@@ -1,0 +1,46 @@
+# Line-ending policy.
+#
+# Without this, a clone with core.autocrlf=true (the Git for Windows default) checks
+# shell scripts out with CRLF. Their shebang then reads as "#!/bin/sh\r", and running
+# them under bash fails with:
+#
+#     /bin/sh^M: bad interpreter: No such file or directory
+#
+# Pinning the endings here fixes it for every clone regardless of local git config,
+# rather than relying on each developer to configure autocrlf correctly.
+
+# Shell scripts are executed by bash and must keep LF.
+gradlew         text eol=lf
+*.sh            text eol=lf
+
+# Batch files are executed by cmd.exe and must keep CRLF.
+gradlew.bat     text eol=crlf
+*.bat           text eol=crlf
+
+# Generated artwork and the scripts that write it. Both export toolchains emit LF.
+# Without this, a clone with core.autocrlf=true checks the icon sources out as CRLF,
+# and re-running the export rewrites every variant - so the tree is dirty on a clean
+# checkout and the committed artwork drifts from what the script produces, which the
+# icon drift gate then fails on.
+*.svg           text eol=lf
+
+# Workflow YAML is read by GitHub, and Markdown is read by everyone. Both are text
+# and both belong pinned, or a Windows clone rewrites them on checkout.
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.md            text eol=lf
+*.mjs           text eol=lf
+
+# Files that no extension pattern reaches. LICENSE is extensionless by convention,
+# and dotfiles like .gitattributes, .gitignore, and .editorconfig have no extension
+# pattern that matches them across all git versions without naming them literally.
+# All check out CRLF without these lines. Verify with `git check-attr text eol -- <file>`.
+LICENSE         text eol=lf
+.gitattributes  text eol=lf
+.gitignore      text eol=lf
+.editorconfig   text eol=lf
+
+# Never apply end-of-line conversion to binaries.
+*.jar           binary
+*.png           binary
+*.zip           binary
