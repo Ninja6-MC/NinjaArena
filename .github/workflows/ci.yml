@@ -42,6 +42,16 @@ jobs:
           echo "No text-attributed file has CRLF in the index."
 
       - name: Validate Gradle Wrapper
+        id: wrapper
+        continue-on-error: true
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Wait Before Revalidating
+        if: steps.wrapper.outcome == 'failure'
+        run: sleep 15
+
+      - name: Validate Gradle Wrapper (retry)
+        if: steps.wrapper.outcome == 'failure'
         uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
       # paper-api 26.3 requires Java 25, and Minecraft 26.1 and newer refuse to start below it.
