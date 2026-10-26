@@ -31,6 +31,3 @@ Java 25, and does not run on Folia.
   `.editorconfig`, `.gitattributes` and an empty `.github/standards-exceptions.yml`.
 - OpenSSF Scorecard workflow, run weekly, on every push to `main` and when branch
   protection changes.
-- `agent-review-gate` workflow, which owns the `ninja6-agent/review` commit status on
-  same-repository pull requests. That status is informational and is not a required
-  check.
