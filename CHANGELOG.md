@@ -23,7 +23,8 @@ Java 25, and does not run on Folia.
   answers with its usage line.
 - JUnit test that parses the built `plugin.yml` with paper-api's own
   `PluginDescriptionFile` and checks the main class, API version, version expansion,
-  Folia flag, command, alias and permission tree.
+  command, alias and permission tree, and reads `folia-supported: false` from the raw
+  YAML.
 - CI workflow running `Build and Test` on Java 25: a CRLF guard, Gradle wrapper
   validation, `./gradlew test` and `./gradlew build`.
 - DCO and Standards workflows calling the org's reusable workflows, plus Dependabot,
