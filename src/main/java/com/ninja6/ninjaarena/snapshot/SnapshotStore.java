@@ -73,6 +73,7 @@ public final class SnapshotStore {
                 channel.force(true);
             }
             mover.move(temp, target);
+            forceDirectory();
         } catch (IOException | RuntimeException e) {
             try {
                 Files.deleteIfExists(temp);
@@ -80,6 +81,18 @@ public final class SnapshotStore {
                 e.addSuppressed(cleanup);
             }
             throw e;
+        }
+    }
+
+    /**
+     * Flushes the directory entry so the rename survives a power loss. Windows cannot open a
+     * directory as a channel, so the failure is ignored there.
+     */
+    private void forceDirectory() {
+        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+            channel.force(true);
+        } catch (IOException unsupported) {
+            // Not supported on this platform.
         }
     }
 
