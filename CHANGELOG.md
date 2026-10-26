@@ -31,3 +31,9 @@ Java 25, and does not run on Folia.
   `.editorconfig`, `.gitattributes` and an empty `.github/standards-exceptions.yml`.
 - OpenSSF Scorecard workflow, run weekly, on every push to `main` and when branch
   protection changes.
+- The `ninjaarena_arenas` world, created on first start and loaded on every start after
+  that: a void generator with one biome and no structures or mobs, time and weather
+  frozen at a clear noon, natural spawning off, a world border and a low view and
+  simulation distance, all tunable under `arena-world` in `config.yml`. Auto-save is off;
+  `ArenaWorld#setSavingEnabled` turns it on for edit mode and saves once when it is
+  turned off again.

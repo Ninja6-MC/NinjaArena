@@ -1,0 +1,7 @@
+arena-world:
+  # World border diameter in blocks, centred on 0, 0. Every arena must fit inside it.
+  border-size: 2048
+  # Chunk radius sent to players in the arena world (2 to 32).
+  view-distance: 6
+  # Chunk radius around players where entities and blocks tick (2 to 32).
+  simulation-distance: 4
