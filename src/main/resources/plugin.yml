@@ -1,0 +1,36 @@
+name: NinjaArena
+version: '${version}'
+main: com.ninja6.ninjaarena.NinjaArenaPlugin
+api-version: '26.3'
+author: Ninja6-MC
+description: Team vs Team vs Enemies arena with ninja stealth mechanics.
+
+# Paper only. Folia refuses to enable a plugin that does not declare support, and this one
+# deliberately does not.
+folia-supported: false
+
+commands:
+  # The long name is the registered root and the short one an alias, so a collision on the
+  # alias costs only the short form.
+  ninjaarena:
+    description: NinjaArena command
+    usage: /<command>
+    aliases: [narena]
+    permission: ninjaarena.play
+
+permissions:
+  # Each tier is a declared child of the one above it. Bukkit gives the dots in a node name
+  # no meaning, so the inheritance exists only where it is written out.
+  ninjaarena.play:
+    description: Join and play arena matches
+    default: true
+  ninjaarena.host:
+    description: Host and run arena matches
+    default: op
+    children:
+      ninjaarena.play: true
+  ninjaarena.admin:
+    description: Administer NinjaArena
+    default: op
+    children:
+      ninjaarena.host: true

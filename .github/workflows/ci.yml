@@ -1,0 +1,64 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    # Without a bound a job inherits GitHub's 360-minute default, and a hung run then holds
+    # a required check neither passing nor failing for six hours.
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The index side of `git ls-files --eol` is what was committed; a text-attributed file
+      # must be LF there whatever the working tree looks like.
+      - name: Reject CRLF In Text-Attributed Files
+        run: |
+          bad=$(git ls-files --eol | awk '($1 == "i/crlf" || $1 == "i/mixed") && $3 ~ /^attr\/text/ { print }' | cut -f2-)
+          if [ -n "$bad" ]; then
+            echo "$bad" | while IFS= read -r f; do echo "::error file=$f::CR bytes in the index for a text-attributed file."; done
+            echo "::error::Fix with: git add --renormalize <file>, then commit."
+            exit 1
+          fi
+          echo "No text-attributed file has CRLF in the index."
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      # paper-api 26.3 requires Java 25, and Minecraft 26.1 and newer refuse to start below it.
+      - name: Set up Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Ensure Gradle Wrapper Is Executable
+        run: chmod +x ./gradlew
+
+      - name: Run Tests
+        run: ./gradlew test --no-daemon
+
+      - name: Build JAR
+        run: ./gradlew build --no-daemon
