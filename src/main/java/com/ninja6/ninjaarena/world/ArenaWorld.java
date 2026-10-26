@@ -11,8 +11,9 @@ import org.bukkit.WorldCreator;
 
 /**
  * The void world every arena is built in. It is created on first start and loaded on every
- * start after that, with saving off: matches must never write their block changes to disk.
- * Edit mode turns saving on while an arena is being built and off again when it is done.
+ * start after that, with auto-save off, so the periodic save never runs during a match. Chunk
+ * unloads and the shutdown save can still write; that gap is tracked in #43. Edit mode turns
+ * auto-save on while an arena is being built and off again when it is done.
  */
 public final class ArenaWorld {
 
@@ -90,8 +91,8 @@ public final class ArenaWorld {
     }
 
     /**
-     * Turns saving on or off. Turning it off first writes the world to disk, so the edits made
-     * while it was on are kept and nothing after it is.
+     * Turns auto-save on or off. Turning it off first writes the world to disk, so the edits
+     * made while it was on are kept; after that only chunk unloads and shutdown can write.
      */
     public void setSavingEnabled(boolean enabled) {
         if (enabled == savingEnabled) {
