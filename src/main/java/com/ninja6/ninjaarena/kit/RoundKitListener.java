@@ -14,7 +14,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.ItemStack;
 
 /** Rebuilds the whole kit each round, including a delayed respawn into a new round. */
@@ -67,18 +66,8 @@ public final class RoundKitListener implements Listener {
                     + "; using an empty round kit.");
             kit.clear();
         }
-        // Clear crafting and cursor before closing, so closing cannot return or drop old kit items.
-        var top = player.getOpenInventory().getTopInventory();
-        if (top.getType() == InventoryType.CRAFTING && top.getHolder() instanceof Player owner
-                && owner.getUniqueId().equals(id)) {
-            top.clear();
-        }
-        player.setItemOnCursor(null);
-        player.closeInventory();
+        KitInventory.clear(player);
         var inventory = player.getInventory();
-        inventory.clear();
-        inventory.setArmorContents(new ItemStack[4]);
-        inventory.setItemInOffHand(null);
         inventory.setHeldItemSlot(0);
         kit.forEach(inventory::setItem);
     }

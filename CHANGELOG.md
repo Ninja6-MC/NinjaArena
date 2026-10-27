@@ -16,6 +16,9 @@ Java 25, and does not run on Folia.
 - A shared `kits.yml` kit, cleared and rebuilt every round and on a delayed respawn into
   the current round. Dead and eliminated players are skipped. Missing or invalid files
   log the reason and use a safe empty kit; item-provider failures also use an empty kit.
+- Fresh installs write the empty kit template before loading. Non-item material entries
+  are skipped with a warning at load while valid entries remain. All exits discard kit
+  items before restoration or saving quit-player data, so a failed restore cannot leak a kit.
 - Named kit item providers via `NinjaArenaPlugin#kitItems()` for custom item IDs, alongside
   vanilla material entries. Providers are resolved when a kit is applied and their item
   data is preserved on independent stacks.

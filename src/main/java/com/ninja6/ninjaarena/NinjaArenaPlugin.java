@@ -32,7 +32,6 @@ import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.logging.Level;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -85,14 +84,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer), this);
         kitItems = new KitItems();
         var kitFile = getDataFolder().toPath().resolve("kits.yml");
-        var kit = KitDefinition.load(kitFile, getLogger());
-        if (!Files.exists(kitFile)) {
-            try {
-                saveResource("kits.yml", false);
-            } catch (RuntimeException e) {
-                getLogger().warning("Could not write the empty kits.yml template: " + e.getMessage());
-            }
-        }
+        var kit = KitDefinition.open(kitFile, getLogger(), () -> saveResource("kits.yml", false));
         getServer().getPluginManager().registerEvents(new RoundKitListener(matches, getServer()::getPlayer,
                 kit, kitItems, getLogger()), this);
         getServer().getPluginManager().registerEvents(new InventoryLockdownListener(matches), this);

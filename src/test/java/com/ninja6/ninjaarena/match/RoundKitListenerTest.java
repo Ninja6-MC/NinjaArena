@@ -14,16 +14,16 @@ import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.PlayerRestorer;
-import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
+import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.PlayerSnapshot;
 import com.ninja6.ninjaarena.snapshot.SnapshotLocation;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
 import com.ninja6.ninjaarena.support.TestItemStack;
 import com.ninja6.ninjaarena.support.TestServer;
-import java.time.Instant;
 import java.nio.file.Files;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +32,7 @@ import java.util.logging.Logger;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.Test;
@@ -210,6 +211,76 @@ class RoundKitListenerTest extends MatchFixture {
             assertArrayEquals(offhandBytes, ItemStack.serializeItemsAsBytes(new ItemStack[] {players.get(ALICE).offhand}));
             assertEquals(GameMode.CREATIVE, player(ALICE).getGameMode());
             matches.close();
+        }
+    }
+
+    private void addKitLeftovers() {
+        Fake alice = players.get(ALICE);
+        alice.cursor = new TestItemStack(Material.STONE, "cursor", 1);
+        alice.crafting[1] = new TestItemStack(Material.STONE, "crafting", 1);
+        alice.armour[0] = new TestItemStack(Material.LEATHER_BOOTS, "boots", 1);
+        assertTrue(Arrays.stream(alice.storage).anyMatch(item -> item != null));
+        assertTrue(alice.offhand != null);
+    }
+
+    private void assertEmptyInventory(UUID id) {
+        Fake fake = players.get(id);
+        assertTrue(Arrays.stream(fake.storage).allMatch(item -> item == null));
+        assertTrue(Arrays.stream(fake.armour).allMatch(item -> item == null));
+        assertNull(fake.offhand);
+        assertNull(fake.cursor);
+        assertTrue(Arrays.stream(fake.crafting).allMatch(item -> item == null));
+    }
+
+    @Test
+    void failedCommandAndTeleportRestoresCannotLeaveKitItemsOutsideTheMatch() {
+        standardKit();
+        for (MatchService.Exit exit : List.of(MatchService.Exit.COMMAND, MatchService.Exit.TELEPORTED)) {
+            configure(KIT, player -> {
+                assertEmptyInventory(player.getUniqueId());
+                return RestoreResult.FAILED;
+            });
+            startTwoOnTwo();
+            addKitLeftovers();
+            assertTrue(matches.leave(player(ALICE), exit));
+            assertFalse(matches.isInMatch(ALICE));
+            assertEmptyInventory(ALICE);
+            runNextTick();
+            assertEmptyInventory(ALICE);
+            matches.close();
+        }
+    }
+
+    @Test
+    void quittingMidMatchClearsKitItemsBeforePlayerDataIsSavedAndBeforeAnyRejoinRestore() {
+        standardKit();
+        configure(KIT, player -> {
+            restored.add(player.getUniqueId());
+            return RestoreResult.FAILED;
+        });
+        startTwoOnTwo();
+        addKitLeftovers();
+        listener.onQuit(new PlayerQuitEvent(player(ALICE), net.kyori.adventure.text.Component.empty()));
+        assertFalse(matches.isInMatch(ALICE));
+        assertEmptyInventory(ALICE);
+        assertTrue(restored.isEmpty());
+    }
+
+    @Test
+    void matchCloseAndDisableClearKitsBeforeFailedRestoresWithoutLeaveEvents() {
+        standardKit();
+        configure(KIT, player -> {
+            assertEmptyInventory(player.getUniqueId());
+            return RestoreResult.FAILED;
+        });
+        startTwoOnTwo();
+        addKitLeftovers();
+        matches.close();
+        deaths.close();
+        assertTrue(events(PlayerLeaveMatchEvent.class).isEmpty());
+        for (UUID id : List.of(ALICE, BOB, CAROL, DAVE)) {
+            assertFalse(matches.isInMatch(id));
+            assertEmptyInventory(id);
         }
     }
 }

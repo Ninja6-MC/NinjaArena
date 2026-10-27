@@ -41,9 +41,10 @@ still on the death screen receives it after being placed on respawn; eliminated 
 who respawn to spectate receive no new kit. Leaving or match close uses the existing
 snapshot restore to return the player's own inventory.
 
-The bundled template is empty. A missing or invalid file logs the cause and uses an empty
-kit, so the plugin can still enable. A missing file also creates the empty template when
-possible; a malformed file is kept for repair. Configure it before enabling the plugin:
+The bundled template is empty. On a fresh install, the plugin writes that template before
+loading it. If creation fails or the file is still missing, a clear message explains the
+empty-kit fallback. Malformed files also use an empty kit and remain available for repair.
+Configure the file before enabling the plugin:
 
 ```yaml
 format: 1
@@ -58,7 +59,9 @@ items:
 Slots 0-8 are the hotbar, 9-35 storage, 36 boots, 37 leggings, 38 chestplate, 39 helmet and
 40 offhand. Each slot may appear once. Entries use exactly one of `material` or `id`;
 amount defaults to 1, must be 1-99, and cannot exceed the resolved item's stack limit.
-Unknown keys and malformed entries reject the whole definition. An unresolved item ID,
+Unknown keys and malformed entries reject the whole definition. Known materials that
+cannot be items (such as WATER, FIRE or NETHER_PORTAL) and air entries are skipped at load
+with a warning naming the file and entry, while valid entries remain. An unresolved item ID,
 an empty provider result or a provider failure logs the cause and applies an empty kit
 instead of a partial one.
 
@@ -77,6 +80,11 @@ Players in a match cannot drop items, pick up items or arrows, open external inv
 (including ender chests), or transfer kit items to container blocks or entities. They can
 arrange their personal inventory. Lockdown uses match membership, so admins building in
 edit mode and other nonparticipants retain normal inventory access.
+Every match exit clears kit storage, armour, offhand, cursor and crafting contents before
+the snapshot restore, including deferred teleport exits, match close and plugin disable.
+Quitting clears the kit before player data is saved. A failed restore therefore leaves an
+empty inventory rather than allowing arena items to be stashed before the snapshot retry;
+the snapshot still holds the player's real inventory.
 
 ## Deaths and spectating
 

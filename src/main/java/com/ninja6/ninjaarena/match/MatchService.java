@@ -4,6 +4,7 @@ import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.match.MatchResult.Reason;
 import com.ninja6.ninjaarena.match.MatchUpdate.Closed;
 import com.ninja6.ninjaarena.match.MatchUpdate.MatchEnded;
@@ -303,7 +304,7 @@ public final class MatchService implements MatchStart {
         if (running == null) {
             return false;
         }
-        releaseSpectator(player);
+        releasePlayer(player);
         apply(running, running.match().leave(playerId));
         settleLater(running);
         switch (exit) {
@@ -476,19 +477,20 @@ public final class MatchService implements MatchStart {
         for (UUID id : running.match().players()) {
             Player player = plugin.getServer().getPlayer(id);
             if (player != null && player.isOnline()) {
-                releaseSpectator(player);
+                releasePlayer(player);
             }
         }
     }
 
-    /** Membership is already removed, so the guard allows this before a restore can fail. */
-    private static void releaseSpectator(Player player) {
+    /** Membership is removed; discard arena state before restoration can fail or be deferred. */
+    private static void releasePlayer(Player player) {
         if (player.getGameMode() == GameMode.SPECTATOR) {
             if (player.getSpectatorTarget() != null) {
                 player.setSpectatorTarget(null);
             }
             player.setGameMode(GameMode.ADVENTURE);
         }
+        KitInventory.clear(player);
     }
 
     private void refuse(List<UUID> players, String message) {
