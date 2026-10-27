@@ -28,6 +28,8 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
+import org.bukkit.inventory.CraftingInventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -152,8 +154,16 @@ public final class PortalListener implements Listener {
                 || !isAt(portal, player.getLocation())) {
             return;
         }
-        // Puts the cursor and crafting-grid items back in the inventory, where the snapshot
-        // saves them; the waiting room empties both.
+        // The snapshot saves storage, armour and offhand, and the waiting room empties the
+        // cursor and crafting grid. Closing the screen would drop at the portal whatever does
+        // not fit back in, so items still held loose keep the player out instead.
+        if (holdsLooseItems(player)) {
+            if (portal.equals(portals.at(player.getLocation()))) {
+                player.teleport(outside, TeleportCause.PLUGIN);
+            }
+            tell(player, "Put away the items on your cursor or in your crafting grid, then walk in again.");
+            return;
+        }
         player.closeInventory();
         Optional<Refusal> refusal = entry.admit(player, portal);
         if (refusal.isPresent()) {
@@ -189,6 +199,22 @@ public final class PortalListener implements Listener {
                     + playerId + ") after a failed arena teleport; it will be restored on their next join.", e);
         }
         tell(player, "You could not be sent to the arena.");
+    }
+
+    /** Whether the player holds items on the cursor or in a crafting grid. */
+    static boolean holdsLooseItems(Player player) {
+        ItemStack cursor = player.getItemOnCursor();
+        if (cursor != null && !cursor.isEmpty()) {
+            return true;
+        }
+        if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory grid) {
+            for (ItemStack item : grid.getMatrix()) {
+                if (item != null && !item.isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Whether the location is in the portal or in a block touching it, in the portal's world. */

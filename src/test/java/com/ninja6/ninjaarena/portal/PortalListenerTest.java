@@ -16,6 +16,7 @@ import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService.CaptureResult;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
+import com.ninja6.ninjaarena.support.TestTaggedItem;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
@@ -25,6 +26,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
@@ -34,10 +36,14 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Chunk;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.inventory.CraftingInventory;
+import org.bukkit.inventory.InventoryView;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
@@ -78,6 +84,9 @@ class PortalListenerTest {
     private boolean teleportRefused;
     /** Whether the waiting room's chunk is already loaded, so its future is complete at once. */
     private boolean chunkLoaded;
+    /** What the player holds on the cursor, and in the first slot of their 2x2 crafting grid. */
+    private Material cursor = Material.AIR;
+    private Material gridItem = Material.AIR;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -204,7 +213,29 @@ class PortalListenerTest {
                         closed = true;
                         yield null;
                     }
+                    case "getItemOnCursor" -> new TestTaggedItem(cursor, Map.of(), cursor == Material.AIR ? 0 : 1);
+                    case "getOpenInventory" -> openInventory();
                     case "hashCode" -> 1;
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    /** The player's own inventory screen, whose top half is the 2x2 crafting grid. */
+    private InventoryView openInventory() {
+        CraftingInventory grid = (CraftingInventory) Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] {CraftingInventory.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "getMatrix" -> new ItemStack[] {
+                        new TestTaggedItem(gridItem, Map.of(), gridItem == Material.AIR ? 0 : 1),
+                        null, null, null};
+                    case "hashCode" -> 2;
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        return (InventoryView) Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] {InventoryView.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "getTopInventory" -> grid;
+                    case "hashCode" -> 3;
                     case "equals" -> proxy == args[0];
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
@@ -258,6 +289,35 @@ class PortalListenerTest {
         assertEquals(arenaWorld, target.getWorld());
         assertEquals(ROOM.x(), target.getX());
         assertEquals(ROOM.z(), target.getZ());
+        assertEquals(List.of("dojo"), entered);
+    }
+
+    @Test
+    void itemsHeldOnTheCursorOrInTheCraftingGridKeepThePlayerOut() {
+        for (boolean onCursor : new boolean[] {true, false}) {
+            cursor = onCursor ? Material.DIAMOND : Material.AIR;
+            gridItem = onCursor ? Material.AIR : Material.DIAMOND;
+            messages.clear();
+            location = new Location(overworld, 11.5, 64, 9.5);
+            move(11.5, 64, 10.5, 0);
+            finishChunkLoads();
+            assertEquals(0, captures);
+            assertFalse(closed);
+            assertTrue(teleports.stream().noneMatch(spot -> spot.getWorld() == arenaWorld));
+            assertEquals(9, location.getBlockZ());
+            // Refusal messages share a cooldown, so only the first round shows one.
+            if (onCursor) {
+                assertEquals(List.of("Put away the items on your cursor or in your crafting grid, then walk in again."),
+                        messages);
+            }
+        }
+
+        cursor = Material.AIR;
+        gridItem = Material.AIR;
+        move(11.5, 64, 9.5, 0);
+        move(11.5, 64, 10.5, 0);
+        finishChunkLoads();
+        assertEquals(1, captures);
         assertEquals(List.of("dojo"), entered);
     }
 
