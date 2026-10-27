@@ -51,7 +51,8 @@ import org.bukkit.plugin.Plugin;
  * <p><b>Entry.</b> The waiting room's chunk is loaded first. Once it is, on the server
  * thread, the checks run again, the snapshot is written and the player is teleported, all in
  * the same tick, so nothing the player does can fall between the snapshot and the teleport.
- * A teleport that fails deletes the snapshot again, since the player never left.
+ * A player who is by then offline, dead, or no longer in or next to the portal is dropped
+ * silently. A teleport that fails deletes the snapshot again, since the player never left.
  */
 public final class PortalListener implements Listener {
 
@@ -133,8 +134,11 @@ public final class PortalListener implements Listener {
             return;
         }
         Player player = plugin.getServer().getPlayer(playerId);
+        // The player must still be where they walked in. One teleported away while the chunk
+        // loaded would otherwise be snapshotted, and later restored, wherever they ended up.
         if (player == null || !player.isOnline() || player.isDead()
-                || !portal.equals(portals.get(portal.name()).orElse(null))) {
+                || !portal.equals(portals.get(portal.name()).orElse(null))
+                || !isAt(portal, player.getLocation())) {
             return;
         }
         Optional<Refusal> refusal = entry.admit(player, portal);
@@ -166,6 +170,19 @@ public final class PortalListener implements Listener {
                     + playerId + ") after a failed arena teleport; it will be restored on their next join.", e);
         }
         player.sendMessage(Component.text("You could not be sent to the arena.", NamedTextColor.RED));
+    }
+
+    /** Whether the location is in the portal or in a block touching it, in the portal's world. */
+    static boolean isAt(Portal portal, Location location) {
+        if (location.getWorld() == null || !location.getWorld().getName().equals(portal.world())) {
+            return false;
+        }
+        int x = location.getBlockX();
+        int y = location.getBlockY();
+        int z = location.getBlockZ();
+        return x >= portal.region().minX() - 1 && x <= portal.region().maxX() + 1
+                && y >= portal.region().minY() - 1 && y <= portal.region().maxY() + 1
+                && z >= portal.region().minZ() - 1 && z <= portal.region().maxZ() + 1;
     }
 
     private void tell(Player player, Refusal refusal) {
