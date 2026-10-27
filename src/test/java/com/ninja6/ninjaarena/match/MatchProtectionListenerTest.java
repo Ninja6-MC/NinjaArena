@@ -256,6 +256,31 @@ class MatchProtectionListenerTest extends MatchFixture {
     }
 
     @Test
+    void closingAMatchRestoresThePersistedGameMode() throws Exception {
+        TestServer.install();
+        Logger logger = Logger.getAnonymousLogger();
+        var snapshots = new SnapshotService(new SnapshotStore(dir.resolve("snapshots")), logger);
+        byte[] emptyItems = {1, 0, 0, 0, 0};
+        snapshots.persist(new PlayerSnapshot(ALICE, "Alice", Instant.now(),
+                new SnapshotLocation(new java.util.UUID(0, 99), "world", 0.5, 64, 0.5, 0, 0),
+                emptyItems, emptyItems, emptyItems, 0, 0, 0, 20, 20, 5, 0, List.of(), GameMode.CREATIVE, 0, 0));
+        var restores = new RestoreService(snapshots, new PlayerRestorer(logger), logger);
+        matches = new MatchService(plugin, arenas, () -> arenaWorld, SETTINGS, restores::restore,
+                events::add, player -> { });
+        var protection = protection(false);
+        gameModeChanges = protection::onGameMode;
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        protection.onRoundStart(new RoundStartEvent(matches.matchOf(ALICE).orElseThrow(), 1, false));
+        assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
+
+        // Every match end sends players home through the same close path.
+        matches.close();
+        assertFalse(matches.isInMatch(ALICE));
+        assertEquals(GameMode.CREATIVE, player(ALICE).getGameMode());
+        assertFalse(snapshots.hasPending(ALICE));
+    }
+
+    @Test
     void bundledConfigDisablesFriendlyFireByDefault() {
         var config = YamlConfiguration.loadConfiguration(new InputStreamReader(
                 getClass().getResourceAsStream("/config.yml"), StandardCharsets.UTF_8));
