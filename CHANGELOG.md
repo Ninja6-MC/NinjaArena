@@ -45,8 +45,10 @@ Java 25, and does not run on Folia.
   turned off again.
 - Restoring a player from their snapshot: location, inventory, experience, health, food,
   effects, game mode, fire ticks and fall distance, with velocity and gliding cleared. The
-  snapshot is deleted only once the restore has succeeded. An unsafe saved spot (solid at
-  the feet or head, or lava, fire or the void below) moves the player to the nearest safe
-  spot within 8 blocks, then their respawn point, then the world spawn. A player who left
-  mid-arena is restored on their next join, and snapshots left by a crash are marked on
-  startup so their players are restored when they join.
+  snapshot is deleted only once the restore has succeeded. An unsafe saved spot (anything
+  solid, lava or fire in the player's space, judged by collision box so slabs, carpet and
+  snow layers count as ground, or lava, fire or the void below) moves the player to the
+  nearest safe spot within 8 blocks, then their respawn point, then the world spawn. A
+  player who left mid-arena is restored on their next join, or on respawn if they join
+  dead, and snapshots left by a crash are marked on startup so their players are restored
+  when they join.

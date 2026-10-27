@@ -39,16 +39,15 @@ public final class PlayerRestorer implements RestoreService.Applier {
 
     @Override
     public void apply(Player player, PlayerSnapshot snapshot) throws RestoreService.RestoreException {
-        if (player.isDead()) {
-            throw new RestoreService.RestoreException(player.getName() + " is dead");
-        }
         Landing landing = landing(player, snapshot.location());
         if (landing.source() != Landing.Source.SAVED) {
             logger.info("The saved spot of " + player.getName() + " is unsafe; returning them to "
                     + landing.source().description + " instead.");
         }
 
+        // A player who rides something or carries a passenger cannot be teleported.
         player.leaveVehicle();
+        player.eject();
         player.setGliding(false);
         if (!player.teleport(landing.location(), TeleportCause.PLUGIN)) {
             throw new RestoreService.RestoreException("the teleport of " + player.getName()

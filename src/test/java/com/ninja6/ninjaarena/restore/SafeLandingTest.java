@@ -18,9 +18,18 @@ class SafeLandingTest {
     private static final class Grid implements SafeLanding.Terrain {
 
         private final Map<List<Integer>, Cell> cells = new HashMap<>();
+        private final Map<List<Integer>, Double> heights = new HashMap<>();
 
         Grid set(int x, int y, int z, Cell cell) {
             cells.put(List.of(x, y, z), cell);
+            heights.remove(List.of(x, y, z));
+            return this;
+        }
+
+        /** A solid block whose collision box tops out at {@code height}. */
+        Grid partial(int x, int y, int z, double height) {
+            set(x, y, z, Cell.SOLID);
+            heights.put(List.of(x, y, z), height);
             return this;
         }
 
@@ -62,6 +71,14 @@ class SafeLandingTest {
                 throw new AssertionError("read outside the world at y=" + y);
             }
             return cells.getOrDefault(List.of(x, y, z), Cell.OPEN);
+        }
+
+        @Override
+        public double height(int x, int y, int z) {
+            if (at(x, y, z) != Cell.SOLID) {
+                throw new AssertionError("height of a non-solid block at " + x + ", " + y + ", " + z);
+            }
+            return heights.getOrDefault(List.of(x, y, z), 1.0);
         }
     }
 
@@ -118,9 +135,60 @@ class SafeLandingTest {
     @Test
     void standingOnASlabIsNotMistakenForBeingInsideIt() {
         // A bottom slab at y = 63 puts the feet at 63.5, inside the slab's block.
-        Grid grid = new Grid().set(0, 62, 0, Cell.SOLID).set(0, 63, 0, Cell.SOLID);
+        Grid grid = new Grid().set(0, 62, 0, Cell.SOLID).partial(0, 63, 0, 0.5);
 
-        assertTrue(SafeLanding.isSafe(grid, 0.5, 63.5, 0.5));
+        assertEquals(Optional.of(new Spot(0.3, 63.5, 0.3, false)), SafeLanding.find(grid, 0.3, 63.5, 0.3));
+    }
+
+    @Test
+    void standingOnCarpetIsNotMistakenForBeingInsideIt() {
+        Grid grid = new Grid().set(0, 62, 0, Cell.SOLID).partial(0, 63, 0, 0.0625);
+
+        assertEquals(Optional.of(new Spot(0.3, 63.0625, 0.3, false)), SafeLanding.find(grid, 0.3, 63.0625, 0.3));
+    }
+
+    @Test
+    void standingOnSnowLayersIsNotMistakenForBeingInsideThem() {
+        // Two to four layers collide at 1/8 to 3/8 of a block.
+        for (int layers = 2; layers <= 4; layers++) {
+            double top = (layers - 1) / 8.0;
+            Grid grid = new Grid().set(0, 62, 0, Cell.SOLID).partial(0, 63, 0, top);
+
+            assertEquals(Optional.of(new Spot(0.3, 63 + top, 0.3, false)), SafeLanding.find(grid, 0.3, 63 + top, 0.3),
+                    layers + " layers");
+        }
+    }
+
+    @Test
+    void aPartialBlockRaisedAboveTheFeetIsUnsafe() {
+        // Saved on carpet that has since been replaced by a slab: the slab reaches into the player.
+        Grid grid = new Grid().set(0, 62, 0, Cell.SOLID).partial(0, 63, 0, 0.5);
+
+        assertFalse(SafeLanding.isSafe(grid, 0.5, 63.0625, 0.5));
+    }
+
+    @Test
+    void aFenceBelowThatReachesIntoThePlayerIsUnsafe() {
+        Grid grid = new Grid().partial(0, 63, 0, 1.5);
+
+        assertFalse(SafeLanding.isSafe(grid, 0.5, 64, 0.5));
+        assertTrue(SafeLanding.isSafe(grid, 0.5, 64.5, 0.5));
+    }
+
+    @Test
+    void aPlayerAboveTheBlockLineNeedsAThirdBlockClear() {
+        // Feet at 64.5 put the head in block 66.
+        Grid grid = new Grid().floor().partial(0, 64, 0, 0.5).set(0, 66, 0, Cell.SOLID);
+
+        assertFalse(SafeLanding.isSafe(grid, 0.5, 64.5, 0.5));
+    }
+
+    @Test
+    void theSearchLandsOnTopOfAPartialBlock() {
+        // Buried at y = 64; the only ground near is a slab one block east.
+        Grid grid = new Grid().set(0, 64, 0, Cell.SOLID).partial(1, 63, 0, 0.5);
+
+        assertEquals(new Spot(1.5, 63.5, 0.5, true), SafeLanding.find(grid, 0.5, 64, 0.5).orElseThrow());
     }
 
     @Test
@@ -132,8 +200,7 @@ class SafeLandingTest {
 
         assertTrue(spot.isPresent());
         assertTrue(spot.get().moved());
-        assertTrue(SafeLanding.isStandable(grid, (int) Math.floor(spot.get().x()), (int) spot.get().y(),
-                (int) Math.floor(spot.get().z())));
+        assertTrue(SafeLanding.isSafe(grid, spot.get().x(), spot.get().y(), spot.get().z()));
         assertEquals(64.0, spot.get().y());
         assertEquals(2, Math.abs((int) Math.floor(spot.get().x())) + Math.abs((int) Math.floor(spot.get().z())));
     }

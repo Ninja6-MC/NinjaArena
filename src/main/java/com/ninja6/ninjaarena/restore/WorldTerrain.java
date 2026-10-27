@@ -6,10 +6,12 @@ import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.util.BoundingBox;
 
 /**
- * A live world seen as {@link SafeLanding} cells. Reading a block loads its chunk, so this
- * is for the server thread only.
+ * A live world seen as {@link SafeLanding} cells. A block is solid when it has a collision
+ * box, and its height is the top of that box. Reading a block loads its chunk, so this is
+ * for the server thread only.
  */
 final class WorldTerrain implements SafeLanding.Terrain {
 
@@ -42,6 +44,15 @@ final class WorldTerrain implements SafeLanding.Terrain {
         if (Tag.FIRE.isTagged(type) || Tag.CAMPFIRES.isTagged(type) || type == Material.MAGMA_BLOCK) {
             return Cell.FIRE;
         }
-        return block.isPassable() ? Cell.OPEN : Cell.SOLID;
+        return block.getCollisionShape().getBoundingBoxes().isEmpty() ? Cell.OPEN : Cell.SOLID;
+    }
+
+    @Override
+    public double height(int x, int y, int z) {
+        double top = 0;
+        for (BoundingBox box : world.getBlockAt(x, y, z).getCollisionShape().getBoundingBoxes()) {
+            top = Math.max(top, box.getMaxY());
+        }
+        return top;
     }
 }

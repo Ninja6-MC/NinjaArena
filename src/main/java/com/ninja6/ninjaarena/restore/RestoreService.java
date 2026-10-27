@@ -31,6 +31,11 @@ public final class RestoreService {
         RESTORED,
         /** There was nothing to restore. */
         NO_SNAPSHOT,
+        /**
+         * The player is dead, for example back on the death screen after disconnecting on it.
+         * The snapshot is kept and the restore runs again when they respawn.
+         */
+        AWAITING_RESPAWN,
         /** The player was not restored; the snapshot is kept for the next attempt. */
         FAILED,
         /**
@@ -71,6 +76,7 @@ public final class RestoreService {
     private final Applier applier;
     private final Logger logger;
     private final Set<UUID> awaitingJoin = new HashSet<>();
+    private final Set<UUID> awaitingRespawn = new HashSet<>();
 
     public RestoreService(SnapshotService snapshots, Applier applier, Logger logger) {
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
@@ -100,6 +106,8 @@ public final class RestoreService {
 
     /** Called when a player leaves the server; a pending snapshot is restored on rejoin. */
     public void markIfPending(UUID playerId) {
+        // A rejoin decides again, so a death screen left on quit is not carried over.
+        awaitingRespawn.remove(playerId);
         if (snapshots.hasPending(playerId)) {
             awaitingJoin.add(playerId);
         }
@@ -109,6 +117,15 @@ public final class RestoreService {
     public boolean shouldRestoreOnJoin(UUID playerId) {
         // The disk check also covers a snapshot that appeared while the server was running.
         return awaitingJoin.contains(playerId) || snapshots.hasPending(playerId);
+    }
+
+    /**
+     * Whether a player who has just respawned should be restored now: only one whose
+     * restore was put off because they were dead. A respawn inside a running match must not
+     * send the player home.
+     */
+    public boolean shouldRestoreOnRespawn(UUID playerId) {
+        return awaitingRespawn.contains(playerId);
     }
 
     /** Players marked to be restored when they join. */
@@ -129,7 +146,14 @@ public final class RestoreService {
         }
         if (snapshot.isEmpty()) {
             awaitingJoin.remove(playerId);
+            awaitingRespawn.remove(playerId);
             return RestoreResult.NO_SNAPSHOT;
+        }
+        if (player.isDead()) {
+            // A dead player cannot be teleported; the respawn listener tries again.
+            awaitingRespawn.add(playerId);
+            logger.info(player.getName() + " is dead; they will be restored when they respawn.");
+            return RestoreResult.AWAITING_RESPAWN;
         }
         try {
             applier.apply(player, snapshot.get());
@@ -139,6 +163,7 @@ public final class RestoreService {
             return RestoreResult.FAILED;
         }
         awaitingJoin.remove(playerId);
+        awaitingRespawn.remove(playerId);
         try {
             snapshots.delete(playerId);
         } catch (IOException e) {

@@ -46,12 +46,17 @@ class RestoreServiceTest {
     }
 
     private static Player player(UUID id) {
+        return player(id, false);
+    }
+
+    private static Player player(UUID id, boolean dead) {
         return (Player) Proxy.newProxyInstance(
                 Player.class.getClassLoader(),
                 new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "getUniqueId" -> id;
                     case "getName" -> "Alice";
+                    case "isDead" -> dead;
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
     }
@@ -157,5 +162,48 @@ class RestoreServiceTest {
 
         snapshots.persist(snapshot(ALICE));
         assertTrue(service.shouldRestoreOnJoin(ALICE));
+    }
+
+    @Test
+    void aDeadPlayerIsRestoredWhenTheyRespawn() throws Exception {
+        snapshots.persist(snapshot(ALICE));
+        RestoreService service = service((player, snapshot) -> applied.add(snapshot));
+        service.markPendingOnStartup();
+        assertFalse(service.shouldRestoreOnRespawn(ALICE));
+
+        // Rejoined on the death screen: nothing is applied and the snapshot stays.
+        assertEquals(RestoreResult.AWAITING_RESPAWN, service.restore(player(ALICE, true)));
+        assertTrue(applied.isEmpty());
+        assertTrue(snapshots.hasPending(ALICE));
+        assertTrue(service.shouldRestoreOnRespawn(ALICE));
+
+        // The respawn listener runs the restore again once they are alive.
+        assertEquals(RestoreResult.RESTORED, service.restore(player(ALICE, false)));
+        assertEquals(List.of(snapshot(ALICE)), applied);
+        assertFalse(snapshots.hasPending(ALICE));
+        assertFalse(service.shouldRestoreOnRespawn(ALICE));
+        assertFalse(service.shouldRestoreOnJoin(ALICE));
+    }
+
+    @Test
+    void aRespawnWithoutADeferredRestoreDoesNotSendThePlayerHome() throws Exception {
+        // A player in a running match has a snapshot on disk and respawns in the arena.
+        snapshots.persist(snapshot(ALICE));
+        RestoreService service = service((player, snapshot) -> applied.add(snapshot));
+
+        assertFalse(service.shouldRestoreOnRespawn(ALICE));
+    }
+
+    @Test
+    void quittingDeadAgainLeavesTheRetryToTheNextJoin() throws Exception {
+        snapshots.persist(snapshot(ALICE));
+        RestoreService service = service((player, snapshot) -> applied.add(snapshot));
+        service.restore(player(ALICE, true));
+
+        service.markIfPending(ALICE);
+
+        assertFalse(service.shouldRestoreOnRespawn(ALICE));
+        assertTrue(service.shouldRestoreOnJoin(ALICE));
+        assertTrue(snapshots.hasPending(ALICE));
     }
 }

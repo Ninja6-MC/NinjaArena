@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.restore;
 
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import java.util.Objects;
 import java.util.UUID;
 import org.bukkit.entity.Player;
@@ -10,7 +11,10 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 
-/** Restores a player on join if they left, or the server stopped, while they were in an arena. */
+/**
+ * Restores a player on join if they left, or the server stopped, while they were in an
+ * arena, and on respawn if they joined dead.
+ */
 public final class RestoreListener implements Listener {
 
     private final Plugin plugin;
@@ -34,6 +38,15 @@ public final class RestoreListener implements Listener {
                 restores.restore(player);
             }
         });
+    }
+
+    /** Finishes a restore that was put off because the player had joined dead. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onRespawn(PlayerPostRespawnEvent event) {
+        Player player = event.getPlayer();
+        if (restores.shouldRestoreOnRespawn(player.getUniqueId())) {
+            restores.restore(player);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
