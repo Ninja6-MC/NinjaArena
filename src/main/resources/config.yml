@@ -24,6 +24,8 @@ waiting-room:
   radius: 16
 
 match:
+  # Allow damage and harmful splash/cloud effects between teammates in the same match.
+  friendly-fire: false
   # Every value below is in seconds unless it says otherwise.
   # Prep at the team spawns at the start of each round: no damage, no enemies (1 to 3600).
   prep-seconds: 15
