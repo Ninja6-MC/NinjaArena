@@ -72,7 +72,7 @@ class InventoryLockdownListenerTest extends MatchFixture {
     }
 
     private void assertDropAndPickup(UUID id, boolean locked) {
-        var rules = new InventoryLockdownListener(matches);
+        var rules = new InventoryLockdownListener(matches::isInMatch);
         Item item = inert(Item.class);
         var drop = new PlayerDropItemEvent(player(id), item);
         rules.onDrop(drop);
@@ -100,7 +100,7 @@ class InventoryLockdownListenerTest extends MatchFixture {
     @Test
     void enderChestsContainersAndOtherExternalViewsAreBlockedWhilePersonalInventoryWorks() {
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
-        var rules = new InventoryLockdownListener(matches);
+        var rules = new InventoryLockdownListener(matches::isInMatch);
         for (InventoryType type : List.of(InventoryType.CHEST, InventoryType.ENDER_CHEST, InventoryType.SHULKER_BOX,
                 InventoryType.BARREL, InventoryType.FURNACE, InventoryType.HOPPER, InventoryType.WORKBENCH,
                 InventoryType.MERCHANT, InventoryType.ANVIL)) {
@@ -119,7 +119,7 @@ class InventoryLockdownListenerTest extends MatchFixture {
     @Test
     void inventoryDropActionsAndTransfersIntoAnAlreadyOpenContainerAreBlocked() {
         startTwoOnTwo();
-        var rules = new InventoryLockdownListener(matches);
+        var rules = new InventoryLockdownListener(matches::isInMatch);
         for (var action : List.of(InventoryAction.DROP_ALL_CURSOR, InventoryAction.DROP_ONE_CURSOR,
                 InventoryAction.DROP_ALL_SLOT, InventoryAction.DROP_ONE_SLOT)) {
             var click = new InventoryClickEvent(players.get(ALICE).view, InventoryType.SlotType.CONTAINER,
@@ -159,7 +159,7 @@ class InventoryLockdownListenerTest extends MatchFixture {
     @Test
     void containerInteractionsIncludingDirectInsertionAreDeniedWithoutBlockingItemUse() {
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
-        var rules = new InventoryLockdownListener(matches);
+        var rules = new InventoryLockdownListener(matches::isInMatch);
         for (var event : List.of(interact(ALICE, Material.ENDER_CHEST, false, false),
                 interact(ALICE, Material.CHISELED_BOOKSHELF, true, false),
                 interact(ALICE, Material.CAMPFIRE, false, true))) {
@@ -176,7 +176,7 @@ class InventoryLockdownListenerTest extends MatchFixture {
     void adminsBuildingInEditModeHaveNoInventoryRestrictions() throws Exception {
         arenas.startEdit("dojo");
         assertDropAndPickup(ALICE, false);
-        var rules = new InventoryLockdownListener(matches);
+        var rules = new InventoryLockdownListener(matches::isInMatch);
         var chest = new InventoryOpenEvent(view(player(ALICE), InventoryType.CHEST));
         rules.onOpen(chest);
         assertFalse(chest.isCancelled());
@@ -192,7 +192,7 @@ class InventoryLockdownListenerTest extends MatchFixture {
     @Test
     void containerEntitiesAndEquipmentTransfersAreLockedOnlyForParticipants() {
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
-        var rules = new InventoryLockdownListener(matches);
+        var rules = new InventoryLockdownListener(matches::isInMatch);
         for (Entity entity : List.of(inert(StorageMinecart.class), inert(ArmorStand.class), inert(ItemFrame.class))) {
             var match = new PlayerInteractEntityEvent(player(ALICE), entity);
             rules.onInteractEntity(match);

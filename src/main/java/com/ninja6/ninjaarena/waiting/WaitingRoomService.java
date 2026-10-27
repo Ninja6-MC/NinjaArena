@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
@@ -72,6 +73,7 @@ public final class WaitingRoomService {
     private final ArenaRegistry arenas;
     private final WaitingRoomSettings settings;
     private final Function<Player, RestoreResult> restore;
+    private final Consumer<Player> empty;
     private final MatchStart matchStart;
 
     private final Map<String, Room> rooms = new TreeMap<>();
@@ -82,13 +84,16 @@ public final class WaitingRoomService {
 
     /**
      * @param restore {@code RestoreService#restore}
+     * @param empty   empties the inventory of a player who arrives, {@code KitInventory#emptyForWaiting}
+     *                on a server
      */
     public WaitingRoomService(Plugin plugin, ArenaRegistry arenas, WaitingRoomSettings settings,
-            Function<Player, RestoreResult> restore, MatchStart matchStart) {
+            Function<Player, RestoreResult> restore, Consumer<Player> empty, MatchStart matchStart) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.arenas = Objects.requireNonNull(arenas, "arenas");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.restore = Objects.requireNonNull(restore, "restore");
+        this.empty = Objects.requireNonNull(empty, "empty");
         this.matchStart = Objects.requireNonNull(matchStart, "matchStart");
     }
 
@@ -103,6 +108,10 @@ public final class WaitingRoomService {
     /**
      * Adds a player who has just been teleported to an arena's waiting room. For the portal,
      * once the player's snapshot is saved and the teleport has succeeded.
+     *
+     * <p>The player's inventory is emptied first, with their effects and fire, and they are put
+     * in adventure mode; their snapshot gives all of it back when they leave. A player who
+     * cannot be emptied is sent home instead, so no one waits holding their own items.
      */
     public void join(Player player, String arenaName) {
         UUID playerId = player.getUniqueId();
@@ -114,12 +123,22 @@ public final class WaitingRoomService {
         }
         Optional<Arena> arena = arenas.get(arenaName);
         Room room = arena.map(found -> rooms.get(found.name())).orElse(null);
+        if (room == null && (arena.isEmpty() || arena.get().waitingRoom() == null)) {
+            player.sendMessage(Component.text("This arena is gone, so you were sent back.", NamedTextColor.RED));
+            sendHome(player);
+            return;
+        }
+        try {
+            empty.accept(player);
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(Level.SEVERE, "Could not empty the inventory of " + player.getName() + " ("
+                    + playerId + ") in the waiting room of arena " + arenaName + "; sending them home.", e);
+            player.sendMessage(Component.text("You could not join the waiting room, so you were sent back.",
+                    NamedTextColor.RED));
+            sendHome(player);
+            return;
+        }
         if (room == null) {
-            if (arena.isEmpty() || arena.get().waitingRoom() == null) {
-                player.sendMessage(Component.text("This arena is gone, so you were sent back.", NamedTextColor.RED));
-                sendHome(player);
-                return;
-            }
             Arena found = arena.get();
             room = new Room(found.name(), found.waitingRoom(), new WaitingRoom(
                     Math.max(1, found.teamSpawns().size()), settings.minPlayers(), settings.countdownSeconds()));

@@ -54,12 +54,13 @@ import org.bukkit.plugin.Plugin;
  * task on a later tick, never inside the move event that crossed into the portal, even when
  * the chunk was already loaded: the event is not done with the player yet, and the waiting
  * room's own move listener would see the player in the room with the event's destination
- * still next to the portal. In that task the checks run again, the snapshot is written and
- * the player is teleported, all in the same tick, so nothing the player does can fall between
- * the snapshot and the teleport. A player who is by then offline, dead, or no longer in or
- * next to the portal, or whose portal has changed, is dropped silently. A teleport that fails
- * is logged and deletes the snapshot again, since the player never left; one that succeeds
- * hands the player to the waiting room.
+ * still next to the portal. In that task the checks run again, the player's inventory screen
+ * is closed so the cursor and crafting grid go back into the saved inventory, the snapshot is
+ * written and the player is teleported, all in the same tick, so nothing the player does can
+ * fall between the snapshot and the teleport. A player who is by then offline, dead, or no
+ * longer in or next to the portal, or whose portal has changed, is dropped silently. A
+ * teleport that fails is logged and deletes the snapshot again, since the player never left;
+ * one that succeeds hands the player to the waiting room, which empties their inventory.
  */
 public final class PortalListener implements Listener {
 
@@ -151,6 +152,9 @@ public final class PortalListener implements Listener {
                 || !isAt(portal, player.getLocation())) {
             return;
         }
+        // Puts the cursor and crafting-grid items back in the inventory, where the snapshot
+        // saves them; the waiting room empties both.
+        player.closeInventory();
         Optional<Refusal> refusal = entry.admit(player, portal);
         if (refusal.isPresent()) {
             if (portal.equals(portals.at(player.getLocation()))) {

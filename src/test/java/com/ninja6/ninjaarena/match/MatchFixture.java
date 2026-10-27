@@ -86,6 +86,7 @@ abstract class MatchFixture {
         final Map<Material, Integer> cooldowns = new HashMap<>();
         Vector velocity;
         boolean gliding;
+        int fireTicks;
         Player proxy;
 
         Fake(UUID id, String name) {
@@ -152,6 +153,7 @@ abstract class MatchFixture {
         return (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[] {World.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "getName" -> name;
+                    case "getUID" -> UUID.nameUUIDFromBytes(name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                     case "hashCode" -> name.hashCode();
                     case "equals" -> proxy == args[0];
                     case "toString" -> name;
@@ -273,7 +275,12 @@ abstract class MatchFixture {
                     case "getOpenInventory" -> fake.view;
                     case "setItemOnCursor" -> { fake.cursor = (ItemStack) args[0]; yield null; }
                     case "getItemOnCursor" -> fake.cursor;
-                    case "getActivePotionEffects" -> List.of();
+                    case "getActivePotionEffects" -> List.copyOf(fake.effects);
+                    case "getFireTicks" -> fake.fireTicks;
+                    case "setFireTicks" -> { fake.fireTicks = (Integer) args[0]; yield null; }
+                    case "getLevel", "getTotalExperience", "getFoodLevel" -> 0;
+                    case "getExp", "getSaturation", "getExhaustion", "getFallDistance" -> 0f;
+                    case "getHealth" -> 20.0;
                     case "setVelocity" -> { fake.velocity = (Vector) args[0]; yield null; }
                     case "isGliding" -> fake.gliding;
                     case "isFlying", "isRiptiding", "isInsideVehicle" -> false;
@@ -282,7 +289,7 @@ abstract class MatchFixture {
                     case "removePotionEffect" -> fake.effects.removeIf(effect -> effect.getType() == args[0]);
                     case "setGliding", "setFallDistance", "closeInventory",
                             "setTotalExperience", "setLevel", "setExp", "setHealth", "setFoodLevel", "setSaturation",
-                            "setExhaustion", "setFireTicks" -> null;
+                            "setExhaustion" -> null;
                     case "getLocation" -> fake.location.clone();
                     case "teleport" -> {
                         Location to = (Location) args[0];

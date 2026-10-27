@@ -310,7 +310,7 @@ class MatchServiceTest extends MatchFixture {
                 player -> {
                     restored.add(player.getUniqueId());
                     return RestoreResult.RESTORED;
-                }, failing);
+                }, player -> { }, failing);
         rooms.join(player(ALICE), "dojo");
         rooms.join(player(BOB), "dojo");
         rooms.tick();

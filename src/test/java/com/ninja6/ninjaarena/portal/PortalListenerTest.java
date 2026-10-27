@@ -66,6 +66,9 @@ class PortalListenerTest {
     private WaitingRoomService rooms;
     private WaitingRoomListener roomListener;
     private int captures;
+    /** Captures made after the player's inventory screen was closed. */
+    private int capturesAfterClose;
+    private boolean closed;
 
     // The test player's state.
     private Location location;
@@ -109,13 +112,16 @@ class PortalListenerTest {
         SnapshotService snapshots = new SnapshotService(new SnapshotStore(dir.resolve("snapshots")), logger);
         PortalEntry entry = new PortalEntry(arenas, new HashSet<UUID>()::contains, player -> {
             captures++;
+            if (closed) {
+                capturesAfterClose++;
+            }
             return CaptureResult.SAVED;
         });
         Plugin plugin = plugin(logger);
         rooms = new WaitingRoomService(plugin, arenas, new WaitingRoomSettings(2, 3, 4), player -> {
             restored.add(player.getUniqueId());
             return RestoreResult.RESTORED;
-        }, (arena, teams) -> { });
+        }, player -> { }, (arena, teams) -> { });
         roomListener = new WaitingRoomListener(rooms);
         listener = new PortalListener(plugin, portals, entry, () -> arenaWorld, snapshots, id -> { },
                 (player, arena) -> {
@@ -194,6 +200,10 @@ class PortalListenerTest {
                         yield null;
                     }
                     case "sendActionBar" -> null;
+                    case "closeInventory" -> {
+                        closed = true;
+                        yield null;
+                    }
                     case "hashCode" -> 1;
                     case "equals" -> proxy == args[0];
                     default -> throw new UnsupportedOperationException(method.getName());
@@ -241,6 +251,8 @@ class PortalListenerTest {
 
         finishChunkLoads();
         assertEquals(1, captures);
+        // Cursor and crafting-grid items go back into the inventory before it is saved.
+        assertEquals(1, capturesAfterClose);
         assertEquals(1, teleports.size());
         Location target = teleports.get(0);
         assertEquals(arenaWorld, target.getWorld());

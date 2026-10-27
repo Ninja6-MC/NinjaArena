@@ -8,6 +8,7 @@ import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
 import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
 import com.ninja6.ninjaarena.kit.KitDefinition;
+import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.kit.RoundKitListener;
 import com.ninja6.ninjaarena.match.MatchDeathListener;
@@ -98,13 +99,17 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         var kit = KitDefinition.open(kitFile, getLogger(), () -> saveResource("kits.yml", false));
         getServer().getPluginManager().registerEvents(new RoundKitListener(matches, getServer()::getPlayer,
                 kit, kitItems, getLogger()), this);
-        getServer().getPluginManager().registerEvents(new InventoryLockdownListener(matches), this);
         matches.start();
         deaths.start();
         // A finished countdown hands its players to the match engine.
         waitingRooms = new WaitingRoomService(this, arenas,
                 WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
-                matches);
+                KitInventory::emptyForWaiting, matches);
+        // Waiting players are locked like match players; the fields are cleared on disable.
+        MatchService inMatch = matches;
+        WaitingRoomService waiting = waitingRooms;
+        getServer().getPluginManager().registerEvents(new InventoryLockdownListener(
+                id -> inMatch.isInMatch(id) || waiting.isWaiting(id)), this);
         getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
         arenas.onEditOrDelete(waitingRooms::closeRoom);
         waitingRooms.start();

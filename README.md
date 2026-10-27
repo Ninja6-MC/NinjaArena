@@ -35,6 +35,14 @@ transparent light and dark, and monochrome variants live beside the master.
 
 ## Round kits and inventory
 
+Players arrive in the waiting room with an empty inventory. Once their snapshot is saved
+and they are in the room, their storage, armour, offhand, cursor and crafting grid are
+cleared, their potion effects and fire are removed, and they are put in adventure mode.
+The waiting room is locked like a match: no item drops or pickups, no containers or ender
+chests (including ones opened by a command), and no armour stands. A player whose
+inventory cannot be emptied is sent home through the restore instead. Leaving returns
+exactly what they came in with, game mode and effects included.
+
 `plugins/NinjaArena/kits.yml` defines one shared kit. Each round clears storage, armour,
 offhand, cursor and the personal crafting grid before applying the kit fresh. A player
 still on the death screen receives it after being placed on respawn; eliminated players
