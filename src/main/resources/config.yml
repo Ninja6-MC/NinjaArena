@@ -43,3 +43,10 @@ match:
   # Extra rounds played, one at a time, while the lead is tied after the last round. Still
   # tied after them, the leading teams share the win (0 to 10).
   extra-rounds: 1
+
+scoring:
+  # Points awarded to the winning team of a round. Draws award nothing; 0 disables it.
+  round-win-points: 5
+  # Points for killing an opposing player in the same match. Teamkills, suicides,
+  # environmental deaths and leaving award nothing. 0 disables this award.
+  player-kill-points: 2

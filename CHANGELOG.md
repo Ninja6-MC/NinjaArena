@@ -13,6 +13,13 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Team scoring: 5 points for a round win and 2 for an opposing player kill, configurable
+  under `scoring`. Teamkills, suicides, environmental deaths, leaving and drawn rounds
+  award nothing. Total points decide match standings and extra rounds, and the final
+  points table replaces the rounds-won summary before players return home.
+- `NinjaArenaPlugin#scores()` exposes the per-match team scores and `TeamScores#addPoints`
+  accepts awards from other sources, including future enemy kills. Scores are frozen in
+  the match result and each new match starts at zero.
 - Match players use Adventure mode and cannot harm teammates with direct attacks,
   projectiles, harmful splash potions or area-effect clouds unless `match.friendly-fire`
   is enabled. Leaving restores the saved game mode with the rest of the snapshot.
