@@ -4,10 +4,13 @@ import com.ninja6.ninjaarena.match.MatchService.Exit;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.util.Objects;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -21,8 +24,8 @@ import org.bukkit.event.player.PlayerTeleportEvent;
  * no damage except from the void or {@code /kill}, so nobody falls forever.
  *
  * <p>Death handling here is deliberately minimal: a death takes the player out of the round
- * and they respawn at their team spawn. Drops and spectating belong to the death-handling
- * task.
+ * and they respawn at their team spawn, where they deal no damage until the next round.
+ * Drops and spectating belong to the death-handling task.
  */
 public final class MatchListener implements Listener {
 
@@ -36,6 +39,18 @@ public final class MatchListener implements Listener {
     public void onDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player player && matches.isSheltered(player.getUniqueId())
                 && event.getCause() != DamageCause.VOID && event.getCause() != DamageCause.KILL) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** A player who is out of the round deals no damage, directly or with a projectile. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onAttack(EntityDamageByEntityEvent event) {
+        Entity damager = event.getDamager();
+        if (damager instanceof Projectile projectile && projectile.getShooter() instanceof Entity shooter) {
+            damager = shooter;
+        }
+        if (damager instanceof Player attacker && matches.isDisarmed(attacker.getUniqueId())) {
             event.setCancelled(true);
         }
     }

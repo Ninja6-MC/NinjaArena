@@ -350,6 +350,19 @@ class MatchServiceTest {
     }
 
     @Test
+    void aPlayerOutOfTheRoundIsDisarmedUntilTheNextRound() {
+        startTwoOnTwo();
+        ticks(2);
+        assertFalse(matches.isDisarmed(ALICE));
+        assertFalse(matches.isDisarmed(UUID.randomUUID()));
+
+        matches.died(player(ALICE), null);
+        runNextTick();
+        assertTrue(matches.isDisarmed(ALICE));
+        assertFalse(matches.isDisarmed(BOB));
+    }
+
+    @Test
     void aPlayerStillDeadAtTheNextRoundIsNotTeleported() {
         startTwoOnTwo();
         ticks(2);

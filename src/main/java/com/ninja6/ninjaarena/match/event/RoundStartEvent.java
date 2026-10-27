@@ -7,6 +7,11 @@ import org.bukkit.event.HandlerList;
  * A round started: every player in the match is alive again, has been readied (health,
  * food and fire reset) and teleported to their team spawn, and PREP has begun. The place to
  * hand out round kits.
+ *
+ * <p>A player still on the death screen when the round starts is not readied or teleported
+ * here: they reach their team spawn when they respawn ({@code MatchService#respawnPoint}).
+ * Anything given to them on this event is lost on respawn, so kits and other per-round
+ * state must also be applied on {@code PlayerRespawnEvent} for a player in a match.
  */
 public final class RoundStartEvent extends MatchEvent {
 

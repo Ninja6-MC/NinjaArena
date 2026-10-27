@@ -257,6 +257,16 @@ public final class MatchService implements MatchStart {
         return running != null && !running.match().phase().isFighting();
     }
 
+    /**
+     * Whether a player in a match may deal no damage now: they are out of the current round.
+     * A stopgap until the death-handling task moves eliminated players to spectating, so a
+     * player who is out cannot decide the round. False for a player not in a match.
+     */
+    public boolean isDisarmed(UUID playerId) {
+        Running running = matchOf.get(playerId);
+        return running != null && !running.match().isAlive(playerId);
+    }
+
     /** Where a player in a match respawns: their team spawn. Empty for a player not in a match. */
     public Optional<Location> respawnPoint(UUID playerId) {
         Running running = matchOf.get(playerId);
