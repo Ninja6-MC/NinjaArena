@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.command;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -17,10 +18,14 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     public static final String ADMIN = "ninjaarena.admin";
 
-    private final ArenaCommand arena;
+    private static final List<String> GROUPS = List.of(ArenaCommand.NAME, PortalCommand.NAME);
 
-    public NinjaArenaCommand(ArenaCommand arena) {
+    private final ArenaCommand arena;
+    private final PortalCommand portal;
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal) {
         this.arena = Objects.requireNonNull(arena, "arena");
+        this.portal = Objects.requireNonNull(portal, "portal");
     }
 
     @Override
@@ -29,12 +34,13 @@ public final class NinjaArenaCommand implements TabExecutor {
             sender.sendMessage(Component.text("You do not have permission to use this command.", NamedTextColor.RED));
             return true;
         }
-        if (args.length == 0 || !args[0].equalsIgnoreCase(ArenaCommand.NAME)) {
-            sender.sendMessage(Component.text("Usage: /" + label + " " + ArenaCommand.NAME + " <subcommand>",
-                    NamedTextColor.RED));
-            return true;
+        String group = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
+        switch (group) {
+            case ArenaCommand.NAME -> arena.execute(sender, label, tail(args));
+            case PortalCommand.NAME -> portal.execute(sender, label, tail(args));
+            default -> sender.sendMessage(Component.text("Usage: /" + label + " <" + String.join("|", GROUPS)
+                    + "> <subcommand>", NamedTextColor.RED));
         }
-        arena.execute(sender, label, tail(args));
         return true;
     }
 
@@ -45,12 +51,19 @@ public final class NinjaArenaCommand implements TabExecutor {
         }
         if (args.length <= 1) {
             String prefix = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
-            return ArenaCommand.NAME.startsWith(prefix) ? List.of(ArenaCommand.NAME) : List.of();
+            List<String> out = new ArrayList<>();
+            for (String group : GROUPS) {
+                if (group.startsWith(prefix)) {
+                    out.add(group);
+                }
+            }
+            return out;
         }
-        if (!args[0].equalsIgnoreCase(ArenaCommand.NAME)) {
-            return List.of();
-        }
-        return arena.complete(sender, tail(args));
+        return switch (args[0].toLowerCase(Locale.ROOT)) {
+            case ArenaCommand.NAME -> arena.complete(sender, tail(args));
+            case PortalCommand.NAME -> portal.complete(sender, tail(args));
+            default -> List.of();
+        };
     }
 
     private static String[] tail(String[] args) {

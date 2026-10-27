@@ -331,7 +331,7 @@ public final class ArenaCommand {
     }
 
     /** Suggests the player's own block coordinate on the given axis (0 x, 1 y, 2 z), and {@code ~}. */
-    private static List<String> coordinate(CommandSender sender, int axis, String current) {
+    static List<String> coordinate(CommandSender sender, int axis, String current) {
         if (!(sender instanceof Player player)) {
             return List.of();
         }
@@ -344,7 +344,7 @@ public final class ArenaCommand {
         return matching(List.of("~", Integer.toString(value)), current);
     }
 
-    private static List<String> matching(List<String> options, String prefix) {
+    static List<String> matching(List<String> options, String prefix) {
         String lower = prefix.toLowerCase(Locale.ROOT);
         List<String> out = new ArrayList<>();
         for (String option : options) {

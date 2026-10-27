@@ -3,6 +3,10 @@ package com.ninja6.ninjaarena;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
+import com.ninja6.ninjaarena.command.PortalCommand;
+import com.ninja6.ninjaarena.portal.PortalEntry;
+import com.ninja6.ninjaarena.portal.PortalListener;
+import com.ninja6.ninjaarena.portal.PortalRegistry;
 import com.ninja6.ninjaarena.restore.PlayerRestorer;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
@@ -23,6 +27,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private ArenaWorld arenaWorld;
     private RestoreService restores;
     private ArenaRegistry arenas;
+    private PortalRegistry portals;
 
     @Override
     public void onEnable() {
@@ -41,7 +46,12 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new RestoreListener(this, restores), this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         arenas = ArenaRegistry.open(this, arenaWorld);
-        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world));
+        portals = PortalRegistry.open(this);
+        PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
+        PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);
+        getServer().getPluginManager().registerEvents(
+                new PortalListener(this, portals, entry, arenaWorld::world, snapshots, portalCommand::forget), this);
+        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world), portalCommand);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -56,6 +66,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (arenaWorld != null) {
             arenaWorld.close();
         }
+        portals = null;
         restores = null;
         snapshots = null;
         getLogger().info("NinjaArena disabled.");
@@ -78,5 +89,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Registered arenas; {@code null} while the plugin is disabled. */
     public ArenaRegistry arenas() {
         return arenas;
+    }
+
+    /** Registered portals; {@code null} while the plugin is disabled. */
+    public PortalRegistry portals() {
+        return portals;
     }
 }
