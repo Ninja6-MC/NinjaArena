@@ -426,6 +426,21 @@ class NinjaToolsTest extends MatchFixture {
     }
 
     @Test
+    void eliminationDiscardsThatPlayersCloudsAndFlyingTools() {
+        fight();
+        hit(launch(ALICE, NinjaTool.SMOKE_BOMB).projectile(), null);
+        Launch flying = launch(ALICE, NinjaTool.SHURIKEN);
+        hit(launch(BOB, NinjaTool.SMOKE_BOMB).projectile(), null);
+        assertEquals(2, clouds.size());
+
+        out(ALICE);
+        assertTrue(clouds.get(0).removed);
+        assertTrue(flying.projectile().removed);
+        assertFalse(clouds.get(1).removed);
+        assertEquals(1, cloudApply(clouds.get(1), List.of(player(CAROL))).getAffectedEntities().size());
+    }
+
+    @Test
     void matchEndAndCloseDiscardEverything() {
         fight();
         Launch flying = launch(ALICE, NinjaTool.SHURIKEN);

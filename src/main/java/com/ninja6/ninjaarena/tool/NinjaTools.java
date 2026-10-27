@@ -272,15 +272,12 @@ public final class NinjaTools implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onEliminated(PlayerEliminatedEvent event) {
-        forget(event.player());
+        discard(event.player());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onLeave(PlayerLeaveMatchEvent event) {
-        UUID player = event.player();
-        removeEntities(thrown, shot -> shot.thrower().equals(player));
-        removeEntities(smoke, cloud -> cloud.thrower().equals(player));
-        forget(player);
+        discard(event.player());
     }
 
     /** Removes every flying tool and cloud and drops all cooldowns and marks. Called on plugin disable. */
@@ -370,6 +367,13 @@ public final class NinjaTools implements Listener {
         removeEntities(thrown, shot -> shot.arena().equals(arena));
         removeEntities(smoke, cloud -> cloud.arena().equals(arena));
         match.players().forEach(this::forget);
+    }
+
+    /** Removes one player's flying tools and clouds and drops their cooldown and mark. */
+    private void discard(UUID player) {
+        removeEntities(thrown, shot -> shot.thrower().equals(player));
+        removeEntities(smoke, cloud -> cloud.thrower().equals(player));
+        forget(player);
     }
 
     private void forget(UUID id) {
