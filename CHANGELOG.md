@@ -31,3 +31,9 @@ Java 25, and does not run on Folia.
   `.editorconfig`, `.gitattributes` and an empty `.github/standards-exceptions.yml`.
 - OpenSSF Scorecard workflow, run weekly, on every push to `main` and when branch
   protection changes.
+- Player snapshots taken before arena entry: location, inventory, armour, offhand,
+  experience, health, food, saturation and exhaustion, potion effects, game mode, fire
+  ticks and fall distance. Each is written to `plugins/NinjaArena/snapshots/<uuid>.yml`
+  through a temporary file and an atomic move, so a crash leaves the previous file or the
+  new one. A capture reports whether it was saved, refuses to overwrite a snapshot that
+  has not been restored yet, and snapshots on disk can be loaded, listed and deleted.
