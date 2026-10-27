@@ -357,6 +357,29 @@ class ArenaRegistryTest {
     }
 
     @Test
+    void aFailedResetKeepsTheArenaUnavailableUntilOneSucceeds() throws Exception {
+        buildComplete("dojo");
+        copies.failing = true;
+        ArenaRegistry reopened = reopen();
+        reopened.resetAll();
+        assertFalse(reopened.isAvailable("dojo"));
+
+        copies.failing = false;
+        reopened.reset("dojo");
+        assertTrue(reopened.isAvailable("dojo"));
+
+        copies.failing = true;
+        assertThrows(ArenaException.class, () -> reopened.reset("dojo"));
+        assertFalse(reopened.isAvailable("dojo"));
+
+        // A finished edit takes a fresh copy of the world as it is, so the arena is clean again.
+        copies.failing = false;
+        reopened.startEdit("dojo");
+        reopened.finishEdit("dojo");
+        assertTrue(reopened.isAvailable("dojo"));
+    }
+
+    @Test
     void deleteAndCreateDropTheOldCopy() throws Exception {
         buildComplete("dojo");
         registry.delete("dojo");

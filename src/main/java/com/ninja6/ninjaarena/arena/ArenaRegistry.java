@@ -62,6 +62,8 @@ public final class ArenaRegistry {
     private final Map<String, Arena> arenas = new TreeMap<>();
     private final Set<String> editing = new TreeSet<>();
     private final Set<String> held = new HashSet<>();
+    /** Arenas whose last reset failed, so the world may still hold a match's changes. */
+    private final Set<String> unreset = new HashSet<>();
 
     /** Set when the file could not be read, so a later write cannot replace what is in it. */
     private boolean unreadable;
@@ -218,6 +220,7 @@ public final class ArenaRegistry {
         } catch (IOException e) {
             // Harmless: nothing restores a copy without an arena, and create removes it first.
         }
+        unreset.remove(arena.name());
         notifyEditOrDelete(arena.name());
     }
 
@@ -269,6 +272,7 @@ public final class ArenaRegistry {
                 throw new ArenaException("Could not save the copy of " + arena.name() + ", so it stays in edit"
                         + " mode: " + e.getMessage(), e);
             }
+            unreset.remove(arena.name());
         }
         leaveEdit(arena.name());
         return ArenaValidator.problems(arena, grid);
@@ -314,8 +318,8 @@ public final class ArenaRegistry {
 
     /**
      * Whether a match may start in the arena: complete, saved as a copy it can be reset from,
-     * not in use, and no arena at all in edit mode, since edit mode turns saving on for the
-     * whole world.
+     * reset successfully since its last match or startup, not in use, and no arena at all in
+     * edit mode, since edit mode turns saving on for the whole world.
      */
     public boolean isAvailable(String name) {
         String key = Arena.normalizeName(name);
@@ -323,6 +327,7 @@ public final class ArenaRegistry {
         return arena != null
                 && editing.isEmpty()
                 && !held.contains(key)
+                && !unreset.contains(key)
                 && ArenaValidator.problems(arena, grid).isEmpty()
                 && copies.exists(key);
     }
@@ -332,7 +337,8 @@ public final class ArenaRegistry {
      * engine, at match end; it may be called while the arena is held.
      *
      * @throws ArenaException if the arena is in edit mode, which would undo the edit, or has
-     *                        no copy, or the copy cannot be read
+     *                        no copy, or the copy cannot be read; the arena is then not
+     *                        available until a reset succeeds or an edit finishes
      */
     public void reset(String name) throws ArenaException {
         Arena arena = require(name);
@@ -342,15 +348,18 @@ public final class ArenaRegistry {
         try {
             copies.restore(arena.name());
         } catch (IOException e) {
+            unreset.add(arena.name());
             throw new ArenaException("Could not reset " + arena.name() + ": " + e.getMessage(), e);
         }
+        unreset.remove(arena.name());
     }
 
     /**
      * Resets every arena that is not in edit mode from its copy. An arena with bounds but no
      * copy, such as one built before copies existed, gets its first copy from the world as
      * it is. Called when the registry opens on startup, before any match can run, so whatever
-     * the last run wrote to the world save is undone.
+     * the last run wrote to the world save is undone. An arena that fails is not available
+     * until a later reset succeeds or an edit finishes.
      */
     public ResetReport resetAll() {
         List<String> reset = new ArrayList<>();
@@ -368,7 +377,9 @@ public final class ArenaRegistry {
                     copies.save(arena.name(), arena.bounds());
                     copied.add(arena.name());
                 }
+                unreset.remove(arena.name());
             } catch (IOException e) {
+                unreset.add(arena.name());
                 failed.add("Could not reset " + arena.name() + " from its saved copy: " + e.getMessage());
             }
         }

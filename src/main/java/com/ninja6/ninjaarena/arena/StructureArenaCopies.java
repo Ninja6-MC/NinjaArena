@@ -97,6 +97,9 @@ public final class StructureArenaCopies implements ArenaCopies {
             int z = Integer.parseInt(origin.group(3));
             Structure structure = structures.loadStructure(file.toFile());
             BlockVector size = structure.getSize();
+            // Each file is one chunk column. Loading it fully loads the entities the last save
+            // wrote there, which entity lookups do not see while the chunk is unloaded.
+            world.getChunkAt(x >> 4, z >> 4);
             clearEntities(new BoundingBox(x, y, z, x + size.getBlockX(), y + size.getBlockY(), z + size.getBlockZ()));
             structure.place(new Location(world, x, y, z), false, StructureRotation.NONE, Mirror.NONE, 0, 1f,
                     new Random());
