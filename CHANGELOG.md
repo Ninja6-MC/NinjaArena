@@ -122,9 +122,10 @@ Java 25, and does not run on Folia.
 - Walking into a portal sends a player with `ninjaarena.play` to the arena's waiting room
   once the arena is available and their snapshot is saved. Only moves that cross a block
   boundary are checked, through an index of the chunks each portal touches. A refused
-  player is put back where they came from and told why, at most every two seconds.
-  Teleporting into a portal does not enter it, and vanilla portal travel is cancelled
-  inside one.
+  player is put back where they came from and told why, at most every two seconds. A
+  failed teleport to the arena is logged, and its message shares that limit. Entry runs
+  on a later tick, never inside the move that crossed into the portal. Teleporting into a
+  portal does not enter it, and vanilla portal travel is cancelled inside one.
 - Waiting rooms: a player who arrives through a portal joins the smallest of the arena's
   teams, and when a departure leaves one team two behind another, the last player to join
   the larger team moves over. A start countdown begins once `waiting-room.min-players`
