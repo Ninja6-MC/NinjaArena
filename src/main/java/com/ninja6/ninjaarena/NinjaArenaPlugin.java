@@ -58,6 +58,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
                 new ReturnHomeMatchStart(getServer(), getLogger(), restores::restore));
         getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
+        arenas.onEditOrDelete(waitingRooms::closeRoom);
         waitingRooms.start();
         PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
         PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);

@@ -40,7 +40,10 @@ public final class ReturnHomeMatchStart implements MatchStart {
                 if (player != null && player.isOnline()) {
                     player.sendMessage(Component.text("Rounds are not available on this server yet, so you were"
                             + " sent back.", NamedTextColor.YELLOW));
-                    restore.apply(player);
+                    if (restore.apply(player) == RestoreResult.FAILED) {
+                        player.sendMessage(Component.text("Your belongings could not be returned yet. Rejoin the"
+                                + " server, or ask an admin if this keeps happening.", NamedTextColor.RED));
+                    }
                 }
             }
         }

@@ -71,6 +71,7 @@ class WaitingRoomServiceTest {
     private World overworld;
     private WaitingRoomService rooms;
     private WaitingRoomListener listener;
+    private ArenaRegistry arenas;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -85,7 +86,7 @@ class WaitingRoomServiceTest {
             public void remove(int chunkX, int chunkZ) {
             }
         };
-        ArenaRegistry arenas = new ArenaRegistry(new ArenaStore(dir.resolve("arenas.yml")),
+        arenas = new ArenaRegistry(new ArenaStore(dir.resolve("arenas.yml")),
                 new ArenaGrid(256, 2048, -64, 320), enabled -> { }, noTickets);
         arenas.load();
         arenas.create("dojo", new GridCell(0, 0));
@@ -101,6 +102,7 @@ class WaitingRoomServiceTest {
             return RestoreResult.RESTORED;
         }, (arena, teams) -> started.add(teams));
         listener = new WaitingRoomListener(rooms);
+        arenas.onEditOrDelete(rooms::closeRoom);
         add(ALICE, "Alice");
         add(BOB, "Bob");
         add(CAROL, "Carol");
@@ -293,6 +295,38 @@ class WaitingRoomServiceTest {
 
         runNextTick();
         assertEquals(2, restored.size());
+    }
+
+    @Test
+    void editingTheArenaClosesItsRoomAndTheNextRoomUsesTheNewPoint() throws Exception {
+        rooms.join(player(ALICE), "dojo");
+        arenas.startEdit("dojo");
+        assertFalse(rooms.isWaiting(ALICE));
+        assertEquals(List.of(ALICE), restored);
+        assertTrue(players.get(ALICE).messages.contains("Arena dojo is no longer available, so you were sent back."));
+
+        arenas.update("dojo", a -> a.withWaitingRoom(new ArenaPoint(50.5, 64, 80.5, 0, 0)));
+        arenas.finishEdit("dojo");
+        players.get(BOB).location = new Location(arenaWorld, 50.5, 64, 80.5);
+        rooms.join(player(BOB), "dojo");
+        walk(BOB, 51.5, 64, 80.5);
+        runNextTick();
+        assertTrue(rooms.isWaiting(BOB));
+        assertEquals(List.of(ALICE), restored);
+    }
+
+    @Test
+    void deletingTheArenaClosesItsRoom() throws Exception {
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(BOB), "dojo");
+        arenas.delete("dojo");
+        assertFalse(rooms.isWaiting(ALICE));
+        assertFalse(rooms.isWaiting(BOB));
+        assertEquals(List.of(ALICE, BOB), restored);
+        for (int i = 0; i < 5; i++) {
+            rooms.tick();
+        }
+        assertTrue(started.isEmpty());
     }
 
     @Test

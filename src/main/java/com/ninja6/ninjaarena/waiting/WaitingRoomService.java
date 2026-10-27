@@ -36,6 +36,12 @@ import org.bukkit.scheduler.BukkitTask;
  * A player is taken out of the room before the restore runs, so the restore's own teleport
  * is not seen as another exit.
  *
+ * <p><b>Arena changes.</b> A room keeps the waiting-room point and team count its arena had
+ * when the room opened. An arena changes only in edit mode, so when its arena enters edit
+ * mode or is deleted, {@link #closeRoom(String)} sends the room's players home and drops the
+ * room. Portals refuse entry while any arena is in edit mode, so the next room opens from
+ * the finished definition.
+ *
  * <p><b>Start.</b> When a countdown finishes, the room is closed and its players are handed
  * to the {@link MatchStart}, which owns them from then on.
  *
@@ -217,6 +223,30 @@ public final class WaitingRoomService {
             }
         }
         return true;
+    }
+
+    /**
+     * Sends everyone waiting for the arena home and drops its room, because the arena is
+     * entering edit mode or being deleted. Does nothing if no one is waiting for it.
+     */
+    public void closeRoom(String arenaName) {
+        Room room = rooms.remove(Arena.normalizeName(arenaName));
+        if (room == null) {
+            return;
+        }
+        List<UUID> waiting = room.state().players();
+        for (UUID playerId : waiting) {
+            arenaOf.remove(playerId);
+        }
+        for (UUID playerId : waiting) {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null && player.isOnline()) {
+                player.sendActionBar(Component.empty());
+                player.sendMessage(Component.text("Arena " + room.arena() + " is no longer available, so you were"
+                        + " sent back.", NamedTextColor.YELLOW));
+                sendHome(player);
+            }
+        }
     }
 
     /** Advances every countdown by a second. Run once a second by {@link #start()}. */

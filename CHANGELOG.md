@@ -94,4 +94,6 @@ Java 25, and does not run on Folia.
 - Leaving a waiting room restores the player from their snapshot: walking or falling more
   than `waiting-room.radius` blocks from it, being teleported out of it, dying, or
   `/ninjaarena leave`, which needs `ninjaarena.play`. A player who disconnects is restored
-  on their next join, and disabling the plugin sends every waiting player home.
+  on their next join, and disabling the plugin sends every waiting player home. Putting an
+  arena in edit mode or deleting it sends everyone in its waiting room home, so a room never
+  outlives the definition it opened with.
