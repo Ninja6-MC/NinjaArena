@@ -5,6 +5,10 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
+import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
+import com.ninja6.ninjaarena.kit.KitDefinition;
+import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.kit.RoundKitListener;
 import com.ninja6.ninjaarena.match.MatchDeathListener;
 import com.ninja6.ninjaarena.match.MatchListener;
 import com.ninja6.ninjaarena.match.MatchProtectionListener;
@@ -28,6 +32,7 @@ import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.logging.Level;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -44,6 +49,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private MatchService matches;
     private MatchDeathListener deaths;
     private TeamScores scores;
+    private KitItems kitItems;
     private WaitingRoomService waitingRooms;
 
     @Override
@@ -77,6 +83,19 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         matches.setStandings(scores);
         getServer().getPluginManager().registerEvents(new TeamScoringListener(scores,
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer), this);
+        kitItems = new KitItems();
+        var kitFile = getDataFolder().toPath().resolve("kits.yml");
+        var kit = KitDefinition.load(kitFile, getLogger());
+        if (!Files.exists(kitFile)) {
+            try {
+                saveResource("kits.yml", false);
+            } catch (RuntimeException e) {
+                getLogger().warning("Could not write the empty kits.yml template: " + e.getMessage());
+            }
+        }
+        getServer().getPluginManager().registerEvents(new RoundKitListener(matches, getServer()::getPlayer,
+                kit, kitItems, getLogger()), this);
+        getServer().getPluginManager().registerEvents(new InventoryLockdownListener(matches), this);
         matches.start();
         deaths.start();
         // A finished countdown hands its players to the match engine.
@@ -109,6 +128,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             matches = null;
         }
         scores = null;
+        kitItems = null;
         if (deaths != null) {
             deaths.close();
             deaths = null;
@@ -161,6 +181,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Team points and the award API for live matches; {@code null} while disabled. */
     public TeamScores scores() {
         return scores;
+    }
+
+    /** Register named providers for custom kit items before a round starts; null while disabled. */
+    public KitItems kitItems() {
+        return kitItems;
     }
 
     /** Registered portals; {@code null} while the plugin is disabled. */

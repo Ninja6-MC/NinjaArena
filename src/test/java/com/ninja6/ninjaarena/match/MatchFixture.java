@@ -31,8 +31,11 @@ import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.Plugin;
@@ -68,6 +71,12 @@ abstract class MatchFixture {
         Entity spectatorTarget;
         Player killer;
         ItemStack[] storage = new ItemStack[0];
+        ItemStack[] armour = new ItemStack[4];
+        ItemStack offhand;
+        ItemStack cursor;
+        ItemStack[] crafting = new ItemStack[5];
+        PlayerInventory inventory;
+        InventoryView view;
         final List<String> messages = new ArrayList<>();
         final List<Location> teleports = new ArrayList<>();
         Player proxy;
@@ -177,6 +186,52 @@ abstract class MatchFixture {
     protected void add(UUID id, String name) {
         Fake fake = new Fake(id, name);
         fake.location = new Location(arenaWorld, ROOM.x(), ROOM.y(), ROOM.z());
+        fake.inventory = (PlayerInventory) Proxy.newProxyInstance(PlayerInventory.class.getClassLoader(),
+                new Class<?>[] {PlayerInventory.class}, (p, m, a) -> switch (m.getName()) {
+                    case "getStorageContents" -> fake.storage.clone();
+                    case "setStorageContents" -> { fake.storage = ((ItemStack[]) a[0]).clone(); yield null; }
+                    case "getArmorContents" -> fake.armour.clone();
+                    case "setArmorContents" -> { fake.armour = ((ItemStack[]) a[0]).clone(); yield null; }
+                    case "getItemInOffHand" -> fake.offhand;
+                    case "setItemInOffHand" -> { fake.offhand = (ItemStack) a[0]; yield null; }
+                    case "setItem" -> {
+                        int slot = (Integer) a[0];
+                        ItemStack item = (ItemStack) a[1];
+                        if (slot == 40) fake.offhand = item;
+                        else if (slot >= 36) fake.armour[slot - 36] = item;
+                        else {
+                            fake.storage = java.util.Arrays.copyOf(fake.storage, Math.max(36, fake.storage.length));
+                            fake.storage[slot] = item;
+                        }
+                        yield null;
+                    }
+                    case "clear" -> {
+                        fake.storage = new ItemStack[36]; fake.armour = new ItemStack[4]; fake.offhand = null;
+                        yield null;
+                    }
+                    case "setHeldItemSlot" -> null;
+                    case "getHolder" -> fake.proxy;
+                    case "getType" -> InventoryType.PLAYER;
+                    case "equals" -> p == a[0];
+                    case "hashCode" -> System.identityHashCode(p);
+                    default -> throw new UnsupportedOperationException(m.getName());
+                });
+        Inventory crafting = (Inventory) Proxy.newProxyInstance(Inventory.class.getClassLoader(),
+                new Class<?>[] {Inventory.class}, (p, m, a) -> switch (m.getName()) {
+                    case "getType" -> InventoryType.CRAFTING;
+                    case "getHolder" -> fake.proxy;
+                    case "clear" -> { fake.crafting = new ItemStack[5]; yield null; }
+                    default -> throw new UnsupportedOperationException(m.getName());
+                });
+        fake.view = (InventoryView) Proxy.newProxyInstance(InventoryView.class.getClassLoader(),
+                new Class<?>[] {InventoryView.class}, (p, m, a) -> switch (m.getName()) {
+                    case "getTopInventory" -> crafting;
+                    case "getBottomInventory" -> fake.inventory;
+                    case "getPlayer" -> fake.proxy;
+                    case "getType" -> InventoryType.CRAFTING;
+                    case "convertSlot" -> a[0];
+                    default -> throw new UnsupportedOperationException(m.getName());
+                });
         fake.proxy = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "getUniqueId" -> id;
@@ -207,22 +262,12 @@ abstract class MatchFixture {
                     }
                     case "getRespawnLocation", "getAttribute" -> null;
                     case "leaveVehicle", "eject" -> false;
-                    case "getInventory" -> Proxy.newProxyInstance(PlayerInventory.class.getClassLoader(),
-                            new Class<?>[] {PlayerInventory.class}, (p, m, a) -> {
-                                if (m.getName().equals("getStorageContents")) {
-                                    return fake.storage.clone();
-                                }
-                                if (m.getName().equals("setStorageContents")) {
-                                    fake.storage = ((ItemStack[]) a[0]).clone();
-                                    return null;
-                                }
-                                if (m.getName().startsWith("set")) {
-                                    return null;
-                                }
-                                throw new UnsupportedOperationException(m.getName());
-                            });
+                    case "getInventory" -> fake.inventory;
+                    case "getOpenInventory" -> fake.view;
+                    case "setItemOnCursor" -> { fake.cursor = (ItemStack) args[0]; yield null; }
+                    case "getItemOnCursor" -> fake.cursor;
                     case "getActivePotionEffects" -> List.of();
-                    case "setGliding", "setVelocity", "setFallDistance", "setItemOnCursor", "closeInventory",
+                    case "setGliding", "setVelocity", "setFallDistance", "closeInventory",
                             "setTotalExperience", "setLevel", "setExp", "setHealth", "setFoodLevel", "setSaturation",
                             "setExhaustion", "setFireTicks" -> null;
                     case "getLocation" -> fake.location.clone();
