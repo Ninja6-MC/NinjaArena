@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -52,7 +53,8 @@ import org.bukkit.plugin.Plugin;
  * thread, the checks run again, the snapshot is written and the player is teleported, all in
  * the same tick, so nothing the player does can fall between the snapshot and the teleport.
  * A player who is by then offline, dead, or no longer in or next to the portal is dropped
- * silently. A teleport that fails deletes the snapshot again, since the player never left.
+ * silently. A teleport that fails deletes the snapshot again, since the player never left;
+ * one that succeeds hands the player to the waiting room.
  */
 public final class PortalListener implements Listener {
 
@@ -64,22 +66,25 @@ public final class PortalListener implements Listener {
     private final Supplier<World> arenaWorld;
     private final SnapshotService snapshots;
     private final Consumer<UUID> onQuit;
+    private final BiConsumer<Player, String> onEnter;
 
     /** Players whose entry is waiting for the waiting room's chunk. */
     private final Set<UUID> entering = new HashSet<>();
     private final Map<UUID, Long> lastMessage = new HashMap<>();
 
     /**
-     * @param onQuit also told when a player leaves, to drop per-player command state
+     * @param onQuit  also told when a player leaves, to drop per-player command state
+     * @param onEnter told the player and the arena's name once the player is in its waiting room
      */
     public PortalListener(Plugin plugin, PortalRegistry portals, PortalEntry entry, Supplier<World> arenaWorld,
-            SnapshotService snapshots, Consumer<UUID> onQuit) {
+            SnapshotService snapshots, Consumer<UUID> onQuit, BiConsumer<Player, String> onEnter) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.portals = Objects.requireNonNull(portals, "portals");
         this.entry = Objects.requireNonNull(entry, "entry");
         this.arenaWorld = Objects.requireNonNull(arenaWorld, "arenaWorld");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
         this.onQuit = Objects.requireNonNull(onQuit, "onQuit");
+        this.onEnter = Objects.requireNonNull(onEnter, "onEnter");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -160,6 +165,7 @@ public final class PortalListener implements Listener {
             moved = false;
         }
         if (moved) {
+            onEnter.accept(player, portal.arena());
             return;
         }
         // The player never left, so what they have now is theirs and the snapshot is stale.

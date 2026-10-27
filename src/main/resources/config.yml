@@ -11,3 +11,14 @@ arena-grid:
   # multiple of 16 (32 to 4096) so cells line up with chunks. Cells must lie inside the
   # world border; changing this moves every cell, so set it before the first arena.
   cell-size: 256
+
+waiting-room:
+  # Players needed in an arena's waiting room before the start countdown begins (1 to 64).
+  # Arriving players are put on the smallest team.
+  min-players: 2
+  # Length of the start countdown in seconds (1 to 600). It stops if the count drops below
+  # min-players and starts again from the full length when it is reached again.
+  countdown-seconds: 30
+  # How far a player may move from the waiting-room point, in blocks along any axis (2 to
+  # 64). Going further, or being teleported further, sends them home.
+  radius: 16

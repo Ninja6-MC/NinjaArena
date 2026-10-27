@@ -12,6 +12,11 @@ import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
+import com.ninja6.ninjaarena.waiting.ReturnHomeMatchStart;
+import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
+import com.ninja6.ninjaarena.waiting.WaitingRoomService;
+import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
+import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import java.io.IOException;
@@ -28,6 +33,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private RestoreService restores;
     private ArenaRegistry arenas;
     private PortalRegistry portals;
+    private WaitingRoomService waitingRooms;
 
     @Override
     public void onEnable() {
@@ -47,11 +53,19 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         arenas = ArenaRegistry.open(this, arenaWorld);
         portals = PortalRegistry.open(this);
+        // Until the round loop exists, a finished countdown sends its players home.
+        waitingRooms = new WaitingRoomService(this, arenas,
+                WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
+                new ReturnHomeMatchStart(getServer(), getLogger(), restores::restore));
+        getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
+        arenas.onEditOrDelete(waitingRooms::closeRoom);
+        waitingRooms.start();
         PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
         PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);
-        getServer().getPluginManager().registerEvents(
-                new PortalListener(this, portals, entry, arenaWorld::world, snapshots, portalCommand::forget), this);
-        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world), portalCommand);
+        getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
+                snapshots, portalCommand::forget, waitingRooms::join), this);
+        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world), portalCommand,
+                player -> waitingRooms.leave(player, Exit.COMMAND));
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -59,6 +73,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (waitingRooms != null) {
+            waitingRooms.close();
+            waitingRooms = null;
+        }
         if (arenas != null) {
             arenas.close();
             arenas = null;
@@ -89,6 +107,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Registered arenas; {@code null} while the plugin is disabled. */
     public ArenaRegistry arenas() {
         return arenas;
+    }
+
+    /** Waiting rooms and their start countdowns; {@code null} while the plugin is disabled. */
+    public WaitingRoomService waitingRooms() {
+        return waitingRooms;
     }
 
     /** Registered portals; {@code null} while the plugin is disabled. */

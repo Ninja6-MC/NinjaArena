@@ -36,6 +36,10 @@ import org.bukkit.plugin.Plugin;
  * them. The match engine holds an arena for exactly as long as a match runs; nothing else
  * keeps arena chunks loaded. A held arena cannot be deleted.
  *
+ * <p><b>Change listeners.</b> {@link #onEditOrDelete(Consumer)} is told an arena's name when
+ * it enters edit mode or is deleted, the two ways its definition can change, so whatever
+ * relies on it (such as players waiting in its waiting room) can let go first.
+ *
  * <p>Not thread-safe: call it from the server thread.
  */
 public final class ArenaRegistry {
@@ -51,6 +55,8 @@ public final class ArenaRegistry {
 
     /** Set when the file could not be read, so a later write cannot replace what is in it. */
     private boolean unreadable;
+
+    private final List<Consumer<String>> editOrDeleteListeners = new ArrayList<>();
 
     /**
      * @param worldSaving turns the arena world's saving on or off
@@ -181,6 +187,7 @@ public final class ArenaRegistry {
         if (editing.contains(arena.name())) {
             leaveEdit(arena.name());
         }
+        notifyEditOrDelete(arena.name());
     }
 
     /** Puts an arena in edit mode and turns world saving on. */
@@ -194,6 +201,22 @@ public final class ArenaRegistry {
         }
         refuseEditWhileHeld();
         enterEdit(arena.name());
+        notifyEditOrDelete(arena.name());
+    }
+
+    /**
+     * Registers a listener told an arena's name after it enters edit mode through
+     * {@link #startEdit(String)} or is deleted. A new arena starts in edit mode too, but
+     * nothing can rely on it yet, so {@link #create} does not notify.
+     */
+    public void onEditOrDelete(Consumer<String> listener) {
+        editOrDeleteListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    private void notifyEditOrDelete(String name) {
+        for (Consumer<String> listener : editOrDeleteListeners) {
+            listener.accept(name);
+        }
     }
 
     /**

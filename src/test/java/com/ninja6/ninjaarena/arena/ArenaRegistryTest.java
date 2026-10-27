@@ -62,6 +62,24 @@ class ArenaRegistryTest {
     }
 
     @Test
+    void startingAnEditOrDeletingNotifiesButCreatingDoesNot() throws Exception {
+        List<String> notified = new ArrayList<>();
+        registry.onEditOrDelete(notified::add);
+        buildComplete("dojo");
+        assertEquals(List.of(), notified);
+
+        registry.startEdit("DOJO");
+        assertEquals(List.of("dojo"), notified);
+        registry.finishEdit("dojo");
+        registry.delete("dojo");
+        assertEquals(List.of("dojo", "dojo"), notified);
+
+        // A refused edit or delete changes nothing, so it does not notify.
+        assertThrows(ArenaException.class, () -> registry.delete("dojo"));
+        assertEquals(2, notified.size());
+    }
+
+    @Test
     void createPicksTheNearestFreeCellAndStartsEditing() throws Exception {
         Arena first = registry.create("Dojo", null);
         Arena second = registry.create("temple", null);

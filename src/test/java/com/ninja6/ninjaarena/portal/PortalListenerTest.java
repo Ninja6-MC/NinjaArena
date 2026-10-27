@@ -49,6 +49,7 @@ class PortalListenerTest {
     private final List<CompletableFuture<Chunk>> chunkLoads = new ArrayList<>();
     private final List<String> messages = new ArrayList<>();
     private final List<Location> teleports = new ArrayList<>();
+    private final List<String> entered = new ArrayList<>();
     private World overworld;
     private World arenaWorld;
     private ArenaRegistry arenas;
@@ -96,7 +97,8 @@ class PortalListenerTest {
             captures++;
             return CaptureResult.SAVED;
         });
-        listener = new PortalListener(plugin(logger), portals, entry, () -> arenaWorld, snapshots, id -> { });
+        listener = new PortalListener(plugin(logger), portals, entry, () -> arenaWorld, snapshots, id -> { },
+                (player, arena) -> entered.add(arena));
         location = new Location(overworld, 11.5, 64, 9.5);
     }
 
@@ -185,6 +187,7 @@ class PortalListenerTest {
         assertEquals(arenaWorld, target.getWorld());
         assertEquals(ROOM.x(), target.getX());
         assertEquals(ROOM.z(), target.getZ());
+        assertEquals(List.of("dojo"), entered);
     }
 
     @Test
@@ -253,6 +256,7 @@ class PortalListenerTest {
         online = false;
         finishChunkLoads();
         assertEquals(0, captures);
+        assertTrue(entered.isEmpty());
     }
 
     @Test
