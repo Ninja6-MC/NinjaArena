@@ -513,9 +513,6 @@ public final class MatchService implements MatchStart {
             return;
         }
         broadcast(running, headline);
-        broadcast(running, Component.text("Rounds won: " + result.standings().stream()
-                .map(standing -> "Team " + standing.team() + " " + standing.roundsWon())
-                .collect(Collectors.joining(", ")) + ".", NamedTextColor.GRAY));
         if (result.reason() != Reason.STOPPED) {
             broadcast(running, Component.text("Returning in " + settings.matchEndSeconds() + " seconds.",
                     NamedTextColor.GRAY));

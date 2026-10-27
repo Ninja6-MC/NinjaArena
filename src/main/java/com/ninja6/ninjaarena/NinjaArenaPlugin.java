@@ -9,6 +9,9 @@ import com.ninja6.ninjaarena.match.MatchListener;
 import com.ninja6.ninjaarena.match.MatchProtectionListener;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchSettings;
+import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.match.TeamScores;
+import com.ninja6.ninjaarena.match.TeamScoringListener;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.portal.PortalListener;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
@@ -38,6 +41,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private ArenaRegistry arenas;
     private PortalRegistry portals;
     private MatchService matches;
+    private TeamScores scores;
     private WaitingRoomService waitingRooms;
 
     @Override
@@ -65,6 +69,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new MatchListener(matches), this);
         getServer().getPluginManager().registerEvents(new MatchProtectionListener(matches,
                 getServer()::getPlayer, getConfig().getBoolean("match.friendly-fire", false)), this);
+        scores = new TeamScores();
+        matches.setStandings(scores);
+        getServer().getPluginManager().registerEvents(new TeamScoringListener(scores,
+                ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer), this);
         matches.start();
         // A finished countdown hands its players to the match engine.
         waitingRooms = new WaitingRoomService(this, arenas,
@@ -95,6 +103,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             matches.close();
             matches = null;
         }
+        scores = null;
         if (arenas != null) {
             arenas.close().forEach(getLogger()::warning);
             arenas = null;
@@ -138,6 +147,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
      */
     public MatchService matches() {
         return matches;
+    }
+
+    /** Team points and the award API for live matches; {@code null} while disabled. */
+    public TeamScores scores() {
+        return scores;
     }
 
     /** Registered portals; {@code null} while the plugin is disabled. */
