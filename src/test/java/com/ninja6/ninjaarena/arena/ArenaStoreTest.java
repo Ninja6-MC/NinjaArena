@@ -86,6 +86,30 @@ class ArenaStoreTest {
         assertRejected("format: [1\n");
     }
 
+    @Test
+    void spawnEntryThatIsNotAPositionFailsTheLoad() throws Exception {
+        Files.writeString(file(), """
+                format: 1
+                arenas:
+                  a:
+                    cell: {x: 0, z: 0}
+                    team-spawns: [5, {x: 1, y: 2, z: 3, yaw: 0, pitch: 0}]
+                """);
+        ArenaCodec.ArenaFormatException thrown = assertThrows(ArenaCodec.ArenaFormatException.class,
+                () -> new ArenaStore(file()).load());
+        assertEquals("arena a: team-spawns entry 1 is not a position", thrown.getMessage());
+
+        Files.writeString(file(), """
+                format: 1
+                arenas:
+                  a:
+                    cell: {x: 0, z: 0}
+                    enemy-spawns: [{x: 1, y: 2, z: 3, yaw: 0, pitch: 0}, {x: 1, y: 2, yaw: 0, pitch: 0}]
+                """);
+        thrown = assertThrows(ArenaCodec.ArenaFormatException.class, () -> new ArenaStore(file()).load());
+        assertEquals("arena a: enemy-spawns entry 2: missing z", thrown.getMessage());
+    }
+
     private void assertRejected(String text) throws IOException {
         Files.writeString(file(), text);
         assertThrows(ArenaCodec.ArenaFormatException.class, () -> new ArenaStore(file()).load(), text);

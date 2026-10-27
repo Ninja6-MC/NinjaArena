@@ -26,13 +26,15 @@ import org.bukkit.plugin.Plugin;
  * <p><b>Edit mode.</b> An arena is changed only while it is in edit mode. While any arena
  * is in edit mode the arena world saves, so what is built is kept; when the last edit
  * finishes, saving is turned off again, which writes the world once. An arena in edit
- * mode is unavailable for matches. Edit mode is not stored: a restart ends every edit, and
+ * mode is unavailable for matches. Saving is one switch for the whole world, so no arena
+ * can be held while any arena is in edit mode, and no edit can start while any arena is
+ * held: auto-save is never on during a match. Edit mode is not stored: a restart ends every edit, and
  * the world is saved on the way down.
  *
  * <p><b>Chunk tickets.</b> {@link #hold(String)} adds a plugin chunk ticket to every chunk
  * the arena's bounds touch, so the arena stays loaded, and {@link #release(String)} removes
  * them. The match engine holds an arena for exactly as long as a match runs; nothing else
- * keeps arena chunks loaded. A held arena cannot enter edit mode or be deleted.
+ * keeps arena chunks loaded. A held arena cannot be deleted.
  *
  * <p>Not thread-safe: call it from the server thread.
  */
@@ -158,6 +160,7 @@ public final class ArenaRegistry {
         } else if (taken.contains(cell)) {
             throw new ArenaException("Cell " + cell.describe() + " already holds an arena.");
         }
+        refuseEditWhileHeld();
         Arena arena = Arena.create(key, cell);
         Map<String, Arena> next = new TreeMap<>(arenas);
         next.put(key, arena);
@@ -189,6 +192,7 @@ public final class ArenaRegistry {
         if (editing.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is already in edit mode.");
         }
+        refuseEditWhileHeld();
         enterEdit(arena.name());
     }
 
@@ -245,12 +249,15 @@ public final class ArenaRegistry {
         return ArenaValidator.problems(require(name), grid);
     }
 
-    /** Whether a match may start in the arena: complete, not in edit mode and not in use. */
+    /**
+     * Whether a match may start in the arena: complete, not in use, and no arena at all in
+     * edit mode, since edit mode turns saving on for the whole world.
+     */
     public boolean isAvailable(String name) {
         String key = Arena.normalizeName(name);
         Arena arena = arenas.get(key);
         return arena != null
-                && !editing.contains(key)
+                && editing.isEmpty()
                 && !held.contains(key)
                 && ArenaValidator.problems(arena, grid).isEmpty();
     }
@@ -259,12 +266,17 @@ public final class ArenaRegistry {
      * Adds a chunk ticket to every chunk the arena's bounds touch. For the match engine, at
      * match start.
      *
-     * @throws ArenaException if the arena is not available
+     * @throws ArenaException if the arena is not available, including while any arena is in
+     *                        edit mode
      */
     public void hold(String name) throws ArenaException {
         Arena arena = require(name);
         if (held.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is already in use by a match.");
+        }
+        if (!editing.isEmpty()) {
+            throw new ArenaException("No match can start while " + String.join(", ", editing)
+                    + " is in edit mode: edit mode turns on saving for the whole arena world.");
         }
         if (!isAvailable(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is not available for a match.");
@@ -308,6 +320,14 @@ public final class ArenaRegistry {
         if (!editing.isEmpty()) {
             editing.clear();
             worldSaving.accept(false);
+        }
+    }
+
+    /** Edit mode turns saving on for the whole world, which must not happen during a match. */
+    private void refuseEditWhileHeld() throws ArenaException {
+        if (!held.isEmpty()) {
+            throw new ArenaException("Arenas cannot be edited while a match is running in " + String.join(", ",
+                    new TreeSet<>(held)) + ": edit mode turns on saving for the whole arena world.");
         }
     }
 

@@ -170,6 +170,7 @@ public final class ArenaCommand {
         }
         Arena arena = require(args[0]);
         World arenaWorld = world.get();
+        boolean flightGranted = false;
         Location target;
         if (arena.waitingRoom() != null) {
             ArenaPoint room = arena.waitingRoom();
@@ -180,12 +181,20 @@ public final class ArenaCommand {
                     (cell.minZ() + cell.maxZ() + 1) / 2.0);
             // There may be nothing to stand on yet; let the admin hover instead of falling.
             if (player.getGameMode() == GameMode.SURVIVAL || player.getGameMode() == GameMode.ADVENTURE) {
-                player.setAllowFlight(true);
+                if (!player.getAllowFlight()) {
+                    flightGranted = true;
+                    player.setAllowFlight(true);
+                }
                 player.setFlying(true);
             }
         }
         player.teleportAsync(target);
         success(sender, "Teleporting to arena " + arena.name() + ".");
+        if (flightGranted) {
+            // Not undone automatically: the admin may still be building when they leave.
+            warn(sender, "Flight was turned on because the arena has no waiting room yet. It stays on until"
+                    + " your game mode changes.");
+        }
     }
 
     private void setBounds(CommandSender sender, String[] args, String usage) throws ArenaException {

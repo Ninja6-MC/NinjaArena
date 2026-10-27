@@ -86,6 +86,8 @@ public final class ArenaCodec {
             Arena arena;
             try {
                 arena = decodeArena(name, section);
+            } catch (ArenaFormatException e) {
+                throw new ArenaFormatException("arena " + name + ": " + e.getMessage(), e);
             } catch (IllegalArgumentException e) {
                 throw new ArenaFormatException("arena " + name + ": " + e.getMessage(), e);
             }
@@ -150,10 +152,21 @@ public final class ArenaCodec {
         if (!section.isList(path)) {
             throw new ArenaFormatException(path + " is not a list");
         }
+        // getMapList would silently skip an entry that is not a map, shortening the list
+        // and shifting the numbers of every later spawn, so each entry is checked here.
+        List<?> raw = section.getList(path);
         List<ArenaPoint> points = new ArrayList<>();
-        for (Map<?, ?> raw : section.getMapList(path)) {
+        for (int i = 0; i < raw.size(); i++) {
+            String entry = path + " entry " + (i + 1);
+            if (!(raw.get(i) instanceof Map<?, ?> map)) {
+                throw new ArenaFormatException(entry + " is not a position");
+            }
             YamlConfiguration holder = new YamlConfiguration();
-            points.add(decodePoint(holder.createSection("p", raw)));
+            try {
+                points.add(decodePoint(holder.createSection("p", map)));
+            } catch (ArenaFormatException e) {
+                throw new ArenaFormatException(entry + ": " + e.getMessage(), e);
+            }
         }
         return points;
     }

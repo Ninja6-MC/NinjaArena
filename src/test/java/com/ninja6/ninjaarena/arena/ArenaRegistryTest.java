@@ -176,10 +176,45 @@ class ArenaRegistryTest {
     }
 
     @Test
+    void noArenaCanBeHeldWhileAnyArenaIsInEditMode() throws Exception {
+        buildComplete("dojo");
+        registry.create("other", null);
+
+        assertFalse(registry.isAvailable("dojo"));
+        ArenaException refused = assertThrows(ArenaException.class, () -> registry.hold("dojo"));
+        assertTrue(refused.getMessage().contains("other is in edit mode"), refused.getMessage());
+        assertEquals(List.of(), tickets);
+
+        registry.finishEdit("other");
+        assertTrue(registry.isAvailable("dojo"));
+        registry.hold("dojo");
+        assertTrue(registry.isHeld("dojo"));
+    }
+
+    @Test
+    void noEditCanStartWhileAnyArenaIsHeld() throws Exception {
+        buildComplete("dojo");
+        registry.create("temple", null);
+        registry.finishEdit("temple");
+        saving.clear();
+        registry.hold("dojo");
+
+        ArenaException refused = assertThrows(ArenaException.class, () -> registry.startEdit("temple"));
+        assertTrue(refused.getMessage().contains("match is running in dojo"), refused.getMessage());
+        assertThrows(ArenaException.class, () -> registry.create("bare", null));
+        assertTrue(registry.get("bare").isEmpty());
+        assertTrue(registry.editing().isEmpty());
+        assertEquals(List.of(), saving);
+
+        registry.release("dojo");
+        registry.startEdit("temple");
+        assertEquals(List.of(true), saving);
+    }
+
+    @Test
     void closeReleasesTicketsAndEndsEdits() throws Exception {
         buildComplete("dojo");
         registry.hold("dojo");
-        registry.create("bare", null);
         tickets.clear();
         saving.clear();
 
@@ -187,6 +222,11 @@ class ArenaRegistryTest {
 
         assertEquals(36, tickets.size());
         assertFalse(registry.isHeld("dojo"));
+        assertEquals(List.of(), saving);
+
+        registry.create("bare", null);
+        saving.clear();
+        registry.close();
         assertFalse(registry.isEditing("bare"));
         assertEquals(List.of(false), saving);
     }

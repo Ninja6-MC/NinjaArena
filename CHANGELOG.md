@@ -58,5 +58,6 @@ Java 25, and does not run on Folia.
   takes the arena out of matches; finishing the last edit turns saving off, saving the
   world, and lists what still stops the arena from hosting a match.
 - `ArenaRegistry#hold` and `#release` for the match engine, adding and removing plugin
-  chunk tickets on every chunk of an arena's bounds for the length of a match. A held
-  arena cannot be edited or deleted.
+  chunk tickets on every chunk of an arena's bounds for the length of a match. Saving is
+  one switch for the whole world, so no arena can be held while any arena is in edit
+  mode, no edit can start while any arena is held, and a held arena cannot be deleted.
