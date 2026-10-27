@@ -21,7 +21,7 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     public static final String ADMIN = "ninjaarena.admin";
     public static final String PLAY = "ninjaarena.play";
-    /** Leaves the waiting room the player is in and sends them home. */
+    /** Leaves the waiting room or match the player is in and sends them home. */
     public static final String LEAVE = "leave";
 
     private static final List<String> GROUPS = List.of(ArenaCommand.NAME, PortalCommand.NAME);
@@ -31,8 +31,8 @@ public final class NinjaArenaCommand implements TabExecutor {
     private final Predicate<Player> leave;
 
     /**
-     * @param leave takes the player out of their waiting room and sends them home; false if
-     *              they were not in one
+     * @param leave takes the player out of their waiting room or match and sends them home;
+     *              false if they were in neither
      */
     public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, Predicate<Player> leave) {
         this.arena = Objects.requireNonNull(arena, "arena");
@@ -67,9 +67,9 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     private void leave(CommandSender sender) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("Only players can leave a waiting room.", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Only players can leave an arena.", NamedTextColor.RED));
         } else if (!leave.test(player)) {
-            sender.sendMessage(Component.text("You are not in a waiting room.", NamedTextColor.RED));
+            sender.sendMessage(Component.text("You are not in an arena.", NamedTextColor.RED));
         }
     }
 

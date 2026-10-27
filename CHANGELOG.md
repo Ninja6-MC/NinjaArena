@@ -89,8 +89,8 @@ Java 25, and does not run on Folia.
   the larger team moves over. A start countdown begins once `waiting-room.min-players`
   are waiting, runs for `waiting-room.countdown-seconds` and stops if the count drops
   below the minimum; when it finishes, the players are handed to the match engine as a
-  team roster. Until rounds exist, that hand-off sends them home. Players in a waiting
-  room take no damage and keep their inventory if they die.
+  team roster. Players in a waiting room take no damage and keep their inventory if they
+  die.
 - Leaving a waiting room restores the player from their snapshot: walking or falling more
   than `waiting-room.radius` blocks from it, being teleported out of it, dying, or
   `/ninjaarena leave`, which needs `ninjaarena.play`. A player who disconnects is restored
@@ -104,4 +104,25 @@ Java 25, and does not run on Folia.
   keeps the arena world from saving while the server runs, but the shutdown save and
   `/save-all` still write it. An arena with no copy is unavailable; one built before
   copies existed is copied as it is on the first start. `ArenaRegistry#reset` resets one
-  arena, for the match engine at match end.
+  arena, for the match engine at match start and end.
+- The round loop. A match holds its arena from start to finish and resets it from the
+  saved copy before the players arrive and again when it ends; if the arena cannot be held
+  or reset at the start, the players are told and sent home. Each round is a prep phase
+  at the team spawns with no damage taken (`match.prep-seconds`, 15 by default), combat
+  for `match.round-seconds` (240), then Overrun, at maximum intensity, until one team is
+  left or `match.overrun-limit-seconds` (120, 0 for none) runs out as a draw. Every player
+  is healed and teleported to their team spawn at the start of each round.
+- A round is won by the last team with a player alive and drawn when the last players of
+  every team go down in the same tick. A death takes the player out of the round, and they
+  respawn at their team spawn; leaving takes them out of the round and the match. After
+  `match.rounds` rounds (5) the team with the most round wins takes the match, and a tied
+  lead plays up to `match.extra-rounds` extra rounds (1) before the leaders share the win.
+  A match where fewer than two teams still have players ends as a forfeit. The result is
+  shown for `match.match-end-seconds` (10), then every player is sent home.
+- Leaving a match: `/ninjaarena leave` and being teleported out of the arena world send
+  the player home, a disconnect restores them on their next join, and disabling the plugin
+  stops every match and sends everyone home.
+- Match events for other features to build on: phase changes, round start once the teams
+  are placed, round end, player eliminated, player left and match end, plus a read API for
+  the match a player is in, its phase, their team and who is alive, and a replaceable team
+  ranking for scoring.

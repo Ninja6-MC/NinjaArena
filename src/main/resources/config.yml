@@ -22,3 +22,22 @@ waiting-room:
   # How far a player may move from the waiting-room point, in blocks along any axis (2 to
   # 64). Going further, or being teleported further, sends them home.
   radius: 16
+
+match:
+  # Every value below is in seconds unless it says otherwise.
+  # Prep at the team spawns at the start of each round: no damage, no enemies (1 to 3600).
+  prep-seconds: 15
+  # The round timer: how long a round is fought before it goes to Overrun (1 to 3600).
+  round-seconds: 240
+  # Overrun runs at maximum intensity until one team is left. When this many seconds pass
+  # first, the round ends as a draw. 0 means no limit (0 to 3600).
+  overrun-limit-seconds: 120
+  # Pause after a round is decided, before the next one starts (1 to 3600).
+  round-end-seconds: 5
+  # How long the result is shown before every player is sent home (1 to 3600).
+  match-end-seconds: 10
+  # Rounds in a match (1 to 25).
+  rounds: 5
+  # Extra rounds played, one at a time, while the lead is tied after the last round. Still
+  # tied after them, the leading teams share the win (0 to 10).
+  extra-rounds: 1

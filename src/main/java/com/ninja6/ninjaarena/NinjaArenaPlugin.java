@@ -4,6 +4,9 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
+import com.ninja6.ninjaarena.match.MatchListener;
+import com.ninja6.ninjaarena.match.MatchService;
+import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.portal.PortalListener;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
@@ -12,7 +15,6 @@ import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
-import com.ninja6.ninjaarena.waiting.ReturnHomeMatchStart;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
@@ -33,6 +35,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private RestoreService restores;
     private ArenaRegistry arenas;
     private PortalRegistry portals;
+    private MatchService matches;
     private WaitingRoomService waitingRooms;
 
     @Override
@@ -53,10 +56,15 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         arenas = ArenaRegistry.open(this, arenaWorld);
         portals = PortalRegistry.open(this);
-        // Until the round loop exists, a finished countdown sends its players home.
+        matches = new MatchService(this, arenas, arenaWorld::world,
+                MatchSettings.from(getConfig().getConfigurationSection("match")), restores::restore,
+                getServer().getPluginManager()::callEvent, MatchService::readyForRound);
+        getServer().getPluginManager().registerEvents(new MatchListener(matches), this);
+        matches.start();
+        // A finished countdown hands its players to the match engine.
         waitingRooms = new WaitingRoomService(this, arenas,
                 WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
-                new ReturnHomeMatchStart(getServer(), getLogger(), restores::restore));
+                matches);
         getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
         arenas.onEditOrDelete(waitingRooms::closeRoom);
         waitingRooms.start();
@@ -65,7 +73,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
                 snapshots, portalCommand::forget, waitingRooms::join), this);
         NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world), portalCommand,
-                player -> waitingRooms.leave(player, Exit.COMMAND));
+                player -> waitingRooms.leave(player, Exit.COMMAND)
+                        || matches.leave(player, MatchService.Exit.COMMAND));
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -76,6 +85,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (waitingRooms != null) {
             waitingRooms.close();
             waitingRooms = null;
+        }
+        if (matches != null) {
+            matches.close();
+            matches = null;
         }
         if (arenas != null) {
             arenas.close().forEach(getLogger()::warning);
@@ -112,6 +125,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Waiting rooms and their start countdowns; {@code null} while the plugin is disabled. */
     public WaitingRoomService waitingRooms() {
         return waitingRooms;
+    }
+
+    /**
+     * Running matches, their events' read API and the team ranking; {@code null} while the
+     * plugin is disabled.
+     */
+    public MatchService matches() {
+        return matches;
     }
 
     /** Registered portals; {@code null} while the plugin is disabled. */
