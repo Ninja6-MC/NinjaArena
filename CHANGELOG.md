@@ -43,6 +43,15 @@ Java 25, and does not run on Folia.
   simulation distance, all tunable under `arena-world` in `config.yml`. Auto-save is off;
   `ArenaWorld#setSavingEnabled` turns it on for edit mode and saves once when it is
   turned off again.
+- Restoring a player from their snapshot: location, inventory, experience, health, food,
+  effects, game mode, fire ticks and fall distance, with velocity and gliding cleared. The
+  snapshot is deleted only once the restore has succeeded. An unsafe saved spot (anything
+  solid, lava or fire in the player's space, judged by collision box so slabs, carpet and
+  snow layers count as ground, or lava, fire or the void below) moves the player to the
+  nearest safe spot within 8 blocks, then their respawn point, then the world spawn. A
+  player who left mid-arena is restored on their next join, or on respawn if they join
+  dead, and snapshots left by a crash are marked on startup so their players are restored
+  when they join.
 - The arena registry in `plugins/NinjaArena/arenas.yml`, written through a temporary file
   and an atomic move. Each arena owns one cell of a fixed grid in the arena world
   (`arena-grid.cell-size` in `config.yml`, 256 blocks by default) and has bounds inside
