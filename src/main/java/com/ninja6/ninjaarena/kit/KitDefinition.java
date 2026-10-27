@@ -36,11 +36,11 @@ public record KitDefinition(List<Entry> items) {
     /** Installs the default before loading on a fresh install; write failures remain non-fatal. */
     public static KitDefinition open(Path file, Logger logger, Runnable saveDefault) {
         if (!Files.exists(file)) {
-            logger.info("kits.yml not found; writing the empty template at " + file + ".");
+            logger.info("kits.yml not found; writing the default template at " + file + ".");
             try {
                 saveDefault.run();
             } catch (RuntimeException e) {
-                logger.warning("Could not write the empty kits.yml template: " + e.getMessage());
+                logger.warning("Could not write the default kits.yml template: " + e.getMessage());
             }
         }
         return load(file, logger);

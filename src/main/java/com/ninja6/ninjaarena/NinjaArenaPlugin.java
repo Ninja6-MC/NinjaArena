@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena;
 
+import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
@@ -25,6 +26,8 @@ import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
+import com.ninja6.ninjaarena.tool.NinjaTools;
+import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
@@ -33,6 +36,8 @@ import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import java.io.IOException;
 import java.util.logging.Level;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -49,6 +54,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private MatchDeathListener deaths;
     private TeamScores scores;
     private KitItems kitItems;
+    private NinjaTools tools;
     private WaitingRoomService waitingRooms;
 
     @Override
@@ -83,6 +89,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new TeamScoringListener(scores,
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer), this);
         kitItems = new KitItems();
+        NinjaTools.registerItems(kitItems);
+        tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
+                ToolSettings.from(getConfig().getConfigurationSection("tools")), Bukkit::getCurrentTick,
+                NinjaTools::damage, at -> at.getWorld().spawn(at, AreaEffectCloud.class));
+        getServer().getPluginManager().registerEvents(tools, this);
         var kitFile = getDataFolder().toPath().resolve("kits.yml");
         var kit = KitDefinition.open(kitFile, getLogger(), () -> saveResource("kits.yml", false));
         getServer().getPluginManager().registerEvents(new RoundKitListener(matches, getServer()::getPlayer,
@@ -118,6 +129,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (matches != null) {
             matches.close();
             matches = null;
+        }
+        if (tools != null) {
+            tools.close();
+            tools = null;
         }
         scores = null;
         kitItems = null;
@@ -178,6 +193,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Register named providers for custom kit items before a round starts; null while disabled. */
     public KitItems kitItems() {
         return kitItems;
+    }
+
+    /** The ninja kit tools and the shuriken mark query; {@code null} while disabled. */
+    public NinjaTools tools() {
+        return tools;
     }
 
     /** Registered portals; {@code null} while the plugin is disabled. */

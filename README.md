@@ -41,10 +41,10 @@ still on the death screen receives it after being placed on respawn; eliminated 
 who respawn to spectate receive no new kit. Leaving or match close uses the existing
 snapshot restore to return the player's own inventory.
 
-The bundled template is empty. On a fresh install, the plugin writes that template before
-loading it. If creation fails or the file is still missing, a clear message explains the
-empty-kit fallback. Malformed files also use an empty kit and remain available for repair.
-Configure the file before enabling the plugin:
+The bundled template holds the ninja kit tools (see below). On a fresh install, the plugin
+writes that template before loading it. If creation fails or the file is still missing, a
+clear message explains the empty-kit fallback. Malformed files also use an empty kit and
+remain available for repair. Add weapons and armour before enabling the plugin:
 
 ```yaml
 format: 1
@@ -52,8 +52,13 @@ items:
   - slot: 0
     material: WOODEN_SWORD
   - slot: 1
-    material: ARROW
-    amount: 16
+    id: ninjaarena:shuriken
+    amount: 8
+  - slot: 2
+    id: ninjaarena:smoke-bomb
+    amount: 2
+  - slot: 3
+    id: ninjaarena:dash
 ```
 
 Slots 0-8 are the hotbar, 9-35 storage, 36 boots, 37 leggings, 38 chestplate, 39 helmet and
@@ -85,6 +90,32 @@ the snapshot restore, including deferred teleport exits, match close and plugin 
 Quitting clears the kit before player data is saved. A failed restore therefore leaves an
 empty inventory rather than allowing arena items to be stashed before the snapshot retry;
 the snapshot still holds the player's real inventory.
+
+## Ninja kit tools
+
+Three tools ship with the plugin, each a vanilla item recognised by a data tag, so
+Bedrock players see the base item. The kit decides who gets them: `amount` is how many
+each player receives per round, and leaving an entry out turns that tool off for the kit.
+
+| Kit ID | Item | Default kit | Effect |
+| :--- | :--- | :--- | :--- |
+| `ninjaarena:smoke-bomb` | Snowball | 2 | Thrown. Where it lands, a 3-block cloud lasts 4 seconds and blinds rival players inside it. |
+| `ninjaarena:shuriken` | Snowball | 8 | Thrown. A hit deals 2 damage and makes a rival glow for 3 seconds. |
+| `ninjaarena:dash` | Feather | 1 | Right-click for a short forward burst. 8-second cooldown, shown on the item. Not consumed. |
+
+Tools work only for players alive in the round during COMBAT and OVERRUN. During PREP,
+between rounds, or once eliminated, a throw or dash is cancelled and the item kept. Smoke
+never blinds the thrower, teammates, eliminated players or anyone outside the match,
+whatever `match.friendly-fire` says. Shuriken damage goes through the normal damage
+rules, including friendly fire. A dash replaces the player's velocity instead of adding
+to it, is shortened so it cannot carry them past the arena bounds, and is refused while
+gliding, flying, riptiding or riding. Flying tools, clouds, cooldowns and glow marks are
+cleared at the end of each round and match, when a player leaves or is eliminated, and on
+plugin disable. Durations, radius, damage, cooldown and dash speed are under `tools` in
+`config.yml`.
+
+`plugin.tools().isMarked(uuid)` reports whether a player is glowing from a shuriken hit,
+for enemy targeting.
 
 ## Deaths and spectating
 

@@ -27,6 +27,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -39,8 +40,10 @@ import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffect;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.Vector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -79,6 +82,10 @@ abstract class MatchFixture {
         InventoryView view;
         final List<String> messages = new ArrayList<>();
         final List<Location> teleports = new ArrayList<>();
+        final List<PotionEffect> effects = new ArrayList<>();
+        final Map<Material, Integer> cooldowns = new HashMap<>();
+        Vector velocity;
+        boolean gliding;
         Player proxy;
 
         Fake(UUID id, String name) {
@@ -267,7 +274,13 @@ abstract class MatchFixture {
                     case "setItemOnCursor" -> { fake.cursor = (ItemStack) args[0]; yield null; }
                     case "getItemOnCursor" -> fake.cursor;
                     case "getActivePotionEffects" -> List.of();
-                    case "setGliding", "setVelocity", "setFallDistance", "closeInventory",
+                    case "setVelocity" -> { fake.velocity = (Vector) args[0]; yield null; }
+                    case "isGliding" -> fake.gliding;
+                    case "isFlying", "isRiptiding", "isInsideVehicle" -> false;
+                    case "setCooldown" -> { fake.cooldowns.put((Material) args[0], (Integer) args[1]); yield null; }
+                    case "addPotionEffect" -> fake.effects.add((PotionEffect) args[0]);
+                    case "removePotionEffect" -> fake.effects.removeIf(effect -> effect.getType() == args[0]);
+                    case "setGliding", "setFallDistance", "closeInventory",
                             "setTotalExperience", "setLevel", "setExp", "setHealth", "setFoodLevel", "setSaturation",
                             "setExhaustion", "setFireTicks" -> null;
                     case "getLocation" -> fake.location.clone();

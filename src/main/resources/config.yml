@@ -50,3 +50,30 @@ scoring:
   # Points for killing an opposing player in the same match. Teamkills, suicides,
   # environmental deaths and leaving award nothing. 0 disables this award.
   player-kill-points: 2
+
+tools:
+  # The ninja kit tools. Which tools a player gets, and how many, is set by the kit in
+  # kits.yml: leave a tool's entry out to turn it off. Tools work only in COMBAT and OVERRUN
+  # for players still alive in the round.
+  smoke-bomb:
+    # How long the cloud lasts where the bomb lands (1 to 60).
+    cloud-seconds: 4
+    # Cloud radius in blocks (1 to 8).
+    radius: 3.0
+    # Blindness given to a rival player in the cloud, renewed while they stay in it (1 to
+    # 60). Teammates, the thrower and anyone outside the match are never affected.
+    blindness-seconds: 2
+  shuriken:
+    # Damage per hit in half hearts, before armour (0 to 20). Damage rules and friendly
+    # fire apply as for any other attack.
+    damage: 2.0
+    # How long a rival hit by a shuriken glows and stays marked for enemies (1 to 60).
+    glow-seconds: 3
+  dash:
+    # Time between dashes (1 to 60).
+    cooldown-seconds: 8
+    # Forward speed in blocks per tick (0.1 to 2). A dash is shortened so it ends inside
+    # the arena.
+    strength: 1.0
+    # Upward speed in blocks per tick (0 to 0.6).
+    lift: 0.3
