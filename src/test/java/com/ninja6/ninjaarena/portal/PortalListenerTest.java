@@ -11,6 +11,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.arena.ArenaStore;
 import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.arena.MemoryCopies;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService.CaptureResult;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
@@ -76,7 +77,7 @@ class PortalListenerTest {
             }
         };
         arenas = new ArenaRegistry(new ArenaStore(dir.resolve("arenas.yml")), new ArenaGrid(256, 2048, -64, 320),
-                enabled -> { }, noTickets);
+                enabled -> { }, noTickets, new MemoryCopies());
         arenas.load();
         arenas.create("dojo", new GridCell(0, 0));
         arenas.update("dojo", a -> a.withBounds(new ArenaBounds(10, 60, 10, 90, 100, 90))

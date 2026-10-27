@@ -11,6 +11,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.arena.ArenaStore;
 import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.arena.MemoryCopies;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
 import com.ninja6.ninjaarena.world.ArenaWorld;
@@ -87,7 +88,7 @@ class WaitingRoomServiceTest {
             }
         };
         arenas = new ArenaRegistry(new ArenaStore(dir.resolve("arenas.yml")),
-                new ArenaGrid(256, 2048, -64, 320), enabled -> { }, noTickets);
+                new ArenaGrid(256, 2048, -64, 320), enabled -> { }, noTickets, new MemoryCopies());
         arenas.load();
         arenas.create("dojo", new GridCell(0, 0));
         arenas.update("dojo", a -> a.withBounds(new ArenaBounds(10, 60, 10, 90, 100, 90))

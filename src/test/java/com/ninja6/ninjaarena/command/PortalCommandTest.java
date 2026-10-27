@@ -9,6 +9,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.arena.ArenaStore;
 import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.arena.MemoryCopies;
 import com.ninja6.ninjaarena.portal.Portal;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
 import com.ninja6.ninjaarena.portal.PortalStore;
@@ -57,7 +58,7 @@ class PortalCommandTest {
             }
         };
         arenas = new ArenaRegistry(new ArenaStore(dir.resolve("arenas.yml")), new ArenaGrid(256, 2048, -64, 320),
-                enabled -> { }, noTickets);
+                enabled -> { }, noTickets, new MemoryCopies());
         arenas.load();
         arenas.create("dojo", new GridCell(0, 0));
         arenas.finishEdit("dojo");

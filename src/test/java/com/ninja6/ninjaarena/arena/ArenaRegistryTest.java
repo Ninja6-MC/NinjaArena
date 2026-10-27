@@ -22,6 +22,7 @@ class ArenaRegistryTest {
 
     private final List<Boolean> saving = new ArrayList<>();
     private final List<String> tickets = new ArrayList<>();
+    private final MemoryCopies copies = new MemoryCopies();
     private ArenaRegistry registry;
 
     private final ChunkTickets recordingTickets = new ChunkTickets() {
@@ -43,7 +44,7 @@ class ArenaRegistryTest {
 
     private ArenaRegistry reopen() throws IOException {
         ArenaRegistry opened = new ArenaRegistry(new ArenaStore(dir.resolve("arenas.yml")), Arenas.GRID,
-                saving::add, recordingTickets);
+                saving::add, recordingTickets, copies);
         opened.load();
         return opened;
     }
@@ -262,10 +263,131 @@ class ArenaRegistryTest {
     void unreadableFileIsNeverOverwritten() throws Exception {
         Path file = dir.resolve("arenas.yml");
         Files.writeString(file, "format: [broken\n");
-        ArenaRegistry broken = new ArenaRegistry(new ArenaStore(file), Arenas.GRID, saving::add, recordingTickets);
+        ArenaRegistry broken = new ArenaRegistry(new ArenaStore(file), Arenas.GRID, saving::add, recordingTickets,
+                copies);
         assertThrows(IOException.class, broken::load);
 
         assertThrows(ArenaException.class, () -> broken.create("dojo", null));
         assertEquals("format: [broken\n", Files.readString(file));
+    }
+
+    @Test
+    void finishEditSavesTheCopyThatAvailabilityNeeds() throws Exception {
+        buildComplete("dojo");
+        assertEquals(Arenas.complete("dojo").bounds(), copies.saved.get("dojo"));
+        assertTrue(registry.isAvailable("dojo"));
+
+        copies.saved.clear();
+        assertFalse(registry.isAvailable("dojo"));
+    }
+
+    @Test
+    void finishEditWithoutBoundsTakesNoCopy() throws Exception {
+        registry.create("bare", null);
+        registry.finishEdit("bare");
+        assertEquals(List.of("delete bare"), copies.calls);
+    }
+
+    @Test
+    void failedCopyKeepsTheArenaInEditMode() throws Exception {
+        registry.create("dojo", null);
+        registry.update("dojo", a -> a.withBounds(Arenas.complete("dojo").bounds()));
+        copies.failing = true;
+
+        ArenaException refused = assertThrows(ArenaException.class, () -> registry.finishEdit("dojo"));
+        assertTrue(refused.getMessage().contains("stays in edit mode"), refused.getMessage());
+        assertTrue(registry.isEditing("dojo"));
+        assertEquals(List.of(true), saving);
+    }
+
+    @Test
+    void resetRestoresTheCopyEvenWhileHeld() throws Exception {
+        buildComplete("dojo");
+        registry.hold("dojo");
+        copies.calls.clear();
+
+        registry.reset("dojo");
+        assertEquals(List.of("restore dojo"), copies.calls);
+    }
+
+    @Test
+    void resetRefusesAnEditAndAMissingCopy() throws Exception {
+        buildComplete("dojo");
+        registry.startEdit("dojo");
+        ArenaException editing = assertThrows(ArenaException.class, () -> registry.reset("dojo"));
+        assertTrue(editing.getMessage().contains("undo the edit"), editing.getMessage());
+
+        registry.finishEdit("dojo");
+        copies.saved.clear();
+        ArenaException missing = assertThrows(ArenaException.class, () -> registry.reset("dojo"));
+        assertTrue(missing.getMessage().contains("no saved copy"), missing.getMessage());
+        assertThrows(ArenaException.class, () -> registry.reset("nowhere"));
+    }
+
+    @Test
+    void resetAllRestoresCopiesAndCopiesArenasThatHaveNone() throws Exception {
+        buildComplete("dojo");
+        registry.create("bare", new GridCell(2, 2));
+        registry.finishEdit("bare");
+        registry.create("temple", new GridCell(1, 1));
+        registry.update("temple", a -> a.withBounds(new ArenaBounds(266, 60, 266, 300, 90, 300)));
+        registry.finishEdit("temple");
+        copies.saved.remove("temple");
+        copies.calls.clear();
+
+        ArenaRegistry.ResetReport report = reopen().resetAll();
+
+        assertEquals(List.of("dojo"), report.reset());
+        assertEquals(List.of("temple"), report.copied());
+        assertEquals(List.of(), report.failed());
+        // The arena with no bounds has nothing to copy or reset.
+        assertEquals(List.of("restore dojo", "save temple"), copies.calls);
+        assertTrue(copies.exists("temple"));
+    }
+
+    @Test
+    void resetAllReportsFailuresAndCarriesOn() throws Exception {
+        buildComplete("dojo");
+        copies.failing = true;
+
+        ArenaRegistry.ResetReport report = reopen().resetAll();
+        assertEquals(List.of(), report.reset());
+        assertEquals(1, report.failed().size());
+        assertTrue(report.failed().get(0).contains("dojo"), report.failed().get(0));
+    }
+
+    @Test
+    void deleteAndCreateDropTheOldCopy() throws Exception {
+        buildComplete("dojo");
+        registry.delete("dojo");
+        assertFalse(copies.exists("dojo"));
+
+        // A copy left behind, for example by a failed delete, never survives a new arena.
+        copies.saved.put("dojo", Arenas.complete("dojo").bounds());
+        registry.create("dojo", null);
+        assertFalse(copies.exists("dojo"));
+    }
+
+    @Test
+    void createRefusesWhenAStaleCopyCannotBeRemoved() throws Exception {
+        copies.failing = true;
+        assertThrows(ArenaException.class, () -> registry.create("dojo", null));
+        assertTrue(registry.get("dojo").isEmpty());
+    }
+
+    @Test
+    void closeSavesTheCopyOfAnOpenEdit() throws Exception {
+        buildComplete("dojo");
+        registry.startEdit("dojo");
+        copies.calls.clear();
+
+        assertEquals(List.of(), registry.close());
+        assertEquals(List.of("save dojo"), copies.calls);
+
+        registry.startEdit("dojo");
+        copies.failing = true;
+        List<String> failed = registry.close();
+        assertEquals(1, failed.size());
+        assertFalse(registry.isEditing("dojo"));
     }
 }
