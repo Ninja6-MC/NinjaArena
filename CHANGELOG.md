@@ -84,3 +84,14 @@ Java 25, and does not run on Folia.
   player is put back where they came from and told why, at most every two seconds.
   Teleporting into a portal does not enter it, and vanilla portal travel is cancelled
   inside one.
+- Waiting rooms: a player who arrives through a portal joins the smallest of the arena's
+  teams, and when a departure leaves one team two behind another, the last player to join
+  the larger team moves over. A start countdown begins once `waiting-room.min-players`
+  are waiting, runs for `waiting-room.countdown-seconds` and stops if the count drops
+  below the minimum; when it finishes, the players are handed to the match engine as a
+  team roster. Until rounds exist, that hand-off sends them home. Players in a waiting
+  room take no damage and keep their inventory if they die.
+- Leaving a waiting room restores the player from their snapshot: walking or falling more
+  than `waiting-room.radius` blocks from it, being teleported out of it, dying, or
+  `/ninjaarena leave`, which needs `ninjaarena.play`. A player who disconnects is restored
+  on their next join, and disabling the plugin sends every waiting player home.

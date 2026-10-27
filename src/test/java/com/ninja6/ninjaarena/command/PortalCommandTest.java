@@ -64,7 +64,7 @@ class PortalCommandTest {
         portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
         portalCommand = new PortalCommand(portals, arenas, world -> !world.equals("gone"));
-        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand);
+        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand, player -> false);
         standing = new Location(world("world"), 10.5, 64, 10.5);
     }
 

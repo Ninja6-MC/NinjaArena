@@ -21,6 +21,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
+import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,6 +34,8 @@ class NinjaArenaCommandTest {
     private final List<String> messages = new ArrayList<>();
     private ArenaRegistry registry;
     private NinjaArenaCommand command;
+    private final List<String> left = new ArrayList<>();
+    private boolean waiting;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -51,7 +54,10 @@ class NinjaArenaCommandTest {
         PortalRegistry portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
         command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null),
-                new PortalCommand(portals, registry, world -> true));
+                new PortalCommand(portals, registry, world -> true), player -> {
+                    left.add(player.getName());
+                    return waiting;
+                });
     }
 
     /** A console sender that holds the admin node or not, and records what it is told. */
@@ -151,5 +157,45 @@ class NinjaArenaCommandTest {
         CommandSender sender = console(true);
         run(sender, "arena info nowhere");
         assertEquals(List.of("No arena called nowhere."), messages);
+    }
+
+    /** A player who holds only the play node. */
+    private Player playerWithPlay() {
+        return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "hasPermission" -> NinjaArenaCommand.PLAY.equals(args[0]);
+                    case "sendMessage" -> {
+                        messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
+                        yield null;
+                    }
+                    case "getName" -> "Alice";
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    @Test
+    void playersCanLeaveAWaitingRoomButNothingElse() {
+        Player player = playerWithPlay();
+        waiting = true;
+        run(player, "leave");
+        assertEquals(List.of("Alice"), left);
+        assertTrue(messages.isEmpty());
+
+        waiting = false;
+        run(player, "LEAVE");
+        assertEquals(List.of("You are not in a waiting room."), messages);
+
+        messages.clear();
+        run(player, "arena list");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+        assertEquals(List.of("leave"), command.onTabComplete(player, null, "narena", new String[] {""}));
+        assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
+    }
+
+    @Test
+    void leaveNeedsThePlayNode() {
+        run(console(false), "leave");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+        assertTrue(left.isEmpty());
     }
 }
