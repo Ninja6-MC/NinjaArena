@@ -65,10 +65,9 @@ import org.bukkit.scheduler.BukkitTask;
  * player is taken out of the match before the restore runs, so the restore's own teleport is
  * not seen as another exit. Disabling the plugin stops every match and sends everyone home.
  *
- * <p><b>Elimination (minimal).</b> Dying in a round takes the player out of that round; they
- * respawn at their team spawn and are back in the next round. Drops, spectating and how an
- * eliminated player waits for the next round are deliberately left to the death-handling
- * task, which builds on {@link PlayerEliminatedEvent} and {@link #respawnPoint(UUID)}.
+ * <p><b>Elimination.</b> Dying in a round takes the player out of that round. Death handling
+ * builds on {@link PlayerEliminatedEvent} and {@link #respawnPoint(UUID)} to retain their
+ * belongings and spectate their team until the next round.
  *
  * <p><b>Extension points.</b> Every change is announced as a {@link MatchEvent}; the read API
  * is {@link #matchOf(UUID)}, {@link #match(String)} and {@link #matches()}, each giving a
@@ -259,8 +258,8 @@ public final class MatchService implements MatchStart {
 
     /**
      * Whether a player in a match may deal no damage now: they are out of the current round.
-     * A stopgap until the death-handling task moves eliminated players to spectating, so a
-     * player who is out cannot decide the round. False for a player not in a match.
+     * A safety guard alongside spectator mode, including delayed respawns, so a player who
+     * is out cannot decide the round. False for a player not in a match.
      */
     public boolean isDisarmed(UUID playerId) {
         Running running = matchOf.get(playerId);

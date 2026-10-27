@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.PlayerRestorer;
 import com.ninja6.ninjaarena.restore.RestoreService;
@@ -44,7 +45,7 @@ import org.junit.jupiter.api.Test;
 class MatchProtectionListenerTest extends MatchFixture {
 
     private MatchProtectionListener protection(boolean enabled) {
-        return new MatchProtectionListener(matches, id -> players.get(id).proxy, enabled);
+        return new MatchProtectionListener(matches, id -> players.get(id).proxy, enabled, deaths::isSpectating);
     }
 
     @SuppressWarnings("unchecked")
@@ -220,11 +221,10 @@ class MatchProtectionListenerTest extends MatchFixture {
     @Test
     void respawnsSetAdventureForMatchPlayersOnly() {
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
-        var protection = protection(false);
-        protection.onRespawn(new PlayerRespawnEvent(player(ALICE), player(ALICE).getLocation(), false,
+        deaths.onPostRespawn(new PlayerPostRespawnEvent(player(ALICE), player(ALICE).getLocation(), false,
                 false, false, PlayerRespawnEvent.RespawnReason.DEATH));
         assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
-        protection.onRespawn(new PlayerRespawnEvent(player(CAROL), player(CAROL).getLocation(), false,
+        deaths.onPostRespawn(new PlayerPostRespawnEvent(player(CAROL), player(CAROL).getLocation(), false,
                 false, false, PlayerRespawnEvent.RespawnReason.DEATH));
         assertEquals(GameMode.SURVIVAL, player(CAROL).getGameMode());
     }

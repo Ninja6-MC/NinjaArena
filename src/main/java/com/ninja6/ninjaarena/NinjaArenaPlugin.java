@@ -5,6 +5,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
+import com.ninja6.ninjaarena.match.MatchDeathListener;
 import com.ninja6.ninjaarena.match.MatchListener;
 import com.ninja6.ninjaarena.match.MatchProtectionListener;
 import com.ninja6.ninjaarena.match.MatchService;
@@ -21,8 +22,8 @@ import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
-import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
+import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
@@ -41,6 +42,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private ArenaRegistry arenas;
     private PortalRegistry portals;
     private MatchService matches;
+    private MatchDeathListener deaths;
     private TeamScores scores;
     private WaitingRoomService waitingRooms;
 
@@ -66,14 +68,17 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         matches = new MatchService(this, arenas, arenaWorld::world,
                 MatchSettings.from(getConfig().getConfigurationSection("match")), restores::restore,
                 getServer().getPluginManager()::callEvent, MatchService::readyForRound);
-        getServer().getPluginManager().registerEvents(new MatchListener(matches), this);
+        deaths = new MatchDeathListener(this, matches, arenas);
+        getServer().getPluginManager().registerEvents(deaths, this);
+        getServer().getPluginManager().registerEvents(new MatchListener(matches, deaths), this);
         getServer().getPluginManager().registerEvents(new MatchProtectionListener(matches,
-                getServer()::getPlayer, getConfig().getBoolean("match.friendly-fire", false)), this);
+                getServer()::getPlayer, getConfig().getBoolean("match.friendly-fire", false), deaths::isSpectating), this);
         scores = new TeamScores();
         matches.setStandings(scores);
         getServer().getPluginManager().registerEvents(new TeamScoringListener(scores,
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer), this);
         matches.start();
+        deaths.start();
         // A finished countdown hands its players to the match engine.
         waitingRooms = new WaitingRoomService(this, arenas,
                 WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
@@ -104,6 +109,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             matches = null;
         }
         scores = null;
+        if (deaths != null) {
+            deaths.close();
+            deaths = null;
+        }
         if (arenas != null) {
             arenas.close().forEach(getLogger()::warning);
             arenas = null;
