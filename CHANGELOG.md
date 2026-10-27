@@ -16,7 +16,16 @@ Java 25, and does not run on Folia.
 - A shared `kits.yml` kit, cleared and rebuilt every round and on a delayed respawn into
   the current round. Dead and eliminated players are skipped. Missing or invalid files
   log the reason and use a safe empty kit; item-provider failures also use an empty kit.
-- Fresh installs write the empty kit template before loading. Non-item material entries
+- Ninja kit tools as kit item IDs: `ninjaarena:smoke-bomb` (a cloud that blinds only
+  rival players alive in the round), `ninjaarena:shuriken` (low damage through the normal
+  damage rules; a hit rival glows and is marked, exposed as `NinjaTools#isMarked`) and
+  `ninjaarena:dash` (a forward burst capped to the arena bounds, with a vanilla item
+  cooldown). Vanilla items tagged with persistent data. The bundled kit gives 8
+  shuriken, 2 smoke bombs and a dash each round; the `tools` section of `config.yml`
+  tunes durations, radius, damage, cooldown and dash speed. Tools work only in COMBAT and
+  OVERRUN for players alive in the round, and their projectiles, clouds, cooldowns and
+  marks are cleared at round end, match end, leave, elimination and plugin disable.
+- Fresh installs write the default kit template before loading. Non-item material entries
   are skipped with a warning at load while valid entries remain. All exits discard kit
   items before restoration or saving quit-player data, so a failed restore cannot leak a kit.
 - Named kit item providers via `NinjaArenaPlugin#kitItems()` for custom item IDs, alongside

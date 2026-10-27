@@ -1,11 +1,22 @@
-# One shared kit, rebuilt at the start of every round. Empty is safe until configured.
+# One shared kit, rebuilt at the start of every round.
 format: 1
-items: []
-# Example entries (replace items: [] with items: followed by entries):
+items:
+  # The ninja kit tools. Remove an entry to turn that tool off; amount is how many each
+  # player gets per round. Their behaviour is tuned under tools in config.yml.
+  - slot: 1
+    id: ninjaarena:shuriken
+    amount: 8
+  - slot: 2
+    id: ninjaarena:smoke-bomb
+    amount: 2
+  - slot: 3
+    id: ninjaarena:dash
+    amount: 1
+# More entries can be added, for example:
 #   - slot: 0
 #     material: WOODEN_SWORD
 #     amount: 1
-# Plugin-defined items use id instead of material, e.g. id: ninjaarena:smoke-bomb.
+# Plugin-defined items use id instead of material, as the tools above do.
 # The item provider must be registered before the round starts.
 # Slots: 0-8 hotbar, 9-35 storage, 36 boots, 37 leggings, 38 chestplate,
 # 39 helmet, 40 offhand. Amount defaults to 1 and cannot exceed the item's stack limit.

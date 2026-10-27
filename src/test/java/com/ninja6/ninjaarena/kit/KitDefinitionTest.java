@@ -21,6 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class KitDefinitionTest {
+    private static final KitDefinition DEFAULT_KIT = new KitDefinition(List.of(
+            new KitDefinition.Entry(1, null, "ninjaarena:shuriken", 8),
+            new KitDefinition.Entry(2, null, "ninjaarena:smoke-bomb", 2),
+            new KitDefinition.Entry(3, null, "ninjaarena:dash", 1)));
     @TempDir Path dir;
     private final List<String> warnings = new ArrayList<>();
     private final List<String> messages = new ArrayList<>();
@@ -101,12 +105,12 @@ class KitDefinitionTest {
     }
 
     @Test
-    void bundledTemplateIsAValidEmptyKit() throws Exception {
+    void bundledTemplateHandsOutTheNinjaToolsWithTheirDefaultCounts() throws Exception {
         try (var stream = getClass().getResourceAsStream("/kits.yml")) {
             assertNotNull(stream);
             Files.copy(stream, dir.resolve("kits.yml"));
         }
-        assertEquals(KitDefinition.EMPTY, KitDefinition.load(dir.resolve("kits.yml"), logger));
+        assertEquals(DEFAULT_KIT, KitDefinition.load(dir.resolve("kits.yml"), logger));
         assertTrue(warnings.isEmpty());
     }
 
@@ -121,11 +125,11 @@ class KitDefinitionTest {
                 throw new UncheckedIOException(e);
             }
         });
-        assertEquals(KitDefinition.EMPTY, kit);
+        assertEquals(DEFAULT_KIT, kit);
         assertTrue(Files.exists(file));
         assertTrue(warnings.isEmpty());
         assertEquals(1, messages.size());
-        assertTrue(messages.getFirst().startsWith("kits.yml not found; writing the empty template"));
+        assertTrue(messages.getFirst().startsWith("kits.yml not found; writing the default template"));
     }
 
     @Test
