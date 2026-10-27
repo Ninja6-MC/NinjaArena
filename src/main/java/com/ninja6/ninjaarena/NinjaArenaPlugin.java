@@ -1,10 +1,12 @@
 package com.ninja6.ninjaarena;
 
+import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
 import com.ninja6.ninjaarena.match.MatchListener;
+import com.ninja6.ninjaarena.match.MatchProtectionListener;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.portal.PortalEntry;
@@ -55,11 +57,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new RestoreListener(this, restores), this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         arenas = ArenaRegistry.open(this, arenaWorld);
+        getServer().getPluginManager().registerEvents(new ArenaProtectionListener(arenas), this);
         portals = PortalRegistry.open(this);
         matches = new MatchService(this, arenas, arenaWorld::world,
                 MatchSettings.from(getConfig().getConfigurationSection("match")), restores::restore,
                 getServer().getPluginManager()::callEvent, MatchService::readyForRound);
         getServer().getPluginManager().registerEvents(new MatchListener(matches), this);
+        getServer().getPluginManager().registerEvents(new MatchProtectionListener(matches,
+                getServer()::getPlayer, getConfig().getBoolean("match.friendly-fire", false)), this);
         matches.start();
         // A finished countdown hands its players to the match engine.
         waitingRooms = new WaitingRoomService(this, arenas,

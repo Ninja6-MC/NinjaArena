@@ -13,6 +13,12 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Match players use Adventure mode and cannot harm teammates with direct attacks,
+  projectiles, harmful splash potions or area-effect clouds unless `match.friendly-fire`
+  is enabled. Leaving restores the saved game mode with the rest of the snapshot.
+- Explosions keep their player damage but cannot destroy blocks in the arena world;
+  entity block changes are cancelled there too. All environmental protection is suspended
+  while any arena is in edit mode and resumes when the last edit finishes.
 - Initial project scaffolding with Gradle Kotlin DSL, the Gradle 9.8.1 wrapper and a
   Java 25 toolchain, compiling against `paper-api` 26.3.
 - `NinjaArenaPlugin`, which only logs on enable and disable.
