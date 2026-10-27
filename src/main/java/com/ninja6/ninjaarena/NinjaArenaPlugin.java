@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena;
 
+import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.command.ArenaCommand;
+import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.restore.PlayerRestorer;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
@@ -19,6 +22,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private SnapshotService snapshots;
     private ArenaWorld arenaWorld;
     private RestoreService restores;
+    private ArenaRegistry arenas;
 
     @Override
     public void onEnable() {
@@ -36,11 +40,19 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         restores.markPendingOnStartup();
         getServer().getPluginManager().registerEvents(new RestoreListener(this, restores), this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
+        arenas = ArenaRegistry.open(this, arenaWorld);
+        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world));
+        getCommand("ninjaarena").setExecutor(command);
+        getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
     }
 
     @Override
     public void onDisable() {
+        if (arenas != null) {
+            arenas.close();
+            arenas = null;
+        }
         if (arenaWorld != null) {
             arenaWorld.close();
         }
@@ -61,5 +73,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     public ArenaWorld arenaWorld() {
         return arenaWorld;
+    }
+
+    /** Registered arenas; {@code null} while the plugin is disabled. */
+    public ArenaRegistry arenas() {
+        return arenas;
     }
 }

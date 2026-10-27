@@ -5,3 +5,9 @@ arena-world:
   view-distance: 6
   # Chunk radius around players where entities and blocks tick (2 to 32).
   simulation-distance: 4
+
+arena-grid:
+  # Edge of the square grid cell each arena is built in, in blocks. Rounded down to a
+  # multiple of 16 (32 to 4096) so cells line up with chunks. Cells must lie inside the
+  # world border; changing this moves every cell, so set it before the first arena.
+  cell-size: 256
