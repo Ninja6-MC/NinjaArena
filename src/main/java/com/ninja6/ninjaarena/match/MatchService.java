@@ -39,6 +39,7 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
@@ -65,10 +66,9 @@ import org.bukkit.scheduler.BukkitTask;
  * player is taken out of the match before the restore runs, so the restore's own teleport is
  * not seen as another exit. Disabling the plugin stops every match and sends everyone home.
  *
- * <p><b>Elimination (minimal).</b> Dying in a round takes the player out of that round; they
- * respawn at their team spawn and are back in the next round. Drops, spectating and how an
- * eliminated player waits for the next round are deliberately left to the death-handling
- * task, which builds on {@link PlayerEliminatedEvent} and {@link #respawnPoint(UUID)}.
+ * <p><b>Elimination.</b> Dying in a round takes the player out of that round. Death handling
+ * builds on {@link PlayerEliminatedEvent} and {@link #respawnPoint(UUID)} to retain their
+ * belongings and spectate their team until the next round.
  *
  * <p><b>Extension points.</b> Every change is announced as a {@link MatchEvent}; the read API
  * is {@link #matchOf(UUID)}, {@link #match(String)} and {@link #matches()}, each giving a
@@ -259,8 +259,8 @@ public final class MatchService implements MatchStart {
 
     /**
      * Whether a player in a match may deal no damage now: they are out of the current round.
-     * A stopgap until the death-handling task moves eliminated players to spectating, so a
-     * player who is out cannot decide the round. False for a player not in a match.
+     * A safety guard alongside spectator mode, including delayed respawns, so a player who
+     * is out cannot decide the round. False for a player not in a match.
      */
     public boolean isDisarmed(UUID playerId) {
         Running running = matchOf.get(playerId);
@@ -303,6 +303,7 @@ public final class MatchService implements MatchStart {
         if (running == null) {
             return false;
         }
+        releaseSpectator(player);
         apply(running, running.match().leave(playerId));
         settleLater(running);
         switch (exit) {
@@ -472,6 +473,22 @@ public final class MatchService implements MatchStart {
     private void forget(Running running) {
         matches.remove(running.match().arena(), running);
         matchOf.values().removeIf(value -> value == running);
+        for (UUID id : running.match().players()) {
+            Player player = plugin.getServer().getPlayer(id);
+            if (player != null && player.isOnline()) {
+                releaseSpectator(player);
+            }
+        }
+    }
+
+    /** Membership is already removed, so the guard allows this before a restore can fail. */
+    private static void releaseSpectator(Player player) {
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            if (player.getSpectatorTarget() != null) {
+                player.setSpectatorTarget(null);
+            }
+            player.setGameMode(GameMode.ADVENTURE);
+        }
     }
 
     private void refuse(List<UUID> players, String message) {

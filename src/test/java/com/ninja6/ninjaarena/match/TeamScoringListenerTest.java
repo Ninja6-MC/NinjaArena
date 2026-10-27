@@ -104,7 +104,7 @@ class TeamScoringListenerTest extends MatchFixture {
                 });
         var damage = new EntityDamageByEntityEvent(player(ALICE), player(CAROL), DamageCause.ENTITY_ATTACK,
                 source, 20);
-        new MatchProtectionListener(matches, plugin.getServer()::getPlayer, true).onDamage(damage);
+        new MatchProtectionListener(matches, plugin.getServer()::getPlayer, true, deaths::isSpectating).onDamage(damage);
         assertFalse(damage.isCancelled());
         matches.died(player(CAROL), player(ALICE));
         assertEquals(ALICE, events(PlayerEliminatedEvent.class).getFirst().killer().orElseThrow());

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import org.bukkit.GameMode;
 import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.entity.Entity;
@@ -18,7 +19,6 @@ import org.bukkit.event.entity.AreaEffectCloudApplyEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PotionSplashEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType.Category;
 import org.bukkit.potion.PotionType;
@@ -29,11 +29,14 @@ public final class MatchProtectionListener implements Listener {
     private final MatchService matches;
     private final Function<UUID, Player> players;
     private final boolean friendlyFire;
+    private final Predicate<UUID> spectators;
 
-    public MatchProtectionListener(MatchService matches, Function<UUID, Player> players, boolean friendlyFire) {
+    public MatchProtectionListener(MatchService matches, Function<UUID, Player> players, boolean friendlyFire,
+            Predicate<UUID> spectators) {
         this.matches = Objects.requireNonNull(matches, "matches");
         this.players = Objects.requireNonNull(players, "players");
         this.friendlyFire = friendlyFire;
+        this.spectators = Objects.requireNonNull(spectators, "spectators");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -80,22 +83,17 @@ public final class MatchProtectionListener implements Listener {
     public void onRoundStart(RoundStartEvent event) {
         for (UUID id : event.match().players()) {
             Player player = players.apply(id);
-            if (player != null && matches.isInMatch(id)) {
+            if (player != null && !player.isDead() && matches.isInMatch(id)) {
                 player.setGameMode(GameMode.ADVENTURE);
             }
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onRespawn(PlayerRespawnEvent event) {
-        if (matches.isInMatch(event.getPlayer().getUniqueId())) {
-            event.getPlayer().setGameMode(GameMode.ADVENTURE);
-        }
-    }
-
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onGameMode(PlayerGameModeChangeEvent event) {
-        if (event.getNewGameMode() != GameMode.ADVENTURE && matches.isInMatch(event.getPlayer().getUniqueId())) {
+        UUID id = event.getPlayer().getUniqueId();
+        GameMode allowed = spectators.test(id) ? GameMode.SPECTATOR : GameMode.ADVENTURE;
+        if (matches.isInMatch(id) && event.getNewGameMode() != allowed) {
             event.setCancelled(true);
         }
     }

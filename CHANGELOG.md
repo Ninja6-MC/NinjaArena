@@ -13,6 +13,12 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Match deaths retain inventory and levels without item or XP drops. Eliminated players
+  spectate living teammates inside their arena, limited to 16 blocks from their team, or
+  wait near their own base if nobody remains. Enemy and mob cameras are blocked.
+- At the next round, spectators return to Adventure mode at their team base. Players
+  still on the death screen are readied and placed when they respawn. Leaving while
+  spectating uses the existing snapshot restore, including the saved game mode.
 - Team scoring: 5 points for a round win and 2 for an opposing player kill, configurable
   under `scoring`. Teamkills, suicides, environmental deaths, leaving and drawn rounds
   award nothing. Total points decide match standings and extra rounds, and the final

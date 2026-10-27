@@ -29,8 +29,11 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Server;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitScheduler;
@@ -62,6 +65,9 @@ abstract class MatchFixture {
         boolean online = true;
         boolean dead;
         GameMode gameMode = GameMode.SURVIVAL;
+        Entity spectatorTarget;
+        Player killer;
+        ItemStack[] storage = new ItemStack[0];
         final List<String> messages = new ArrayList<>();
         final List<Location> teleports = new ArrayList<>();
         Player proxy;
@@ -84,7 +90,9 @@ abstract class MatchFixture {
     protected ArenaRegistry arenas;
     protected MatchService matches;
     protected MatchListener listener;
+    protected MatchDeathListener deaths;
     protected Consumer<PlayerGameModeChangeEvent> gameModeChanges = event -> { };
+    protected Consumer<PlayerTeleportEvent> teleportEvents = event -> { };
 
     @BeforeEach
     void setUp() throws Exception {
@@ -116,7 +124,8 @@ abstract class MatchFixture {
             restored.add(player.getUniqueId());
             return RestoreResult.RESTORED;
         }, events::add, player -> readied.add(player.getUniqueId()));
-        listener = new MatchListener(matches);
+        deaths = new MatchDeathListener(plugin, matches, arenas);
+        listener = new MatchListener(matches, deaths);
         add(ALICE, "Alice");
         add(BOB, "Bob");
         add(CAROL, "Carol");
@@ -174,13 +183,25 @@ abstract class MatchFixture {
                     case "getName" -> name;
                     case "isOnline" -> fake.online;
                     case "isDead" -> fake.dead;
+                    case "getKiller" -> fake.killer;
                     case "getGameMode" -> fake.gameMode;
+                    case "getSpectatorTarget" -> fake.spectatorTarget;
+                    case "setSpectatorTarget" -> {
+                        if (fake.gameMode != GameMode.SPECTATOR) {
+                            throw new IllegalStateException("player is not a spectator");
+                        }
+                        fake.spectatorTarget = (Entity) args[0];
+                        yield null;
+                    }
                     case "setGameMode" -> {
                         var event = new PlayerGameModeChangeEvent(fake.proxy, (GameMode) args[0],
                                 PlayerGameModeChangeEvent.Cause.PLUGIN, null);
                         gameModeChanges.accept(event);
                         if (!event.isCancelled()) {
                             fake.gameMode = event.getNewGameMode();
+                            if (fake.gameMode != GameMode.SPECTATOR) {
+                                fake.spectatorTarget = null;
+                            }
                         }
                         yield null;
                     }
@@ -188,6 +209,13 @@ abstract class MatchFixture {
                     case "leaveVehicle", "eject" -> false;
                     case "getInventory" -> Proxy.newProxyInstance(PlayerInventory.class.getClassLoader(),
                             new Class<?>[] {PlayerInventory.class}, (p, m, a) -> {
+                                if (m.getName().equals("getStorageContents")) {
+                                    return fake.storage.clone();
+                                }
+                                if (m.getName().equals("setStorageContents")) {
+                                    fake.storage = ((ItemStack[]) a[0]).clone();
+                                    return null;
+                                }
                                 if (m.getName().startsWith("set")) {
                                     return null;
                                 }
@@ -200,6 +228,14 @@ abstract class MatchFixture {
                     case "getLocation" -> fake.location.clone();
                     case "teleport" -> {
                         Location to = (Location) args[0];
+                        var event = new PlayerTeleportEvent(fake.proxy, fake.location.clone(), to,
+                                args.length > 1 && args[1] instanceof PlayerTeleportEvent.TeleportCause cause
+                                        ? cause : PlayerTeleportEvent.TeleportCause.PLUGIN);
+                        teleportEvents.accept(event);
+                        if (event.isCancelled()) {
+                            yield false;
+                        }
+                        to = event.getTo();
                         fake.teleports.add(to);
                         fake.location = to;
                         yield true;

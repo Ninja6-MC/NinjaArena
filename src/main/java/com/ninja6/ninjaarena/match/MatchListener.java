@@ -23,16 +23,17 @@ import org.bukkit.event.player.PlayerTeleportEvent;
  * of the arena world, and disconnects. Outside COMBAT and OVERRUN, players in a match take
  * no damage except from the void or {@code /kill}, so nobody falls forever.
  *
- * <p>Death handling here is deliberately minimal: a death takes the player out of the round
- * and they respawn at their team spawn, where they deal no damage until the next round.
- * Drops and spectating belong to the death-handling task.
+ * <p>Deaths eliminate players through the match engine; {@link MatchDeathListener} owns
+ * inventory retention, team spectating and respawn placement.
  */
 public final class MatchListener implements Listener {
 
     private final MatchService matches;
+    private final MatchDeathListener deaths;
 
-    public MatchListener(MatchService matches) {
+    public MatchListener(MatchService matches, MatchDeathListener deaths) {
         this.matches = Objects.requireNonNull(matches, "matches");
+        this.deaths = Objects.requireNonNull(deaths, "deaths");
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -55,17 +56,17 @@ public final class MatchListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDeath(PlayerDeathEvent event) {
         Player player = event.getPlayer();
-        if (matches.isInMatch(player.getUniqueId())) {
+        if (!event.isCancelled() && matches.isInMatch(player.getUniqueId())) {
             matches.died(player, player.getKiller());
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onRespawn(PlayerRespawnEvent event) {
-        matches.respawnPoint(event.getPlayer().getUniqueId()).ifPresent(event::setRespawnLocation);
+        deaths.placeRespawn(event);
     }
 
     /** Also sees vanilla portal travel, whose event is a teleport event. */
