@@ -13,6 +13,19 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- A shared `kits.yml` kit, cleared and rebuilt every round and on a delayed respawn into
+  the current round. Dead and eliminated players are skipped. Missing or invalid files
+  log the reason and use a safe empty kit; item-provider failures also use an empty kit.
+- Fresh installs write the empty kit template before loading. Non-item material entries
+  are skipped with a warning at load while valid entries remain. All exits discard kit
+  items before restoration or saving quit-player data, so a failed restore cannot leak a kit.
+- Named kit item providers via `NinjaArenaPlugin#kitItems()` for custom item IDs, alongside
+  vanilla material entries. Providers are resolved when a kit is applied and their item
+  data is preserved on independent stacks.
+- Match-only inventory lockdown for item and arrow pickup, item drops, external container
+  inventories and direct container interactions. Personal inventory arrangement remains
+  available; builders outside a match are unaffected. Snapshot restoration returns the
+  player's own storage, armour and offhand inventory after leaving or match close.
 - Match deaths retain inventory and levels without item or XP drops. Eliminated players
   spectate living teammates inside their arena, limited to 16 blocks from their team, or
   wait near their own base if nobody remains. Enemy and mob cameras are blocked.

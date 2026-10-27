@@ -1,0 +1,11 @@
+# One shared kit, rebuilt at the start of every round. Empty is safe until configured.
+format: 1
+items: []
+# Example entries (replace items: [] with items: followed by entries):
+#   - slot: 0
+#     material: WOODEN_SWORD
+#     amount: 1
+# Plugin-defined items use id instead of material, e.g. id: ninjaarena:smoke-bomb.
+# The item provider must be registered before the round starts.
+# Slots: 0-8 hotbar, 9-35 storage, 36 boots, 37 leggings, 38 chestplate,
+# 39 helmet, 40 offhand. Amount defaults to 1 and cannot exceed the item's stack limit.

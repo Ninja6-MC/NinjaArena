@@ -5,6 +5,7 @@ import io.papermc.paper.registry.RegistryKey;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import net.kyori.adventure.key.Key;
 import org.bukkit.Color;
 import org.bukkit.Keyed;
@@ -12,6 +13,9 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.inventory.InventoryView;
+import org.bukkit.inventory.ItemType;
+import org.bukkit.inventory.MenuType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionEffectTypeCategory;
@@ -36,6 +40,26 @@ public final class TestRegistryAccess implements RegistryAccess {
                 (proxy, method, args) -> {
                     if (method.getName().equals("get") || method.getName().equals("getOrThrow")) {
                         String value = ((Key) args[0]).value();
+                        if (name.equals("item")) {
+                            if (Set.of("water", "fire", "nether_portal").contains(value)) {
+                                return null;
+                            }
+                            return Proxy.newProxyInstance(ItemType.Typed.class.getClassLoader(),
+                                    new Class<?>[] {ItemType.Typed.class}, (p, m, a) -> switch (m.getName()) {
+                                        case "typed" -> p;
+                                        case "getKey" -> NamespacedKey.minecraft(value);
+                                        default -> throw new UnsupportedOperationException(m.getName());
+                                    });
+                        }
+                        if (name.equals("menu")) {
+                            return Proxy.newProxyInstance(MenuType.Typed.class.getClassLoader(),
+                                    new Class<?>[] {MenuType.Typed.class}, (p, m, a) -> switch (m.getName()) {
+                                        case "typed" -> p;
+                                        case "getInventoryViewClass" -> InventoryView.class;
+                                        case "getKey" -> NamespacedKey.minecraft(value);
+                                        default -> throw new UnsupportedOperationException(m.getName());
+                                    });
+                        }
                         return entries.computeIfAbsent(value, key -> {
                             if (name.equals("mob_effect")) {
                                 return new Effect(key);
