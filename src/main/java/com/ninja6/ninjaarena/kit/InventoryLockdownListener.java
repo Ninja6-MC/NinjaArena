@@ -1,7 +1,8 @@
 package com.ninja6.ninjaarena.kit;
 
-import com.ninja6.ninjaarena.match.MatchService;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Predicate;
 import org.bukkit.Material;
 import org.bukkit.block.Campfire;
 import org.bukkit.entity.ArmorStand;
@@ -27,39 +28,47 @@ import org.bukkit.event.player.PlayerPickupArrowEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.InventoryView;
 
-/** Match membership, never world or edit mode, determines whether an inventory is locked. */
+/**
+ * Locks the inventory of a player in a match or a waiting room: no drops, pickups, containers,
+ * ender chests (as a block or through any command that opens one) or armour stands. Membership,
+ * never world or edit mode, decides whether an inventory is locked.
+ */
 public final class InventoryLockdownListener implements Listener {
 
-    private final MatchService matches;
+    private final Predicate<UUID> locked;
 
-    public InventoryLockdownListener(MatchService matches) {
-        this.matches = Objects.requireNonNull(matches, "matches");
+    /**
+     * @param locked whether a player's inventory is locked; on a server, whether they are in a
+     *               match or waiting for one
+     */
+    public InventoryLockdownListener(Predicate<UUID> locked) {
+        this.locked = Objects.requireNonNull(locked, "locked");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
-        if (matches.isInMatch(event.getPlayer().getUniqueId())) {
+        if (locked.test(event.getPlayer().getUniqueId())) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPickup(EntityPickupItemEvent event) {
-        if (event.getEntity() instanceof Player player && matches.isInMatch(player.getUniqueId())) {
+        if (event.getEntity() instanceof Player player && locked.test(player.getUniqueId())) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onAttemptPickup(PlayerAttemptPickupItemEvent event) {
-        if (matches.isInMatch(event.getPlayer().getUniqueId())) {
+        if (locked.test(event.getPlayer().getUniqueId())) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onArrowPickup(PlayerPickupArrowEvent event) {
-        if (matches.isInMatch(event.getPlayer().getUniqueId())) {
+        if (locked.test(event.getPlayer().getUniqueId())) {
             event.setCancelled(true);
         }
     }
@@ -73,7 +82,7 @@ public final class InventoryLockdownListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onClick(InventoryClickEvent event) {
-        if (!matches.isInMatch(event.getWhoClicked().getUniqueId())) {
+        if (!locked.test(event.getWhoClicked().getUniqueId())) {
             return;
         }
         switch (event.getAction()) {
@@ -95,7 +104,7 @@ public final class InventoryLockdownListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent event) {
-        if (!matches.isInMatch(event.getPlayer().getUniqueId()) || event.getAction() != Action.RIGHT_CLICK_BLOCK
+        if (!locked.test(event.getPlayer().getUniqueId()) || event.getAction() != Action.RIGHT_CLICK_BLOCK
                 || event.getClickedBlock() == null) {
             return;
         }
@@ -109,7 +118,7 @@ public final class InventoryLockdownListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onInteractEntity(PlayerInteractEntityEvent event) {
         var entity = event.getRightClicked();
-        if (matches.isInMatch(event.getPlayer().getUniqueId())
+        if (locked.test(event.getPlayer().getUniqueId())
                 && (entity instanceof InventoryHolder || entity instanceof ArmorStand || entity instanceof ItemFrame)) {
             event.setCancelled(true);
         }
@@ -122,13 +131,13 @@ public final class InventoryLockdownListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onArmourStand(PlayerArmorStandManipulateEvent event) {
-        if (matches.isInMatch(event.getPlayer().getUniqueId())) {
+        if (locked.test(event.getPlayer().getUniqueId())) {
             event.setCancelled(true);
         }
     }
 
     private boolean lockedView(InventoryView view) {
-        if (!matches.isInMatch(view.getPlayer().getUniqueId())) {
+        if (!locked.test(view.getPlayer().getUniqueId())) {
             return false;
         }
         var top = view.getTopInventory();

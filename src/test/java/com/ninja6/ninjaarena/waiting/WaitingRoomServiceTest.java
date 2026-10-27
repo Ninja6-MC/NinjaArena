@@ -101,7 +101,7 @@ class WaitingRoomServiceTest {
         rooms = new WaitingRoomService(plugin(), arenas, new WaitingRoomSettings(2, 3, 4), player -> {
             restored.add(player.getUniqueId());
             return RestoreResult.RESTORED;
-        }, (arena, teams) -> started.add(teams));
+        }, player -> { }, (arena, teams) -> started.add(teams));
         listener = new WaitingRoomListener(rooms);
         arenas.onEditOrDelete(rooms::closeRoom);
         add(ALICE, "Alice");

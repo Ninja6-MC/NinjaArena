@@ -484,7 +484,7 @@ class NinjaToolsTest extends MatchFixture {
                     default -> throw new UnsupportedOperationException(m.getName());
                 });
         var drop = new PlayerDropItemEvent(player(ALICE), dropped);
-        new InventoryLockdownListener(matches).onDrop(drop);
+        new InventoryLockdownListener(matches::isInMatch).onDrop(drop);
         assertTrue(drop.isCancelled());
 
         matches.leave(player(ALICE), MatchService.Exit.COMMAND);

@@ -28,6 +28,8 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
+import org.bukkit.inventory.CraftingInventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -54,12 +56,13 @@ import org.bukkit.plugin.Plugin;
  * task on a later tick, never inside the move event that crossed into the portal, even when
  * the chunk was already loaded: the event is not done with the player yet, and the waiting
  * room's own move listener would see the player in the room with the event's destination
- * still next to the portal. In that task the checks run again, the snapshot is written and
- * the player is teleported, all in the same tick, so nothing the player does can fall between
- * the snapshot and the teleport. A player who is by then offline, dead, or no longer in or
- * next to the portal, or whose portal has changed, is dropped silently. A teleport that fails
- * is logged and deletes the snapshot again, since the player never left; one that succeeds
- * hands the player to the waiting room.
+ * still next to the portal. In that task the checks run again, the player's inventory screen
+ * is closed so the cursor and crafting grid go back into the saved inventory, the snapshot is
+ * written and the player is teleported, all in the same tick, so nothing the player does can
+ * fall between the snapshot and the teleport. A player who is by then offline, dead, or no
+ * longer in or next to the portal, or whose portal has changed, is dropped silently. A
+ * teleport that fails is logged and deletes the snapshot again, since the player never left;
+ * one that succeeds hands the player to the waiting room, which empties their inventory.
  */
 public final class PortalListener implements Listener {
 
@@ -151,6 +154,17 @@ public final class PortalListener implements Listener {
                 || !isAt(portal, player.getLocation())) {
             return;
         }
+        // The snapshot saves storage, armour and offhand, and the waiting room empties the
+        // cursor and crafting grid. Closing the screen would drop at the portal whatever does
+        // not fit back in, so items still held loose keep the player out instead.
+        if (holdsLooseItems(player)) {
+            if (portal.equals(portals.at(player.getLocation()))) {
+                player.teleport(outside, TeleportCause.PLUGIN);
+            }
+            tell(player, "Put away the items on your cursor or in your crafting grid, then walk in again.");
+            return;
+        }
+        player.closeInventory();
         Optional<Refusal> refusal = entry.admit(player, portal);
         if (refusal.isPresent()) {
             if (portal.equals(portals.at(player.getLocation()))) {
@@ -185,6 +199,22 @@ public final class PortalListener implements Listener {
                     + playerId + ") after a failed arena teleport; it will be restored on their next join.", e);
         }
         tell(player, "You could not be sent to the arena.");
+    }
+
+    /** Whether the player holds items on the cursor or in a crafting grid. */
+    static boolean holdsLooseItems(Player player) {
+        ItemStack cursor = player.getItemOnCursor();
+        if (cursor != null && !cursor.isEmpty()) {
+            return true;
+        }
+        if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory grid) {
+            for (ItemStack item : grid.getMatrix()) {
+                if (item != null && !item.isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Whether the location is in the portal or in a block touching it, in the portal's world. */
