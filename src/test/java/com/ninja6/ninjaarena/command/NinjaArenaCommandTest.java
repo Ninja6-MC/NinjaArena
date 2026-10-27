@@ -11,6 +11,8 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.arena.ArenaStore;
 import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.portal.PortalRegistry;
+import com.ninja6.ninjaarena.portal.PortalStore;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -46,7 +48,10 @@ class NinjaArenaCommandTest {
         registry = new ArenaRegistry(new ArenaStore(dir.resolve("arenas.yml")),
                 new ArenaGrid(256, 2048, -64, 320), enabled -> { }, noTickets);
         registry.load();
-        command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null));
+        PortalRegistry portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
+        portals.load();
+        command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null),
+                new PortalCommand(portals, registry, world -> true));
     }
 
     /** A console sender that holds the admin node or not, and records what it is told. */
@@ -131,6 +136,7 @@ class NinjaArenaCommandTest {
         CommandSender sender = console(true);
         run(sender, "arena create dojo");
         assertEquals(List.of("arena"), command.onTabComplete(sender, null, "narena", new String[] {"a"}));
+        assertEquals(List.of("arena", "portal"), command.onTabComplete(sender, null, "narena", new String[] {""}));
         assertEquals(List.of("setbounds", "setwaitingroom", "setteamspawn"),
                 command.onTabComplete(sender, null, "narena", new String[] {"arena", "set"}));
         assertEquals(List.of("dojo"), command.onTabComplete(sender, null, "narena", new String[] {"arena", "info", "d"}));

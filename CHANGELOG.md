@@ -70,3 +70,17 @@ Java 25, and does not run on Folia.
   chunk tickets on every chunk of an arena's bounds for the length of a match. Saving is
   one switch for the whole world, so no arena can be held while any arena is in edit
   mode, no edit can start while any arena is held, and a held arena cannot be deleted.
+- Portals: a box of blocks in any world except the arena world, bound to an arena by
+  name and stored in `plugins/NinjaArena/portals.yml` through a temporary file and an
+  atomic move. Portals cannot overlap and are at most 128 blocks along each axis. A file
+  that cannot be read, including one with a single bad entry, fails the load naming the
+  portal, is left untouched and blocks every change until it is fixed.
+- `/ninjaarena portal` admin subcommands, gated on `ninjaarena.admin` for both running and
+  tab completion: `setcorner <1|2>` from where the player stands or from coordinates in
+  their world, `create <name> <arena>`, `delete`, `list` and `info`.
+- Walking into a portal sends a player with `ninjaarena.play` to the arena's waiting room
+  once the arena is available and their snapshot is saved. Only moves that cross a block
+  boundary are checked, through an index of the chunks each portal touches. A refused
+  player is put back where they came from and told why, at most every two seconds.
+  Teleporting into a portal does not enter it, and vanilla portal travel is cancelled
+  inside one.
