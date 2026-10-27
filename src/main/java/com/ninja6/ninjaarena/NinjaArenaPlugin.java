@@ -78,7 +78,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             waitingRooms = null;
         }
         if (arenas != null) {
-            arenas.close();
+            arenas.close().forEach(getLogger()::warning);
             arenas = null;
         }
         if (arenaWorld != null) {

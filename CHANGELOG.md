@@ -97,3 +97,11 @@ Java 25, and does not run on Folia.
   on their next join, and disabling the plugin sends every waiting player home. Putting an
   arena in edit mode or deleting it sends everyone in its waiting room home, so a room never
   outlives the definition it opened with.
+- Saved arena copies: finishing an edit copies the arena's blocks, block entities
+  included, to `plugins/NinjaArena/arena-copies/<arena>/` as structure files, one per
+  chunk column. Every arena is reset from its copy on startup, so what a match left
+  behind is undone whether the server stopped cleanly or crashed: auto-save being off
+  keeps the arena world from saving while the server runs, but the shutdown save and
+  `/save-all` still write it. An arena with no copy is unavailable; one built before
+  copies existed is copied as it is on the first start. `ArenaRegistry#reset` resets one
+  arena, for the match engine at match end.

@@ -33,8 +33,17 @@ import org.bukkit.plugin.Plugin;
  *
  * <p><b>Chunk tickets.</b> {@link #hold(String)} adds a plugin chunk ticket to every chunk
  * the arena's bounds touch, so the arena stays loaded, and {@link #release(String)} removes
- * them. The match engine holds an arena for exactly as long as a match runs; nothing else
- * keeps arena chunks loaded. A held arena cannot be deleted.
+ * them. The match engine holds an arena for exactly as long as a match runs. A held arena
+ * cannot be deleted.
+ *
+ * <p><b>Saved copies.</b> Auto-save being off does not keep a match out of the world save:
+ * the server's shutdown save writes every loaded chunk of every world, the arena world
+ * included, and {@code /save-all} does the same. So each arena's blocks are copied to
+ * {@link ArenaCopies} whenever an edit finishes, and the copy, not the world save, is what
+ * the arena is meant to look like. {@link #resetAll()} puts every copy back when the
+ * registry opens on startup, so an arena is as it was built on every boot, whether the
+ * last run ended cleanly, mid-match or in a crash. {@link #reset(String)} does the same for
+ * one arena, for the match engine at match end. An arena with no copy is not available.
  *
  * <p><b>Change listeners.</b> {@link #onEditOrDelete(Consumer)} is told an arena's name when
  * it enters edit mode or is deleted, the two ways its definition can change, so whatever
@@ -48,10 +57,13 @@ public final class ArenaRegistry {
     private final ArenaGrid grid;
     private final Consumer<Boolean> worldSaving;
     private final ChunkTickets tickets;
+    private final ArenaCopies copies;
 
     private final Map<String, Arena> arenas = new TreeMap<>();
     private final Set<String> editing = new TreeSet<>();
     private final Set<String> held = new HashSet<>();
+    /** Arenas whose last reset failed, so the world may still hold a match's changes. */
+    private final Set<String> unreset = new HashSet<>();
 
     /** Set when the file could not be read, so a later write cannot replace what is in it. */
     private boolean unreadable;
@@ -62,11 +74,13 @@ public final class ArenaRegistry {
      * @param worldSaving turns the arena world's saving on or off
      *                    ({@code ArenaWorld#setSavingEnabled})
      */
-    public ArenaRegistry(ArenaStore store, ArenaGrid grid, Consumer<Boolean> worldSaving, ChunkTickets tickets) {
+    public ArenaRegistry(ArenaStore store, ArenaGrid grid, Consumer<Boolean> worldSaving, ChunkTickets tickets,
+            ArenaCopies copies) {
         this.store = Objects.requireNonNull(store, "store");
         this.grid = Objects.requireNonNull(grid, "grid");
         this.worldSaving = Objects.requireNonNull(worldSaving, "worldSaving");
         this.tickets = Objects.requireNonNull(tickets, "tickets");
+        this.copies = Objects.requireNonNull(copies, "copies");
     }
 
     /**
@@ -94,8 +108,9 @@ public final class ArenaRegistry {
     /**
      * The registry for the running server: {@code arenas.yml} in the plugin's data folder,
      * the grid from the {@code arena-grid} config section and the arena world's border and
-     * height, and chunk tickets owned by the plugin. A file that cannot be read is logged and
-     * left as it is.
+     * height, chunk tickets owned by the plugin, and copies in {@code arena-copies}. Once
+     * loaded, every arena is reset from its copy ({@link #resetAll()}). A file that cannot be
+     * read is logged and left as it is.
      */
     public static ArenaRegistry open(Plugin plugin, ArenaWorld arenaWorld) {
         World world = arenaWorld.world();
@@ -114,7 +129,9 @@ public final class ArenaRegistry {
             }
         };
         ArenaStore store = new ArenaStore(plugin.getDataFolder().toPath().resolve("arenas.yml"));
-        ArenaRegistry registry = new ArenaRegistry(store, grid, arenaWorld::setSavingEnabled, tickets);
+        ArenaCopies copies = new StructureArenaCopies(plugin.getDataFolder().toPath().resolve("arena-copies"), world,
+                plugin.getServer().getStructureManager());
+        ArenaRegistry registry = new ArenaRegistry(store, grid, arenaWorld::setSavingEnabled, tickets, copies);
         try {
             registry.load();
             plugin.getLogger().info("Loaded " + registry.all().size() + " arena(s) on a " + grid.cellSize()
@@ -122,7 +139,16 @@ public final class ArenaRegistry {
         } catch (IOException e) {
             plugin.getLogger().log(Level.SEVERE, "Could not read " + store.file()
                     + "; arenas cannot be changed until it is fixed and the server restarted.", e);
+            return registry;
         }
+        ResetReport report = registry.resetAll();
+        if (!report.reset().isEmpty()) {
+            plugin.getLogger().info("Reset " + String.join(", ", report.reset()) + " from the saved copy.");
+        }
+        if (!report.copied().isEmpty()) {
+            plugin.getLogger().info("Saved a first copy of " + String.join(", ", report.copied()) + ".");
+        }
+        report.failed().forEach(problem -> plugin.getLogger().warning(problem));
         return registry;
     }
 
@@ -167,6 +193,8 @@ public final class ArenaRegistry {
             throw new ArenaException("Cell " + cell.describe() + " already holds an arena.");
         }
         refuseEditWhileHeld();
+        // A copy left by an earlier arena of this name must never be restored over this one.
+        deleteCopy(key);
         Arena arena = Arena.create(key, cell);
         Map<String, Arena> next = new TreeMap<>(arenas);
         next.put(key, arena);
@@ -175,7 +203,7 @@ public final class ArenaRegistry {
         return arena;
     }
 
-    /** Removes an arena from the registry. Its blocks stay in the world. */
+    /** Removes an arena and its saved copy from the registry. Its blocks stay in the world. */
     public void delete(String name) throws ArenaException {
         Arena arena = require(name);
         if (held.contains(arena.name())) {
@@ -187,6 +215,12 @@ public final class ArenaRegistry {
         if (editing.contains(arena.name())) {
             leaveEdit(arena.name());
         }
+        try {
+            copies.delete(arena.name());
+        } catch (IOException e) {
+            // Harmless: nothing restores a copy without an arena, and create removes it first.
+        }
+        unreset.remove(arena.name());
         notifyEditOrDelete(arena.name());
     }
 
@@ -220,15 +254,25 @@ public final class ArenaRegistry {
     }
 
     /**
-     * Takes an arena out of edit mode. When it was the last one, world saving is turned off,
-     * which saves the world.
+     * Saves the arena's copy and takes it out of edit mode. When it was the last one, world
+     * saving is turned off, which saves the world.
      *
      * @return what still stops the arena from hosting a match; empty if it is ready
+     * @throws ArenaException if the copy cannot be saved; the arena then stays in edit mode
      */
     public List<String> finishEdit(String name) throws ArenaException {
         Arena arena = require(name);
         if (!editing.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is not in edit mode.");
+        }
+        if (arena.bounds() != null) {
+            try {
+                copies.save(arena.name(), arena.bounds());
+            } catch (IOException e) {
+                throw new ArenaException("Could not save the copy of " + arena.name() + ", so it stays in edit"
+                        + " mode: " + e.getMessage(), e);
+            }
+            unreset.remove(arena.name());
         }
         leaveEdit(arena.name());
         return ArenaValidator.problems(arena, grid);
@@ -273,7 +317,8 @@ public final class ArenaRegistry {
     }
 
     /**
-     * Whether a match may start in the arena: complete, not in use, and no arena at all in
+     * Whether a match may start in the arena: complete, saved as a copy it can be reset from,
+     * reset successfully since its last match or startup, not in use, and no arena at all in
      * edit mode, since edit mode turns saving on for the whole world.
      */
     public boolean isAvailable(String name) {
@@ -282,7 +327,79 @@ public final class ArenaRegistry {
         return arena != null
                 && editing.isEmpty()
                 && !held.contains(key)
-                && ArenaValidator.problems(arena, grid).isEmpty();
+                && !unreset.contains(key)
+                && ArenaValidator.problems(arena, grid).isEmpty()
+                && copies.exists(key);
+    }
+
+    /**
+     * Puts the arena's blocks back as they were when its last edit finished. For the match
+     * engine, at match end; it may be called while the arena is held.
+     *
+     * @throws ArenaException if the arena is in edit mode, which would undo the edit, or has
+     *                        no copy, or the copy cannot be read; the arena is then not
+     *                        available until a reset succeeds or an edit finishes
+     */
+    public void reset(String name) throws ArenaException {
+        Arena arena = require(name);
+        if (editing.contains(arena.name())) {
+            throw new ArenaException("Arena " + arena.name() + " is in edit mode; a reset would undo the edit.");
+        }
+        try {
+            copies.restore(arena.name());
+        } catch (IOException e) {
+            unreset.add(arena.name());
+            throw new ArenaException("Could not reset " + arena.name() + ": " + e.getMessage(), e);
+        }
+        unreset.remove(arena.name());
+    }
+
+    /**
+     * Resets every arena that is not in edit mode from its copy. An arena with bounds but no
+     * copy, such as one built before copies existed, gets its first copy from the world as
+     * it is. Called when the registry opens on startup, before any match can run, so whatever
+     * the last run wrote to the world save is undone. An arena that fails is not available
+     * until a later reset succeeds or an edit finishes.
+     */
+    public ResetReport resetAll() {
+        List<String> reset = new ArrayList<>();
+        List<String> copied = new ArrayList<>();
+        List<String> failed = new ArrayList<>();
+        for (Arena arena : arenas.values()) {
+            if (arena.bounds() == null || editing.contains(arena.name())) {
+                continue;
+            }
+            try {
+                if (copies.exists(arena.name())) {
+                    copies.restore(arena.name());
+                    reset.add(arena.name());
+                } else {
+                    copies.save(arena.name(), arena.bounds());
+                    copied.add(arena.name());
+                }
+                unreset.remove(arena.name());
+            } catch (IOException e) {
+                unreset.add(arena.name());
+                failed.add("Could not reset " + arena.name() + " from its saved copy: " + e.getMessage());
+            }
+        }
+        return new ResetReport(reset, copied, failed);
+    }
+
+    /**
+     * What {@link #resetAll()} did.
+     *
+     * @param reset  arenas put back from their copy
+     * @param copied arenas that had no copy and were copied as they are
+     * @param failed one message per arena that could not be reset or copied
+     */
+    public record ResetReport(List<String> reset, List<String> copied, List<String> failed) {
+
+        public ResetReport {
+            reset = List.copyOf(reset);
+            copied = List.copyOf(copied);
+            failed = List.copyOf(failed);
+        }
     }
 
     /**
@@ -335,15 +452,33 @@ public final class ArenaRegistry {
         return held.contains(Arena.normalizeName(name));
     }
 
-    /** Releases every held arena and ends every edit. Called on plugin disable. */
-    public void close() {
+    /**
+     * Releases every held arena and ends every edit, saving the copy of each arena that was
+     * being edited. Called on plugin disable.
+     *
+     * @return one message per copy that could not be saved
+     */
+    public List<String> close() {
         for (String name : new ArrayList<>(held)) {
             release(name);
         }
+        List<String> failed = new ArrayList<>();
         if (!editing.isEmpty()) {
+            for (String name : editing) {
+                Arena arena = arenas.get(name);
+                if (arena == null || arena.bounds() == null) {
+                    continue;
+                }
+                try {
+                    copies.save(name, arena.bounds());
+                } catch (IOException e) {
+                    failed.add("Could not save the copy of " + name + " while closing its edit: " + e.getMessage());
+                }
+            }
             editing.clear();
             worldSaving.accept(false);
         }
+        return failed;
     }
 
     /** Edit mode turns saving on for the whole world, which must not happen during a match. */
@@ -365,6 +500,14 @@ public final class ArenaRegistry {
         editing.remove(key);
         if (editing.isEmpty()) {
             worldSaving.accept(false);
+        }
+    }
+
+    private void deleteCopy(String key) throws ArenaException {
+        try {
+            copies.delete(key);
+        } catch (IOException e) {
+            throw new ArenaException("Could not delete the saved copy of " + key + ": " + e.getMessage(), e);
         }
     }
 

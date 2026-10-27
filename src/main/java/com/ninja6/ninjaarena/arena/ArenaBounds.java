@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.arena;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * An axis-aligned box of whole blocks, both corners inclusive. The constructor orders the
  * corners, so any two opposite corners describe the same box.
@@ -49,6 +52,22 @@ public record ArenaBounds(int minX, int minY, int minZ, int maxX, int maxY, int 
 
     public int maxChunkZ() {
         return Math.floorDiv(maxZ, 16);
+    }
+
+    /**
+     * The box split along chunk borders: one part per chunk column it touches, each the full
+     * height of the box. Together the parts cover the box exactly once.
+     */
+    public List<ArenaBounds> chunkColumns() {
+        List<ArenaBounds> columns = new ArrayList<>();
+        for (int chunkX = minChunkX(); chunkX <= maxChunkX(); chunkX++) {
+            for (int chunkZ = minChunkZ(); chunkZ <= maxChunkZ(); chunkZ++) {
+                columns.add(new ArenaBounds(
+                        Math.max(minX, chunkX * 16), minY, Math.max(minZ, chunkZ * 16),
+                        Math.min(maxX, chunkX * 16 + 15), maxY, Math.min(maxZ, chunkZ * 16 + 15)));
+            }
+        }
+        return columns;
     }
 
     public String describe() {

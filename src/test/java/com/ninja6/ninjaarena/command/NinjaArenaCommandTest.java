@@ -11,6 +11,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.arena.ArenaStore;
 import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.arena.MemoryCopies;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
 import com.ninja6.ninjaarena.portal.PortalStore;
 import java.lang.reflect.Proxy;
@@ -49,7 +50,7 @@ class NinjaArenaCommandTest {
             }
         };
         registry = new ArenaRegistry(new ArenaStore(dir.resolve("arenas.yml")),
-                new ArenaGrid(256, 2048, -64, 320), enabled -> { }, noTickets);
+                new ArenaGrid(256, 2048, -64, 320), enabled -> { }, noTickets, new MemoryCopies());
         registry.load();
         PortalRegistry portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
