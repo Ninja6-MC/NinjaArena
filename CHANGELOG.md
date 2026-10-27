@@ -43,3 +43,20 @@ Java 25, and does not run on Folia.
   simulation distance, all tunable under `arena-world` in `config.yml`. Auto-save is off;
   `ArenaWorld#setSavingEnabled` turns it on for edit mode and saves once when it is
   turned off again.
+- The arena registry in `plugins/NinjaArena/arenas.yml`, written through a temporary file
+  and an atomic move. Each arena owns one cell of a fixed grid in the arena world
+  (`arena-grid.cell-size` in `config.yml`, 256 blocks by default) and has bounds inside
+  that cell, a waiting room, 2 to 4 team spawns and at least one enemy spawn point, all
+  inside the bounds. An arena that breaks any of these is unavailable for matches, and a
+  file that cannot be read is left untouched and blocks every change until it is fixed.
+- `/ninjaarena arena` admin subcommands, gated on `ninjaarena.admin` for both running and
+  tab completion: `create`, `delete`, `list`, `info`, `edit <on|off>`, `tp`, `setbounds`,
+  `setwaitingroom`, `setteamspawn`, `removeteamspawn`, `addenemyspawn` and
+  `removeenemyspawn`. Positions default to where the player stands and can be given as
+  coordinates, so everything except `tp` also runs from the console.
+- Edit mode: arenas change only while in edit mode, which turns arena world saving on and
+  takes the arena out of matches; finishing the last edit turns saving off, saving the
+  world, and lists what still stops the arena from hosting a match.
+- `ArenaRegistry#hold` and `#release` for the match engine, adding and removing plugin
+  chunk tickets on every chunk of an arena's bounds for the length of a match. A held
+  arena cannot be edited or deleted.
