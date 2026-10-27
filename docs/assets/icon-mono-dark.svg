@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Exported from icon-master.svg by scripts/export-icons.mjs. Edit the master. -->
+  <g stroke="#E8EDF2" fill="#E8EDF2">
+    <polyline points="212,272 212,212 272,212" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="212,272 242,272 242,302 272,302 272,332 302,332 302,362 332,362 332,392 362,392 362,422 392,422 392,452 422,452 422,482 452,482 452,512 482,512 482,542 512,542 512,572 542,572 542,602" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="272,212 302,212 302,242 332,242 332,272 362,272 362,302 392,302 392,332 422,332 422,362 452,362 452,392 482,392 482,422 512,422 512,452 542,452 542,482 572,482 572,512 602,512 602,542" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="242,242 272,242 272,272 302,272 302,302 332,302 332,332 362,332 362,362 392,362 392,392 422,392 422,422 452,422 452,452 482,452 482,482 512,482 512,512 542,512 542,542 572,542 572,572" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="512,662 512,602 542,602 632,602 632,542 662,542 662,512" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="572,572 602,572 602,602 632,602 632,632 662,632 662,662 692,662 692,692 722,692 722,722 752,722 752,752" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="752,782 782,782 782,812 812,812 812,782 782,782 782,752" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="812,272 812,212 752,212" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="812,272 782,272 782,302 752,302 752,332 722,332 722,362 692,362 692,392 662,392 662,422 632,422 632,452 602,452 602,482 572,482 572,512 542,512 542,542 512,542 512,572 482,572 482,602" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="752,212 722,212 722,242 692,242 692,272 662,272 662,302 632,302 632,332 602,332 602,362 572,362 572,392 542,392 542,422 512,422 512,452 482,452 482,482 452,482 452,512 422,512 422,542" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="782,242 752,242 752,272 722,272 722,302 692,302 692,332 662,332 662,362 632,362 632,392 602,392 602,422 572,422 572,452 542,452 542,482 512,482 512,512 482,512 482,542 452,542 452,572" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="512,662 512,602 482,602 392,602 392,542 362,542 362,512" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="452,572 422,572 422,602 392,602 392,632 362,632 362,662 332,662 332,692 302,692 302,722 272,722 272,752" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="272,782 242,782 242,812 212,812 212,782 242,782 242,752" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
+    <circle cx="512" cy="512" r="50" stroke="none" />
+  </g>
+</svg>
