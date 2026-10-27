@@ -80,6 +80,12 @@ class TeamScoringListenerTest extends MatchFixture {
                     player.messages.stream().filter(message -> message.startsWith("Final scores:")).toList());
             assertFalse(player.messages.stream().anyMatch(message -> message.startsWith("Rounds won:")));
             assertTrue(player.messages.contains("Team 1 wins the match!"));
+            // The table sits between the winner and the countdown.
+            List<String> end = player.messages.subList(player.messages.indexOf("Team 1 wins the match!"),
+                    player.messages.size());
+            assertEquals(3, end.size(), end.toString());
+            assertTrue(end.get(1).startsWith("Final scores:"), end.toString());
+            assertTrue(end.get(2).startsWith("Returning in "), end.toString());
         }
         ticks(2);
         assertEquals(4, restored.size());

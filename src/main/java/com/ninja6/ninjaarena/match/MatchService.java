@@ -414,7 +414,9 @@ public final class MatchService implements MatchStart {
                     announceResult(running, ended.result());
                     plugin.getLogger().info("Match in arena " + match.arena() + " ended: " + ended.result().reason()
                             + ", winners " + ended.result().winners() + ".");
+                    // Listeners show their results (the score table) between the winner and the countdown.
                     events.accept(new MatchEndEvent(match, ended.result()));
+                    announceReturn(running, ended.result());
                 }
                 case Closed closed -> close(running);
             }
@@ -509,11 +511,13 @@ public final class MatchService implements MatchStart {
             // Nobody is left to tell.
             case ABANDONED -> null;
         };
-        if (headline == null) {
-            return;
+        if (headline != null) {
+            broadcast(running, headline);
         }
-        broadcast(running, headline);
-        if (result.reason() != Reason.STOPPED) {
+    }
+
+    private void announceReturn(Running running, MatchResult result) {
+        if (result.reason() != Reason.STOPPED && result.reason() != Reason.ABANDONED) {
             broadcast(running, Component.text("Returning in " + settings.matchEndSeconds() + " seconds.",
                     NamedTextColor.GRAY));
         }
