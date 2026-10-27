@@ -47,14 +47,19 @@ import org.bukkit.plugin.Plugin;
  *
  * <p><b>Refusal.</b> A player who may not enter is put back on the block they came from and
  * told why, at most once every {@link #MESSAGE_COOLDOWN_MILLIS} milliseconds, so walking
- * into the edge again does not flood chat.
+ * into the edge again does not flood chat. The message for a failed teleport shares that
+ * cooldown.
  *
- * <p><b>Entry.</b> The waiting room's chunk is loaded first. Once it is, on the server
- * thread, the checks run again, the snapshot is written and the player is teleported, all in
- * the same tick, so nothing the player does can fall between the snapshot and the teleport.
- * A player who is by then offline, dead, or no longer in or next to the portal is dropped
- * silently. A teleport that fails deletes the snapshot again, since the player never left;
- * one that succeeds hands the player to the waiting room.
+ * <p><b>Entry.</b> The waiting room's chunk is loaded first. Entry then runs in a scheduled
+ * task on a later tick, never inside the move event that crossed into the portal, even when
+ * the chunk was already loaded: the event is not done with the player yet, and the waiting
+ * room's own move listener would see the player in the room with the event's destination
+ * still next to the portal. In that task the checks run again, the snapshot is written and
+ * the player is teleported, all in the same tick, so nothing the player does can fall between
+ * the snapshot and the teleport. A player who is by then offline, dead, or no longer in or
+ * next to the portal, or whose portal has changed, is dropped silently. A teleport that fails
+ * is logged and deletes the snapshot again, since the player never left; one that succeeds
+ * hands the player to the waiting room.
  */
 public final class PortalListener implements Listener {
 
@@ -114,7 +119,7 @@ public final class PortalListener implements Listener {
         ArenaPoint room = entry.waitingRoom(portal).orElseThrow();
         entering.add(playerId);
         arenaWorld.get().getChunkAtAsync(Math.floorDiv(room.blockX(), 16), Math.floorDiv(room.blockZ(), 16))
-                .whenComplete((chunk, error) -> onServerThread(() -> enter(playerId, portal, outside)));
+                .whenComplete((chunk, error) -> later(() -> enter(playerId, portal, outside)));
     }
 
     /** Lets the region, not the frame, decide where a player standing in a portal goes. */
@@ -159,9 +164,13 @@ public final class PortalListener implements Listener {
         boolean moved;
         try {
             moved = player.teleport(target, TeleportCause.PLUGIN);
+            if (!moved) {
+                plugin.getLogger().warning("The teleport of " + player.getName() + " (" + playerId + ") to arena "
+                        + portal.arena() + " was refused.");
+            }
         } catch (RuntimeException e) {
-            plugin.getLogger().log(Level.SEVERE, "Could not teleport " + player.getName() + " to arena "
-                    + portal.arena(), e);
+            plugin.getLogger().log(Level.SEVERE, "Could not teleport " + player.getName() + " (" + playerId
+                    + ") to arena " + portal.arena(), e);
             moved = false;
         }
         if (moved) {
@@ -175,7 +184,7 @@ public final class PortalListener implements Listener {
             plugin.getLogger().log(Level.SEVERE, "Could not delete the snapshot of " + player.getName() + " ("
                     + playerId + ") after a failed arena teleport; it will be restored on their next join.", e);
         }
-        player.sendMessage(Component.text("You could not be sent to the arena.", NamedTextColor.RED));
+        tell(player, "You could not be sent to the arena.");
     }
 
     /** Whether the location is in the portal or in a block touching it, in the portal's world. */
@@ -192,19 +201,26 @@ public final class PortalListener implements Listener {
     }
 
     private void tell(Player player, Refusal refusal) {
+        tell(player, refusal.message());
+    }
+
+    /** Sends a red message, at most once every {@link #MESSAGE_COOLDOWN_MILLIS} per player. */
+    private void tell(Player player, String message) {
         long now = System.currentTimeMillis();
         Long last = lastMessage.get(player.getUniqueId());
         if (last != null && now - last < MESSAGE_COOLDOWN_MILLIS) {
             return;
         }
         lastMessage.put(player.getUniqueId(), now);
-        player.sendMessage(Component.text(refusal.message(), NamedTextColor.RED));
+        player.sendMessage(Component.text(message, NamedTextColor.RED));
     }
 
-    private void onServerThread(Runnable task) {
-        if (plugin.getServer().isPrimaryThread()) {
-            task.run();
-        } else if (plugin.isEnabled()) {
+    /**
+     * Runs the task on the server thread on a later tick. Never runs it inline, because a chunk
+     * that is already loaded completes its future at once, inside the move event.
+     */
+    private void later(Runnable task) {
+        if (plugin.isEnabled()) {
             plugin.getServer().getScheduler().runTask(plugin, task);
         }
     }

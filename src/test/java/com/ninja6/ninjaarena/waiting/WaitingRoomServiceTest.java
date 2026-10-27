@@ -254,6 +254,33 @@ class WaitingRoomServiceTest {
     }
 
     @Test
+    void anEventThatStartsOutsideTheArenaWorldDoesNotTakeAWaitingPlayerOut() {
+        rooms.join(player(ALICE), "dojo");
+        Fake alice = players.get(ALICE);
+        // Another plugin sent Alice to the room inside a move or teleport event that began next to a portal.
+        listener.onMove(new PlayerMoveEvent(alice.proxy, new Location(overworld, 11.5, 64, 9.5),
+                new Location(overworld, 11.5, 64, 10.5)));
+        listener.onTeleport(new PlayerTeleportEvent(alice.proxy, new Location(overworld, 11.5, 64, 9.5),
+                new Location(overworld, 11.5, 64, 10.5)));
+        assertTrue(rooms.isWaiting(ALICE));
+        runNextTick();
+        assertTrue(restored.isEmpty());
+        assertFalse(alice.messages.contains("You left the waiting room."));
+    }
+
+    @Test
+    void aWaitingPlayerFoundOutsideTheArenaWorldStillLeaves() {
+        rooms.join(player(ALICE), "dojo");
+        Fake alice = players.get(ALICE);
+        alice.location = new Location(overworld, 11.5, 64, 9.5);
+        listener.onMove(new PlayerMoveEvent(alice.proxy, alice.location.clone(),
+                new Location(overworld, 11.5, 64, 10.5)));
+        assertFalse(rooms.isWaiting(ALICE));
+        runNextTick();
+        assertEquals(List.of(ALICE), restored);
+    }
+
+    @Test
     void theLeaveCommandRestoresAtOnce() {
         rooms.join(player(ALICE), "dojo");
         assertTrue(rooms.leave(player(ALICE), Exit.COMMAND));

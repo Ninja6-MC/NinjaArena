@@ -12,9 +12,13 @@ import com.ninja6.ninjaarena.arena.ArenaStore;
 import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
 import com.ninja6.ninjaarena.arena.MemoryCopies;
+import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService.CaptureResult;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
+import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
+import com.ninja6.ninjaarena.waiting.WaitingRoomService;
+import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
@@ -35,6 +39,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitScheduler;
+import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,10 +57,14 @@ class PortalListenerTest {
     private final List<String> messages = new ArrayList<>();
     private final List<Location> teleports = new ArrayList<>();
     private final List<String> entered = new ArrayList<>();
+    private final List<Runnable> nextTick = new ArrayList<>();
+    private final List<UUID> restored = new ArrayList<>();
     private World overworld;
     private World arenaWorld;
     private ArenaRegistry arenas;
     private PortalListener listener;
+    private WaitingRoomService rooms;
+    private WaitingRoomListener roomListener;
     private int captures;
 
     // The test player's state.
@@ -62,6 +72,9 @@ class PortalListenerTest {
     private GameMode gameMode = GameMode.SURVIVAL;
     private boolean canPlay = true;
     private boolean online = true;
+    private boolean teleportRefused;
+    /** Whether the waiting room's chunk is already loaded, so its future is complete at once. */
+    private boolean chunkLoaded;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -98,8 +111,17 @@ class PortalListenerTest {
             captures++;
             return CaptureResult.SAVED;
         });
-        listener = new PortalListener(plugin(logger), portals, entry, () -> arenaWorld, snapshots, id -> { },
-                (player, arena) -> entered.add(arena));
+        Plugin plugin = plugin(logger);
+        rooms = new WaitingRoomService(plugin, arenas, new WaitingRoomSettings(2, 3, 4), player -> {
+            restored.add(player.getUniqueId());
+            return RestoreResult.RESTORED;
+        }, (arena, teams) -> { });
+        roomListener = new WaitingRoomListener(rooms);
+        listener = new PortalListener(plugin, portals, entry, () -> arenaWorld, snapshots, id -> { },
+                (player, arena) -> {
+                    entered.add(arena);
+                    rooms.join(player, arena);
+                });
         location = new Location(overworld, 11.5, 64, 9.5);
     }
 
@@ -108,6 +130,9 @@ class PortalListenerTest {
                 (proxy, method, args) -> switch (method.getName()) {
                     case "getName" -> name;
                     case "getChunkAtAsync" -> {
+                        if (chunkLoaded) {
+                            yield CompletableFuture.<Chunk>completedFuture(null);
+                        }
                         CompletableFuture<Chunk> load = new CompletableFuture<>();
                         chunkLoads.add(load);
                         yield load;
@@ -120,10 +145,21 @@ class PortalListenerTest {
     }
 
     private Plugin plugin(Logger logger) {
+        BukkitTask task = (BukkitTask) Proxy.newProxyInstance(BukkitTask.class.getClassLoader(),
+                new Class<?>[] {BukkitTask.class}, (proxy, method, args) -> null);
+        BukkitScheduler scheduler = (BukkitScheduler) Proxy.newProxyInstance(BukkitScheduler.class.getClassLoader(),
+                new Class<?>[] {BukkitScheduler.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "runTask" -> {
+                        nextTick.add((Runnable) args[1]);
+                        yield task;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
         Server server = (Server) Proxy.newProxyInstance(Server.class.getClassLoader(), new Class<?>[] {Server.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "isPrimaryThread" -> true;
                     case "getPlayer" -> online && ALICE.equals(args[0]) ? player() : null;
+                    case "getScheduler" -> scheduler;
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
         return (Plugin) Proxy.newProxyInstance(Plugin.class.getClassLoader(), new Class<?>[] {Plugin.class},
@@ -146,6 +182,9 @@ class PortalListenerTest {
                     case "isOnline" -> online;
                     case "isDead" -> false;
                     case "teleport" -> {
+                        if (teleportRefused) {
+                            yield false;
+                        }
                         location = ((Location) args[0]).clone();
                         teleports.add(location);
                         yield true;
@@ -154,25 +193,44 @@ class PortalListenerTest {
                         messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
                         yield null;
                     }
+                    case "sendActionBar" -> null;
                     case "hashCode" -> 1;
                     case "equals" -> proxy == args[0];
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
     }
 
-    /** Moves the player to the given spot and returns the event after the listener saw it. */
+    /**
+     * Moves the player to the given spot and returns the event after the listeners saw it, in
+     * the order the server calls them: the portal at HIGH, the waiting room at MONITOR. A
+     * teleport made inside the event wins over the event's destination, as on the server.
+     */
     private PlayerMoveEvent move(double x, double y, double z, float yaw) {
         Location to = new Location(overworld, x, y, z, yaw, 0);
         PlayerMoveEvent event = new PlayerMoveEvent(player(), location.clone(), to);
+        int teleported = teleports.size();
         listener.onMove(event);
-        location = event.getTo().clone();
+        if (!event.isCancelled()) {
+            roomListener.onMove(event);
+        }
+        if (teleports.size() == teleported) {
+            location = event.getTo().clone();
+        }
         return event;
     }
 
+    /** Completes the pending chunk loads and runs what they scheduled for the next tick. */
     private void finishChunkLoads() {
         for (CompletableFuture<Chunk> load : new ArrayList<>(chunkLoads)) {
             load.complete(null);
         }
+        runNextTick();
+    }
+
+    private void runNextTick() {
+        List<Runnable> tasks = new ArrayList<>(nextTick);
+        nextTick.clear();
+        tasks.forEach(Runnable::run);
     }
 
     @Test
@@ -267,5 +325,38 @@ class PortalListenerTest {
         finishChunkLoads();
         assertEquals(1, captures);
         assertFalse(teleports.isEmpty());
+    }
+
+    @Test
+    void anAlreadyLoadedChunkEntersOnTheNextTickAndThePlayerStaysInTheRoom() {
+        chunkLoaded = true;
+        move(11.5, 64, 10.5, 0);
+        assertTrue(teleports.isEmpty());
+        assertFalse(rooms.isWaiting(ALICE));
+
+        runNextTick();
+        assertEquals(1, captures);
+        assertEquals(1, teleports.size());
+        assertEquals(arenaWorld, location.getWorld());
+        assertEquals(List.of("dojo"), entered);
+        assertTrue(rooms.isWaiting(ALICE));
+
+        runNextTick();
+        assertTrue(rooms.isWaiting(ALICE));
+        assertTrue(restored.isEmpty());
+        assertFalse(messages.contains("You left the waiting room."));
+    }
+
+    @Test
+    void aRefusedTeleportIsToldOnceInAWhile() {
+        teleportRefused = true;
+        move(11.5, 64, 10.5, 0);
+        finishChunkLoads();
+        move(11.5, 64, 9.5, 0);
+        move(11.5, 64, 10.5, 0);
+        finishChunkLoads();
+        assertEquals(2, captures);
+        assertTrue(entered.isEmpty());
+        assertEquals(List.of("You could not be sent to the arena."), messages);
     }
 }
