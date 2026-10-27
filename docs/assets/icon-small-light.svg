@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Exported from icon-master.svg by scripts/export-icons.mjs. Edit the master. -->
+  <g stroke="#0369A1">
+    <polyline points="272,272 332,272 332,332 392,332 392,392 452,392 452,452 512,452 512,512 572,512 572,572 632,572 632,632 692,632 692,692 752,692 752,752" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="752,272 692,272 692,332 632,332 632,392 572,392 572,452 512,452 512,512 452,512 452,572 392,572 392,632 332,632 332,692 272,692 272,752" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="512,632 572,632 572,572 632,572" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
+    <polyline points="512,632 452,632 452,572 392,572" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
+  </g>
+</svg>
