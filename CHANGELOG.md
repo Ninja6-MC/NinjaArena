@@ -133,6 +133,11 @@ Java 25, and does not run on Folia.
   below the minimum; when it finishes, the players are handed to the match engine as a
   team roster. Players in a waiting room take no damage and keep their inventory if they
   die.
+- Players arrive in the waiting room with an empty inventory, no potion effects or fire,
+  and in adventure mode, once their snapshot is saved. The cursor and crafting grid are
+  put back into the inventory before the snapshot. The room is locked like a match: no
+  drops, pickups, containers or ender chests. A player who cannot be emptied is sent
+  home, and leaving restores exactly what they came in with.
 - Leaving a waiting room restores the player from their snapshot: walking or falling more
   than `waiting-room.radius` blocks from it, being teleported out of it, dying, or
   `/ninjaarena leave`, which needs `ninjaarena.play`. A player who disconnects is restored
