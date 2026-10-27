@@ -37,3 +37,9 @@ Java 25, and does not run on Folia.
   through a temporary file and an atomic move, so a crash leaves the previous file or the
   new one. A capture reports whether it was saved, refuses to overwrite a snapshot that
   has not been restored yet, and snapshots on disk can be loaded, listed and deleted.
+- The `ninjaarena_arenas` world, created on first start and loaded on every start after
+  that: a void generator with one biome and no structures or mobs, time and weather
+  frozen at a clear noon, natural spawning off, a world border and a low view and
+  simulation distance, all tunable under `arena-world` in `config.yml`. Auto-save is off;
+  `ArenaWorld#setSavingEnabled` turns it on for edit mode and saves once when it is
+  turned off again.
