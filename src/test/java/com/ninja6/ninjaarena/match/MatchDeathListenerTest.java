@@ -395,4 +395,120 @@ class MatchDeathListenerTest extends MatchFixture {
         assertFalse(deaths.isSpectating(ALICE));
         assertTrue(events(PlayerEliminatedEvent.class).isEmpty());
     }
+
+    @Test
+    void aFailedLeaveRestoreCannotLeaveAnUnrestrictedSpectator() {
+        configure(player -> {
+            assertEquals(GameMode.ADVENTURE, player.getGameMode());
+            restored.add(player.getUniqueId());
+            return RestoreResult.FAILED;
+        });
+        startTwoOnTwo();
+        death(ALICE, BOB);
+        respawn(ALICE);
+        assertEquals(GameMode.SPECTATOR, player(ALICE).getGameMode());
+        matches.leave(player(ALICE), MatchService.Exit.COMMAND);
+        assertEquals(List.of(ALICE), restored);
+        assertFalse(matches.isInMatch(ALICE));
+        assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
+        assertNull(player(ALICE).getSpectatorTarget());
+        deaths.tick();
+        assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
+    }
+
+    @Test
+    void closingForDisableClearsSpectatorModeBeforeAFailedRestoreWithoutALeaveEvent() {
+        configure(player -> {
+            assertEquals(GameMode.ADVENTURE, player.getGameMode());
+            restored.add(player.getUniqueId());
+            return RestoreResult.FAILED;
+        });
+        startTwoOnTwo();
+        death(ALICE, BOB);
+        respawn(ALICE);
+        matches.close();
+        deaths.close();
+        assertTrue(events(PlayerLeaveMatchEvent.class).isEmpty());
+        assertTrue(restored.contains(ALICE));
+        assertFalse(matches.isInMatch(ALICE));
+        assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
+        assertNull(player(ALICE).getSpectatorTarget());
+    }
+
+    @Test
+    void naturalMatchCloseAlsoClearsSpectatorModeBeforeAFailedRestore() {
+        configure(player -> {
+            assertEquals(GameMode.ADVENTURE, player.getGameMode());
+            return RestoreResult.FAILED;
+        });
+        startTwoOnTwo();
+        for (int round = 0; round < SETTINGS.rounds(); round++) {
+            death(ALICE, BOB);
+            respawn(ALICE);
+            death(BOB, CAROL);
+            death(DAVE, CAROL);
+            // Let the two opponents respawn so their states do not carry into the next round.
+            respawn(BOB);
+            respawn(DAVE);
+            runNextTick();
+            ticks(SETTINGS.roundEndSeconds());
+        }
+        assertEquals(MatchPhase.MATCH_END, matches.matchOf(ALICE).orElseThrow().phase());
+        assertEquals(GameMode.SPECTATOR, player(ALICE).getGameMode());
+        ticks(SETTINGS.matchEndSeconds());
+        assertFalse(matches.isInMatch(ALICE));
+        assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
+        assertNull(player(ALICE).getSpectatorTarget());
+    }
+
+    @Test
+    void teleportExitAndQuitClearSpectatorModeBeforeAnyDeferredRestore() {
+        configure(player -> {
+            assertEquals(GameMode.ADVENTURE, player.getGameMode());
+            restored.add(player.getUniqueId());
+            return RestoreResult.FAILED;
+        });
+        startTwoOnTwo();
+        death(ALICE, BOB);
+        respawn(ALICE);
+        matches.leave(player(ALICE), MatchService.Exit.TELEPORTED);
+        assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
+        assertTrue(restored.isEmpty());
+        runNextTick();
+        assertEquals(List.of(ALICE), restored);
+        assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
+        death(CAROL, BOB);
+        respawn(CAROL);
+        matches.leave(player(CAROL), MatchService.Exit.QUIT);
+        assertEquals(GameMode.ADVENTURE, player(CAROL).getGameMode());
+        assertNull(player(CAROL).getSpectatorTarget());
+        assertEquals(List.of(ALICE), restored);
+    }
+
+    @Test
+    void aDetachedCameraCanMoveFreelyNearTheTeamAndChooseAnotherTeammate() {
+        matches.start("dojo", List.of(List.of(ALICE, CAROL, DAVE), List.of(BOB)));
+        players.get(CAROL).location = new Location(arenaWorld, 30, 64, 30);
+        players.get(DAVE).location = new Location(arenaWorld, 60, 64, 60);
+        death(ALICE, BOB);
+        respawn(ALICE);
+        assertSame(player(CAROL), player(ALICE).getSpectatorTarget());
+        player(ALICE).setSpectatorTarget(null);
+        Location nearby = player(CAROL).getLocation().add(5, 0, 0);
+        players.get(ALICE).location = nearby.clone();
+        deaths.tick();
+        assertNull(player(ALICE).getSpectatorTarget());
+        assertEquals(nearby, player(ALICE).getLocation());
+        // The spectator menu clears the camera while teleporting to the chosen teammate.
+        assertTrue(player(ALICE).teleport(player(DAVE).getLocation()));
+        deaths.tick();
+        assertNull(player(ALICE).getSpectatorTarget());
+        assertEquals(player(DAVE).getLocation(), player(ALICE).getLocation());
+        var choose = new PlayerStartSpectatingEntityEvent(player(ALICE), null, player(DAVE));
+        deaths.onStartSpectating(choose);
+        assertFalse(choose.isCancelled());
+        player(ALICE).setSpectatorTarget(player(DAVE));
+        deaths.tick();
+        assertSame(player(DAVE), player(ALICE).getSpectatorTarget());
+    }
 }

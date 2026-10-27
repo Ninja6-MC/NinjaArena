@@ -40,11 +40,15 @@ After respawning, eliminated players spectate living teammates until the next ro
 Spectator cameras can target only their own team; movement and teleports stay inside the
 arena and within 16 blocks of a living teammate. If nobody on the team remains alive and
 inside the arena, spectators wait near their own team base.
+Spectators can detach the camera to move within that limit or choose another teammate;
+the tether reattaches only after an invalid target or movement outside the allowed area.
 
 The next round returns spectators to Adventure mode at their team base. A player still
 on the death screen at round start is placed and readied when they respawn. Use
 `/narena leave` to leave while spectating: the existing restore returns the saved
 belongings, game mode and location. Quitting leaves the restore to the next join.
+Every exit first clears spectator mode, so an unsuccessful restore leaves the player in
+Adventure mode while their snapshot remains available for a retry.
 
 ## Match scoring
 

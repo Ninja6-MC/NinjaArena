@@ -114,7 +114,7 @@ public final class MatchDeathListener implements Listener {
         Player player = event.getPlayer();
         matches.matchOf(player.getUniqueId()).ifPresent(match -> {
             if (isSpectating(player.getUniqueId())) {
-                follow(player, match);
+                follow(player, match, true);
             } else {
                 clearCamera(player);
                 player.setGameMode(GameMode.ADVENTURE);
@@ -139,10 +139,6 @@ public final class MatchDeathListener implements Listener {
     @EventHandler(priority = EventPriority.LOW)
     public void onLeave(PlayerLeaveMatchEvent event) {
         eliminated.remove(event.player());
-        Player player = plugin.getServer().getPlayer(event.player());
-        if (player != null) {
-            clearCamera(player);
-        }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -186,12 +182,12 @@ public final class MatchDeathListener implements Listener {
             }
             Player player = plugin.getServer().getPlayer(entry.getKey());
             if (player != null && player.isOnline() && !player.isDead()) {
-                follow(player, entry.getValue());
+                follow(player, entry.getValue(), false);
             }
         }
     }
 
-    private void follow(Player player, MatchView match) {
+    private void follow(Player player, MatchView match, boolean attachOnRespawn) {
         if (player.isDead()) {
             return;
         }
@@ -202,16 +198,20 @@ public final class MatchDeathListener implements Listener {
             return;
         }
         Player target = target(player, match).orElse(null);
-        if (player.getSpectatorTarget() != target) {
+        boolean invalidTarget = player.getSpectatorTarget() != null
+                && !validTarget(player.getSpectatorTarget(), player, match);
+        if (invalidTarget) {
             clearCamera(player);
         }
-        if (!allowedPosition(player.getLocation(), match, player)) {
+        boolean outside = !allowedPosition(player.getLocation(), match, player);
+        if (outside) {
             clearCamera(player);
             if (!anchor(player, match).map(player::teleport).orElse(false)) {
                 return;
             }
         }
-        if (target != null && player.getSpectatorTarget() != target) {
+        if ((attachOnRespawn || invalidTarget || outside)
+                && target != null && player.getSpectatorTarget() != target) {
             player.setSpectatorTarget(target);
         }
     }

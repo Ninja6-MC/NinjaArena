@@ -39,6 +39,7 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
@@ -302,6 +303,7 @@ public final class MatchService implements MatchStart {
         if (running == null) {
             return false;
         }
+        releaseSpectator(player);
         apply(running, running.match().leave(playerId));
         settleLater(running);
         switch (exit) {
@@ -471,6 +473,22 @@ public final class MatchService implements MatchStart {
     private void forget(Running running) {
         matches.remove(running.match().arena(), running);
         matchOf.values().removeIf(value -> value == running);
+        for (UUID id : running.match().players()) {
+            Player player = plugin.getServer().getPlayer(id);
+            if (player != null && player.isOnline()) {
+                releaseSpectator(player);
+            }
+        }
+    }
+
+    /** Membership is already removed, so the guard allows this before a restore can fail. */
+    private static void releaseSpectator(Player player) {
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            if (player.getSpectatorTarget() != null) {
+                player.setSpectatorTarget(null);
+            }
+            player.setGameMode(GameMode.ADVENTURE);
+        }
     }
 
     private void refuse(List<UUID> players, String message) {

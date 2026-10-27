@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.match.event;
 
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.ninja6.ninjaarena.match.MatchView;
 import org.bukkit.event.HandlerList;
 
@@ -10,8 +11,10 @@ import org.bukkit.event.HandlerList;
  *
  * <p>A player still on the death screen when the round starts is not readied or teleported
  * here: they reach their team spawn when they respawn ({@code MatchService#respawnPoint}).
- * Anything given to them on this event is lost on respawn, so kits and other per-round
- * state must also be applied on {@code PlayerRespawnEvent} for a player in a match.
+ * Skip those players here and apply kits and other per-round state on
+ * {@link PlayerPostRespawnEvent}, after death handling's HIGH-priority handler (for
+ * example, at HIGHEST). Give kits only to players who are in a match and alive in its
+ * current round; eliminated players respawn as spectators and must not receive a kit.
  */
 public final class RoundStartEvent extends MatchEvent {
 
