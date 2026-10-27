@@ -43,7 +43,7 @@ import org.bukkit.plugin.Plugin;
  * the arena is meant to look like. {@link #resetAll()} puts every copy back when the
  * registry opens on startup, so an arena is as it was built on every boot, whether the
  * last run ended cleanly, mid-match or in a crash. {@link #reset(String)} does the same for
- * one arena, for the match engine at match end. An arena with no copy is not available.
+ * one arena, for the match engine at match start and end. An arena with no copy is not available.
  *
  * <p><b>Change listeners.</b> {@link #onEditOrDelete(Consumer)} is told an arena's name when
  * it enters edit mode or is deleted, the two ways its definition can change, so whatever
@@ -334,7 +334,7 @@ public final class ArenaRegistry {
 
     /**
      * Puts the arena's blocks back as they were when its last edit finished. For the match
-     * engine, at match end; it may be called while the arena is held.
+     * engine, at match start and end; it may be called while the arena is held.
      *
      * @throws ArenaException if the arena is in edit mode, which would undo the edit, or has
      *                        no copy, or the copy cannot be read; the arena is then not
