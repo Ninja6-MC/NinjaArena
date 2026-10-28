@@ -12,10 +12,20 @@ import org.bukkit.ExplosionResult;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
+import org.bukkit.event.Cancellable;
+import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
+import org.bukkit.event.block.BlockFadeEvent;
+import org.bukkit.event.block.BlockFormEvent;
+import org.bukkit.event.block.BlockFromToEvent;
+import org.bukkit.event.block.BlockGrowEvent;
+import org.bukkit.event.block.BlockIgniteEvent;
+import org.bukkit.event.block.BlockSpreadEvent;
+import org.bukkit.event.block.LeavesDecayEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.junit.jupiter.api.Test;
@@ -60,6 +70,23 @@ class ArenaProtectionTest extends MatchFixture {
         var change = new EntityChangeBlockEvent(inert(Entity.class), block, inert(BlockData.class));
         listener.onEntityChangeBlock(change);
         assertEquals(protectedWorld, change.isCancelled());
+
+        BlockState state = inert(BlockState.class);
+        List<Cancellable> blockChanges = List.of(new BlockBurnEvent(block), new BlockIgniteEvent(block,
+                BlockIgniteEvent.IgniteCause.SPREAD, (Entity) null), new BlockSpreadEvent(block, block, state),
+                new BlockFormEvent(block, state), new BlockGrowEvent(block, state), new BlockFadeEvent(block, state),
+                new BlockFromToEvent(block, BlockFace.DOWN), new LeavesDecayEvent(block));
+        listener.onBurn((BlockBurnEvent) blockChanges.get(0));
+        listener.onIgnite((BlockIgniteEvent) blockChanges.get(1));
+        listener.onSpread((BlockSpreadEvent) blockChanges.get(2));
+        listener.onForm((BlockFormEvent) blockChanges.get(3));
+        listener.onGrow((BlockGrowEvent) blockChanges.get(4));
+        listener.onFade((BlockFadeEvent) blockChanges.get(5));
+        listener.onFlow((BlockFromToEvent) blockChanges.get(6));
+        listener.onLeavesDecay((LeavesDecayEvent) blockChanges.get(7));
+        for (Cancellable event : blockChanges) {
+            assertEquals(protectedWorld, event.isCancelled(), event.getClass().getSimpleName());
+        }
     }
 
     @Test

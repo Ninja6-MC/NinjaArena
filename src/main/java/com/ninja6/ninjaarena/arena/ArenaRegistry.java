@@ -141,9 +141,13 @@ public final class ArenaRegistry {
                     + "; arenas cannot be changed until it is fixed and the server restarted.", e);
             return registry;
         }
+        // Runs before anything can start a match, so no arena is available until it is done.
+        long started = System.nanoTime();
         ResetReport report = registry.resetAll();
+        long millis = (System.nanoTime() - started) / 1_000_000;
         if (!report.reset().isEmpty()) {
-            plugin.getLogger().info("Reset " + String.join(", ", report.reset()) + " from the saved copy.");
+            plugin.getLogger().info("Reset " + String.join(", ", report.reset()) + " from the saved copy in "
+                    + millis + " ms.");
         }
         if (!report.copied().isEmpty()) {
             plugin.getLogger().info("Saved a first copy of " + String.join(", ", report.copied()) + ".");
