@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.DoubleSupplier;
+import java.util.function.ToDoubleBiFunction;
 
 /**
  * Picks the player an enemy goes for: a weighted draw over the players alive in the round, in
@@ -43,11 +44,24 @@ public final class Targeting {
     public static Map<UUID, Double> weights(MatchView match, MatchStandings standings, double leaderBias,
             TargetWeigher weigher) {
         Objects.requireNonNull(weigher, "weigher");
+        return weights(match, standings, leaderBias, (player, base) -> weigher.weigh(match, player, base));
+    }
+
+    /** Each alive player's weight for an enemy of the kind; otherwise as the method above. */
+    public static Map<UUID, Double> weights(MatchView match, MatchStandings standings, double leaderBias,
+            TargetWeigher weigher, EnemyKind kind) {
+        Objects.requireNonNull(weigher, "weigher");
+        Objects.requireNonNull(kind, "kind");
+        return weights(match, standings, leaderBias, (player, base) -> weigher.weigh(match, player, base, kind));
+    }
+
+    private static Map<UUID, Double> weights(MatchView match, MatchStandings standings, double leaderBias,
+            ToDoubleBiFunction<UUID, Double> weigh) {
         List<Integer> leaders = leaders(match, standings);
         Map<UUID, Double> weights = new LinkedHashMap<>();
         for (UUID player : match.alivePlayers()) {
             double base = leaders.contains(match.teamOf(player)) ? leaderBias : 1;
-            double weight = weigher.weigh(match, player, base);
+            double weight = weigh.applyAsDouble(player, base);
             if (Double.isFinite(weight) && weight > 0) {
                 weights.put(player, weight);
             }

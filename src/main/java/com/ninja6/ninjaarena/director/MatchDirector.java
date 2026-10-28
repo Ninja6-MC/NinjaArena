@@ -3,7 +3,9 @@ package com.ninja6.ninjaarena.director;
 import com.ninja6.ninjaarena.match.MatchStandings;
 import com.ninja6.ninjaarena.match.MatchView;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -23,7 +25,11 @@ import java.util.function.DoubleSupplier;
  * intensity x budget. An enemy that dies or is removed returns its cost on the next second.
  *
  * <p><b>Targets.</b> Each new enemy, and each living one whose target is no longer alive in
- * the round, gets a player drawn by weight; the team with the most points weighs more.
+ * the round, gets a player drawn by weight; the team with the most points weighs more, and the
+ * {@link TargetWeigher} adjusts each weight for the enemy's kind. Each second the weigher can
+ * also clear an enemy's target ({@link TargetWeigher#mayTarget}) or have it lose track of the
+ * player it chases ({@link TargetWeigher#keepsTarget}); an enemy that loses track is drawn
+ * one of the other players, or none when nobody else is left.
  *
  * <p>Holds no server state: the spawner, the gate and the random source are passed in, and
  * time is the calls to {@link #tick()}. Not thread-safe: call it from the server thread.
@@ -124,7 +130,7 @@ public final class MatchDirector {
         if (alive.isEmpty()) {
             return;
         }
-        Map<UUID, Double> weights = Targeting.weights(match, standings, settings.leaderBias(), weigher);
+        Weights weights = new Weights();
         retarget(weights);
         spend(intensity * roundBudget, weights);
     }
@@ -182,16 +188,25 @@ public final class MatchDirector {
         enemies.removeIf(tracked -> !tracked.enemy().isAlive());
     }
 
-    private void retarget(Map<UUID, Double> weights) {
+    private void retarget(Weights weights) {
         for (Tracked tracked : enemies) {
-            UUID target = tracked.enemy().target();
-            if (target == null || !match.isAlive(target)) {
-                tracked.enemy().target(Targeting.pick(weights, random));
+            Enemy enemy = tracked.enemy();
+            UUID target = enemy.target();
+            if (!weigher.mayTarget(match, enemy)) {
+                if (target != null) {
+                    enemy.target(null);
+                }
+            } else if (target == null || !match.isAlive(target)) {
+                enemy.target(Targeting.pick(weights.of(enemy.kind()), random));
+            } else if (!weigher.keepsTarget(match, enemy, target)) {
+                Map<UUID, Double> others = new LinkedHashMap<>(weights.of(enemy.kind()));
+                others.remove(target);
+                enemy.target(Targeting.pick(others, random));
             }
         }
     }
 
-    private void spend(double threat, Map<UUID, Double> weights) {
+    private void spend(double threat, Weights weights) {
         EnumSet<EnemyKind> usable = EnumSet.allOf(EnemyKind.class);
         double inPlay = threatInPlay();
         while (true) {
@@ -201,7 +216,7 @@ public final class MatchDirector {
                 return;
             }
             EnemyKind kind = affordable.get(index(affordable.size()));
-            Optional<Enemy> spawned = spawner.spawn(kind, Targeting.pick(weights, random));
+            Optional<Enemy> spawned = spawner.spawn(kind, Targeting.pick(weights.of(kind), random));
             if (spawned.isEmpty()) {
                 usable.remove(kind);
                 continue;
@@ -216,5 +231,16 @@ public final class MatchDirector {
     private int index(int size) {
         double roll = Math.clamp(random.getAsDouble(), 0, Math.nextDown(1.0));
         return Math.min(size - 1, (int) (roll * size));
+    }
+
+    /** One second's targeting weights, worked out for each enemy kind when first needed. */
+    private final class Weights {
+
+        private final Map<EnemyKind, Map<UUID, Double>> byKind = new EnumMap<>(EnemyKind.class);
+
+        Map<UUID, Double> of(EnemyKind kind) {
+            return byKind.computeIfAbsent(kind,
+                    key -> Targeting.weights(match, standings, settings.leaderBias(), weigher, key));
+        }
     }
 }
