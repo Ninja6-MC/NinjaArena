@@ -53,8 +53,8 @@ scoring:
 
 director:
   threat-budget:
-    # Budget per round = base x round multiplier x player factor. Multipliers are supplied
-    # by the caller; this section defines no round progression or player-count curve.
+    # Budget per round = base x round multiplier x player factor: the threat allowed alive
+    # at intensity 1. The multiplier and factor are set under director.intensity.
     # Negative values count as zero; base and factors must be finite. No rounding is applied.
     base: 20.0
   enemy-costs:
@@ -63,6 +63,39 @@ director:
     skeleton: 2
     spider: 2
     shadow-stalker: 8
+  intensity:
+    # Once a second during a fight the director works out a target intensity from 0 to 1 and
+    # spawns enemies until the cost of those alive reaches intensity x the round budget.
+    # OVERRUN is always 1. Fractions are 0 to 1; non-finite values use the default.
+    # Combat repeats a cycle: a build-up from the relax level to the round's peak, the peak
+    # held, then a short relax. Lengths in seconds (1 to 600).
+    build-up-seconds: 40
+    peak-seconds: 20
+    relax-seconds: 10
+    # Peak intensity of round 1; each later round, extra rounds included, adds round-step.
+    first-round-peak: 0.6
+    round-step: 0.1
+    # Relax intensity as a fraction of the round's peak.
+    relax-level: 0.25
+    # Intensity added by the end of the round timer, growing evenly through combat.
+    time-ramp: 0.2
+    # Share of the intensity that scales with the fraction of starting teams still alive in
+    # the round. 0 ignores eliminations.
+    teams-weight: 0.5
+    # Damage taken by alive players over the last damage-window-seconds (1 to 60), divided by
+    # the players alive, eases the pressure: at damage-full-stress half hearts per player (1
+    # to 1000) the intensity is cut by damage-relief.
+    damage-window-seconds: 10
+    damage-full-stress: 20.0
+    damage-relief: 0.5
+    # The threat-budget round multiplier is 1 + budget-round-step x (round - 1), and its
+    # player factor is budget-per-player x the players alive when the fight starts (both 0
+    # to 10).
+    budget-round-step: 0.25
+    budget-per-player: 0.25
+    # Targeting weight of players on the team with the most points (1 to 10); 1 turns the
+    # leading-team pressure off. No team is favoured while every team has the same points.
+    leader-bias: 2.0
 
 tools:
   # The ninja kit tools. Which tools a player gets, and how many, is set by the kit in
