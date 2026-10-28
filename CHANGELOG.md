@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Enemy spawn-position selection rotates through registered points, skipping points within
+  8 blocks of any player, visible to any player, or obstructed by block collision shapes
+  for the requested mob dimensions. If no point is valid, selection returns empty.
 - A shared `kits.yml` kit, cleared and rebuilt every round and on a delayed respawn into
   the current round. Dead and eliminated players are skipped. Missing or invalid files
   log the reason and use a safe empty kit; item-provider failures also use an empty kit.
