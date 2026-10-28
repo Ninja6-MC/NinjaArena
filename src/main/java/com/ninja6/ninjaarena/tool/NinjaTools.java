@@ -76,6 +76,8 @@ public final class NinjaTools implements Listener {
     static final int TICKS_PER_SECOND = 20;
     /** How often a cloud renews Blindness on a rival who stays in it. */
     static final int SMOKE_REAPPLY_TICKS = 10;
+    /** How far above or below its centre a smoke cloud hides an enemy's view, in blocks. */
+    public static final double SMOKE_REACH = 2;
     /** Horizontal speed kept per tick in the air; a burst of {@code v} covers under {@code v / 0.09} blocks. */
     private static final double AIR_DRAG = 0.91;
     /** Room kept between the end of a dash and the arena's edge. */
@@ -148,6 +150,31 @@ public final class NinjaTools implements Listener {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Whether a place is inside a live smoke bomb cloud: within its radius across and
+     * {@value #SMOKE_REACH} blocks above or below its centre; for enemy targeting.
+     */
+    public boolean inSmoke(Location at) {
+        if (smoke.isEmpty() || at.getWorld() == null) {
+            return false;
+        }
+        double radius = settings.smokeRadius();
+        for (Smoke cloud : smoke.values()) {
+            AreaEffectCloud entity = cloud.cloud();
+            if (!entity.isValid()) {
+                continue;
+            }
+            Location centre = entity.getLocation();
+            double dx = at.getX() - centre.getX();
+            double dz = at.getZ() - centre.getZ();
+            if (at.getWorld().equals(centre.getWorld()) && Math.abs(at.getY() - centre.getY()) <= SMOKE_REACH
+                    && dx * dx + dz * dz <= radius * radius) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

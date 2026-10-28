@@ -238,6 +238,24 @@ class NinjaToolsTest extends MatchFixture {
     }
 
     @Test
+    void smokeCoversItsRadiusAndALittleAboveAndBelow() {
+        fight();
+        Location centre = player(ALICE).getLocation();
+        assertFalse(tools.inSmoke(centre), "no cloud yet");
+        hit(launch(ALICE, NinjaTool.SMOKE_BOMB).projectile(), null);
+        assertTrue(tools.inSmoke(centre));
+        assertTrue(tools.inSmoke(centre.clone().add(3, 0, 0)), "on the radius");
+        assertTrue(tools.inSmoke(centre.clone().add(2, 2, 2)));
+        assertTrue(tools.inSmoke(centre.clone().add(0, -2, 0)));
+        assertFalse(tools.inSmoke(centre.clone().add(2.2, 0, 2.2)), "outside the radius");
+        assertFalse(tools.inSmoke(centre.clone().add(0, 2.5, 0)), "above the cloud");
+        assertFalse(tools.inSmoke(new Location(null, centre.getX(), centre.getY(), centre.getZ())));
+
+        clouds.getFirst().removed = true;
+        assertFalse(tools.inSmoke(centre), "the cloud has run out");
+    }
+
+    @Test
     void aBombFromAThrowerWhoIsOutBeforeItLandsMakesNoCloud() {
         fight();
         Launch bomb = launch(ALICE, NinjaTool.SMOKE_BOMB);

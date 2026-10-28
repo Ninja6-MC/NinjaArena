@@ -95,6 +95,10 @@ public final class MobSpawner implements MatchDirector.Spawner {
             return kind;
         }
 
+        Mob mob() {
+            return mob;
+        }
+
         @Override
         public boolean isAlive() {
             return mob.isValid() && !mob.isDead();

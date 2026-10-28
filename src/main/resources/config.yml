@@ -63,6 +63,26 @@ director:
     skeleton: 2
     spider: 2
     shadow-stalker: 8
+  stealth:
+    # A hidden player is one who crouches where no enemy can see them, or crouches in low
+    # light. Their targeting weight is multiplied by hidden-weight (0 to 1); 1 turns it off.
+    hidden-weight: 0.25
+    # Light level at or below which a crouching player is hidden even in plain sight (-1 to
+    # 15); -1 turns it off.
+    low-light: 7
+    # Seconds an enemy chases a player it cannot see before it loses track of them and goes
+    # for another (1 to 60). Checked once a second.
+    lose-track-seconds: 3
+    # Targeting weight multiplier of a player marked by a shuriken (1 to 10); 1 turns it off.
+    # The hidden cut, the mark and the leader bias all multiply together. Enemies inside a
+    # smoke bomb cloud drop their target and take no other while inside.
+    marked-weight: 2.0
+    # Enemy types that skip the hidden cut and the lose-track timer.
+    ignores-stealth:
+      zombie: false
+      skeleton: false
+      spider: false
+      shadow-stalker: false
   intensity:
     # Once a second during a fight the director works out a target intensity from 0 to 1 and
     # spawns enemies until the cost of those alive reaches intensity x the round budget.

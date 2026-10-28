@@ -6,11 +6,15 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
+import com.ninja6.ninjaarena.director.AggroSteering;
 import com.ninja6.ninjaarena.director.DirectorService;
 import com.ninja6.ninjaarena.director.EnemyCosts;
 import com.ninja6.ninjaarena.director.IntensitySettings;
+import com.ninja6.ninjaarena.director.MatchDirector;
 import com.ninja6.ninjaarena.director.MobSpawner;
+import com.ninja6.ninjaarena.director.StealthSettings;
 import com.ninja6.ninjaarena.director.ThreatBudget;
+import com.ninja6.ninjaarena.director.WorldSenses;
 import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitInventory;
@@ -42,6 +46,7 @@ import com.ninja6.ninjaarena.world.ArenaChunkUnloader;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import java.io.IOException;
+import java.util.List;
 import java.util.SplittableRandom;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
@@ -114,6 +119,16 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 ToolSettings.from(getConfig().getConfigurationSection("tools")), Bukkit::getCurrentTick,
                 NinjaTools::damage, at -> at.getWorld().spawn(at, AreaEffectCloud.class));
         getServer().getPluginManager().registerEvents(tools, this);
+        // Stealth, smoke and shuriken marks steer the enemies' targets.
+        DirectorService steered = directors;
+        WorldSenses senses = new WorldSenses(getServer()::getPlayer, tools::inSmoke);
+        AggroSteering steering = new AggroSteering(
+                StealthSettings.from(getConfig().getConfigurationSection("director.stealth")), senses,
+                tools::isMarked, match -> steered.director(match).map(MatchDirector::enemies).orElse(List.of()),
+                Bukkit::getCurrentTick);
+        directors.setWeigher(steering);
+        getServer().getPluginManager().registerEvents(senses, this);
+        getServer().getPluginManager().registerEvents(steering, this);
         var kitFile = getDataFolder().toPath().resolve("kits.yml");
         var kit = KitDefinition.open(kitFile, getLogger(), () -> saveResource("kits.yml", false));
         getServer().getPluginManager().registerEvents(new RoundKitListener(matches, getServer()::getPlayer,
