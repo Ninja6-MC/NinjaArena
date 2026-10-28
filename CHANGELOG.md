@@ -16,7 +16,8 @@ Java 25, and does not run on Folia.
 - A per-match enemy director. Once a second during COMBAT and OVERRUN it works out a target
   intensity and spawns zombies, skeletons and spiders through the spawn-position selection
   until the cost of those alive reaches intensity x the round's threat budget; an enemy
-  that dies or is removed returns its cost. Combat cycles through build-up, peak and a
+  that dies or is removed returns its cost. Zombies and skeletons do not burn under the
+  arena world's fixed noon. Combat cycles through build-up, peak and a
   short relax, each round peaking higher; combat time ramps it up, while teams knocked out
   and recent damage taken ease it. OVERRUN runs at full intensity. The round budget grows
   each round and with the players alive when the fight starts. Enemies are pointed at a

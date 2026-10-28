@@ -10,8 +10,10 @@ import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.AbstractSkeleton;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Zombie;
 
 /**
  * Spawns the director's enemies as vanilla mobs at the arena's enemy spawns, through
@@ -50,7 +52,7 @@ public final class MobSpawner implements MatchDirector.Spawner {
         if (at.isEmpty()) {
             return Optional.empty();
         }
-        Mob mob = world.spawn(at.get(), kind.type());
+        Mob mob = world.spawn(at.get(), kind.type(), MobSpawner::prepare);
         if (!mob.isValid()) {
             // Another plugin cancelled the spawn.
             return Optional.empty();
@@ -58,6 +60,21 @@ public final class MobSpawner implements MatchDirector.Spawner {
         MobEnemy enemy = new MobEnemy(kind, mob, players);
         enemy.target(target);
         return Optional.of(enemy);
+    }
+
+    /**
+     * Readies a mob before it is added to the world. The arena world's clock is fixed at
+     * noon, so undead that burn in daylight (zombies and their husk and drowned variants,
+     * and every skeleton) are kept from burning; otherwise they would die in any open arena
+     * and the director would keep replacing them.
+     */
+    static void prepare(Mob mob) {
+        if (mob instanceof Zombie zombie) {
+            zombie.setShouldBurnInDay(false);
+        }
+        if (mob instanceof AbstractSkeleton skeleton) {
+            skeleton.setShouldBurnInDay(false);
+        }
     }
 
     /** A spawned mob as the director sees it. */

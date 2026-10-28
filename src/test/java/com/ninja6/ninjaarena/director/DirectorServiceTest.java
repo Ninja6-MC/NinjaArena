@@ -206,6 +206,18 @@ class DirectorServiceTest {
         second();
         assertTrue(loops.getFirst().cancelled);
         assertFalse(service.isLooping(match));
+
+        failSpawns = false;
+        phase(MatchPhase.OVERRUN);
+        assertEquals(1, loops.size(), "no new loop in the round that failed");
+        assertFalse(service.isLooping(match));
+
+        phase(MatchPhase.ROUND_END);
+        match.nextRound();
+        match.phase = MatchPhase.PREP;
+        phase(MatchPhase.COMBAT);
+        assertEquals(2, loops.size());
+        assertTrue(service.isLooping(match), "the next round starts it again");
     }
 
     @Test

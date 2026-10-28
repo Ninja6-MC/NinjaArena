@@ -32,7 +32,8 @@ import org.bukkit.scheduler.BukkitTask;
  * {@link MatchEndEvent}, whatever the reason (completed, forfeit, abandoned when the last
  * player leaves, or stopped on plugin disable), after every other listener has seen the event.
  * {@link #close()} cancels every task on plugin disable. If a director throws, its loop stops
- * for the rest of that fight and the error is logged.
+ * for the rest of that round, OVERRUN included, and the error is logged; the next round
+ * starts it again.
  *
  * <p><b>Players.</b> Damage taken by players alive in a fight counts towards the director's
  * recent damage. A player eliminated or leaving is no longer targeted.
@@ -50,6 +51,8 @@ public final class DirectorService implements Listener {
     private static final class Running {
         final MatchDirector director;
         BukkitTask loop;
+        /** The round in which the director threw, so no loop restarts in it; 0 for none. */
+        int failedRound;
 
         Running(MatchDirector director) {
             this.director = director;
@@ -158,7 +161,7 @@ public final class DirectorService implements Listener {
         }
         Running entry = running.computeIfAbsent(match, view -> new Running(new MatchDirector(view, settings, budget,
                 costs, standings, spawners.apply(view), gate, weigher, random)));
-        if (entry.loop == null) {
+        if (entry.loop == null && entry.failedRound != match.round()) {
             entry.loop = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> tick(match), TICKS_PER_SECOND,
                     TICKS_PER_SECOND);
         }
@@ -185,6 +188,7 @@ public final class DirectorService implements Listener {
             entry.director.tick();
         } catch (RuntimeException e) {
             cancel(entry);
+            entry.failedRound = match.round();
             plugin.getLogger().log(Level.SEVERE, "The enemy director of arena " + match.arena()
                     + " failed; it spawns nothing more this round.", e);
         }
