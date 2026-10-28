@@ -13,6 +13,12 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Enemy spawn diagnostics. When no enemy spawn point qualifies, one log line names the check
+  that refused each point (too close, in view, chunk not loaded, blocked space), and a
+  spawn the world cancels is logged too; each reason at most once per round per match, at
+  FINE, or at INFO with `director.debug` on. `/narena director [arena]` (admins) shows the
+  round budget, intensity, enemies in play with their threat and the last refused or
+  cancelled spawn for the match the admin is in or the one running in the named arena.
 - Enemy lifecycle and arena teardown: enemies are non-persistent, cannot pick up items,
   and drop neither items nor experience. Enemies stuck within a quarter block or outside
   their arena for 10 seconds are removed, returning their threat cost through the director.
@@ -229,3 +235,12 @@ Java 25, and does not run on Folia.
   are placed, round end, player eliminated, player left and match end, plus a read API for
   the match a player is in, its phase, their team and who is alive, and a replaceable team
   ranking for scoring.
+
+### Changed
+- An enemy spawn point now counts as hidden from a player who has no line of sight to it
+  or who looks more than 100 degrees away from it (`director.spawn.view-angle`; 180 keeps
+  cover as the only way to hide a point), so an arena with a single enemy spawn gets
+  enemies whenever nobody faces it. Only the match's players alive in the round count;
+  spectators, eliminated players and anyone outside the match no longer refuse a point.
+  Points within 8 blocks of such a player, in unloaded chunks or without room for the
+  enemy are still skipped, and nothing spawns when no point qualifies.

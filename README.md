@@ -23,8 +23,8 @@ On Windows, use `gradlew.bat build`. The plugin JAR is written to `build/libs/`,
 
 ## Setting up an arena
 
-Admins need `ninjaarena.admin`. `/narena` on its own lists the `arena` and `portal`
-command groups. A first arena, in the order you need it:
+Admins need `ninjaarena.admin`. `/narena` on its own lists the `arena`, `portal` and
+`director` command groups. A first arena, in the order you need it:
 
 1. `/narena arena create dojo` registers the arena in the next free cell of the arena
    world and puts it in edit mode. The reply shows the cell's coordinates.
@@ -177,6 +177,23 @@ Enemies pick their targets by weight, and stealth and the tools steer that weigh
 Each enemy type has an `ignores-stealth` setting, off by default, that skips the hidden cut
 and the lose-track timer; smoke and marks still apply. Every weight and timing is under
 `director.stealth` in `config.yml`.
+
+### Enemy spawns
+
+Enemies appear only at the arena's enemy spawn points. A point is used when its chunk is
+loaded, the enemy has room there, it is more than 8 blocks from every player still alive
+in the round, and it is hidden from each of them: out of their line of sight, or more than
+100 degrees away from where they look (`director.spawn.view-angle`; 180 makes cover the
+only way to hide a point). Spectators, eliminated players and anyone outside the match do
+not count. When no point qualifies nothing spawns that second; no other place is used and
+no chunk is loaded. One point is enough as long as players do not all face it,
+and more points spread the enemies out.
+
+`/narena director [arena]` shows an admin the director of the match they are in, or of the
+match running in the named arena: the round budget, the intensity, the enemies in play with
+their threat, and the latest spawn that was refused or cancelled, with the reason for each
+point. The same reasons are logged at most once per round each, at FINE by default; set
+`director.debug: true` to log them at INFO.
 
 ## Deaths and spectating
 

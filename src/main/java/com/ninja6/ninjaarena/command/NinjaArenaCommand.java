@@ -24,19 +24,22 @@ public final class NinjaArenaCommand implements TabExecutor {
     /** Leaves the waiting room or match the player is in and sends them home. */
     public static final String LEAVE = "leave";
 
-    private static final List<String> GROUPS = List.of(ArenaCommand.NAME, PortalCommand.NAME);
+    private static final List<String> GROUPS = List.of(ArenaCommand.NAME, PortalCommand.NAME, DirectorCommand.NAME);
 
     private final ArenaCommand arena;
     private final PortalCommand portal;
+    private final DirectorCommand director;
     private final Predicate<Player> leave;
 
     /**
      * @param leave takes the player out of their waiting room or match and sends them home;
      *              false if they were in neither
      */
-    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, Predicate<Player> leave) {
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave) {
         this.arena = Objects.requireNonNull(arena, "arena");
         this.portal = Objects.requireNonNull(portal, "portal");
+        this.director = Objects.requireNonNull(director, "director");
         this.leave = Objects.requireNonNull(leave, "leave");
     }
 
@@ -59,6 +62,7 @@ public final class NinjaArenaCommand implements TabExecutor {
         switch (group) {
             case ArenaCommand.NAME -> arena.execute(sender, label, tail(args));
             case PortalCommand.NAME -> portal.execute(sender, label, tail(args));
+            case DirectorCommand.NAME -> director.execute(sender, label, tail(args));
             default -> help(sender, label, args.length == 0 ? null : args[0]);
         }
         return true;
@@ -74,6 +78,7 @@ public final class NinjaArenaCommand implements TabExecutor {
         }
         line(sender, label, ArenaCommand.NAME + " <subcommand>", "create, edit and set up arenas");
         line(sender, label, PortalCommand.NAME + " <subcommand>", "mark out portals that lead to arenas");
+        line(sender, label, DirectorCommand.NAME + " [arena]", "show the enemy director of a running match");
         line(sender, label, LEAVE, "leave the waiting room or match you are in");
     }
 
@@ -115,6 +120,7 @@ public final class NinjaArenaCommand implements TabExecutor {
         return switch (args[0].toLowerCase(Locale.ROOT)) {
             case ArenaCommand.NAME -> arena.complete(sender, tail(args));
             case PortalCommand.NAME -> portal.complete(sender, tail(args));
+            case DirectorCommand.NAME -> director.complete(sender, tail(args));
             default -> List.of();
         };
     }

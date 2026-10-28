@@ -18,6 +18,7 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -65,7 +66,8 @@ class PortalCommandTest {
         portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
         portalCommand = new PortalCommand(portals, arenas, world -> !world.equals("gone"));
-        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand, player -> false);
+        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand,
+                new DirectorCommand(List::of, id -> Optional.empty(), match -> Optional.empty()), player -> false);
         standing = new Location(world("world"), 10.5, 64, 10.5);
     }
 

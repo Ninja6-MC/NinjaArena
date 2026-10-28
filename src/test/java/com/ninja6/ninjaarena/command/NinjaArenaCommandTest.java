@@ -19,6 +19,7 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -35,6 +36,10 @@ class NinjaArenaCommandTest {
 
     @TempDir
     Path dir;
+
+    /** No match running, so no director. */
+    private static final DirectorCommand NO_DIRECTOR = new DirectorCommand(List::of, id -> Optional.empty(),
+            match -> Optional.empty());
 
     private final List<String> messages = new ArrayList<>();
     private ArenaRegistry registry;
@@ -59,7 +64,7 @@ class NinjaArenaCommandTest {
         PortalRegistry portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
         command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null),
-                new PortalCommand(portals, registry, world -> true), player -> {
+                new PortalCommand(portals, registry, world -> true), NO_DIRECTOR, player -> {
                     left.add(player.getName());
                     return waiting;
                 });
@@ -146,6 +151,7 @@ class NinjaArenaCommandTest {
         List<String> help = List.of(
                 "/narena arena <subcommand> - create, edit and set up arenas",
                 "/narena portal <subcommand> - mark out portals that lead to arenas",
+                "/narena director [arena] - show the enemy director of a running match",
                 "/narena leave - leave the waiting room or match you are in");
         assertEquals("NinjaArena commands:", messages.get(0));
         assertEquals(help, messages.subList(1, messages.size()));
@@ -185,7 +191,8 @@ class NinjaArenaCommandTest {
         CommandSender sender = console(true);
         run(sender, "arena create dojo");
         assertEquals(List.of("arena"), command.onTabComplete(sender, null, "narena", new String[] {"a"}));
-        assertEquals(List.of("arena", "portal"), command.onTabComplete(sender, null, "narena", new String[] {""}));
+        assertEquals(List.of("arena", "portal", "director"),
+                command.onTabComplete(sender, null, "narena", new String[] {""}));
         assertEquals(List.of("setbounds", "setwaitingroom", "setteamspawn"),
                 command.onTabComplete(sender, null, "narena", new String[] {"arena", "set"}));
         assertEquals(List.of("dojo"), command.onTabComplete(sender, null, "narena", new String[] {"arena", "info", "d"}));
@@ -279,6 +286,24 @@ class NinjaArenaCommandTest {
         teleport.complete(true);
         assertEquals(List.of("teleport(384.0, 64.0, 128.0)", "setAllowFlight(true)", "setFlying(true)"), calls);
         assertTrue(messages.stream().anyMatch(message -> message.contains("empty until you build")), messages.toString());
+    }
+
+    @Test
+    void directorStatusNeedsTheAdminNode() {
+        Player player = playerWithPlay();
+        run(player, "director dojo");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+        assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"d"}));
+        assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"director", ""}));
+
+        messages.clear();
+        CommandSender admin = console(true);
+        assertEquals(List.of("director"), command.onTabComplete(admin, null, "narena", new String[] {"d"}));
+        run(admin, "director dojo");
+        assertEquals(List.of("No match is running in arena dojo."), messages);
+        messages.clear();
+        command.onCommand(admin, null, "narena", new String[] {"director"});
+        assertEquals(List.of("Usage: /narena director <arena>, or run it while in a match."), messages);
     }
 
     @Test
