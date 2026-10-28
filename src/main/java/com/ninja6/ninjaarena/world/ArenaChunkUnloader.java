@@ -32,7 +32,10 @@ public final class ArenaChunkUnloader {
     /** Ticks between sweeps. */
     static final long PERIOD_TICKS = 100;
 
-    /** At most this many chunks are unloaded in one sweep, so a backlog is spread over ticks. */
+    /**
+     * At most this many chunks are tried in one sweep, unloaded or refused, so a backlog is
+     * spread over ticks.
+     */
     static final int MAX_PER_SWEEP = 64;
 
     private final World world;
@@ -69,8 +72,10 @@ public final class ArenaChunkUnloader {
             return 0;
         }
         int count = 0;
+        int attempts = 0;
         for (Chunk chunk : world.getLoadedChunks()) {
-            if (count >= MAX_PER_SWEEP) {
+            // Refusals count too, so a server that defers every unload costs a bounded sweep.
+            if (attempts >= MAX_PER_SWEEP) {
                 break;
             }
             if (chunk.getLoadLevel() != Chunk.LoadLevel.INACCESSIBLE) {
@@ -78,6 +83,7 @@ public final class ArenaChunkUnloader {
             }
             int x = chunk.getX();
             int z = chunk.getZ();
+            attempts++;
             if (world.unloadChunk(x, z, false)) {
                 count++;
                 continue;

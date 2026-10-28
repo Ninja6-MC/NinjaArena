@@ -149,6 +149,22 @@ class ArenaChunkUnloaderTest {
     }
 
     @Test
+    void refusedChunksCountTowardTheLimitOfASweep() {
+        int backlog = ArenaChunkUnloader.MAX_PER_SWEEP + 10;
+        for (int x = 0; x < backlog; x++) {
+            loaded.put(x + ",0", LoadLevel.INACCESSIBLE);
+            refusing.add(x + ",0");
+        }
+
+        assertEquals(0, unloader.sweep());
+
+        // Each tried chunk is asked twice; the ones past the limit are not asked at all.
+        assertEquals(2 * ArenaChunkUnloader.MAX_PER_SWEEP, unloads.size());
+        assertEquals(ArenaChunkUnloader.MAX_PER_SWEEP, unloader.refused());
+        assertEquals(backlog, loaded.size());
+    }
+
+    @Test
     void sweepingAnEmptyWorldDoesNothing() {
         assertEquals(0, unloader.sweep());
         assertEquals(List.of(), unloads);

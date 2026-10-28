@@ -346,13 +346,21 @@ class ArenaRegistryTest {
 
         ArenaException refused = assertThrows(ArenaException.class, () -> registry.startEdit("dojo"));
         assertTrue(refused.getMessage().contains("stays out of edit mode"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("arena-copies/dojo"), refused.getMessage());
         assertFalse(registry.isEditing("dojo"));
         assertFalse(registry.isAvailable("dojo"));
         assertEquals(List.of(), saving);
 
-        copies.failing = false;
+        // Removing the copy, as the message says, lets the edit start from the world as it is.
+        copies.saved.remove("dojo");
+        copies.calls.clear();
         registry.startEdit("dojo");
         assertTrue(registry.isEditing("dojo"));
+        assertEquals(List.of(), copies.calls);
+        copies.failing = false;
+        assertEquals(List.of(), registry.finishEdit("dojo"));
+        assertTrue(copies.exists("dojo"));
+        assertTrue(registry.isAvailable("dojo"));
     }
 
     @Test

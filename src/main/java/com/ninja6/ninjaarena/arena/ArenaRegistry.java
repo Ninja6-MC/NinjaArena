@@ -238,7 +238,9 @@ public final class ArenaRegistry {
      * edit would start from that save and {@link #finishEdit} would copy the damage.
      *
      * @throws ArenaException if the arena has a copy that cannot be restored; it then stays
-     *                        out of edit mode, so the damage is never copied
+     *                        out of edit mode, so the damage is never copied. Removing the
+     *                        copy lets the edit start from the world as it is, since an arena
+     *                        with bounds but no copy is edited without a reset
      */
     public void startEdit(String name) throws ArenaException {
         Arena arena = require(name);
@@ -255,7 +257,9 @@ public final class ArenaRegistry {
             } catch (IOException e) {
                 unreset.add(arena.name());
                 throw new ArenaException("Could not reset " + arena.name() + " from its saved copy before the edit,"
-                        + " so it stays out of edit mode: " + e.getMessage(), e);
+                        + " so it stays out of edit mode: " + e.getMessage() + ". To edit it as the world has it now,"
+                        + " remove its folder plugins/NinjaArena/arena-copies/" + arena.name() + " and start the edit"
+                        + " again; finishing the edit saves a new copy. Or delete the arena and create it again.", e);
             }
             unreset.remove(arena.name());
         }
