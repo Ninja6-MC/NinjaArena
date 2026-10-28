@@ -211,6 +211,43 @@ class WaitingRoomServiceTest {
     }
 
     @Test
+    void aFinishedCountdownHoldsWhileNoMatchSlotIsFree() {
+        boolean[] free = {false};
+        rooms.setStartAllowed(() -> free[0]);
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(BOB), "dojo");
+        for (int i = 0; i < 6; i++) {
+            rooms.tick();
+        }
+        assertTrue(started.isEmpty());
+        assertTrue(rooms.isWaiting(ALICE));
+        assertTrue(rooms.isWaiting(BOB));
+
+        free[0] = true;
+        rooms.tick();
+        assertEquals(List.of(List.of(List.of(ALICE), List.of(BOB))), started);
+        assertFalse(rooms.isWaiting(ALICE));
+    }
+
+    @Test
+    void aHeldCountdownStillStopsWhenAPlayerLeaves() {
+        rooms.setStartAllowed(() -> false);
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(BOB), "dojo");
+        for (int i = 0; i < 4; i++) {
+            rooms.tick();
+        }
+        assertTrue(rooms.leave(player(BOB), Exit.COMMAND));
+        assertTrue(players.get(ALICE).messages.contains("Not enough players. The countdown stopped."));
+
+        rooms.setStartAllowed(() -> true);
+        for (int i = 0; i < 5; i++) {
+            rooms.tick();
+        }
+        assertTrue(started.isEmpty());
+    }
+
+    @Test
     void walkingOutRestoresOnTheNextTickAndStopsTheCountdown() {
         rooms.join(player(ALICE), "dojo");
         rooms.join(player(BOB), "dojo");

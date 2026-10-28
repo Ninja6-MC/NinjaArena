@@ -51,6 +51,25 @@ scoring:
   # environmental deaths and leaving award nothing. 0 disables this award.
   player-kill-points: 2
 
+stability:
+  # Matches running at once (1 to 100). A waiting room whose countdown ends while this many
+  # run holds at its last second until one finishes.
+  max-concurrent-matches: 4
+  # Enemies alive at once in one match, and across every match (1 to 1000 each).
+  match-mob-cap: 25
+  global-mob-cap: 80
+  # Enemies spawned in one server tick across every match (1 to 100). A director held back
+  # by a cap or this limit tries again the next second.
+  spawns-per-tick: 4
+  # Tick-time guard, on the server's average tick time in milliseconds (1 to 1000). Above
+  # pause-spawning-above-mspt no enemies spawn; above drop-tier-above-mspt the intensity is
+  # also lowered by intensity-tier (0 to 1). Both last until the average falls below
+  # resume-below-mspt. Resume is kept at or below pause, and drop-tier at or above it.
+  pause-spawning-above-mspt: 40.0
+  drop-tier-above-mspt: 45.0
+  resume-below-mspt: 35.0
+  intensity-tier: 0.25
+
 director:
   threat-budget:
     # Budget per round = base x round multiplier x player factor: the threat allowed alive

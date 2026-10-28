@@ -10,6 +10,8 @@ import com.ninja6.ninjaarena.director.DirectorService;
 import com.ninja6.ninjaarena.director.EnemyCosts;
 import com.ninja6.ninjaarena.director.IntensitySettings;
 import com.ninja6.ninjaarena.director.MobSpawner;
+import com.ninja6.ninjaarena.director.StabilityGate;
+import com.ninja6.ninjaarena.director.StabilitySettings;
 import com.ninja6.ninjaarena.director.ThreatBudget;
 import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
 import com.ninja6.ninjaarena.kit.KitDefinition;
@@ -131,6 +133,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 id -> inMatch.isInMatch(id) || waiting.isWaiting(id)), this);
         getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
         arenas.onEditOrDelete(waitingRooms::closeRoom);
+        // Match slots, enemy caps, the spawn rate and the tick-time guard; enemies are counted
+        // from each match's director. Set before any fight can create a director.
+        StabilitySettings stability = StabilitySettings.from(getConfig().getConfigurationSection("stability"));
+        DirectorService enemyDirectors = directors;
+        directors.setGate(new StabilityGate(stability,
+                match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
+                Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger()));
+        waitingRooms.setStartAllowed(() -> inMatch.matches().size() < stability.maxMatches());
         waitingRooms.start();
         PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
         PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);
