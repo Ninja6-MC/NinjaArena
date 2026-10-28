@@ -74,6 +74,16 @@ stability:
   tier-recovery-seconds: 30
 
 director:
+  # Log why an enemy did not spawn (each reason at most once per round per match) at INFO
+  # rather than FINE, which the default server log leaves out. /narena director shows the
+  # latest reason either way.
+  debug: false
+  spawn:
+    # An enemy spawn point is used only when it is in loaded chunks, has room for the enemy,
+    # is more than 8 blocks from every player in the arena world, and is hidden from each of
+    # them: out of their line of sight, or more than view-angle degrees off the way they look
+    # (0 to 180). 180 leaves only cover to hide a point.
+    view-angle: 100.0
   threat-budget:
     # Budget per round = base x round multiplier x player factor: the threat allowed alive
     # at intensity 1. The multiplier and factor are set under director.intensity.

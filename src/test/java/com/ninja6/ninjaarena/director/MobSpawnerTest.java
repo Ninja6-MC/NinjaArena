@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.logging.Logger;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -40,6 +41,10 @@ class MobSpawnerTest {
     private final Map<Mob, List<String>> lifecycleCalls = new HashMap<>();
     private final List<Mob> added = new ArrayList<>();
     private final Map<Mob, List<Material>> mainHands = new HashMap<>();
+    /** Whether spawned mobs stay valid; false as when another plugin cancels the spawn. */
+    private boolean valid = true;
+    private final SpawnDiagnostics diagnostics = new SpawnDiagnostics(
+            new FakeMatch(List.of(List.of(), List.of())).combat(0), SpawnSettings.DEFAULTS, Logger.getAnonymousLogger());
 
     private Mob mob(Class<? extends Mob> type) {
         Mob[] self = new Mob[1];
@@ -65,7 +70,7 @@ class MobSpawnerTest {
                                 }
                                 throw new UnsupportedOperationException(call.getName());
                             });
-                    case "isValid" -> true;
+                    case "isValid" -> valid;
                     case "isDead" -> false;
                     case "setTarget", "getTarget" -> null;
                     case "hashCode" -> System.identityHashCode(proxy);
@@ -104,7 +109,7 @@ class MobSpawnerTest {
     void spawnedUndeadDoNotBurnUnderTheFixedNoonSky() {
         var arena = new Arena("dojo", new GridCell(0, 0), null, null, List.of(),
                 List.of(new ArenaPoint(10.5, 64, 10.5, 0, 0)));
-        var spawner = new MobSpawner(world, new SpawnPlacement(arena), id -> null, BOW);
+        var spawner = new MobSpawner(world, new SpawnPlacement(arena), id -> null, diagnostics, BOW);
         for (EnemyKind kind : EnemyKind.values()) {
             assertTrue(spawner.spawn(kind, null).isPresent(), kind.name());
         }
@@ -117,6 +122,24 @@ class MobSpawnerTest {
         assertFalse(burnCalls.containsKey(added.get(2)), "spiders never burn");
         assertEquals(List.of(Material.BOW), mainHands.get(added.get(1)), "skeleton holds a bow");
         assertFalse(mainHands.containsKey(added.get(0)), "zombie is left as spawned");
+    }
+
+    @Test
+    void refusedAndCancelledSpawnsAreExplained() {
+        var empty = new MobSpawner(world, new SpawnPlacement(new Arena("dojo", new GridCell(0, 0), null, null,
+                List.of(), List.of())), id -> null, diagnostics, BOW);
+        assertTrue(empty.lastRefusal().isEmpty());
+        assertTrue(empty.spawn(EnemyKind.ZOMBIE, null).isEmpty());
+        assertEquals("round 1, no enemy spawn point for a zombie: the arena has no enemy spawn points",
+                empty.lastRefusal().orElseThrow());
+
+        valid = false;
+        var arena = new Arena("dojo", new GridCell(0, 0), null, null, List.of(),
+                List.of(new ArenaPoint(10.5, 64, 10.5, 0, 0)));
+        var spawner = new MobSpawner(world, new SpawnPlacement(arena), id -> null, diagnostics, BOW);
+        assertTrue(spawner.spawn(EnemyKind.SPIDER, null).isEmpty());
+        assertEquals("round 1, the world cancelled a spider spawn at 10.5, 64.0, 10.5",
+                spawner.lastRefusal().orElseThrow());
     }
 
     @Test

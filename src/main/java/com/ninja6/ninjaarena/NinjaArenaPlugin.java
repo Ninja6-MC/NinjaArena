@@ -4,6 +4,7 @@ import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
+import com.ninja6.ninjaarena.command.DirectorCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
 import com.ninja6.ninjaarena.director.AggroSteering;
@@ -13,6 +14,7 @@ import com.ninja6.ninjaarena.director.EnemyLifecycle;
 import com.ninja6.ninjaarena.director.IntensitySettings;
 import com.ninja6.ninjaarena.director.MatchDirector;
 import com.ninja6.ninjaarena.director.MobSpawner;
+import com.ninja6.ninjaarena.director.SpawnSettings;
 import com.ninja6.ninjaarena.director.StabilityGate;
 import com.ninja6.ninjaarena.director.StabilitySettings;
 import com.ninja6.ninjaarena.director.StealthSettings;
@@ -115,7 +117,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 ThreatBudget.from(getConfig().getConfigurationSection("director.threat-budget")),
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")),
                 scores, matches::matchOf, MobSpawner.factory(arenas, arenaWorld::world, getServer()::getPlayer,
-                        getLogger()), new SplittableRandom()::nextDouble);
+                        SpawnSettings.from(getConfig().getConfigurationSection("director")), getLogger()),
+                new SplittableRandom()::nextDouble);
         getServer().getPluginManager().registerEvents(directors, this);
         enemyLifecycle = new EnemyLifecycle(matches::matches, directors::director,
                 name -> arenas.get(name).map(Arena::bounds), arenaWorld::world, scores,
@@ -169,6 +172,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
                 snapshots, portalCommand::forget, waitingRooms::join), this);
         NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world), portalCommand,
+                new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 player -> waitingRooms.leave(player, Exit.COMMAND)
                         || matches.leave(player, MatchService.Exit.COMMAND));
         getCommand("ninjaarena").setExecutor(command);

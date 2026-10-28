@@ -62,6 +62,15 @@ public final class MatchDirector {
          *         that kind this second
          */
         Optional<Enemy> spawn(EnemyKind kind, UUID target);
+
+        /** Why the latest spawn did not happen, for an admin; empty if none failed or it cannot say. */
+        default Optional<String> lastRefusal() {
+            return Optional.empty();
+        }
+    }
+
+    /** The living enemies of one kind, and the threat they hold. */
+    public record InPlay(EnemyKind kind, int count, int threat) {
     }
 
     private record Tracked(Enemy enemy, int cost) {
@@ -176,6 +185,24 @@ public final class MatchDirector {
      */
     public List<Enemy> enemies() {
         return enemies.stream().map(Tracked::enemy).toList();
+    }
+
+    /** The tracked enemies by kind, in kind order, with their threat; kinds with none are left out. */
+    public List<InPlay> inPlay() {
+        Map<EnemyKind, int[]> byKind = new EnumMap<>(EnemyKind.class);
+        for (Tracked tracked : enemies) {
+            int[] sum = byKind.computeIfAbsent(tracked.enemy().kind(), kind -> new int[2]);
+            sum[0]++;
+            sum[1] += tracked.cost();
+        }
+        List<InPlay> out = new ArrayList<>();
+        byKind.forEach((kind, sum) -> out.add(new InPlay(kind, sum[0], sum[1])));
+        return out;
+    }
+
+    /** Why the latest spawn did not happen, as the spawner tells it. */
+    public Optional<String> lastRefusal() {
+        return spawner.lastRefusal();
     }
 
     private void startRound() {

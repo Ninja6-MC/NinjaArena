@@ -28,28 +28,34 @@ public final class MobSpawner implements MatchDirector.Spawner {
     private final World world;
     private final SpawnPlacement placement;
     private final Function<UUID, Player> players;
+    private final SpawnDiagnostics diagnostics;
 
     private final Supplier<ItemStack> bow;
 
-    public MobSpawner(World world, SpawnPlacement placement, Function<UUID, Player> players) {
-        this(world, placement, players, () -> new ItemStack(Material.BOW));
+    public MobSpawner(World world, SpawnPlacement placement, Function<UUID, Player> players,
+            SpawnDiagnostics diagnostics) {
+        this(world, placement, players, diagnostics, () -> new ItemStack(Material.BOW));
     }
 
-    MobSpawner(World world, SpawnPlacement placement, Function<UUID, Player> players, Supplier<ItemStack> bow) {
+    MobSpawner(World world, SpawnPlacement placement, Function<UUID, Player> players, SpawnDiagnostics diagnostics,
+            Supplier<ItemStack> bow) {
         this.world = Objects.requireNonNull(world, "world");
         this.placement = Objects.requireNonNull(placement, "placement");
         this.players = Objects.requireNonNull(players, "players");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.bow = Objects.requireNonNull(bow, "bow");
     }
 
     /**
-     * A spawner for each match, placing enemies at its arena's spawns. A match whose arena is
-     * gone gets a spawner that spawns nothing, and a warning is logged.
+     * A spawner for each match, placing enemies at its arena's spawns and explaining refused
+     * or cancelled spawns through {@link SpawnDiagnostics}. A match whose arena is gone gets a
+     * spawner that spawns nothing, and a warning is logged.
      */
     public static Function<MatchView, MatchDirector.Spawner> factory(ArenaRegistry arenas, Supplier<World> world,
-            Function<UUID, Player> players, Logger logger) {
+            Function<UUID, Player> players, SpawnSettings settings, Logger logger) {
         return match -> arenas.get(match.arena())
-                .<MatchDirector.Spawner>map(arena -> new MobSpawner(world.get(), new SpawnPlacement(arena), players))
+                .<MatchDirector.Spawner>map(arena -> new MobSpawner(world.get(), new SpawnPlacement(arena, settings),
+                        players, new SpawnDiagnostics(match, settings, logger)))
                 .orElseGet(() -> {
                     logger.warning("Arena " + match.arena() + " is gone, so its match gets no enemies.");
                     return (kind, target) -> Optional.empty();
@@ -60,16 +66,23 @@ public final class MobSpawner implements MatchDirector.Spawner {
     public Optional<MatchDirector.Enemy> spawn(EnemyKind kind, UUID target) {
         Optional<Location> at = placement.next(world, kind.width(), kind.height());
         if (at.isEmpty()) {
+            diagnostics.refused(kind, placement.refusals());
             return Optional.empty();
         }
         Mob mob = world.spawn(at.get(), kind.type(), false, spawned -> prepare(spawned, bow));
         if (!mob.isValid()) {
             // Another plugin cancelled the spawn.
+            diagnostics.cancelled(kind, at.get());
             return Optional.empty();
         }
         MobEnemy enemy = new MobEnemy(kind, mob, players);
         enemy.target(target);
         return Optional.of(enemy);
+    }
+
+    @Override
+    public Optional<String> lastRefusal() {
+        return diagnostics.last();
     }
 
     /**
