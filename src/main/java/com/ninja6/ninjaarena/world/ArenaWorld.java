@@ -16,10 +16,11 @@ import org.bukkit.WorldCreator;
  *
  * <p>On Paper 26.3 auto-save off stops the periodic save and chunk unloading, so chunks stay
  * loaded and nothing is written while the server runs; a crash leaves the world as it was last
- * saved. {@link ArenaChunkUnloader} unloads, without saving, the chunks nothing holds. It does not stop the shutdown save, which turns saving back on for every world before
+ * saved. It does not stop the shutdown save, which turns saving back on for every world before
  * writing all loaded chunks, nor {@code /save-all} or {@link World#save()}. The world save can
  * therefore hold what a match left behind; arenas are put back from their own saved copies
- * instead ({@code ArenaRegistry#resetAll}).
+ * instead ({@code ArenaRegistry#resetAll}). {@link ArenaChunkUnloader} unloads, without
+ * saving, the chunks nothing holds.
  */
 public final class ArenaWorld {
 

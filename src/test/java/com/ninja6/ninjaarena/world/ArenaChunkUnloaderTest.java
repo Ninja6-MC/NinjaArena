@@ -1,14 +1,15 @@
 package com.ninja6.ninjaarena.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
@@ -26,8 +27,8 @@ class ArenaChunkUnloaderTest {
     private final List<String> unloads = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
     private boolean saving;
-    /** When set, an unload leaves the chunk loaded. */
-    private boolean refuse;
+    /** Chunks, by {@code "x,z"}, that stay loaded when asked to unload. */
+    private final Set<String> refusing = new HashSet<>();
     private ArenaChunkUnloader unloader;
 
     @BeforeEach
@@ -59,7 +60,7 @@ class ArenaChunkUnloaderTest {
                     case "unloadChunk" -> {
                         String key = args[0] + "," + args[1];
                         unloads.add(key + ((Boolean) args[2] ? " save" : " discard"));
-                        if (!refuse) {
+                        if (!refusing.contains(key)) {
                             loaded.remove(key);
                         }
                         yield !loaded.containsKey(key);
@@ -124,26 +125,33 @@ class ArenaChunkUnloaderTest {
     }
 
     @Test
-    void aRefusedUnloadClearsTheNoSaveMarkAndStopsSweeping() {
+    void aRefusedUnloadClearsTheNoSaveMarkAndTheSweepGoesOn() {
         loaded.put("1,0", LoadLevel.INACCESSIBLE);
         loaded.put("2,0", LoadLevel.INACCESSIBLE);
-        refuse = true;
+        loaded.put("3,0", LoadLevel.INACCESSIBLE);
+        refusing.add("1,0");
 
-        assertEquals(0, unloader.sweep());
+        assertEquals(2, unloader.sweep());
 
         // The second request, with saving allowed, clears the mark the first one left.
-        assertEquals(List.of("1,0 discard", "1,0 save"), unloads);
-        assertTrue(unloader.isStopped());
+        assertEquals(List.of("1,0 discard", "1,0 save", "2,0 discard", "3,0 discard"), unloads);
+        assertEquals(List.of("1,0"), List.copyOf(loaded.keySet()));
+        assertEquals(1, unloader.refused());
         assertEquals(1, warnings.size());
 
-        refuse = false;
+        // A later sweep tries the refused chunk again, and only the first refusal is logged.
         assertEquals(0, unloader.sweep());
-        assertEquals(2, unloads.size());
+        assertEquals(2, unloader.refused());
+        assertEquals(1, warnings.size());
+        refusing.clear();
+        assertEquals(1, unloader.sweep());
+        assertTrue(loaded.isEmpty());
     }
 
     @Test
-    void startsUnstopped() {
-        assertFalse(unloader.isStopped());
+    void sweepingAnEmptyWorldDoesNothing() {
         assertEquals(0, unloader.sweep());
+        assertEquals(List.of(), unloads);
+        assertEquals(0, unloader.refused());
     }
 }

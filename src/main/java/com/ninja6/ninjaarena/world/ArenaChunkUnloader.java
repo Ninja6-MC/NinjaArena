@@ -22,7 +22,8 @@ import org.bukkit.scheduler.BukkitTask;
  * <p>Nothing is unloaded while world saving is on (an arena is in edit mode): the server
  * then unloads chunks itself and saves them, which keeps the edit. If a ticketless chunk
  * refuses to unload, the sweep asks for it again with saving allowed, so it is not left
- * marked as never to be saved, and stops for the rest of the run.
+ * marked as never to be saved, and goes on to the next chunk; a later sweep tries it again.
+ * The first refusal of a run is logged.
  *
  * <p>Call it from the server thread.
  */
@@ -38,8 +39,8 @@ public final class ArenaChunkUnloader {
     private final BooleanSupplier saving;
     private final Logger logger;
 
-    private boolean stopped;
     private long unloaded;
+    private long refused;
     private BukkitTask task;
 
     /**
@@ -64,7 +65,7 @@ public final class ArenaChunkUnloader {
      * @return how many were unloaded
      */
     public int sweep() {
-        if (stopped || saving.getAsBoolean()) {
+        if (saving.getAsBoolean()) {
             return 0;
         }
         int count = 0;
@@ -84,10 +85,11 @@ public final class ArenaChunkUnloader {
             // A refused unload still marks the chunk as never to be saved; asking again with
             // saving allowed clears the mark, so a later edit in it is kept.
             world.unloadChunk(x, z, true);
-            stopped = true;
-            logger.warning("Chunk " + x + ", " + z + " in " + world.getName() + " has no ticket but would not"
-                    + " unload; arena world chunks are no longer unloaded until the next start.");
-            break;
+            refused++;
+            if (refused == 1) {
+                logger.warning("Chunk " + x + ", " + z + " in " + world.getName() + " has no ticket but would not"
+                        + " unload; it is tried again on the next sweep.");
+            }
         }
         unloaded += count;
         return count;
@@ -98,9 +100,9 @@ public final class ArenaChunkUnloader {
         return unloaded;
     }
 
-    /** Whether a chunk refused to unload, which stops every later sweep. */
-    public boolean isStopped() {
-        return stopped;
+    /** Ticketless chunks that refused to unload since the start, counted once per attempt. */
+    public long refused() {
+        return refused;
     }
 
     /** Stops sweeping. Called on plugin disable. */

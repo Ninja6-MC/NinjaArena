@@ -265,6 +265,8 @@ class MatchServiceTest extends MatchFixture {
     @Test
     void anUnavailableArenaRefusesTheMatch() throws Exception {
         arenas.startEdit("dojo");
+        // Starting the edit resets the arena; the refused match must not touch the copy.
+        copies.calls.clear();
         startTwoOnTwo();
         assertTrue(matches.matches().isEmpty());
         assertEquals(List.of(ALICE, CAROL, BOB, DAVE), restored);

@@ -325,6 +325,48 @@ class ArenaRegistryTest {
     }
 
     @Test
+    void startingAnEditResetsTheArenaFromItsCopyFirst() throws Exception {
+        buildComplete("dojo");
+        copies.calls.clear();
+        saving.clear();
+
+        registry.startEdit("dojo");
+
+        // Restored while saving is still off, so the edit starts from the copy, not the world save.
+        assertEquals(List.of("restore dojo"), copies.calls);
+        assertEquals(List.of(true), saving);
+        assertTrue(registry.isEditing("dojo"));
+    }
+
+    @Test
+    void anEditWithAnUnreadableCopyIsRefusedSoTheDamageIsNeverCopied() throws Exception {
+        buildComplete("dojo");
+        copies.failing = true;
+        saving.clear();
+
+        ArenaException refused = assertThrows(ArenaException.class, () -> registry.startEdit("dojo"));
+        assertTrue(refused.getMessage().contains("stays out of edit mode"), refused.getMessage());
+        assertFalse(registry.isEditing("dojo"));
+        assertFalse(registry.isAvailable("dojo"));
+        assertEquals(List.of(), saving);
+
+        copies.failing = false;
+        registry.startEdit("dojo");
+        assertTrue(registry.isEditing("dojo"));
+    }
+
+    @Test
+    void anEditWithoutACopyStartsWithoutAReset() throws Exception {
+        registry.create("bare", new GridCell(2, 2));
+        registry.finishEdit("bare");
+        copies.calls.clear();
+
+        registry.startEdit("bare");
+        assertEquals(List.of(), copies.calls);
+        assertTrue(registry.isEditing("bare"));
+    }
+
+    @Test
     void resetAllRestoresCopiesAndCopiesArenasThatHaveNone() throws Exception {
         buildComplete("dojo");
         registry.create("bare", new GridCell(2, 2));

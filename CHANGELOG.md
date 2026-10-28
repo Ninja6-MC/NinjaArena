@@ -159,7 +159,9 @@ Java 25, and does not run on Folia.
   unloaded every five seconds without being saved, up to 64 at a time, so the loaded set
   stays bounded and the shutdown save writes only what is still in use. Nothing is
   unloaded this way while an arena is in edit mode. Plugin disable logs how many chunks
-  were unloaded and how many were still loaded.
+  were unloaded and how many were still loaded. Since the world save can hold what a
+  match left behind, starting an edit first resets the arena from its copy, and an edit
+  whose copy cannot be read is refused rather than copying that damage.
 - The round loop. A match holds its arena from start to finish and resets it from the
   saved copy before the players arrive and again when it ends; if the arena cannot be held
   or reset at the start, the players are told and sent home. Each round is a prep phase
