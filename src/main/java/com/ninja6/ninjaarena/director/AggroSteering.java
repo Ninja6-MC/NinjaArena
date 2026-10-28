@@ -59,14 +59,19 @@ public final class AggroSteering implements TargetWeigher, Listener {
         boolean inSmoke(MatchDirector.Enemy enemy);
     }
 
-    /** The player an enemy chases and the tick it last saw them, or began chasing them. */
+    /**
+     * The player an enemy chases, the tick it last saw them or began chasing them, and the
+     * tick of the last check.
+     */
     private static final class Sighting {
         final UUID target;
         long seen;
+        long checked;
 
-        Sighting(UUID target, long seen) {
+        Sighting(UUID target, long now) {
             this.target = target;
-            this.seen = seen;
+            this.seen = now;
+            this.checked = now;
         }
     }
 
@@ -113,9 +118,17 @@ public final class AggroSteering implements TargetWeigher, Listener {
         return steer(match, player, weight, !settings.ignoresStealth(kind));
     }
 
+    /** False inside smoke; the enemy's chase ends there, so a later one starts a new timer. */
     @Override
     public boolean mayTarget(MatchView match, MatchDirector.Enemy enemy) {
-        return !senses.inSmoke(enemy);
+        if (!senses.inSmoke(enemy)) {
+            return true;
+        }
+        Chases chase = chases.get(match);
+        if (chase != null) {
+            chase.sightings.remove(enemy);
+        }
+        return false;
     }
 
     @Override
@@ -130,10 +143,13 @@ public final class AggroSteering implements TargetWeigher, Listener {
             chase.sightings.keySet().removeIf(tracked -> !tracked.isAlive());
         }
         Sighting last = chase.sightings.get(enemy);
-        if (last == null || !last.target.equals(target)) {
+        // A chase not checked in the last second was broken off (no target, or another one
+        // in between), so this is a new chase with a new timer.
+        if (last == null || !last.target.equals(target) || now - last.checked > TICKS_PER_SECOND) {
             chase.sightings.put(enemy, new Sighting(target, now));
             return true;
         }
+        last.checked = now;
         if (senses.sees(enemy, target)) {
             last.seen = now;
             return true;

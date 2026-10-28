@@ -238,12 +238,11 @@ class AggroSteeringTest {
         FakeEnemy zombie = enemy(EnemyKind.ZOMBIE, A);
         AggroSteering steering = steering();
         assertTrue(steering.keepsTarget(match, zombie, A));
-        tick += 40;
+        keepsChasing(steering, zombie, A, 1);
         senses.see(zombie, A);
-        assertTrue(steering.keepsTarget(match, zombie, A));
+        keepsChasing(steering, zombie, A, 1);
         senses.blind(zombie);
-        tick += 40;
-        assertTrue(steering.keepsTarget(match, zombie, A));
+        keepsChasing(steering, zombie, A, 2);
         tick += 20;
         assertFalse(steering.keepsTarget(match, zombie, A));
     }
@@ -253,14 +252,60 @@ class AggroSteeringTest {
         FakeEnemy zombie = enemy(EnemyKind.ZOMBIE, A);
         AggroSteering steering = steering();
         assertTrue(steering.keepsTarget(match, zombie, A));
-        tick += 40;
+        keepsChasing(steering, zombie, A, 1);
+        tick += 20;
         assertTrue(steering.keepsTarget(match, zombie, B), "switched to B");
-        tick += 40;
-        assertTrue(steering.keepsTarget(match, zombie, B));
+        keepsChasing(steering, zombie, B, 2);
         tick += 20;
         assertFalse(steering.keepsTarget(match, zombie, B));
         tick += 20;
         assertTrue(steering.keepsTarget(match, zombie, B), "chasing B again starts over");
+    }
+
+    @Test
+    void aChaseAfterSmokeStartsANewTimerOnTheSamePlayer() {
+        FakeEnemy zombie = enemy(EnemyKind.ZOMBIE, A);
+        AggroSteering steering = steering();
+        assertTrue(steering.keepsTarget(match, zombie, A));
+        keepsChasing(steering, zombie, A, 2);
+        // Smoke drops the target for the cloud's 4 seconds.
+        senses.smoke.add(zombie);
+        for (int second = 0; second < 4; second++) {
+            tick += 20;
+            assertFalse(steering.mayTarget(match, zombie));
+        }
+        senses.smoke.clear();
+        // Out of the cloud the director draws Alice again; she is checked from the next second.
+        tick += 20;
+        assertTrue(steering.mayTarget(match, zombie));
+        tick += 20;
+        assertTrue(steering.keepsTarget(match, zombie, A), "a new chase");
+        keepsChasing(steering, zombie, A, 2);
+        tick += 20;
+        assertFalse(steering.keepsTarget(match, zombie, A), "three seconds into the new chase");
+    }
+
+    @Test
+    void aChaseBrokenOffWithoutSmokeAlsoStartsANewTimer() {
+        FakeEnemy zombie = enemy(EnemyKind.ZOMBIE, A);
+        AggroSteering steering = steering();
+        assertTrue(steering.keepsTarget(match, zombie, A));
+        keepsChasing(steering, zombie, A, 2);
+        // Two seconds with no target, so nothing is checked.
+        tick += 40;
+        tick += 20;
+        assertTrue(steering.keepsTarget(match, zombie, A), "a new chase");
+        keepsChasing(steering, zombie, A, 2);
+        tick += 20;
+        assertFalse(steering.keepsTarget(match, zombie, A));
+    }
+
+    /** Advances the given seconds, checking once each, and expects the chase to hold. */
+    private void keepsChasing(AggroSteering steering, FakeEnemy enemy, UUID target, int seconds) {
+        for (int second = 0; second < seconds; second++) {
+            tick += 20;
+            assertTrue(steering.keepsTarget(match, enemy, target), "tick " + tick);
+        }
     }
 
     @Test
@@ -303,7 +348,8 @@ class AggroSteeringTest {
         FakeEnemy zombie = enemy(EnemyKind.ZOMBIE, A);
         AggroSteering steering = steering();
         assertTrue(steering.keepsTarget(match, zombie, A));
-        tick += 60;
+        keepsChasing(steering, zombie, A, 2);
+        tick += 20;
         steering.onMatchEnd(new MatchEndEvent(match,
                 new MatchResult("dojo", MatchResult.Reason.STOPPED, List.of(), List.of(), List.of())));
         assertTrue(steering.keepsTarget(match, zombie, A), "a fresh chase");
@@ -314,7 +360,8 @@ class AggroSteeringTest {
         FakeEnemy zombie = enemy(EnemyKind.ZOMBIE, A);
         AggroSteering steering = steering();
         assertTrue(steering.keepsTarget(match, zombie, A));
-        tick += 60;
+        keepsChasing(steering, zombie, A, 2);
+        tick += 20;
         zombie.alive = false;
         // A later check for another enemy prunes the dead one; were it kept, it would lose track now.
         FakeEnemy other = enemy(EnemyKind.ZOMBIE, A);
