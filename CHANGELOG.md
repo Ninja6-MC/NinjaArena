@@ -26,6 +26,15 @@ Java 25, and does not run on Folia.
   and is cancelled when the round or match ends, when the last player leaves and on plugin
   disable. `NinjaArenaPlugin#directors()` exposes each match's director and its enemies, a
   spawn gate for caps and tick-time limits, and a targeting-weight hook.
+- Stealth and aggro steering through the director's targeting-weight hook. A player who
+  crouches where no enemy can see them, or crouches in low light, weighs a quarter as
+  much; a shuriken-marked player weighs twice as much while marked, and the leading-team
+  bias still applies on top. An enemy that has not seen the player it chases for 3 seconds
+  loses track and is drawn another player, and an enemy inside a smoke bomb cloud drops
+  its target and takes no other while inside. Each enemy type has an `ignores-stealth`
+  setting, off by default, that skips the hidden cut and the lose-track timer. Values are
+  under `director.stealth` in `config.yml`. `NinjaTools#inSmoke` reports whether a place
+  is inside a smoke cloud.
 - Enemy spawn-position selection rotates through registered points, skipping points within
   8 blocks of any player, visible to any player, or obstructed by block collision shapes
   for the requested mob dimensions. If no point is valid, selection returns empty.
