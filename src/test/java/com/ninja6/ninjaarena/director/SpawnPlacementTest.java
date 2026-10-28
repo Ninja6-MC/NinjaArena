@@ -57,6 +57,16 @@ class SpawnPlacementTest {
     }
 
     @Test
+    void aPlayerSeeingOnlyTheUpperBodyRejectsThePoint() {
+        players.add(proxy(Player.class, (name, args) -> switch (name) {
+            case "getLocation" -> new Location(world, 40, 64, 0.5);
+            case "hasLineOfSight" -> ((Location) args[0]).getY() > 65;
+            default -> throw new UnsupportedOperationException(name);
+        }));
+        assertTrue(placement(point(10.5)).next(world, 0.6, 1.8).isEmpty());
+    }
+
+    @Test
     void anyPlayerWithLineOfSightRejectsEvenADistantPoint() {
         players.add(player(-100, false));
         players.add(player(100, true));

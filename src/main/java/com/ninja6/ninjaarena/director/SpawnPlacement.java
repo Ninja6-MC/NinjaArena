@@ -37,17 +37,18 @@ public final class SpawnPlacement {
             ArenaPoint point = points.get(cursor);
             cursor = (cursor + 1) % points.size();
             Location location = new Location(world, point.x(), point.y(), point.z(), point.yaw(), point.pitch());
-            if (fits(world, location, width, height) && hidden(location, players)) {
+            if (fits(world, location, width, height) && hidden(location, height, players)) {
                 return Optional.of(location);
             }
         }
         return Optional.empty();
     }
 
-    private static boolean hidden(Location location, List<Player> players) {
+    private static boolean hidden(Location location, double height, List<Player> players) {
+        Location upper = location.clone().add(0, height * 0.85, 0);
         for (Player player : players) {
             if (player.getLocation().distanceSquared(location) <= MIN_DISTANCE_SQUARED
-                    || player.hasLineOfSight(location)) {
+                    || player.hasLineOfSight(location) || player.hasLineOfSight(upper)) {
                 return false;
             }
         }
