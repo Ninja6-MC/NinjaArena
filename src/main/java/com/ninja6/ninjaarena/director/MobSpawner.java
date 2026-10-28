@@ -52,7 +52,7 @@ public final class MobSpawner implements MatchDirector.Spawner {
         if (at.isEmpty()) {
             return Optional.empty();
         }
-        Mob mob = world.spawn(at.get(), kind.type(), MobSpawner::prepare);
+        Mob mob = world.spawn(at.get(), kind.type(), false, MobSpawner::prepare);
         if (!mob.isValid()) {
             // Another plugin cancelled the spawn.
             return Optional.empty();
@@ -66,7 +66,8 @@ public final class MobSpawner implements MatchDirector.Spawner {
      * Readies a mob before it is added to the world. The arena world's clock is fixed at
      * noon, so undead that burn in daylight (zombies and their husk and drowned variants,
      * and every skeleton) are kept from burning; otherwise they would die in any open arena
-     * and the director would keep replacing them.
+     * and the director would keep replacing them. Spawning without randomized data keeps
+     * vanilla from adding riders or mounts that the director would not track.
      */
     static void prepare(Mob mob) {
         mob.setPersistent(false);

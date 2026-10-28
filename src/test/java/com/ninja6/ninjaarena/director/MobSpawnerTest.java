@@ -68,7 +68,8 @@ class MobSpawnerTest {
                 case "getBlockAt" -> emptyBlock();
                 case "spawn" -> {
                     Mob mob = mob((Class<? extends Mob>) args[1]);
-                    ((Consumer<Mob>) args[2]).accept(mob);
+                    assertFalse((Boolean) args[2], "no randomized riders or mounts");
+                    ((Consumer<Mob>) args[3]).accept(mob);
                     added.add(mob);
                     yield mob;
                 }
