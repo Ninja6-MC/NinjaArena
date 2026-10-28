@@ -16,6 +16,9 @@ Java 25, and does not run on Folia.
 - Enemy spawn-position selection rotates through registered points, skipping points within
   8 blocks of any player, visible to any player, or obstructed by block collision shapes
   for the requested mob dimensions. If no point is valid, selection returns empty.
+- Pure threat-budget arithmetic: base x round multiplier x player factor, with a
+  configurable base under `director.threat-budget` and enemy costs under
+  `director.enemy-costs` (zombie 1, skeleton 2, spider 2, Shadow Stalker 8).
 - A shared `kits.yml` kit, cleared and rebuilt every round and on a delayed respawn into
   the current round. Dead and eliminated players are skipped. Missing or invalid files
   log the reason and use a safe empty kit; item-provider failures also use an empty kit.
@@ -55,8 +58,15 @@ Java 25, and does not run on Folia.
   projectiles, harmful splash potions or area-effect clouds unless `match.friendly-fire`
   is enabled. Leaving restores the saved game mode with the rest of the snapshot.
 - Explosions keep their player damage but cannot destroy blocks in the arena world;
-  entity block changes are cancelled there too. All environmental protection is suspended
+  entity block changes are cancelled there too, as are fire, fluid flow, growth, spread,
+  forming, fading and leaf decay, so a match cannot change a block outside the arena
+  bounds that the saved copy does not cover. All environmental protection is suspended
   while any arena is in edit mode and resumes when the last edit finishes.
+- Arena setup help: `/narena` with no or an unknown group lists the `arena`, `portal` and
+  `leave` commands with one-line descriptions. `arena edit <name> off` says the arena left
+  edit mode and how to return when problems remain, the enemy spawn problem explains what
+  the spawns are for, and `portal setcorner` warns about a one-block-tall selection and
+  suggests `~ ~2 ~` for a doorway. The README has a first-arena walkthrough.
 - Initial project scaffolding with Gradle Kotlin DSL, the Gradle 9.8.1 wrapper and a
   Java 25 toolchain, compiling against `paper-api` 26.3.
 - `NinjaArenaPlugin`, which only logs on enable and disable.
@@ -83,10 +93,10 @@ Java 25, and does not run on Folia.
   has not been restored yet, and snapshots on disk can be loaded, listed and deleted.
 - The `ninjaarena_arenas` world, created on first start and loaded on every start after
   that: a void generator with one biome and no structures or mobs, time and weather
-  frozen at a clear noon, natural spawning off, a world border and a low view and
-  simulation distance, all tunable under `arena-world` in `config.yml`. Auto-save is off;
-  `ArenaWorld#setSavingEnabled` turns it on for edit mode and saves once when it is
-  turned off again.
+  frozen at a clear noon, natural spawning off, inventories kept on death, a world border
+  and a low view and simulation distance, the last three tunable under `arena-world` in
+  `config.yml`. Auto-save is off; `ArenaWorld#setSavingEnabled` turns it on for edit mode
+  and saves once when it is turned off again.
 - Restoring a player from their snapshot: location, inventory, experience, health, food,
   effects, game mode, fire ticks and fall distance, with velocity and gliding cleared. The
   snapshot is deleted only once the restore has succeeded. An unsafe saved spot (anything
@@ -154,7 +164,15 @@ Java 25, and does not run on Folia.
   keeps the arena world from saving while the server runs, but the shutdown save and
   `/save-all` still write it. An arena with no copy is unavailable; one built before
   copies existed is copied as it is on the first start. `ArenaRegistry#reset` resets one
-  arena, for the match engine at match start and end.
+  arena, for the match engine at match start and end. A reset loads each chunk's
+  entities before clearing them, and the startup reset logs how long it took.
+- Arena world chunks that nothing holds (no player near, no arena held by a match) are
+  unloaded every five seconds without being saved, up to 64 at a time, so the loaded set
+  stays bounded and the shutdown save writes only what is still in use. Nothing is
+  unloaded this way while an arena is in edit mode. Plugin disable logs how many chunks
+  were unloaded and how many were still loaded. Since the world save can hold what a
+  match left behind, starting an edit first resets the arena from its copy, and an edit
+  whose copy cannot be read is refused rather than copying that damage.
 - The round loop. A match holds its arena from start to finish and resets it from the
   saved copy before the players arrive and again when it ends; if the arena cannot be held
   or reset at the start, the players are told and sent home. Each round is a prep phase

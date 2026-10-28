@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.arena.Arena;
@@ -18,8 +19,11 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
@@ -116,6 +120,44 @@ class NinjaArenaCommandTest {
     }
 
     @Test
+    void editOffWithProblemsSaysItLeftEditModeAndHowToReturn() {
+        CommandSender sender = console(true);
+        run(sender, "arena create dojo 0 0");
+        run(sender, "arena setbounds dojo 10 60 10 90 100 90");
+        messages.clear();
+        run(sender, "arena edit dojo off");
+
+        assertEquals(List.of("Arena dojo saved and left edit mode, but it cannot host a match yet:",
+                "The waiting room is not set.",
+                "Needs 2 to 4 team spawns, has 0.",
+                "Needs at least one enemy spawn point: enemies spawn there during rounds.",
+                "Turn edit mode back on with /narena arena edit dojo on to fix them."), messages);
+        assertFalse(registry.isEditing("dojo"));
+
+        messages.clear();
+        run(sender, "arena edit dojo on");
+        assertTrue(registry.isEditing("dojo"));
+    }
+
+    @Test
+    void theRootListsItsGroupsWhenNoneOrAnUnknownOneIsGiven() {
+        CommandSender sender = console(true);
+        command.onCommand(sender, null, "narena", new String[0]);
+        List<String> help = List.of(
+                "/narena arena <subcommand> - create, edit and set up arenas",
+                "/narena portal <subcommand> - mark out portals that lead to arenas",
+                "/narena leave - leave the waiting room or match you are in");
+        assertEquals("NinjaArena commands:", messages.get(0));
+        assertEquals(help, messages.subList(1, messages.size()));
+
+        messages.clear();
+        run(sender, "create dojo");
+        assertEquals("Unknown command create. Subcommands sit under a group:", messages.get(0));
+        assertEquals(help, messages.subList(1, messages.size()));
+        assertTrue(registry.all().isEmpty());
+    }
+
+    @Test
     void boundsOutsideTheCellAreRefused() {
         CommandSender sender = console(true);
         run(sender, "arena create dojo 0 0");
@@ -191,6 +233,52 @@ class NinjaArenaCommandTest {
         assertEquals(List.of("You do not have permission to use this command."), messages);
         assertEquals(List.of("leave"), command.onTabComplete(player, null, "narena", new String[] {""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
+    }
+
+    @Test
+    void teleportToAnEmptyCellTurnsFlightOnOnceTheTeleportIsDone() {
+        run(console(true), "arena create dojo 1 0");
+        List<String> calls = new ArrayList<>();
+        CompletableFuture<Boolean> teleport = new CompletableFuture<>();
+        boolean[] allowFlight = {false};
+        Player admin = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "hasPermission" -> NinjaArenaCommand.ADMIN.equals(args[0]);
+                    case "sendMessage" -> {
+                        messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
+                        yield null;
+                    }
+                    case "getName" -> "Admin";
+                    case "getGameMode" -> GameMode.SURVIVAL;
+                    case "getAllowFlight" -> allowFlight[0];
+                    case "setAllowFlight" -> {
+                        allowFlight[0] = (boolean) args[0];
+                        calls.add("setAllowFlight(" + args[0] + ")");
+                        yield null;
+                    }
+                    case "setFlying" -> {
+                        calls.add("setFlying(" + args[0] + ")");
+                        yield null;
+                    }
+                    case "teleportAsync" -> {
+                        Location target = (Location) args[0];
+                        calls.add("teleport(" + target.getX() + ", " + target.getY() + ", " + target.getZ() + ")");
+                        yield teleport;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        messages.clear();
+
+        run(admin, "arena tp dojo");
+        assertEquals(List.of("teleport(384.0, 64.0, 128.0)"), calls);
+        assertEquals(1, messages.size());
+        assertTrue(messages.get(0).contains("cell 1, 0"), messages.get(0));
+        assertTrue(messages.get(0).contains("Bounds: not set"), messages.get(0));
+
+        // A world change during the teleport may reset flight, so it is set only afterwards.
+        teleport.complete(true);
+        assertEquals(List.of("teleport(384.0, 64.0, 128.0)", "setAllowFlight(true)", "setFlying(true)"), calls);
+        assertTrue(messages.stream().anyMatch(message -> message.contains("empty until you build")), messages.toString());
     }
 
     @Test

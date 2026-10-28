@@ -59,10 +59,27 @@ public final class NinjaArenaCommand implements TabExecutor {
         switch (group) {
             case ArenaCommand.NAME -> arena.execute(sender, label, tail(args));
             case PortalCommand.NAME -> portal.execute(sender, label, tail(args));
-            default -> sender.sendMessage(Component.text("Usage: /" + label + " <" + String.join("|", GROUPS)
-                    + "> <subcommand>, or /" + label + " " + LEAVE, NamedTextColor.RED));
+            default -> help(sender, label, args.length == 0 ? null : args[0]);
         }
         return true;
+    }
+
+    /** Lists the command groups, for an admin who gave none or an unknown one. */
+    private static void help(CommandSender sender, String label, String unknown) {
+        if (unknown != null) {
+            sender.sendMessage(Component.text("Unknown command " + unknown + ". Subcommands sit under a group:",
+                    NamedTextColor.RED));
+        } else {
+            sender.sendMessage(Component.text("NinjaArena commands:", NamedTextColor.GOLD));
+        }
+        line(sender, label, ArenaCommand.NAME + " <subcommand>", "create, edit and set up arenas");
+        line(sender, label, PortalCommand.NAME + " <subcommand>", "mark out portals that lead to arenas");
+        line(sender, label, LEAVE, "leave the waiting room or match you are in");
+    }
+
+    private static void line(CommandSender sender, String label, String usage, String description) {
+        sender.sendMessage(Component.text("/" + label + " " + usage, NamedTextColor.YELLOW)
+                .append(Component.text(" - " + description, NamedTextColor.GRAY)));
     }
 
     private void leave(CommandSender sender) {

@@ -33,6 +33,7 @@ import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
+import com.ninja6.ninjaarena.world.ArenaChunkUnloader;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import java.io.IOException;
@@ -48,6 +49,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     private SnapshotService snapshots;
     private ArenaWorld arenaWorld;
+    private ArenaChunkUnloader chunkUnloader;
     private RestoreService restores;
     private ArenaRegistry arenas;
     private PortalRegistry portals;
@@ -75,6 +77,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new RestoreListener(this, restores), this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         arenas = ArenaRegistry.open(this, arenaWorld);
+        chunkUnloader = new ArenaChunkUnloader(arenaWorld.world(), arenaWorld::isSavingEnabled, getLogger());
+        chunkUnloader.start(this);
         getServer().getPluginManager().registerEvents(new ArenaProtectionListener(arenas), this);
         portals = PortalRegistry.open(this);
         matches = new MatchService(this, arenas, arenaWorld::world,
@@ -148,6 +152,12 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (arenas != null) {
             arenas.close().forEach(getLogger()::warning);
             arenas = null;
+        }
+        if (chunkUnloader != null) {
+            chunkUnloader.close();
+            getLogger().info("Unloaded " + chunkUnloader.unloaded() + " arena world chunk(s) this run; "
+                    + arenaWorld.world().getLoadedChunks().length + " still loaded at shutdown.");
+            chunkUnloader = null;
         }
         if (arenaWorld != null) {
             arenaWorld.close();

@@ -64,6 +64,9 @@ public final class TestRegistryAccess implements RegistryAccess {
                             if (name.equals("mob_effect")) {
                                 return new Effect(key);
                             }
+                            if (name.equals("game_rule")) {
+                                return new TestGameRule<>(NamespacedKey.minecraft(key));
+                            }
                             if (name.equals("attribute")) {
                                 return (Attribute) Proxy.newProxyInstance(Attribute.class.getClassLoader(),
                                         new Class<?>[] {Attribute.class}, (p, m, a) -> {

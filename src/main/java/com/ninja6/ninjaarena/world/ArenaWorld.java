@@ -19,7 +19,8 @@ import org.bukkit.WorldCreator;
  * saved. It does not stop the shutdown save, which turns saving back on for every world before
  * writing all loaded chunks, nor {@code /save-all} or {@link World#save()}. The world save can
  * therefore hold what a match left behind; arenas are put back from their own saved copies
- * instead ({@code ArenaRegistry#resetAll}).
+ * instead ({@code ArenaRegistry#resetAll}). {@link ArenaChunkUnloader} unloads, without
+ * saving, the chunks nothing holds.
  */
 public final class ArenaWorld {
 
@@ -60,7 +61,10 @@ public final class ArenaWorld {
         return arenaWorld;
     }
 
-    private static void configure(World world, ArenaWorldSettings settings) {
+    static void configure(World world, ArenaWorldSettings settings) {
+        // A death here outside a match (an admin building, say) keeps the player's items.
+        // Match and waiting-room deaths already keep the inventory themselves.
+        setRule(world, GameRules.KEEP_INVENTORY, true);
         setRule(world, GameRules.ADVANCE_TIME, false);
         setRule(world, GameRules.ADVANCE_WEATHER, false);
         setRule(world, GameRules.SPAWN_MOBS, false);

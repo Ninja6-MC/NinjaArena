@@ -64,7 +64,7 @@ public final class ArenaCommand {
                 case "delete" -> delete(sender, rest, usagePrefix);
                 case "list" -> list(sender);
                 case "info" -> info(sender, rest, usagePrefix);
-                case "edit" -> edit(sender, rest, usagePrefix);
+                case "edit" -> edit(sender, label, rest, usagePrefix);
                 case "tp" -> teleport(sender, rest, usagePrefix);
                 case "setbounds" -> setBounds(sender, rest, usagePrefix);
                 case "setwaitingroom" -> setWaitingRoom(sender, rest, usagePrefix);
@@ -136,7 +136,7 @@ public final class ArenaCommand {
         }
     }
 
-    private void edit(CommandSender sender, String[] args, String usage) throws ArenaException {
+    private void edit(CommandSender sender, String label, String[] args, String usage) throws ArenaException {
         if (args.length != 2 || !(args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("off"))) {
             error(sender, "Usage: " + usage + "edit <name> <on|off>");
             return;
@@ -153,10 +153,12 @@ public final class ArenaCommand {
             success(sender, "Arena " + arena.name() + " saved and ready for matches.");
             return;
         }
-        warn(sender, "Arena " + arena.name() + " saved, but it cannot host a match yet:");
+        warn(sender, "Arena " + arena.name() + " saved and left edit mode, but it cannot host a match yet:");
         for (String problem : problems) {
             warn(sender, problem);
         }
+        warn(sender, "Turn edit mode back on with /" + label + " " + NAME + " edit " + arena.name()
+                + " on to fix them.");
     }
 
     private void teleport(CommandSender sender, String[] args, String usage) throws ArenaException {
@@ -170,29 +172,50 @@ public final class ArenaCommand {
         }
         Arena arena = require(args[0]);
         World arenaWorld = world.get();
-        boolean flightGranted = false;
+        ArenaBounds cell = registry.grid().cellBounds(arena.cell());
+        boolean hover = arena.waitingRoom() == null;
         Location target;
-        if (arena.waitingRoom() != null) {
+        if (!hover) {
             ArenaPoint room = arena.waitingRoom();
             target = new Location(arenaWorld, room.x(), room.y(), room.z(), room.yaw(), room.pitch());
         } else {
-            ArenaBounds cell = registry.grid().cellBounds(arena.cell());
             target = new Location(arenaWorld, (cell.minX() + cell.maxX() + 1) / 2.0, 64,
                     (cell.minZ() + cell.maxZ() + 1) / 2.0);
-            // There may be nothing to stand on yet; let the admin hover instead of falling.
-            if (player.getGameMode() == GameMode.SURVIVAL || player.getGameMode() == GameMode.ADVENTURE) {
-                if (!player.getAllowFlight()) {
-                    flightGranted = true;
-                    player.setAllowFlight(true);
-                }
-                player.setFlying(true);
-            }
         }
-        player.teleportAsync(target);
-        success(sender, "Teleporting to arena " + arena.name() + ".");
-        if (flightGranted) {
+        success(sender, "Teleporting to arena " + arena.name() + " in cell " + arena.cell().describe() + " ("
+                + cell.describe() + "). Bounds: " + (arena.bounds() == null ? "not set" : arena.bounds().describe())
+                + ".");
+        player.teleportAsync(target).thenAccept(moved -> {
+            if (!moved) {
+                error(sender, "The teleport to arena " + arena.name() + " failed.");
+                return;
+            }
+            if (hover) {
+                hover(player);
+            }
+        });
+    }
+
+    /**
+     * Keeps an admin from falling into the void of a cell with nothing built yet. Applied once
+     * the teleport is done: a change of world can turn flight off (EssentialsX
+     * {@code world-change-fly-reset}), so flight set before it would not last.
+     */
+    private static void hover(Player player) {
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            return;
+        }
+        boolean granted = false;
+        if (!player.getAllowFlight()) {
+            granted = true;
+            player.setAllowFlight(true);
+        }
+        player.setFlying(true);
+        warn(player, "The arena world is empty until you build: there is nothing under you yet. Use creative"
+                + " or flight while building.");
+        if (granted) {
             // Not undone automatically: the admin may still be building when they leave.
-            warn(sender, "Flight was turned on because the arena has no waiting room yet. It stays on until"
+            warn(player, "Flight was turned on because the arena has no waiting room yet. It stays on until"
                     + " your game mode changes.");
         }
     }
