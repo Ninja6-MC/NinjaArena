@@ -41,7 +41,6 @@ class SpawnPlacementTest {
     private final World world = proxy(World.class, (name, args) -> switch (name) {
         case "getMinHeight" -> -64;
         case "getMaxHeight" -> 320;
-        case "getPlayers" -> players;
         case "isChunkLoaded" -> !unloaded.contains(List.of((int) args[0], (int) args[1]));
         case "getBlockAt" -> block((int) args[0], (int) args[1], (int) args[2]);
         default -> throw new UnsupportedOperationException(name);
@@ -51,7 +50,7 @@ class SpawnPlacementTest {
     void rotatesAcrossRegisteredPointsAndPreservesFacing() {
         SpawnPlacement placement = placement(point(10.5), point(20.5), point(30.5));
         for (double x : new double[] {10.5, 20.5, 30.5, 10.5}) {
-            Location selected = placement.next(world, 0.6, 1.8).orElseThrow();
+            Location selected = placement.next(world, players, 0.6, 1.8).orElseThrow();
             assertEquals(x, selected.getX());
             assertEquals(64, selected.getY());
             assertEquals(0.5, selected.getZ());
@@ -64,7 +63,7 @@ class SpawnPlacementTest {
     void rejectsNearbyPlayersIncludingEightBlockBoundary() {
         players.add(player(2.5, false));
         SpawnPlacement placement = placement(point(10.49), point(10.5), point(10.51));
-        assertEquals(10.51, placement.next(world, 0.6, 1.8).orElseThrow().getX());
+        assertEquals(10.51, placement.next(world, players, 0.6, 1.8).orElseThrow().getX());
     }
 
     @Test
@@ -75,27 +74,27 @@ class SpawnPlacementTest {
             case "hasLineOfSight" -> ((Location) args[0]).getY() > 65;
             default -> throw new UnsupportedOperationException(name);
         }));
-        assertTrue(placement(point(10.5)).next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement(point(10.5)).next(world, players, 0.6, 1.8).isEmpty());
     }
 
     @Test
     void anyPlayerWithLineOfSightRejectsEvenADistantPoint() {
         players.add(player(-100, false));
         players.add(player(100, true));
-        assertTrue(placement(point(10.5)).next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement(point(10.5)).next(world, players, 0.6, 1.8).isEmpty());
     }
 
     @Test
     void rechecksPlayersAndRecoversWhenAllPointsWereBlocked() {
         SpawnPlacement placement = placement(point(10.5), point(20.5));
         players.add(player(10.5, true));
-        assertTrue(placement.next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement.next(world, players, 0.6, 1.8).isEmpty());
         players.clear();
-        assertEquals(10.5, placement.next(world, 0.6, 1.8).orElseThrow().getX());
+        assertEquals(10.5, placement.next(world, players, 0.6, 1.8).orElseThrow().getX());
         players.add(player(20.5, false));
-        assertEquals(10.5, placement.next(world, 0.6, 1.8).orElseThrow().getX());
+        assertEquals(10.5, placement.next(world, players, 0.6, 1.8).orElseThrow().getX());
         players.clear();
-        assertEquals(20.5, placement.next(world, 0.6, 1.8).orElseThrow().getX());
+        assertEquals(20.5, placement.next(world, players, 0.6, 1.8).orElseThrow().getX());
     }
 
     @Test
@@ -103,54 +102,54 @@ class SpawnPlacementTest {
         SpawnPlacement placement = placement(point(10.5), point(20.5), point(30.5));
         solid(10, 64, 0, 1);
         solid(20, 65, 0, 1);
-        assertEquals(30.5, placement.next(world, 0.6, 1.8).orElseThrow().getX());
+        assertEquals(30.5, placement.next(world, players, 0.6, 1.8).orElseThrow().getX());
         blocks.clear();
-        assertEquals(10.5, placement.next(world, 0.6, 1.8).orElseThrow().getX());
+        assertEquals(10.5, placement.next(world, players, 0.6, 1.8).orElseThrow().getX());
     }
 
     @Test
     void checksFullWidthAndHeightRatherThanOnlyFeetColumn() {
         solid(11, 64, 0, 1);
-        assertTrue(placement(point(10.9)).next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement(point(10.9)).next(world, players, 0.6, 1.8).isEmpty());
         blocks.clear();
         solid(10, 66, 0, 1);
-        assertTrue(placement(point(10.5)).next(world, 0.6, 2.4).isEmpty());
-        assertTrue(placement(point(10.5)).next(world, 0.6, 1.8).isPresent());
+        assertTrue(placement(point(10.5)).next(world, players, 0.6, 2.4).isEmpty());
+        assertTrue(placement(point(10.5)).next(world, players, 0.6, 1.8).isPresent());
     }
 
     @Test
     void permitsTouchingGroundButRejectsProtrudingFenceBelow() {
         solid(10, 63, 0, 1);
         SpawnPlacement placement = placement(point(10.5));
-        assertTrue(placement.next(world, 0.6, 1.8).isPresent());
+        assertTrue(placement.next(world, players, 0.6, 1.8).isPresent());
         solid(10, 63, 0, 1.5);
-        assertTrue(placement.next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement.next(world, players, 0.6, 1.8).isEmpty());
     }
 
     @Test
     void usesPartialCollisionShapesAtFractionalAndNegativeCoordinates() {
         solid(-1, 64, 0, 0.5);
         SpawnPlacement onSlab = placement(new ArenaPoint(-0.5, 64.5, 0.5, 0, 0));
-        assertTrue(onSlab.next(world, 0.6, 1.8).isPresent());
+        assertTrue(onSlab.next(world, players, 0.6, 1.8).isPresent());
         SpawnPlacement inSlab = placement(new ArenaPoint(-0.5, 64.4, 0.5, 0, 0));
-        assertTrue(inSlab.next(world, 0.6, 1.8).isEmpty());
+        assertTrue(inSlab.next(world, players, 0.6, 1.8).isEmpty());
     }
 
     @Test
     void skipsUnloadedChunksAndWorldHeightViolations() {
         unloaded.add(List.of(1, 0));
-        assertTrue(placement(point(15.9)).next(world, 0.6, 1.8).isEmpty());
-        assertTrue(placement(new ArenaPoint(0.5, 319, 0.5, 0, 0)).next(world, 0.6, 1.8).isEmpty());
-        assertTrue(placement(new ArenaPoint(0.5, -65, 0.5, 0, 0)).next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement(point(15.9)).next(world, players, 0.6, 1.8).isEmpty());
+        assertTrue(placement(new ArenaPoint(0.5, 319, 0.5, 0, 0)).next(world, players, 0.6, 1.8).isEmpty());
+        assertTrue(placement(new ArenaPoint(0.5, -65, 0.5, 0, 0)).next(world, players, 0.6, 1.8).isEmpty());
     }
 
     @Test
     void emptyRegistrationHasNoFallbackAndDimensionsMustBePositiveAndFinite() {
         SpawnPlacement placement = placement();
-        assertTrue(placement.next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement.next(world, players, 0.6, 1.8).isEmpty());
         for (double invalid : new double[] {0, -1, Double.NaN, Double.POSITIVE_INFINITY}) {
-            assertThrows(IllegalArgumentException.class, () -> placement.next(world, invalid, 1.8));
-            assertThrows(IllegalArgumentException.class, () -> placement.next(world, 0.6, invalid));
+            assertThrows(IllegalArgumentException.class, () -> placement.next(world, players, invalid, 1.8));
+            assertThrows(IllegalArgumentException.class, () -> placement.next(world, players, 0.6, invalid));
         }
     }
 
@@ -158,7 +157,7 @@ class SpawnPlacementTest {
     void aSinglePointBehindAPlayerWithASightLineIsUsed() {
         players.add(player(30.5, EAST, true));
         SpawnPlacement placement = placement(point(10.5));
-        assertEquals(10.5, placement.next(world, 0.6, 1.8).orElseThrow().getX());
+        assertEquals(10.5, placement.next(world, players, 0.6, 1.8).orElseThrow().getX());
         assertEquals(List.of(), placement.refusals());
     }
 
@@ -166,21 +165,21 @@ class SpawnPlacementTest {
     void aPlayerFacingAPointInSightRefusesItAsInView() {
         players.add(player(30.5, WEST, true));
         SpawnPlacement placement = placement(point(10.5));
-        assertTrue(placement.next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement.next(world, players, 0.6, 1.8).isEmpty());
         assertEquals(List.of(new Refused(1, Refusal.IN_VIEW)), placement.refusals());
     }
 
     @Test
     void coverHidesAPointThePlayerFaces() {
         players.add(player(30.5, WEST, false));
-        assertTrue(placement(point(10.5)).next(world, 0.6, 1.8).isPresent());
+        assertTrue(placement(point(10.5)).next(world, players, 0.6, 1.8).isPresent());
     }
 
     @Test
     void lookingAwayDoesNotHideAPointWithinEightBlocks() {
         players.add(player(16.5, EAST, false));
         SpawnPlacement placement = placement(point(10.5));
-        assertTrue(placement.next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement.next(world, players, 0.6, 1.8).isEmpty());
         assertEquals(List.of(new Refused(1, Refusal.TOO_CLOSE)), placement.refusals());
     }
 
@@ -188,13 +187,13 @@ class SpawnPlacementTest {
     void theViewAngleIsMeasuredFromTheLookDirection() {
         // Looking along +z, the point lies 90 degrees off to the side.
         players.add(player(-9.5, SOUTH, true));
-        assertTrue(placement(SpawnSettings.DEFAULTS, point(10.5)).next(world, 0.6, 1.8).isEmpty(),
+        assertTrue(placement(SpawnSettings.DEFAULTS, point(10.5)).next(world, players, 0.6, 1.8).isEmpty(),
                 "inside the default 100 degrees");
-        assertTrue(placement(new SpawnSettings(80, false), point(10.5)).next(world, 0.6, 1.8).isPresent(),
+        assertTrue(placement(new SpawnSettings(80, false), point(10.5)).next(world, players, 0.6, 1.8).isPresent(),
                 "outside 80 degrees");
         players.clear();
         players.add(player(30.5, EAST, true));
-        assertTrue(placement(new SpawnSettings(180, false), point(10.5)).next(world, 0.6, 1.8).isEmpty(),
+        assertTrue(placement(new SpawnSettings(180, false), point(10.5)).next(world, players, 0.6, 1.8).isEmpty(),
                 "180 leaves only cover");
     }
 
@@ -202,10 +201,10 @@ class SpawnPlacementTest {
     void everyPlayerMustHaveThePointOutOfViewOrBehindCover() {
         players.add(player(30.5, EAST, true));
         players.add(player(-9.5, EAST, false));
-        assertTrue(placement(point(10.5)).next(world, 0.6, 1.8).isPresent());
+        assertTrue(placement(point(10.5)).next(world, players, 0.6, 1.8).isPresent());
         players.add(player(-20.5, EAST, true));
         SpawnPlacement placement = placement(point(10.5));
-        assertTrue(placement.next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement.next(world, players, 0.6, 1.8).isEmpty());
         assertEquals(List.of(new Refused(1, Refusal.IN_VIEW)), placement.refusals());
     }
 
@@ -215,7 +214,7 @@ class SpawnPlacementTest {
         solid(40, 64, 0, 1);
         players.add(player(60.5, WEST, true));
         SpawnPlacement placement = placement(point(-20.5), point(40.5), point(55.5), point(10.5));
-        assertTrue(placement.next(world, 0.6, 1.8).isEmpty());
+        assertTrue(placement.next(world, players, 0.6, 1.8).isEmpty());
         assertEquals(List.of(new Refused(1, Refusal.CHUNK_NOT_LOADED), new Refused(2, Refusal.BLOCKED),
                 new Refused(3, Refusal.TOO_CLOSE), new Refused(4, Refusal.IN_VIEW)), placement.refusals());
     }

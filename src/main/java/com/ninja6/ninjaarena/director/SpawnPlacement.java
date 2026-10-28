@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.director;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -15,7 +16,7 @@ import org.bukkit.util.Vector;
 
 /**
  * Selects registered enemy spawns for one arena. A point qualifies when it is in loaded
- * chunks, free of collisions, more than 8 blocks from every player in the world, and hidden
+ * chunks, free of collisions, more than 8 blocks from every player passed in, and hidden
  * from each of them: out of their line of sight, or more than
  * {@link SpawnSettings#viewAngle()} degrees off the way they look. Call on the server thread.
  */
@@ -71,16 +72,20 @@ public final class SpawnPlacement {
 
     /**
      * The next hidden, unoccupied point for a mob of the given width and height. Rotates
-     * through registered points, rechecking players and blocks on every call. Empty means
-     * the caller must skip spawning; no fallback position is invented or chunk loaded, and
-     * {@link #refusals()} then says why each point was passed over.
+     * through registered points, rechecking players and blocks on every call. Only the given
+     * players can refuse a point; pass the match's players alive in the round, and none
+     * leaves only the block checks. Empty means the caller must skip spawning; no fallback
+     * position is invented or chunk loaded, and {@link #refusals()} then says why each point
+     * was passed over.
+     *
+     * @param players the players a point must be far from and hidden from, all in the world
      */
-    public Optional<Location> next(World world, double width, double height) {
+    public Optional<Location> next(World world, Collection<? extends Player> players, double width, double height) {
         Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(players, "players");
         if (!Double.isFinite(width) || width <= 0 || !Double.isFinite(height) || height <= 0) {
             throw new IllegalArgumentException("mob dimensions must be finite and positive");
         }
-        List<Player> players = world.getPlayers();
         List<Refused> refused = new ArrayList<>();
         for (int checked = 0; checked < points.size(); checked++) {
             int index = cursor;
@@ -111,7 +116,7 @@ public final class SpawnPlacement {
     }
 
     /** Null when the point is far enough from, and hidden from, every player. */
-    private Refusal visibility(Location location, double height, List<Player> players) {
+    private Refusal visibility(Location location, double height, Collection<? extends Player> players) {
         Location upper = location.clone().add(0, height * 0.85, 0);
         Refusal reason = null;
         for (Player player : players) {

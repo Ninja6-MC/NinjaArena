@@ -240,6 +240,7 @@ Java 25, and does not run on Folia.
 - An enemy spawn point now counts as hidden from a player who has no line of sight to it
   or who looks more than 100 degrees away from it (`director.spawn.view-angle`; 180 keeps
   cover as the only way to hide a point), so an arena with a single enemy spawn gets
-  enemies whenever nobody faces it. Points within 8 blocks of a player, in unloaded chunks
-  or without room for the enemy are still skipped, and nothing spawns when no point
-  qualifies.
+  enemies whenever nobody faces it. Only the match's players alive in the round count;
+  spectators, eliminated players and anyone outside the match no longer refuse a point.
+  Points within 8 blocks of such a player, in unloaded chunks or without room for the
+  enemy are still skipped, and nothing spawns when no point qualifies.

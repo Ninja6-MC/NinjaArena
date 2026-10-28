@@ -181,11 +181,12 @@ and the lose-track timer; smoke and marks still apply. Every weight and timing i
 ### Enemy spawns
 
 Enemies appear only at the arena's enemy spawn points. A point is used when its chunk is
-loaded, the enemy has room there, it is more than 8 blocks from every player in the arena
-world, and it is hidden from each of them: out of their line of sight, or more than 100
-degrees away from where they look (`director.spawn.view-angle`; 180 makes cover the only
-way to hide a point). When no point qualifies nothing spawns that second; no other place
-is used and no chunk is loaded. One point is enough as long as players do not all face it,
+loaded, the enemy has room there, it is more than 8 blocks from every player still alive
+in the round, and it is hidden from each of them: out of their line of sight, or more than
+100 degrees away from where they look (`director.spawn.view-angle`; 180 makes cover the
+only way to hide a point). Spectators, eliminated players and anyone outside the match do
+not count. When no point qualifies nothing spawns that second; no other place is used and
+no chunk is loaded. One point is enough as long as players do not all face it,
 and more points spread the enemies out.
 
 `/narena director [arena]` shows an admin the director of the match they are in, or of the

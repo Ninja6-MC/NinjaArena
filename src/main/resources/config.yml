@@ -80,9 +80,10 @@ director:
   debug: false
   spawn:
     # An enemy spawn point is used only when it is in loaded chunks, has room for the enemy,
-    # is more than 8 blocks from every player in the arena world, and is hidden from each of
-    # them: out of their line of sight, or more than view-angle degrees off the way they look
-    # (0 to 180). 180 leaves only cover to hide a point.
+    # is more than 8 blocks from every player of the match still alive in the round, and is
+    # hidden from each of them: out of their line of sight, or more than view-angle degrees
+    # off the way they look (0 to 180). 180 leaves only cover to hide a point. Spectators and
+    # players outside the match do not count.
     view-angle: 100.0
   threat-budget:
     # Budget per round = base x round multiplier x player factor: the threat allowed alive
