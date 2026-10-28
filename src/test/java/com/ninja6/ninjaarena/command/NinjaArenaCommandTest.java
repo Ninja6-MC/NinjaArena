@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.arena.Arena;
@@ -113,6 +114,44 @@ class NinjaArenaCommandTest {
         assertEquals(new ArenaBounds(10, 60, 10, 90, 100, 90), arena.bounds());
         assertEquals(new ArenaPoint(20.5, 64, 20.5, -90, 0), arena.teamSpawns().get(0));
         assertTrue(registry.isAvailable("dojo"));
+    }
+
+    @Test
+    void editOffWithProblemsSaysItLeftEditModeAndHowToReturn() {
+        CommandSender sender = console(true);
+        run(sender, "arena create dojo 0 0");
+        run(sender, "arena setbounds dojo 10 60 10 90 100 90");
+        messages.clear();
+        run(sender, "arena edit dojo off");
+
+        assertEquals(List.of("Arena dojo saved and left edit mode, but it cannot host a match yet:",
+                "The waiting room is not set.",
+                "Needs 2 to 4 team spawns, has 0.",
+                "Needs at least one enemy spawn point: enemies spawn there during rounds.",
+                "Turn edit mode back on with /narena arena edit dojo on to fix them."), messages);
+        assertFalse(registry.isEditing("dojo"));
+
+        messages.clear();
+        run(sender, "arena edit dojo on");
+        assertTrue(registry.isEditing("dojo"));
+    }
+
+    @Test
+    void theRootListsItsGroupsWhenNoneOrAnUnknownOneIsGiven() {
+        CommandSender sender = console(true);
+        command.onCommand(sender, null, "narena", new String[0]);
+        List<String> help = List.of(
+                "/narena arena <subcommand> - create, edit and set up arenas",
+                "/narena portal <subcommand> - mark out portals that lead to arenas",
+                "/narena leave - leave the waiting room or match you are in");
+        assertEquals("NinjaArena commands:", messages.get(0));
+        assertEquals(help, messages.subList(1, messages.size()));
+
+        messages.clear();
+        run(sender, "create dojo");
+        assertEquals("Unknown command create. Subcommands sit under a group:", messages.get(0));
+        assertEquals(help, messages.subList(1, messages.size()));
+        assertTrue(registry.all().isEmpty());
     }
 
     @Test

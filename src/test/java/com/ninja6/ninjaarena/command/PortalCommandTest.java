@@ -156,6 +156,23 @@ class PortalCommandTest {
     }
 
     @Test
+    void aOneBlockTallSelectionWarnsAndSuggestsADoorway() {
+        CommandSender sender = player(true);
+        run(sender, "portal setcorner 1");
+        standing = new Location(world("world"), 12.5, 64.4, 10.5);
+        run(sender, "portal setcorner 2");
+        assertEquals(List.of("Corner 1 set to 10, 64, 10 in world.", "Corner 2 set to 12, 64, 10 in world.",
+                "Selected 10, 64, 10 to 12, 64, 10.",
+                "The selection is one block tall, so the portal would be a flat pad. For a doorway, stand in it"
+                        + " and use setcorner 2 ~ ~2 ~."), messages);
+
+        messages.clear();
+        run(sender, "portal setcorner 2 ~ ~2 ~");
+        assertEquals(List.of("Corner 2 set to 12, 66, 10 in world.", "Selected 10, 64, 10 to 12, 66, 10."),
+                messages);
+    }
+
+    @Test
     void cornersAcceptCoordinatesAndOffsets() {
         CommandSender sender = player(true);
         run(sender, "portal setcorner 1 ~ ~-1 ~2");

@@ -21,6 +21,31 @@ through its toolchain support; the wrapper downloads Gradle itself.
 On Windows, use `gradlew.bat build`. The plugin JAR is written to `build/libs/`, and
 `./gradlew test` runs the unit tests on their own.
 
+## Setting up an arena
+
+Admins need `ninjaarena.admin`. `/narena` on its own lists the `arena` and `portal`
+command groups. A first arena, in the order you need it:
+
+1. `/narena arena create dojo` registers the arena in the next free cell of the arena
+   world and puts it in edit mode. The reply shows the cell's coordinates.
+2. Switch to creative, then `/narena arena tp dojo` takes you to the middle of the cell.
+   Build the arena inside the cell.
+3. `/narena arena setbounds dojo <x1> <y1> <z1> <x2> <y2> <z2>` marks the playable box.
+   It must fit inside the cell, and everything below must be inside it. `~` and `~n` are
+   relative to where you stand.
+4. Stand at each team base and run `/narena arena setteamspawn dojo 1`, then `2`, up to
+   four teams. Two are required.
+5. Stand where players wait before the match and run `/narena arena setwaitingroom dojo`.
+6. Stand where enemies should appear and run `/narena arena addenemyspawn dojo`. At least
+   one is required; enemies spawn there during rounds.
+7. `/narena arena edit dojo off` saves the arena and leaves edit mode. If anything is
+   still missing it is listed; `/narena arena edit dojo on` lets you fix it.
+   `/narena arena info dojo` shows the current setup and problems at any time.
+8. Back in the main world, build a doorway frame for the portal. Stand on the floor
+   inside it and run `/narena portal setcorner 1`, then `/narena portal setcorner 2 ~ ~2 ~`
+   so the portal is a doorway rather than a flat pad. Move sideways first for a wider
+   door. `/narena portal create dojo-door dojo` binds it to the arena.
+
 ## Icon artwork
 
 The geometry master is `docs/assets/icon-master.svg`. All other SVG and PNG icons

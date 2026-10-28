@@ -54,6 +54,11 @@ Java 25, and does not run on Folia.
 - Explosions keep their player damage but cannot destroy blocks in the arena world;
   entity block changes are cancelled there too. All environmental protection is suspended
   while any arena is in edit mode and resumes when the last edit finishes.
+- Arena setup help: `/narena` with no or an unknown group lists the `arena`, `portal` and
+  `leave` commands with one-line descriptions. `arena edit <name> off` says the arena left
+  edit mode and how to return when problems remain, the enemy spawn problem explains what
+  the spawns are for, and `portal setcorner` warns about a one-block-tall selection and
+  suggests `~ ~2 ~` for a doorway. The README has a first-arena walkthrough.
 - Initial project scaffolding with Gradle Kotlin DSL, the Gradle 9.8.1 wrapper and a
   Java 25 toolchain, compiling against `paper-api` 26.3.
 - `NinjaArenaPlugin`, which only logs on enable and disable.
