@@ -19,8 +19,11 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
@@ -230,6 +233,52 @@ class NinjaArenaCommandTest {
         assertEquals(List.of("You do not have permission to use this command."), messages);
         assertEquals(List.of("leave"), command.onTabComplete(player, null, "narena", new String[] {""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
+    }
+
+    @Test
+    void teleportToAnEmptyCellTurnsFlightOnOnceTheTeleportIsDone() {
+        run(console(true), "arena create dojo 1 0");
+        List<String> calls = new ArrayList<>();
+        CompletableFuture<Boolean> teleport = new CompletableFuture<>();
+        boolean[] allowFlight = {false};
+        Player admin = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "hasPermission" -> NinjaArenaCommand.ADMIN.equals(args[0]);
+                    case "sendMessage" -> {
+                        messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
+                        yield null;
+                    }
+                    case "getName" -> "Admin";
+                    case "getGameMode" -> GameMode.SURVIVAL;
+                    case "getAllowFlight" -> allowFlight[0];
+                    case "setAllowFlight" -> {
+                        allowFlight[0] = (boolean) args[0];
+                        calls.add("setAllowFlight(" + args[0] + ")");
+                        yield null;
+                    }
+                    case "setFlying" -> {
+                        calls.add("setFlying(" + args[0] + ")");
+                        yield null;
+                    }
+                    case "teleportAsync" -> {
+                        Location target = (Location) args[0];
+                        calls.add("teleport(" + target.getX() + ", " + target.getY() + ", " + target.getZ() + ")");
+                        yield teleport;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        messages.clear();
+
+        run(admin, "arena tp dojo");
+        assertEquals(List.of("teleport(384.0, 64.0, 128.0)"), calls);
+        assertEquals(1, messages.size());
+        assertTrue(messages.get(0).contains("cell 1, 0"), messages.get(0));
+        assertTrue(messages.get(0).contains("Bounds: not set"), messages.get(0));
+
+        // A world change during the teleport may reset flight, so it is set only afterwards.
+        teleport.complete(true);
+        assertEquals(List.of("teleport(384.0, 64.0, 128.0)", "setAllowFlight(true)", "setFlying(true)"), calls);
+        assertTrue(messages.stream().anyMatch(message -> message.contains("empty until you build")), messages.toString());
     }
 
     @Test

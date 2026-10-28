@@ -60,7 +60,10 @@ public final class ArenaWorld {
         return arenaWorld;
     }
 
-    private static void configure(World world, ArenaWorldSettings settings) {
+    static void configure(World world, ArenaWorldSettings settings) {
+        // A death here outside a match (an admin building, say) keeps the player's items.
+        // Match and waiting-room deaths already keep the inventory themselves.
+        setRule(world, GameRules.KEEP_INVENTORY, true);
         setRule(world, GameRules.ADVANCE_TIME, false);
         setRule(world, GameRules.ADVANCE_WEATHER, false);
         setRule(world, GameRules.SPAWN_MOBS, false);

@@ -6,8 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import org.bukkit.GameRule;
 import org.bukkit.World;
+import org.bukkit.WorldBorder;
 import org.junit.jupiter.api.Test;
 
 class ArenaWorldTest {
@@ -58,6 +62,27 @@ class ArenaWorldTest {
         arenaWorld.setSavingEnabled(false);
         arenaWorld.close();
         assertEquals(List.of(), calls);
+    }
+
+    @Test
+    void deathsOutsideAMatchKeepTheirItems() {
+        Map<String, Object> rules = new HashMap<>();
+        WorldBorder border = (WorldBorder) Proxy.newProxyInstance(WorldBorder.class.getClassLoader(),
+                new Class<?>[] {WorldBorder.class}, (proxy, method, args) -> null);
+        World world = (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[] {World.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "setGameRule" -> {
+                        rules.put(((GameRule<?>) args[0]).getKey().getKey(), args[1]);
+                        yield true;
+                    }
+                    case "getWorldBorder" -> border;
+                    case "setTime", "setStorm", "setThundering", "setViewDistance", "setSimulationDistance" -> null;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+
+        ArenaWorld.configure(world, ArenaWorldSettings.DEFAULTS);
+
+        assertEquals(true, rules.get("keep_inventory"));
     }
 
     @Test

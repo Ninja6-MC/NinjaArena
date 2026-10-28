@@ -79,7 +79,8 @@ public final class TestInternalBridge implements InternalAPIBridge {
 
     @Override
     public <MODERN, LEGACY> GameRule<LEGACY> legacyGameRuleBridge(GameRule<MODERN> arg0, Function<LEGACY, MODERN> arg1, Function<MODERN, LEGACY> arg2, Class<LEGACY> arg3) {
-        throw new UnsupportedOperationException("unused API bridge call");
+        // Called while GameRule and GameRules initialise each other, so arg0 may still be null.
+        return new TestGameRule<>(arg0 == null ? NamespacedKey.minecraft("legacy") : arg0.getKey());
     }
 
     @Override

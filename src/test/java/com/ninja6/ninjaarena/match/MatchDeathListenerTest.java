@@ -128,6 +128,22 @@ class MatchDeathListenerTest extends MatchFixture {
     }
 
     @Test
+    void anArenaWorldDeathOutsideAMatchKeepsWhatTheWorldRuleKept() {
+        players.get(ALICE).dead = true;
+        var event = deathEvent(ALICE);
+        // keep_inventory is on in the arena world: the server drops nothing and keeps everything.
+        event.getDrops().clear();
+        event.getItemsToKeep().clear();
+        event.setKeepInventory(true);
+        deaths.onDeath(event);
+        deaths.onDeathBetweenRounds(event);
+        listener.onDeath(event);
+        assertTrue(event.getKeepInventory());
+        assertTrue(event.getDrops().isEmpty());
+        assertFalse(deaths.isSpectating(ALICE));
+    }
+
+    @Test
     void deathsAndRespawnsOutsideAMatchAreUnaffected() {
         var event = death(ALICE, null);
         assertEquals(1, event.getDrops().size());
