@@ -25,11 +25,16 @@ import java.util.logging.Logger;
  * {@link StabilitySettings#dropTierAboveMspt()} the intensity also drops by
  * {@link StabilitySettings#intensityTier()}. Both hold until the average falls below
  * {@link StabilitySettings#resumeBelowMspt()}, so a server hovering near a threshold does not
- * flap. A reading that is not a finite number changes nothing.
+ * flap. Spawning then resumes, but after a tier drop the intensity stays a tier lower for
+ * {@link StabilitySettings#tierRecoverySeconds()}, so the directors refill to less than they
+ * had before. A reading above the pause threshold during that time pauses spawning again and
+ * keeps the tier dropped. A reading that is not a finite number changes nothing.
  *
  * <p>Time and tick time are passed in. Not thread-safe: call it from the server thread.
  */
 public final class StabilityGate implements SpawnGate {
+
+    static final int TICKS_PER_SECOND = 20;
 
     /** Where the tick-time guard stands. */
     public enum Guard {
@@ -38,7 +43,9 @@ public final class StabilityGate implements SpawnGate {
         /** No spawns until the tick time recovers. */
         PAUSED,
         /** No spawns, and the intensity one tier lower, until the tick time recovers. */
-        TIER_DROPPED
+        TIER_DROPPED,
+        /** Spawning again after a tier drop, with the intensity still a tier lower for a while. */
+        RECOVERING
     }
 
     private final StabilitySettings settings;
@@ -52,6 +59,8 @@ public final class StabilityGate implements SpawnGate {
     private int tick;
     private int spawnsThisTick;
     private Guard guard = Guard.NORMAL;
+    /** The server tick spawning resumed after a tier drop. */
+    private int recoveryStart;
 
     /**
      * @param aliveIn           enemies alive in a match; {@link #alive(MatchDirector)} of its director
@@ -85,13 +94,14 @@ public final class StabilityGate implements SpawnGate {
     @Override
     public double intensity(MatchView match, double target) {
         refresh();
-        return guard == Guard.TIER_DROPPED ? Math.max(0, target - settings.intensityTier()) : target;
+        boolean tierDown = guard == Guard.TIER_DROPPED || guard == Guard.RECOVERING;
+        return tierDown ? Math.max(0, target - settings.intensityTier()) : target;
     }
 
     @Override
     public boolean maySpawn(MatchView match) {
         refresh();
-        if (guard != Guard.NORMAL || spawnsThisTick >= settings.spawnsPerTick()) {
+        if (guard == Guard.PAUSED || guard == Guard.TIER_DROPPED || spawnsThisTick >= settings.spawnsPerTick()) {
             return false;
         }
         if (aliveIn.applyAsInt(match) >= settings.matchMobCap()) {
@@ -129,25 +139,42 @@ public final class StabilityGate implements SpawnGate {
         spawnsThisTick = 0;
         double mspt = averageTickMillis.getAsDouble();
         if (!Double.isFinite(mspt)) {
+            if (guard == Guard.RECOVERING && recovered(now)) {
+                change(Guard.NORMAL, "Intensity is back to normal.");
+            }
             return;
         }
-        Guard next = guard;
-        if (mspt > settings.dropTierAboveMspt()) {
-            next = Guard.TIER_DROPPED;
+        String at = "Average tick time is " + String.format(Locale.ROOT, "%.1f", mspt) + " ms; ";
+        boolean tierDown = guard == Guard.TIER_DROPPED || guard == Guard.RECOVERING;
+        if (mspt > settings.dropTierAboveMspt() || (mspt > settings.pauseAboveMspt() && tierDown)) {
+            change(Guard.TIER_DROPPED, at + "enemy spawning paused and intensity lowered one tier.");
         } else if (mspt > settings.pauseAboveMspt()) {
-            next = guard == Guard.TIER_DROPPED ? Guard.TIER_DROPPED : Guard.PAUSED;
-        } else if (mspt < settings.resumeBelowMspt()) {
-            next = Guard.NORMAL;
+            change(Guard.PAUSED, at + "enemy spawning paused.");
+        } else if (mspt < settings.resumeBelowMspt() && guard == Guard.PAUSED) {
+            change(Guard.NORMAL, at + "enemy spawning resumed.");
+        } else if (mspt < settings.resumeBelowMspt() && guard == Guard.TIER_DROPPED) {
+            recoveryStart = now;
+            change(Guard.RECOVERING, at + "enemy spawning resumed; intensity stays one tier lower for "
+                    + settings.tierRecoverySeconds() + " s.");
         }
-        if (next != guard) {
-            String at = String.format(Locale.ROOT, "%.1f", mspt);
-            switch (next) {
-                case NORMAL -> logger.info("Average tick time is " + at + " ms; enemy spawning resumed.");
-                case PAUSED -> logger.warning("Average tick time is " + at + " ms; enemy spawning paused.");
-                case TIER_DROPPED -> logger.warning("Average tick time is " + at + " ms; enemy spawning paused"
-                        + " and intensity lowered one tier.");
-            }
-            guard = next;
+        if (guard == Guard.RECOVERING && recovered(now)) {
+            change(Guard.NORMAL, at + "intensity is back to normal.");
         }
+    }
+
+    private boolean recovered(int now) {
+        return now - recoveryStart >= settings.tierRecoverySeconds() * TICKS_PER_SECOND;
+    }
+
+    private void change(Guard next, String message) {
+        if (next == guard) {
+            return;
+        }
+        if (next == Guard.NORMAL || next == Guard.RECOVERING) {
+            logger.info(message);
+        } else {
+            logger.warning(message);
+        }
+        guard = next;
     }
 }

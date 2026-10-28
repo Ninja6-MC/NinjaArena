@@ -29,9 +29,10 @@ Java 25, and does not run on Folia.
 - Server stability limits under `stability` in `config.yml`: at most 25 enemies alive per
   match and 80 across every match, and at most 4 enemy spawns per server tick. Spawning
   pauses while the average tick time is above 40 ms, and the intensity also drops one tier
-  (0.25) above 45 ms; both lift once it falls below 35 ms. At most 4 matches run at once;
-  a waiting room whose countdown ends while every slot is in use holds at its last second
-  until one frees up.
+  (0.25) above 45 ms. Spawning resumes once it falls below 35 ms, and after a tier drop the
+  intensity stays a tier lower for another 30 s. At most 4 matches run at once; a waiting
+  room whose countdown ends while every slot is in use holds at its last second, and the
+  room held longest starts first when a slot frees up.
 - Enemy spawn-position selection rotates through registered points, skipping points within
   8 blocks of any player, visible to any player, or obstructed by block collision shapes
   for the requested mob dimensions. If no point is valid, selection returns empty.

@@ -69,6 +69,9 @@ stability:
   drop-tier-above-mspt: 45.0
   resume-below-mspt: 35.0
   intensity-tier: 0.25
+  # After a tier drop, spawning resumes below resume-below-mspt but the intensity stays a
+  # tier lower for this many seconds (0 to 600), so the arenas refill to less than before.
+  tier-recovery-seconds: 30
 
 director:
   threat-budget:

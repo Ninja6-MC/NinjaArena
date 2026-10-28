@@ -147,9 +147,108 @@ class StabilityGateTest {
 
         mspt = 30;
         tick++;
-        assertEquals(0.8, gate.intensity(dojo, 0.8), DELTA);
+        assertTrue(gate.maySpawn(dojo), "spawning resumes below 35 ms");
+        assertEquals(Guard.RECOVERING, gate.guard());
+        assertEquals(0.55, gate.intensity(dojo, 0.8), DELTA, "the tier stays dropped while recovering");
+
+        tick += 30 * 20 - 1;
+        assertEquals(0.55, gate.intensity(dojo, 0.8), DELTA);
+        tick++;
+        assertEquals(0.8, gate.intensity(dojo, 0.8), DELTA, "back after 30 s");
         assertEquals(Guard.NORMAL, gate.guard());
         assertTrue(gate.maySpawn(dojo));
+    }
+
+    @Test
+    void aSlowTickWhileRecoveringPausesAgainWithTheTierStillDropped() {
+        var gate = gate();
+        mspt = 50;
+        gate.maySpawn(dojo);
+        mspt = 30;
+        tick++;
+        assertTrue(gate.maySpawn(dojo));
+        assertEquals(Guard.RECOVERING, gate.guard());
+
+        mspt = 41;
+        tick++;
+        assertFalse(gate.maySpawn(dojo));
+        assertEquals(Guard.TIER_DROPPED, gate.guard(), "41 ms is below the drop threshold but keeps the tier");
+        assertEquals(0.75, gate.intensity(dojo, 1), DELTA);
+
+        mspt = 37;
+        tick++;
+        assertEquals(Guard.TIER_DROPPED, gate.guard(), "37 ms is not below the resume threshold");
+        mspt = 30;
+        tick++;
+        gate.maySpawn(dojo);
+        assertEquals(Guard.RECOVERING, gate.guard(), "the recovery period starts again");
+        tick += 30 * 20;
+        gate.maySpawn(dojo);
+        assertEquals(Guard.NORMAL, gate.guard());
+    }
+
+    @Test
+    void noRecoveryPeriodLiftsTheTierWithThePause() {
+        var gate = gate(new StabilitySettings(4, 25, 80, 4, 40, 45, 35, 0.25, 0));
+        mspt = 50;
+        gate.maySpawn(dojo);
+        mspt = 30;
+        tick++;
+        assertTrue(gate.maySpawn(dojo));
+        assertEquals(Guard.NORMAL, gate.guard());
+        assertEquals(0.8, gate.intensity(dojo, 0.8), DELTA);
+    }
+
+    @Test
+    void anArenaRefillsToLessAfterATierDropThanAfterAPause() {
+        assertEquals(20, refillAfter(41), "a pause alone refills to the full intensity");
+        assertEquals(15, refillAfter(46), "a tier drop refills to 0.75 of it");
+    }
+
+    /**
+     * Fills a match in OVERRUN to its budget of 20 zombies, kills them all during a slow spell
+     * of the given tick time, then lets the tick time recover and counts what comes back.
+     */
+    private int refillAfter(double slow) {
+        dojo.phase = MatchPhase.OVERRUN;
+        running.clear();
+        running.add(dojo);
+        tick = 0;
+        mspt = 20;
+        List<FakeEnemy> spawned = new ArrayList<>();
+        MatchDirector.Spawner spawner = (kind, target) -> {
+            FakeEnemy enemy = new FakeEnemy(kind, target);
+            spawned.add(enemy);
+            return Optional.of(enemy);
+        };
+        MatchDirector[] director = new MatchDirector[1];
+        Logger logger = Logger.getAnonymousLogger();
+        logger.setLevel(Level.OFF);
+        var gate = new StabilityGate(StabilitySettings.DEFAULTS, match -> StabilityGate.alive(director[0]),
+                () -> running, () -> tick, () -> mspt, logger);
+        // Base 40 x round 1 x two players at 0.25 each: a budget of 20 zombies.
+        director[0] = new MatchDirector(dojo, IntensitySettings.DEFAULTS, new ThreatBudget(40), EnemyCosts.DEFAULTS,
+                (match, team) -> 0, spawner, gate, TargetWeigher.NONE, () -> 0);
+        for (int second = 0; second < 10; second++) {
+            director[0].tick();
+            tick += 20;
+        }
+        assertEquals(20, StabilityGate.alive(director[0]));
+
+        mspt = slow;
+        director[0].tick();
+        tick += 20;
+        spawned.forEach(enemy -> enemy.alive = false);
+        director[0].tick();
+        tick += 20;
+        assertEquals(0, StabilityGate.alive(director[0]), "nothing spawns during the slow spell");
+
+        mspt = 30;
+        for (int second = 0; second < 10; second++) {
+            director[0].tick();
+            tick += 20;
+        }
+        return StabilityGate.alive(director[0]);
     }
 
     @Test
@@ -162,6 +261,9 @@ class StabilityGateTest {
         mspt = 20;
         tick++;
         gate.maySpawn(dojo);
+        tick += 30 * 20;
+        gate.maySpawn(dojo);
+        assertEquals(Guard.NORMAL, gate.guard());
         mspt = 41;
         tick++;
         gate.maySpawn(dojo);
@@ -206,7 +308,7 @@ class StabilityGateTest {
 
     @Test
     void customLimitsApply() {
-        var gate = gate(new StabilitySettings(2, 3, 5, 1, 30, 50, 20, 0.5));
+        var gate = gate(new StabilitySettings(2, 3, 5, 1, 30, 50, 20, 0.5, 30));
         alive.put(dojo, 3);
         assertFalse(gate.maySpawn(dojo));
         alive.put(dojo, 2);
@@ -276,7 +378,11 @@ class StabilityGateTest {
         mspt = 30;
         tick += 20;
         director[0].tick();
-        assertEquals(1, director[0].intensity(), DELTA);
+        assertEquals(0.75, director[0].intensity(), DELTA, "recovering a tier lower");
         assertEquals(28, spawned.size());
+
+        tick += 30 * 20;
+        director[0].tick();
+        assertEquals(1, director[0].intensity(), DELTA);
     }
 }

@@ -19,16 +19,20 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param dropTierAboveMspt average tick time above which intensity also drops one tier
  * @param resumeBelowMspt   average tick time below which spawning and intensity return to normal
  * @param intensityTier     intensity removed by a tier drop, from 0 to 1
+ * @param tierRecoverySeconds how long the intensity stays a tier lower once spawning resumes
+ *                          after a tier drop
  */
 public record StabilitySettings(int maxMatches, int matchMobCap, int globalMobCap, int spawnsPerTick,
-        double pauseAboveMspt, double dropTierAboveMspt, double resumeBelowMspt, double intensityTier) {
+        double pauseAboveMspt, double dropTierAboveMspt, double resumeBelowMspt, double intensityTier,
+        int tierRecoverySeconds) {
 
     static final int MAX_MATCHES = 100;
     static final int MAX_MOBS = 1000;
     static final int MAX_SPAWNS_PER_TICK = 100;
     static final double MAX_MSPT = 1000;
+    static final int MAX_RECOVERY_SECONDS = 600;
 
-    public static final StabilitySettings DEFAULTS = new StabilitySettings(4, 25, 80, 4, 40, 45, 35, 0.25);
+    public static final StabilitySettings DEFAULTS = new StabilitySettings(4, 25, 80, 4, 40, 45, 35, 0.25, 30);
 
     public StabilitySettings {
         maxMatches = Math.clamp(maxMatches, 1, MAX_MATCHES);
@@ -39,6 +43,7 @@ public record StabilitySettings(int maxMatches, int matchMobCap, int globalMobCa
         dropTierAboveMspt = Math.max(pauseAboveMspt, clamp(dropTierAboveMspt, 1, MAX_MSPT));
         resumeBelowMspt = Math.min(pauseAboveMspt, clamp(resumeBelowMspt, 1, MAX_MSPT));
         intensityTier = clamp(intensityTier, 0, 1);
+        tierRecoverySeconds = Math.clamp(tierRecoverySeconds, 0, MAX_RECOVERY_SECONDS);
     }
 
     /** Reads the settings, falling back to the defaults for a missing section, key or non-finite value. */
@@ -55,7 +60,8 @@ public record StabilitySettings(int maxMatches, int matchMobCap, int globalMobCa
                 finite(section, "pause-spawning-above-mspt", d.pauseAboveMspt()),
                 finite(section, "drop-tier-above-mspt", d.dropTierAboveMspt()),
                 finite(section, "resume-below-mspt", d.resumeBelowMspt()),
-                finite(section, "intensity-tier", d.intensityTier()));
+                finite(section, "intensity-tier", d.intensityTier()),
+                section.getInt("tier-recovery-seconds", d.tierRecoverySeconds()));
     }
 
     private static double finite(ConfigurationSection section, String key, double fallback) {

@@ -6,6 +6,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -47,7 +48,7 @@ import org.bukkit.scheduler.BukkitTask;
  * <p><b>Start.</b> When a countdown finishes, the room is closed and its players are handed
  * to the {@link MatchStart}, which owns them from then on. While no match may start (every
  * match slot is in use, see {@link #setStartAllowed}), a finished countdown holds at its last
- * second and the room stays open.
+ * second and the room stays open; when a slot frees up, the room held longest starts first.
  *
  * <p>Not thread-safe: call it from the server thread.
  */
@@ -85,6 +86,9 @@ public final class WaitingRoomService {
     private final Set<UUID> homeBound = new HashSet<>();
     private BukkitTask ticker;
     private BooleanSupplier startAllowed = () -> true;
+    /** Rooms held at their last second for a free match slot, by arena, with the order they were held in. */
+    private final Map<String, Long> heldSince = new HashMap<>();
+    private long holds;
 
     /**
      * @param restore {@code RestoreService#restore}
@@ -282,11 +286,17 @@ public final class WaitingRoomService {
 
     /** Advances every countdown by a second. Run once a second by {@link #start()}. */
     public void tick() {
-        for (Room room : new ArrayList<>(rooms.values())) {
+        heldSince.keySet().retainAll(rooms.keySet());
+        List<Room> order = new ArrayList<>(rooms.values());
+        // Held rooms first, longest held first, so a free slot goes to the room that waited longest.
+        order.sort(Comparator.comparingLong(room -> heldSince.getOrDefault(room.arena(), Long.MAX_VALUE)));
+        for (Room room : order) {
             if (room.state().secondsLeft() == 1 && !startAllowed.getAsBoolean()) {
+                heldSince.putIfAbsent(room.arena(), holds++);
                 showFull(room);
                 continue;
             }
+            heldSince.remove(room.arena());
             WaitingRoom.Tick tick = room.state().tick();
             if (tick.phase() == WaitingRoom.Phase.START) {
                 launch(room, tick.teams());
@@ -306,6 +316,7 @@ public final class WaitingRoomService {
         List<UUID> waiting = new ArrayList<>(arenaOf.keySet());
         waiting.addAll(homeBound);
         rooms.clear();
+        heldSince.clear();
         arenaOf.clear();
         homeBound.clear();
         for (UUID playerId : waiting) {
