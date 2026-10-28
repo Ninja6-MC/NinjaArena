@@ -82,9 +82,8 @@ Java 25, and does not run on Folia.
   that: a void generator with one biome and no structures or mobs, time and weather
   frozen at a clear noon, natural spawning off, inventories kept on death, a world border
   and a low view and simulation distance, the last three tunable under `arena-world` in
-  `config.yml`. Auto-save is off;
-  `ArenaWorld#setSavingEnabled` turns it on for edit mode and saves once when it is
-  turned off again.
+  `config.yml`. Auto-save is off; `ArenaWorld#setSavingEnabled` turns it on for edit mode
+  and saves once when it is turned off again.
 - Restoring a player from their snapshot: location, inventory, experience, health, food,
   effects, game mode, fire ticks and fall distance, with velocity and gliding cleared. The
   snapshot is deleted only once the restore has succeeded. An unsafe saved spot (anything
