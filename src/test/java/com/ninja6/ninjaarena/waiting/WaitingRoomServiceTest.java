@@ -211,6 +211,84 @@ class WaitingRoomServiceTest {
     }
 
     @Test
+    void aFinishedCountdownHoldsWhileNoMatchSlotIsFree() {
+        boolean[] free = {false};
+        rooms.setStartAllowed(() -> free[0]);
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(BOB), "dojo");
+        for (int i = 0; i < 6; i++) {
+            rooms.tick();
+        }
+        assertTrue(started.isEmpty());
+        assertTrue(rooms.isWaiting(ALICE));
+        assertTrue(rooms.isWaiting(BOB));
+
+        free[0] = true;
+        rooms.tick();
+        assertEquals(List.of(List.of(List.of(ALICE), List.of(BOB))), started);
+        assertFalse(rooms.isWaiting(ALICE));
+    }
+
+    @Test
+    void aFreedSlotGoesToTheRoomHeldLongestWhateverItsArenaIsCalled() throws Exception {
+        arenas.create("cave", new GridCell(1, 0));
+        arenas.update("cave", a -> a.withBounds(new ArenaBounds(266, 60, 10, 346, 100, 90))
+                .withWaitingRoom(new ArenaPoint(306.5, 64, 50.5, 0, 0))
+                .withTeamSpawn(1, new ArenaPoint(276.5, 64, 20.5, 0, 0))
+                .withTeamSpawn(2, new ArenaPoint(336.5, 64, 80.5, 0, 0))
+                .withEnemySpawn(new ArenaPoint(306.5, 64, 20.5, 0, 0)));
+        arenas.finishEdit("cave");
+        UUID dave = new UUID(0, 4);
+        add(dave, "Dave");
+        List<String> startedIn = new ArrayList<>();
+        int[] slots = {0};
+        rooms = new WaitingRoomService(plugin(), arenas, new WaitingRoomSettings(2, 3, 4), player -> {
+            restored.add(player.getUniqueId());
+            return RestoreResult.RESTORED;
+        }, player -> { }, (arena, teams) -> startedIn.add(arena));
+        rooms.setStartAllowed(() -> startedIn.size() < slots[0]);
+
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(BOB), "dojo");
+        for (int i = 0; i < 3; i++) {
+            rooms.tick();
+        }
+        rooms.join(player(CAROL), "cave");
+        rooms.join(player(dave), "cave");
+        for (int i = 0; i < 5; i++) {
+            rooms.tick();
+        }
+        assertTrue(startedIn.isEmpty());
+
+        slots[0] = 1;
+        rooms.tick();
+        assertEquals(List.of("dojo"), startedIn, "dojo was held first, though cave sorts before it");
+        assertTrue(rooms.isWaiting(CAROL));
+
+        slots[0] = 2;
+        rooms.tick();
+        assertEquals(List.of("dojo", "cave"), startedIn);
+    }
+
+    @Test
+    void aHeldCountdownStillStopsWhenAPlayerLeaves() {
+        rooms.setStartAllowed(() -> false);
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(BOB), "dojo");
+        for (int i = 0; i < 4; i++) {
+            rooms.tick();
+        }
+        assertTrue(rooms.leave(player(BOB), Exit.COMMAND));
+        assertTrue(players.get(ALICE).messages.contains("Not enough players. The countdown stopped."));
+
+        rooms.setStartAllowed(() -> true);
+        for (int i = 0; i < 5; i++) {
+            rooms.tick();
+        }
+        assertTrue(started.isEmpty());
+    }
+
+    @Test
     void walkingOutRestoresOnTheNextTickAndStopsTheCountdown() {
         rooms.join(player(ALICE), "dojo");
         rooms.join(player(BOB), "dojo");

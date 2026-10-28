@@ -26,6 +26,13 @@ Java 25, and does not run on Folia.
   and is cancelled when the round or match ends, when the last player leaves and on plugin
   disable. `NinjaArenaPlugin#directors()` exposes each match's director and its enemies, a
   spawn gate for caps and tick-time limits, and a targeting-weight hook.
+- Server stability limits under `stability` in `config.yml`: at most 25 enemies alive per
+  match and 80 across every match, and at most 4 enemy spawns per server tick. Spawning
+  pauses while the average tick time is above 40 ms, and the intensity also drops one tier
+  (0.25) above 45 ms. Spawning resumes once it falls below 35 ms, and after a tier drop the
+  intensity stays a tier lower for another 30 s. At most 4 matches run at once; a waiting
+  room whose countdown ends while every slot is in use holds at its last second, and the
+  room held longest starts first when a slot frees up.
 - Stealth and aggro steering through the director's targeting-weight hook. A player who
   crouches where no enemy can see them, or crouches in low light, weighs a quarter as
   much; a shuriken-marked player weighs twice as much while marked, and the leading-team
