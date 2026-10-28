@@ -64,7 +64,7 @@ public final class ArenaCommand {
                 case "delete" -> delete(sender, rest, usagePrefix);
                 case "list" -> list(sender);
                 case "info" -> info(sender, rest, usagePrefix);
-                case "edit" -> edit(sender, rest, usagePrefix);
+                case "edit" -> edit(sender, label, rest, usagePrefix);
                 case "tp" -> teleport(sender, rest, usagePrefix);
                 case "setbounds" -> setBounds(sender, rest, usagePrefix);
                 case "setwaitingroom" -> setWaitingRoom(sender, rest, usagePrefix);
@@ -136,7 +136,7 @@ public final class ArenaCommand {
         }
     }
 
-    private void edit(CommandSender sender, String[] args, String usage) throws ArenaException {
+    private void edit(CommandSender sender, String label, String[] args, String usage) throws ArenaException {
         if (args.length != 2 || !(args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("off"))) {
             error(sender, "Usage: " + usage + "edit <name> <on|off>");
             return;
@@ -153,10 +153,12 @@ public final class ArenaCommand {
             success(sender, "Arena " + arena.name() + " saved and ready for matches.");
             return;
         }
-        warn(sender, "Arena " + arena.name() + " saved, but it cannot host a match yet:");
+        warn(sender, "Arena " + arena.name() + " saved and left edit mode, but it cannot host a match yet:");
         for (String problem : problems) {
             warn(sender, problem);
         }
+        warn(sender, "Turn edit mode back on with /" + label + " " + NAME + " edit " + arena.name()
+                + " on to fix them.");
     }
 
     private void teleport(CommandSender sender, String[] args, String usage) throws ArenaException {

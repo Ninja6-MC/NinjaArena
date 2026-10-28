@@ -53,7 +53,7 @@ public final class ArenaValidator {
 
         List<ArenaPoint> enemies = arena.enemySpawns();
         if (enemies.isEmpty()) {
-            problems.add("Needs at least one enemy spawn point.");
+            problems.add("Needs at least one enemy spawn point: enemies spawn there during rounds.");
         }
         if (bounds != null) {
             for (int i = 0; i < enemies.size(); i++) {

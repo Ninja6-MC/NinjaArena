@@ -135,6 +135,10 @@ public final class PortalCommand {
             if (!fits(bounds)) {
                 warn(sender, "That is more than " + Portal.MAX_SPAN + " blocks along an axis; create will refuse it.");
             }
+            if (bounds.minY() == bounds.maxY()) {
+                warn(sender, "The selection is one block tall, so the portal would be a flat pad. For a doorway,"
+                        + " stand in it and use setcorner " + corner + " ~ ~2 ~.");
+            }
         }
     }
 

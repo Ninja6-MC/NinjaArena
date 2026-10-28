@@ -23,7 +23,7 @@ class ArenaValidatorTest {
                 "Bounds are not set.",
                 "The waiting room is not set.",
                 "Needs 2 to 4 team spawns, has 0.",
-                "Needs at least one enemy spawn point."), problems);
+                "Needs at least one enemy spawn point: enemies spawn there during rounds."), problems);
     }
 
     @Test
