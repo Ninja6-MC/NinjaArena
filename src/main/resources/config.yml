@@ -51,6 +51,19 @@ scoring:
   # environmental deaths and leaving award nothing. 0 disables this award.
   player-kill-points: 2
 
+director:
+  threat-budget:
+    # Budget per round = base x round multiplier x player factor. Multipliers are supplied
+    # by the caller; this section defines no round progression or player-count curve.
+    # Negative values count as zero; base and factors must be finite. No rounding is applied.
+    base: 20.0
+  enemy-costs:
+    # Threat points per enemy (minimum 1).
+    zombie: 1
+    skeleton: 2
+    spider: 2
+    shadow-stalker: 8
+
 tools:
   # The ninja kit tools. Which tools a player gets, and how many, is set by the kit in
   # kits.yml: leave a tool's entry out to turn it off. Tools work only in COMBAT and OVERRUN
