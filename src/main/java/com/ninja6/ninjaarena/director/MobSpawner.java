@@ -9,11 +9,14 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.AbstractSkeleton;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.WitherSkeleton;
 import org.bukkit.entity.Zombie;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * Spawns the director's enemies as vanilla mobs at the arena's enemy spawns, through
@@ -26,10 +29,17 @@ public final class MobSpawner implements MatchDirector.Spawner {
     private final SpawnPlacement placement;
     private final Function<UUID, Player> players;
 
+    private final Supplier<ItemStack> bow;
+
     public MobSpawner(World world, SpawnPlacement placement, Function<UUID, Player> players) {
+        this(world, placement, players, () -> new ItemStack(Material.BOW));
+    }
+
+    MobSpawner(World world, SpawnPlacement placement, Function<UUID, Player> players, Supplier<ItemStack> bow) {
         this.world = Objects.requireNonNull(world, "world");
         this.placement = Objects.requireNonNull(placement, "placement");
         this.players = Objects.requireNonNull(players, "players");
+        this.bow = Objects.requireNonNull(bow, "bow");
     }
 
     /**
@@ -52,7 +62,7 @@ public final class MobSpawner implements MatchDirector.Spawner {
         if (at.isEmpty()) {
             return Optional.empty();
         }
-        Mob mob = world.spawn(at.get(), kind.type(), MobSpawner::prepare);
+        Mob mob = world.spawn(at.get(), kind.type(), false, spawned -> prepare(spawned, bow));
         if (!mob.isValid()) {
             // Another plugin cancelled the spawn.
             return Optional.empty();
@@ -66,14 +76,21 @@ public final class MobSpawner implements MatchDirector.Spawner {
      * Readies a mob before it is added to the world. The arena world's clock is fixed at
      * noon, so undead that burn in daylight (zombies and their husk and drowned variants,
      * and every skeleton) are kept from burning; otherwise they would die in any open arena
-     * and the director would keep replacing them.
+     * and the director would keep replacing them. Spawning without randomized data keeps
+     * vanilla from adding riders or mounts that the director would not track.
      */
-    static void prepare(Mob mob) {
+    static void prepare(Mob mob, Supplier<ItemStack> bow) {
+        mob.setPersistent(false);
+        mob.setCanPickupItems(false);
         if (mob instanceof Zombie zombie) {
             zombie.setShouldBurnInDay(false);
         }
         if (mob instanceof AbstractSkeleton skeleton) {
             skeleton.setShouldBurnInDay(false);
+            if (!(skeleton instanceof WitherSkeleton)) {
+                // Spawning without randomized data leaves the skeleton unequipped.
+                skeleton.getEquipment().setItemInMainHand(bow.get());
+            }
         }
     }
 
@@ -81,6 +98,8 @@ public final class MobSpawner implements MatchDirector.Spawner {
     static final class MobEnemy implements MatchDirector.Enemy {
 
         private final EnemyKind kind;
+        private final EnemyMotion motion = new EnemyMotion();
+        private boolean deathHandled;
         private final Mob mob;
         private final Function<UUID, Player> players;
 
@@ -90,13 +109,25 @@ public final class MobSpawner implements MatchDirector.Spawner {
             this.players = players;
         }
 
+        Mob mob() {
+            return mob;
+        }
+
+        EnemyMotion motion() {
+            return motion;
+        }
+
+        boolean claimDeath() {
+            if (deathHandled) {
+                return false;
+            }
+            deathHandled = true;
+            return true;
+        }
+
         @Override
         public EnemyKind kind() {
             return kind;
-        }
-
-        Mob mob() {
-            return mob;
         }
 
         @Override

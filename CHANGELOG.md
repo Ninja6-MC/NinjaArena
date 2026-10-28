@@ -13,6 +13,12 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Enemy lifecycle and arena teardown: enemies are non-persistent, cannot pick up items,
+  and drop neither items nor experience. Enemies stuck within a quarter block or outside
+  their arena for 10 seconds are removed, returning their threat cost through the director.
+  Player kills award the enemy's configured cost to the killer's team. Match end and plugin
+  disable remove tracked enemies, including escapees, and clear mobs, projectiles, items
+  and experience orbs inside the arena before the existing reset and chunk-ticket release.
 - A per-match enemy director. Once a second during COMBAT and OVERRUN it works out a target
   intensity and spawns zombies, skeletons and spiders through the spawn-position selection
   until the cost of those alive reaches intensity x the round's threat budget; an enemy

@@ -7,12 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.support.TestItemStack;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Drowned;
@@ -22,15 +25,21 @@ import org.bukkit.entity.Skeleton;
 import org.bukkit.entity.Spider;
 import org.bukkit.entity.Stray;
 import org.bukkit.entity.WitherSkeleton;
+import org.bukkit.inventory.EntityEquipment;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.entity.Zombie;
 import org.bukkit.util.VoxelShape;
 import org.junit.jupiter.api.Test;
 
 class MobSpawnerTest {
 
+    private static final Supplier<ItemStack> BOW = () -> new TestItemStack(Material.BOW, "bow", 1);
+
     /** setShouldBurnInDay calls per mob, and whether the mob was readied before joining the world. */
     private final Map<Mob, List<Boolean>> burnCalls = new HashMap<>();
+    private final Map<Mob, List<String>> lifecycleCalls = new HashMap<>();
     private final List<Mob> added = new ArrayList<>();
+    private final Map<Mob, List<Material>> mainHands = new HashMap<>();
 
     private Mob mob(Class<? extends Mob> type) {
         Mob[] self = new Mob[1];
@@ -41,6 +50,21 @@ class MobSpawnerTest {
                         burnCalls.computeIfAbsent(self[0], ignored -> new ArrayList<>()).add((Boolean) args[0]);
                         yield null;
                     }
+                    case "setPersistent", "setCanPickupItems" -> {
+                        assertFalse(added.contains(self[0]), "readied before it joins the world");
+                        lifecycleCalls.computeIfAbsent(self[0], ignored -> new ArrayList<>())
+                                .add(method.getName() + "=" + args[0]);
+                        yield null;
+                    }
+                    case "getEquipment" -> Proxy.newProxyInstance(EntityEquipment.class.getClassLoader(),
+                            new Class<?>[] {EntityEquipment.class}, (equipment, call, items) -> {
+                                if (call.getName().equals("setItemInMainHand")) {
+                                    mainHands.computeIfAbsent(self[0], ignored -> new ArrayList<>())
+                                            .add(((ItemStack) items[0]).getType());
+                                    return null;
+                                }
+                                throw new UnsupportedOperationException(call.getName());
+                            });
                     case "isValid" -> true;
                     case "isDead" -> false;
                     case "setTarget", "getTarget" -> null;
@@ -61,7 +85,8 @@ class MobSpawnerTest {
                 case "getBlockAt" -> emptyBlock();
                 case "spawn" -> {
                     Mob mob = mob((Class<? extends Mob>) args[1]);
-                    ((Consumer<Mob>) args[2]).accept(mob);
+                    assertFalse((Boolean) args[2], "no randomized riders or mounts");
+                    ((Consumer<Mob>) args[3]).accept(mob);
                     added.add(mob);
                     yield mob;
                 }
@@ -79,14 +104,19 @@ class MobSpawnerTest {
     void spawnedUndeadDoNotBurnUnderTheFixedNoonSky() {
         var arena = new Arena("dojo", new GridCell(0, 0), null, null, List.of(),
                 List.of(new ArenaPoint(10.5, 64, 10.5, 0, 0)));
-        var spawner = new MobSpawner(world, new SpawnPlacement(arena), id -> null);
+        var spawner = new MobSpawner(world, new SpawnPlacement(arena), id -> null, BOW);
         for (EnemyKind kind : EnemyKind.values()) {
             assertTrue(spawner.spawn(kind, null).isPresent(), kind.name());
         }
         assertEquals(3, added.size());
+        for (Mob mob : added) {
+            assertEquals(List.of("setPersistent=false", "setCanPickupItems=false"), lifecycleCalls.get(mob));
+        }
         assertEquals(List.of(false), burnCalls.get(added.get(0)), "zombie");
         assertEquals(List.of(false), burnCalls.get(added.get(1)), "skeleton");
         assertFalse(burnCalls.containsKey(added.get(2)), "spiders never burn");
+        assertEquals(List.of(Material.BOW), mainHands.get(added.get(1)), "skeleton holds a bow");
+        assertFalse(mainHands.containsKey(added.get(0)), "zombie is left as spawned");
     }
 
     @Test
@@ -94,11 +124,11 @@ class MobSpawnerTest {
         for (Class<? extends Mob> type : List.of(Zombie.class, Husk.class, Drowned.class, Skeleton.class,
                 Stray.class, WitherSkeleton.class)) {
             Mob mob = mob(type);
-            MobSpawner.prepare(mob);
+            MobSpawner.prepare(mob, BOW);
             assertEquals(List.of(false), burnCalls.get(mob), type.getSimpleName());
         }
         Mob spider = mob(Spider.class);
-        MobSpawner.prepare(spider);
+        MobSpawner.prepare(spider, BOW);
         assertFalse(burnCalls.containsKey(spider));
     }
 }
