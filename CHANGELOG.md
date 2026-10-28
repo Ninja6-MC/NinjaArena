@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Enemy spawn-position selection rotates through registered points, skipping points within
+  8 blocks of any player, visible to any player, or obstructed by block collision shapes
+  for the requested mob dimensions. If no point is valid, selection returns empty.
 - Pure threat-budget arithmetic: base x round multiplier x player factor, with a
   configurable base under `director.threat-budget` and enemy costs under
   `director.enemy-costs` (zombie 1, skeleton 2, spider 2, Shadow Stalker 8).
