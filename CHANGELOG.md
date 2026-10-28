@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Pure threat-budget arithmetic: base x round multiplier x player factor, with a
+  configurable base under `director.threat-budget` and enemy costs under
+  `director.enemy-costs` (zombie 1, skeleton 2, spider 2, Shadow Stalker 8).
 - A shared `kits.yml` kit, cleared and rebuilt every round and on a delayed respawn into
   the current round. Dead and eliminated players are skipped. Missing or invalid files
   log the reason and use a safe empty kit; item-provider failures also use an empty kit.
