@@ -33,6 +33,17 @@ and `node scripts/export-icons.mjs --check` to verify the committed exports.
 The small cut covers 16–64 px, including a 20 px preview. Full-size, rounded,
 transparent light and dark, and monochrome variants live beside the master.
 
+## Building an arena
+
+Arenas are built in the void world `ninjaarena_arenas`. `/narena arena create <name>` puts
+the new arena in edit mode in an empty grid cell; `/narena arena tp <name>` takes you there
+and reports the cell and its bounds. Switch to creative or turn on flight before building:
+until a waiting room is set, `tp` lands you over the cell centre with nothing below, and
+turns flight on for survival and adventure players once the teleport is done (after
+plugins such as EssentialsX have reset flight for the world change). The arena world
+keeps inventories on death, so a fall while building loses no items; match deaths are
+handled by the match as described below.
+
 ## Round kits and inventory
 
 Players arrive in the waiting room with an empty inventory. Once their snapshot is saved
