@@ -69,6 +69,8 @@ public final class MobSpawner implements MatchDirector.Spawner {
      * and the director would keep replacing them.
      */
     static void prepare(Mob mob) {
+        mob.setPersistent(false);
+        mob.setCanPickupItems(false);
         if (mob instanceof Zombie zombie) {
             zombie.setShouldBurnInDay(false);
         }
@@ -81,6 +83,8 @@ public final class MobSpawner implements MatchDirector.Spawner {
     static final class MobEnemy implements MatchDirector.Enemy {
 
         private final EnemyKind kind;
+        private final EnemyMotion motion = new EnemyMotion();
+        private boolean deathHandled;
         private final Mob mob;
         private final Function<UUID, Player> players;
 
@@ -88,6 +92,22 @@ public final class MobSpawner implements MatchDirector.Spawner {
             this.kind = kind;
             this.mob = mob;
             this.players = players;
+        }
+
+        Mob mob() {
+            return mob;
+        }
+
+        EnemyMotion motion() {
+            return motion;
+        }
+
+        boolean claimDeath() {
+            if (deathHandled) {
+                return false;
+            }
+            deathHandled = true;
+            return true;
         }
 
         @Override

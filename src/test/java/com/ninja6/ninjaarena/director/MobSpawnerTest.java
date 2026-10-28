@@ -30,6 +30,7 @@ class MobSpawnerTest {
 
     /** setShouldBurnInDay calls per mob, and whether the mob was readied before joining the world. */
     private final Map<Mob, List<Boolean>> burnCalls = new HashMap<>();
+    private final Map<Mob, List<String>> lifecycleCalls = new HashMap<>();
     private final List<Mob> added = new ArrayList<>();
 
     private Mob mob(Class<? extends Mob> type) {
@@ -39,6 +40,12 @@ class MobSpawnerTest {
                     case "setShouldBurnInDay" -> {
                         assertFalse(added.contains(self[0]), "readied before it joins the world");
                         burnCalls.computeIfAbsent(self[0], ignored -> new ArrayList<>()).add((Boolean) args[0]);
+                        yield null;
+                    }
+                    case "setPersistent", "setCanPickupItems" -> {
+                        assertFalse(added.contains(self[0]), "readied before it joins the world");
+                        lifecycleCalls.computeIfAbsent(self[0], ignored -> new ArrayList<>())
+                                .add(method.getName() + "=" + args[0]);
                         yield null;
                     }
                     case "isValid" -> true;
@@ -84,6 +91,9 @@ class MobSpawnerTest {
             assertTrue(spawner.spawn(kind, null).isPresent(), kind.name());
         }
         assertEquals(3, added.size());
+        for (Mob mob : added) {
+            assertEquals(List.of("setPersistent=false", "setCanPickupItems=false"), lifecycleCalls.get(mob));
+        }
         assertEquals(List.of(false), burnCalls.get(added.get(0)), "zombie");
         assertEquals(List.of(false), burnCalls.get(added.get(1)), "skeleton");
         assertFalse(burnCalls.containsKey(added.get(2)), "spiders never burn");

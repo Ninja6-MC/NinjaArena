@@ -8,6 +8,7 @@ import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
 import com.ninja6.ninjaarena.director.DirectorService;
 import com.ninja6.ninjaarena.director.EnemyCosts;
+import com.ninja6.ninjaarena.director.EnemyLifecycle;
 import com.ninja6.ninjaarena.director.IntensitySettings;
 import com.ninja6.ninjaarena.director.MobSpawner;
 import com.ninja6.ninjaarena.director.ThreatBudget;
@@ -63,6 +64,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private MatchDeathListener deaths;
     private TeamScores scores;
     private DirectorService directors;
+    private EnemyLifecycle enemyLifecycle;
     private KitItems kitItems;
     private NinjaTools tools;
     private WaitingRoomService waitingRooms;
@@ -108,6 +110,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 scores, matches::matchOf, MobSpawner.factory(arenas, arenaWorld::world, getServer()::getPlayer,
                         getLogger()), new SplittableRandom()::nextDouble);
         getServer().getPluginManager().registerEvents(directors, this);
+        enemyLifecycle = new EnemyLifecycle(matches::matches, directors::director,
+                name -> arenas.get(name).map(Arena::bounds), arenaWorld::world, scores,
+                EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")), System::nanoTime);
+        getServer().getPluginManager().registerEvents(enemyLifecycle, this);
+        enemyLifecycle.start(this);
         kitItems = new KitItems();
         NinjaTools.registerItems(kitItems);
         tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
@@ -149,6 +156,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (waitingRooms != null) {
             waitingRooms.close();
             waitingRooms = null;
+        }
+        if (enemyLifecycle != null) {
+            enemyLifecycle.close();
+            enemyLifecycle = null;
         }
         if (directors != null) {
             directors.close();
