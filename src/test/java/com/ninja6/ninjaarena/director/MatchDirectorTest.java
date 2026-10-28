@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.match.MatchView;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -87,8 +88,16 @@ class MatchDirectorTest {
     }
 
     private MatchDirector director(SpawnGate gate) {
+        return director(gate, TargetWeigher.NONE);
+    }
+
+    private MatchDirector director(TargetWeigher weigher) {
+        return director(SpawnGate.OPEN, weigher);
+    }
+
+    private MatchDirector director(SpawnGate gate, TargetWeigher weigher) {
         return new MatchDirector(match, IntensitySettings.DEFAULTS, new ThreatBudget(20), EnemyCosts.DEFAULTS,
-                standings, spawner, gate, TargetWeigher.NONE, () -> roll);
+                standings, spawner, gate, weigher, () -> roll);
     }
 
     @Test
@@ -302,6 +311,102 @@ class MatchDirectorTest {
         assertNull(spawned.get(0).target);
         assertNull(spawned.get(2).target);
         assertEquals(B, spawned.get(1).target);
+    }
+
+    @Test
+    void theWeigherWeighsForEachEnemyKind() {
+        List<EnemyKind> asked = new ArrayList<>();
+        TargetWeigher weigher = new TargetWeigher() {
+            @Override
+            public double weigh(MatchView view, UUID player, double weight) {
+                throw new AssertionError("the director always names the kind");
+            }
+
+            @Override
+            public double weigh(MatchView view, UUID player, double weight, EnemyKind kind) {
+                asked.add(kind);
+                return kind == EnemyKind.ZOMBIE && player.equals(A) ? 0 : weight;
+            }
+        };
+        var director = director(weigher);
+        director.tick();
+        assertTrue(spawned.stream().allMatch(enemy -> enemy.kind == EnemyKind.ZOMBIE && C.equals(enemy.target)));
+        assertEquals(List.of(EnemyKind.ZOMBIE, EnemyKind.ZOMBIE, EnemyKind.ZOMBIE, EnemyKind.ZOMBIE), asked,
+                "worked out once a second for the kind, one call per player");
+
+        spawned.get(0).target = null;
+        asked.clear();
+        director.tick();
+        assertEquals(C, spawned.get(0).target);
+        assertEquals(List.of(EnemyKind.ZOMBIE, EnemyKind.ZOMBIE, EnemyKind.ZOMBIE, EnemyKind.ZOMBIE), asked);
+    }
+
+    @Test
+    void anEnemyTheWeigherBarsDropsItsTargetAndGetsNoOther() {
+        Set<MatchDirector.Enemy> barred = new HashSet<>();
+        TargetWeigher weigher = new TargetWeigher() {
+            @Override
+            public double weigh(MatchView view, UUID player, double weight) {
+                return weight;
+            }
+
+            @Override
+            public boolean mayTarget(MatchView view, MatchDirector.Enemy enemy) {
+                return !barred.contains(enemy);
+            }
+
+            @Override
+            public boolean keepsTarget(MatchView view, MatchDirector.Enemy enemy, UUID target) {
+                throw new AssertionError("a barred enemy is never asked");
+            }
+        };
+        var director = director(weigher);
+        director.tick();
+        barred.addAll(spawned);
+        director.tick();
+        assertTrue(spawned.stream().allMatch(enemy -> enemy.target == null));
+        director.tick();
+        assertTrue(spawned.stream().allMatch(enemy -> enemy.target == null), "still barred");
+
+        barred.remove(spawned.get(1));
+        director.tick();
+        assertEquals(A, spawned.get(1).target);
+        assertNull(spawned.get(0).target);
+    }
+
+    @Test
+    void anEnemyThatLosesTrackIsDrawnAnotherPlayer() {
+        Set<UUID> lost = new HashSet<>();
+        List<UUID> asked = new ArrayList<>();
+        TargetWeigher weigher = new TargetWeigher() {
+            @Override
+            public double weigh(MatchView view, UUID player, double weight) {
+                return weight;
+            }
+
+            @Override
+            public boolean keepsTarget(MatchView view, MatchDirector.Enemy enemy, UUID target) {
+                asked.add(target);
+                return !lost.contains(target);
+            }
+        };
+        var director = director(weigher);
+        director.tick();
+        assertEquals(List.of(), asked, "new enemies are not asked in their first second");
+        director.tick();
+        assertEquals(List.of(A, A, A), asked);
+
+        lost.add(A);
+        director.tick();
+        // Without Alice the first player is Carol.
+        assertTrue(spawned.stream().allMatch(enemy -> C.equals(enemy.target)));
+
+        lost.add(C);
+        match.alive.remove(B);
+        match.alive.remove(D);
+        match.alive.remove(A);
+        director.tick();
+        assertTrue(spawned.stream().allMatch(enemy -> enemy.target == null), "nobody else to chase");
     }
 
     @Test

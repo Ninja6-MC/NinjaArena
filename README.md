@@ -159,7 +159,24 @@ plugin disable. Durations, radius, damage, cooldown and dash speed are under `to
 `config.yml`.
 
 `plugin.tools().isMarked(uuid)` reports whether a player is glowing from a shuriken hit,
-for enemy targeting.
+and `plugin.tools().inSmoke(location)` whether a place is inside a smoke cloud, for enemy
+targeting.
+
+### Stealth and enemy aggro
+
+Enemies pick their targets by weight, and stealth and the tools steer that weight:
+
+- A player who crouches where no enemy can see them, or crouches in low light (level 7 or
+  below), counts as hidden and weighs a quarter as much.
+- A player marked by a shuriken weighs twice as much while the glow lasts. The hidden cut,
+  the mark and the leading-team bias multiply together.
+- An enemy that has not seen the player it chases for 3 seconds loses track of them and
+  goes for another player.
+- An enemy inside a smoke cloud drops its target and takes no other while inside.
+
+Each enemy type has an `ignores-stealth` setting, off by default, that skips the hidden cut
+and the lose-track timer; smoke and marks still apply. Every weight and timing is under
+`director.stealth` in `config.yml`.
 
 ## Deaths and spectating
 

@@ -6,6 +6,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -44,7 +46,9 @@ import org.bukkit.scheduler.BukkitTask;
  * the finished definition.
  *
  * <p><b>Start.</b> When a countdown finishes, the room is closed and its players are handed
- * to the {@link MatchStart}, which owns them from then on.
+ * to the {@link MatchStart}, which owns them from then on. While no match may start (every
+ * match slot is in use, see {@link #setStartAllowed}), a finished countdown holds at its last
+ * second and the room stays open; when a slot frees up, the room held longest starts first.
  *
  * <p>Not thread-safe: call it from the server thread.
  */
@@ -81,6 +85,10 @@ public final class WaitingRoomService {
     /** Players out of their room whose restore waits for the next tick. */
     private final Set<UUID> homeBound = new HashSet<>();
     private BukkitTask ticker;
+    private BooleanSupplier startAllowed = () -> true;
+    /** Rooms held at their last second for a free match slot, by arena, with the order they were held in. */
+    private final Map<String, Long> heldSince = new HashMap<>();
+    private long holds;
 
     /**
      * @param restore {@code RestoreService#restore}
@@ -268,9 +276,27 @@ public final class WaitingRoomService {
         }
     }
 
+    /**
+     * Sets whether a match may start now, asked each second for every room about to start. While
+     * it says no, the countdown holds at its last second; by default a match may always start.
+     */
+    public void setStartAllowed(BooleanSupplier startAllowed) {
+        this.startAllowed = Objects.requireNonNull(startAllowed, "startAllowed");
+    }
+
     /** Advances every countdown by a second. Run once a second by {@link #start()}. */
     public void tick() {
-        for (Room room : new ArrayList<>(rooms.values())) {
+        heldSince.keySet().retainAll(rooms.keySet());
+        List<Room> order = new ArrayList<>(rooms.values());
+        // Held rooms first, longest held first, so a free slot goes to the room that waited longest.
+        order.sort(Comparator.comparingLong(room -> heldSince.getOrDefault(room.arena(), Long.MAX_VALUE)));
+        for (Room room : order) {
+            if (room.state().secondsLeft() == 1 && !startAllowed.getAsBoolean()) {
+                heldSince.putIfAbsent(room.arena(), holds++);
+                showFull(room);
+                continue;
+            }
+            heldSince.remove(room.arena());
             WaitingRoom.Tick tick = room.state().tick();
             if (tick.phase() == WaitingRoom.Phase.START) {
                 launch(room, tick.teams());
@@ -290,6 +316,7 @@ public final class WaitingRoomService {
         List<UUID> waiting = new ArrayList<>(arenaOf.keySet());
         waiting.addAll(homeBound);
         rooms.clear();
+        heldSince.clear();
         arenaOf.clear();
         homeBound.clear();
         for (UUID playerId : waiting) {
@@ -347,6 +374,17 @@ public final class WaitingRoomService {
                 ? Component.text("Match starts in " + state.secondsLeft() + "s", NamedTextColor.GOLD)
                 : Component.text("Waiting for players " + count(room), NamedTextColor.GRAY);
         for (UUID playerId : state.players()) {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null) {
+                player.sendActionBar(line);
+            }
+        }
+    }
+
+    private void showFull(Room room) {
+        Component line = Component.text("Every match slot is in use. Starting when one frees up.",
+                NamedTextColor.GOLD);
+        for (UUID playerId : room.state().players()) {
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null) {
                 player.sendActionBar(line);
