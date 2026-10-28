@@ -40,7 +40,8 @@ import org.bukkit.plugin.Plugin;
  * the server's shutdown save writes every loaded chunk of every world, the arena world
  * included, and {@code /save-all} does the same. So each arena's blocks are copied to
  * {@link ArenaCopies} whenever an edit finishes, and the copy, not the world save, is what
- * the arena is meant to look like. {@link #resetAll()} puts every copy back when the
+ * the arena is meant to look like. {@link #startEdit(String)} resets the arena first, so an
+ * edit never starts from the world save. {@link #resetAll()} puts every copy back when the
  * registry opens on startup, so an arena is as it was built on every boot, whether the
  * last run ended cleanly, mid-match or in a crash. {@link #reset(String)} does the same for
  * one arena, for the match engine at match start and end. An arena with no copy is not available.
@@ -141,9 +142,13 @@ public final class ArenaRegistry {
                     + "; arenas cannot be changed until it is fixed and the server restarted.", e);
             return registry;
         }
+        // Runs before anything can start a match, so no arena is available until it is done.
+        long started = System.nanoTime();
         ResetReport report = registry.resetAll();
+        long millis = (System.nanoTime() - started) / 1_000_000;
         if (!report.reset().isEmpty()) {
-            plugin.getLogger().info("Reset " + String.join(", ", report.reset()) + " from the saved copy.");
+            plugin.getLogger().info("Reset " + String.join(", ", report.reset()) + " from the saved copy in "
+                    + millis + " ms.");
         }
         if (!report.copied().isEmpty()) {
             plugin.getLogger().info("Saved a first copy of " + String.join(", ", report.copied()) + ".");
@@ -224,7 +229,19 @@ public final class ArenaRegistry {
         notifyEditOrDelete(arena.name());
     }
 
-    /** Puts an arena in edit mode and turns world saving on. */
+    /**
+     * Resets the arena from its saved copy, puts it in edit mode and turns world saving on.
+     *
+     * <p>The reset comes first because the world save is not what the arena should look like:
+     * a shutdown save or {@code /save-all} can have written a match's changes, and chunks
+     * nothing holds are unloaded without saving, which drops the last reset. Without it the
+     * edit would start from that save and {@link #finishEdit} would copy the damage.
+     *
+     * @throws ArenaException if the arena has a copy that cannot be restored; it then stays
+     *                        out of edit mode, so the damage is never copied. Removing the
+     *                        copy lets the edit start from the world as it is, since an arena
+     *                        with bounds but no copy is edited without a reset
+     */
     public void startEdit(String name) throws ArenaException {
         Arena arena = require(name);
         if (held.contains(arena.name())) {
@@ -234,6 +251,18 @@ public final class ArenaRegistry {
             throw new ArenaException("Arena " + arena.name() + " is already in edit mode.");
         }
         refuseEditWhileHeld();
+        if (arena.bounds() != null && copies.exists(arena.name())) {
+            try {
+                copies.restore(arena.name());
+            } catch (IOException e) {
+                unreset.add(arena.name());
+                throw new ArenaException("Could not reset " + arena.name() + " from its saved copy before the edit,"
+                        + " so it stays out of edit mode: " + e.getMessage() + ". To edit it as the world has it now,"
+                        + " remove its folder plugins/NinjaArena/arena-copies/" + arena.name() + " and start the edit"
+                        + " again; finishing the edit saves a new copy. Or delete the arena and create it again.", e);
+            }
+            unreset.remove(arena.name());
+        }
         enterEdit(arena.name());
         notifyEditOrDelete(arena.name());
     }

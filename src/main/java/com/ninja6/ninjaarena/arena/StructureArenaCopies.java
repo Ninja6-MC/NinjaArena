@@ -13,6 +13,7 @@ import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.structure.Mirror;
@@ -97,10 +98,12 @@ public final class StructureArenaCopies implements ArenaCopies {
             int z = Integer.parseInt(origin.group(3));
             Structure structure = structures.loadStructure(file.toFile());
             BlockVector size = structure.getSize();
-            // Each file is one chunk column. Loading it fully loads the entities the last save
-            // wrote there, which entity lookups do not see while the chunk is unloaded.
-            world.getChunkAt(x >> 4, z >> 4);
-            clearEntities(new BoundingBox(x, y, z, x + size.getBlockX(), y + size.getBlockY(), z + size.getBlockZ()));
+            // Each file is one chunk column. Entities load separately from blocks, after the
+            // chunk does; Chunk#getEntities loads them first, so what the last save wrote there
+            // (mobs, items, arrows left mid-match) is seen and cleared.
+            Chunk chunk = world.getChunkAt(x >> 4, z >> 4);
+            clearEntities(chunk, new BoundingBox(x, y, z, x + size.getBlockX(), y + size.getBlockY(),
+                    z + size.getBlockZ()));
             structure.place(new Location(world, x, y, z), false, StructureRotation.NONE, Mirror.NONE, 0, 1f,
                     new Random());
         }
@@ -117,8 +120,11 @@ public final class StructureArenaCopies implements ArenaCopies {
         deleteTree(dir.resolve(name + ".new"));
     }
 
-    private void clearEntities(BoundingBox box) {
-        for (Entity entity : world.getNearbyEntities(box)) {
+    private static void clearEntities(Chunk chunk, BoundingBox box) {
+        for (Entity entity : chunk.getEntities()) {
+            if (!box.contains(entity.getLocation().toVector())) {
+                continue;
+            }
             if (!(entity instanceof Player || entity instanceof ArmorStand || entity instanceof Hanging
                     || entity instanceof Display || entity instanceof Marker)) {
                 entity.remove();

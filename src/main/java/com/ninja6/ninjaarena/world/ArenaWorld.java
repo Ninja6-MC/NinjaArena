@@ -19,7 +19,8 @@ import org.bukkit.WorldCreator;
  * saved. It does not stop the shutdown save, which turns saving back on for every world before
  * writing all loaded chunks, nor {@code /save-all} or {@link World#save()}. The world save can
  * therefore hold what a match left behind; arenas are put back from their own saved copies
- * instead ({@code ArenaRegistry#resetAll}).
+ * instead ({@code ArenaRegistry#resetAll}). {@link ArenaChunkUnloader} unloads, without
+ * saving, the chunks nothing holds.
  */
 public final class ArenaWorld {
 
