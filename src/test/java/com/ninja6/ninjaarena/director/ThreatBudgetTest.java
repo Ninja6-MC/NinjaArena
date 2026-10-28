@@ -45,6 +45,10 @@ class ThreatBudgetTest {
         assertEquals(ThreatBudget.DEFAULTS, ThreatBudget.from(config));
         config.set("base", 12.5);
         assertEquals(50, ThreatBudget.from(config).forRound(2, 2));
+        for (double bad : new double[] {Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NaN}) {
+            config.set("base", bad);
+            assertEquals(ThreatBudget.DEFAULTS, ThreatBudget.from(config));
+        }
     }
 
     @Test

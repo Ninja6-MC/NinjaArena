@@ -13,7 +13,11 @@ public record ThreatBudget(double base) {
 
     /** Reads the {@code director.threat-budget} section; zero disables the budget. */
     public static ThreatBudget from(ConfigurationSection section) {
-        return section == null ? DEFAULTS : new ThreatBudget(section.getDouble("base", DEFAULTS.base()));
+        if (section == null) {
+            return DEFAULTS;
+        }
+        double base = section.getDouble("base", DEFAULTS.base());
+        return Double.isFinite(base) ? new ThreatBudget(base) : DEFAULTS;
     }
 
     /** Returns base x round multiplier x player factor without rounding fractional points. */
