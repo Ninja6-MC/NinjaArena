@@ -6,6 +6,11 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
+import com.ninja6.ninjaarena.director.DirectorService;
+import com.ninja6.ninjaarena.director.EnemyCosts;
+import com.ninja6.ninjaarena.director.IntensitySettings;
+import com.ninja6.ninjaarena.director.MobSpawner;
+import com.ninja6.ninjaarena.director.ThreatBudget;
 import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitInventory;
@@ -37,6 +42,7 @@ import com.ninja6.ninjaarena.world.ArenaChunkUnloader;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import java.io.IOException;
+import java.util.SplittableRandom;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.AreaEffectCloud;
@@ -56,6 +62,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private MatchService matches;
     private MatchDeathListener deaths;
     private TeamScores scores;
+    private DirectorService directors;
     private KitItems kitItems;
     private NinjaTools tools;
     private WaitingRoomService waitingRooms;
@@ -93,6 +100,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         matches.setStandings(scores);
         getServer().getPluginManager().registerEvents(new TeamScoringListener(scores,
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer), this);
+        // Starts and stops each match's spawn loop with its fights; closed before the matches.
+        directors = new DirectorService(this,
+                IntensitySettings.from(getConfig().getConfigurationSection("director.intensity")),
+                ThreatBudget.from(getConfig().getConfigurationSection("director.threat-budget")),
+                EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")),
+                scores, matches::matchOf, MobSpawner.factory(arenas, arenaWorld::world, getServer()::getPlayer,
+                        getLogger()), new SplittableRandom()::nextDouble);
+        getServer().getPluginManager().registerEvents(directors, this);
         kitItems = new KitItems();
         NinjaTools.registerItems(kitItems);
         tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
@@ -134,6 +149,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (waitingRooms != null) {
             waitingRooms.close();
             waitingRooms = null;
+        }
+        if (directors != null) {
+            directors.close();
+            directors = null;
         }
         if (matches != null) {
             matches.close();
@@ -203,6 +222,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Team points and the award API for live matches; {@code null} while disabled. */
     public TeamScores scores() {
         return scores;
+    }
+
+    /**
+     * The enemy director of each match, with the spawn gate and targeting hooks; {@code null}
+     * while disabled.
+     */
+    public DirectorService directors() {
+        return directors;
     }
 
     /** Register named providers for custom kit items before a round starts; null while disabled. */

@@ -13,6 +13,19 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- A per-match enemy director. Once a second during COMBAT and OVERRUN it works out a target
+  intensity and spawns zombies, skeletons and spiders through the spawn-position selection
+  until the cost of those alive reaches intensity x the round's threat budget; an enemy
+  that dies or is removed returns its cost. Zombies and skeletons do not burn under the
+  arena world's fixed noon. Combat cycles through build-up, peak and a
+  short relax, each round peaking higher; combat time ramps it up, while teams knocked out
+  and recent damage taken ease it. OVERRUN runs at full intensity. The round budget grows
+  each round and with the players alive when the fight starts. Enemies are pointed at a
+  player drawn by weight, and players on the team with the most points weigh more. All
+  values are under `director.intensity` in `config.yml`. The loop starts with each fight
+  and is cancelled when the round or match ends, when the last player leaves and on plugin
+  disable. `NinjaArenaPlugin#directors()` exposes each match's director and its enemies, a
+  spawn gate for caps and tick-time limits, and a targeting-weight hook.
 - Enemy spawn-position selection rotates through registered points, skipping points within
   8 blocks of any player, visible to any player, or obstructed by block collision shapes
   for the requested mob dimensions. If no point is valid, selection returns empty.
