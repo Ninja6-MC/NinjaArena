@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "ninjaarena:item/shuriken",
+    "layer1": "ninjaarena:item/shuriken_accent"
+  }
+}

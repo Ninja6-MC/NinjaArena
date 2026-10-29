@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "ninjaarena:item/smoke_bomb",
+    "layer1": "ninjaarena:item/smoke_bomb_accent"
+  }
+}
