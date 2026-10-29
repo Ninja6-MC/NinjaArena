@@ -307,7 +307,7 @@ class PortalListenerTest {
             assertEquals(9, location.getBlockZ());
             // Refusal messages share a cooldown, so only the first round shows one.
             if (onCursor) {
-                assertEquals(List.of("Put away the items on your cursor or in your crafting grid, then walk in again."),
+                assertEquals(List.of("Put away the items on your cursor or in your crafting grid, then try again."),
                         messages);
             }
         }

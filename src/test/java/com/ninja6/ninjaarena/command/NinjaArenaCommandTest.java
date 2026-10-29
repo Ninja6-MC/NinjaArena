@@ -46,6 +46,7 @@ class NinjaArenaCommandTest {
     private final List<Component> components = new ArrayList<>();
     private ArenaRegistry registry;
     private NinjaArenaCommand command;
+    private PortalCommand portalCommand;
     private final List<String> left = new ArrayList<>();
     private boolean waiting;
 
@@ -65,8 +66,9 @@ class NinjaArenaCommandTest {
         registry.load();
         PortalRegistry portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
+        portalCommand = new PortalCommand(portals, registry, world -> true);
         command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null),
-                new PortalCommand(portals, registry, world -> true), NO_DIRECTOR, player -> {
+                portalCommand, NO_DIRECTOR, player -> {
                     left.add(player.getName());
                     return waiting;
                 });
@@ -329,7 +331,7 @@ class NinjaArenaCommandTest {
         assertEquals(List.of("The Arena commands:",
                 "/ninjaarena help - show the commands you can use",
                 "/ninjaarena leave - leave the waiting room or match you are in",
-                "/ninjaarena accept <host> - accept an invitation (not available yet)"), messages);
+                "/ninjaarena accept <host> - accept an invitation to the Arena"), messages);
 
         messages.clear();
         Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
@@ -444,5 +446,27 @@ class NinjaArenaCommandTest {
         }
         assertEquals(List.of(), command.onTabComplete(none, null, "narena", new String[0]));
         assertTrue(left.isEmpty());
+    }
+
+    @Test
+    void hostingRoutesDispatchOnlyAfterPermissionPlayerAndArityChecks() {
+        List<String> calls = new ArrayList<>();
+        HostingCommands hosting = new HostingCommands() {
+            public void host(Player player, String arena) { calls.add("host " + arena); }
+            public void invite(Player player, String invitee) { calls.add("invite " + invitee); }
+            public void accept(Player player, String host) { calls.add("accept " + host); }
+        };
+        command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null), portalCommand, NO_DIRECTOR,
+                player -> false, hosting);
+        Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
+        run(host, "HOST dojo");
+        run(host, "invite Bob");
+        run(playerWithPlay(), "accept Alice");
+        assertEquals(List.of("host dojo", "invite Bob", "accept Alice"), calls);
+        run(playerWithPlay(), "host dojo");
+        run(host, "invite Bob extra");
+        run(host, "accept");
+        run(console(true), "host dojo");
+        assertEquals(3, calls.size());
     }
 }

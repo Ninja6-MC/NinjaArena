@@ -13,9 +13,14 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Hosted matches with plain-command invitations and explicit acceptance. Opening and
+  inviting move nobody; accepted entry reuses portal snapshot and teleport safeguards.
+  Reservations end on host exit, room closure, match start, arena changes and shutdown.
+  Host and accepted invitees stay together within balanced team capacity and reunite when
+  later arrivals allow it. Failed entries retain invitations for retry; leave cancels an
+  accepted entry still loading.
 - Permission-filtered command help and completion for player, host and admin routes.
-  `accept <host>`, `host <arena>`, `invite <player>` and `admin reload` report that they are
-  not available yet. Existing leave, arena, portal and director paths remain, and every
+  Existing leave, arena, portal and director paths remain, and every
   permission tier declares its children explicitly.
 - Round feedback: a round timer bossbar that turns red for Overrun, team points and living
   enemy counts in the actionbar, round start and end titles, and standard sound cues for

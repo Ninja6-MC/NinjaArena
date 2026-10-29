@@ -54,10 +54,15 @@ public final class PortalEntry {
 
     /** Everything except the snapshot write. Empty if the player may go on. */
     public Optional<Refusal> check(Player player, Portal portal) {
+        return check(player, portal.arena());
+    }
+
+    /** The same admission checks for an explicitly accepted invitation. */
+    public Optional<Refusal> check(Player player, String arenaName) {
         if (!player.hasPermission(PLAY)) {
             return refuse(Reason.NO_PERMISSION, "You do not have permission to enter arenas.");
         }
-        Optional<Arena> arena = arenas.get(portal.arena());
+        Optional<Arena> arena = arenas.get(arenaName);
         if (arena.isEmpty() || arena.get().waitingRoom() == null) {
             return refuse(Reason.NO_ARENA, "This portal does not lead to an arena.");
         }
@@ -83,7 +88,11 @@ public final class PortalEntry {
      * teleport fails, the caller deletes the snapshot again.
      */
     public Optional<Refusal> admit(Player player, Portal portal) {
-        Optional<Refusal> refusal = check(player, portal);
+        return admit(player, portal.arena());
+    }
+
+    public Optional<Refusal> admit(Player player, String arenaName) {
+        Optional<Refusal> refusal = check(player, arenaName);
         if (refusal.isPresent()) {
             return refusal;
         }
@@ -97,7 +106,11 @@ public final class PortalEntry {
 
     /** Where the portal sends players, or empty if its arena is gone or has no waiting room. */
     public Optional<ArenaPoint> waitingRoom(Portal portal) {
-        return arenas.get(portal.arena()).map(Arena::waitingRoom);
+        return waitingRoom(portal.arena());
+    }
+
+    public Optional<ArenaPoint> waitingRoom(String arenaName) {
+        return arenas.get(arenaName).map(Arena::waitingRoom);
     }
 
     private static Optional<Refusal> pending() {
