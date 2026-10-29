@@ -6,13 +6,13 @@
       "textures": [
         {
           "path": "shuriken/shuriken-base-16.png",
-          "sha256": "42e9afc68d12215c4947541875bb18e95a5c0410146e7b37dade11175531517d",
+          "sha256": "293a76fa80c862f8e89182288e6e5b048672200c9c7e22d0475432b3110e2f43",
           "width": 16,
           "height": 16
         },
         {
           "path": "shuriken/shuriken-accent-16.png",
-          "sha256": "8bc7f4c39bb74d6be8eb0ef9bfe59b7d707bacc57fd3be706a9947edd374893c",
+          "sha256": "754c52b09b9d09894d5a6713cfef045db80f8098e2bc1e6f0ced0f2eea9feb64",
           "width": 16,
           "height": 16
         },
@@ -48,13 +48,13 @@
       "textures": [
         {
           "path": "smoke-bomb/smoke-bomb-base-16.png",
-          "sha256": "4b1caa69cb302ecf3a9095032a0acf2d8a1873c2f57fb1eee053d192dcc27b28",
+          "sha256": "73444f5c593c13e1ddeaf7bbd89832079f39fce5ca72911c919176945f094373",
           "width": 16,
           "height": 16
         },
         {
           "path": "smoke-bomb/smoke-bomb-accent-16.png",
-          "sha256": "8d419d965b6a31d8125a15ad675826377be940aa55426a868c8a77727f094f6c",
+          "sha256": "e6036b744b9be589dc9a0dcb9c6725fe992dea97150cf66b3a2b0f43e2286c89",
           "width": 16,
           "height": 16
         },
@@ -92,13 +92,13 @@
       "textures": [
         {
           "path": "dash-scroll/dash-scroll-base-16.png",
-          "sha256": "c4186e7963b311c62792173501e3fd16aaaa7d0093461acc16dc0abc66c989f7",
+          "sha256": "5924c0f0a490856ccf927f3ac8f694ebfb3c1e6295a77a4ec056e2c2263a9a1f",
           "width": 16,
           "height": 16
         },
         {
           "path": "dash-scroll/dash-scroll-accent-16.png",
-          "sha256": "454e8ef80800e876e17224228580ed62282311e4bedbac5b55513a981be65165",
+          "sha256": "086deafff96a52f18b21bc0dee25643276f736a40a3f8327e4d8265cfc1a77c2",
           "width": 16,
           "height": 16
         },

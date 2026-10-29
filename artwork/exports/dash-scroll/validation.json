@@ -7,7 +7,7 @@
     "nonempty_alpha": true,
     "grayscale": false,
     "source": "adaptations/dash-scroll-16.pcraft",
-    "sha256": "c4186e7963b311c62792173501e3fd16aaaa7d0093461acc16dc0abc66c989f7"
+    "sha256": "5924c0f0a490856ccf927f3ac8f694ebfb3c1e6295a77a4ec056e2c2263a9a1f"
   },
   "dash-scroll-accent-16.png": {
     "size": [
@@ -17,7 +17,7 @@
     "nonempty_alpha": true,
     "grayscale": true,
     "source": "adaptations/dash-scroll-16.pcraft",
-    "sha256": "454e8ef80800e876e17224228580ed62282311e4bedbac5b55513a981be65165"
+    "sha256": "086deafff96a52f18b21bc0dee25643276f736a40a3f8327e4d8265cfc1a77c2"
   },
   "dash-scroll-base-32.png": {
     "size": [
@@ -38,7 +38,7 @@
     "sha256": "ea0ef712110bdb666848f49468b448c4968689f1b61e83fa8dc86afdee033596"
   },
   "recombination_32": {
-    "max_premultiplied_channel_difference": 8.0,
+    "max_premultiplied_channel_difference": 8,
     "mean_premultiplied_channel_difference": 0.031,
     "note": "Separate rasterization may differ at antialiased overlapping edges."
   },

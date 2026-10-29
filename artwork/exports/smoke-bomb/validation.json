@@ -7,7 +7,7 @@
     "nonempty_alpha": true,
     "grayscale": false,
     "source": "adaptations/smoke-bomb-16.pcraft",
-    "sha256": "4b1caa69cb302ecf3a9095032a0acf2d8a1873c2f57fb1eee053d192dcc27b28"
+    "sha256": "73444f5c593c13e1ddeaf7bbd89832079f39fce5ca72911c919176945f094373"
   },
   "smoke-bomb-accent-16.png": {
     "size": [
@@ -17,7 +17,7 @@
     "nonempty_alpha": true,
     "grayscale": true,
     "source": "adaptations/smoke-bomb-16.pcraft",
-    "sha256": "8d419d965b6a31d8125a15ad675826377be940aa55426a868c8a77727f094f6c"
+    "sha256": "e6036b744b9be589dc9a0dcb9c6725fe992dea97150cf66b3a2b0f43e2286c89"
   },
   "smoke-bomb-base-32.png": {
     "size": [

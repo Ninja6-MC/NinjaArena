@@ -112,7 +112,8 @@ derived. Never edit an exported PNG directly.
    (`tools/export-svg-layers.py`).
 2. In PhotoCraft, use Replace Contents on each Smart Object so the pixel
    cleanup layers stay in place, and re-check the 16-pixel result by eye.
-3. Re-export the PNG layers and update `exports/equipment-manifest.json`.
+3. Re-export the PNG layers, run `node artwork/tools/crisp-16.js` (hard-edges the
+   16-pixel layers and refreshes hashes), and update `exports/equipment-manifest.json`.
 4. Run `node artwork/tools/validate-exports.js`. It checks hashes, sizes,
    that every asset has base and accent layers at 16, 32 and 64, that accent
    layers are grayscale, and that 16-pixel files have no partial alpha.
