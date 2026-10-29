@@ -23,8 +23,9 @@ On Windows, use `gradlew.bat build`. The plugin JAR is written to `build/libs/`,
 
 ## Setting up an arena
 
-Admins need `ninjaarena.admin`. `/narena` on its own lists the `arena`, `portal` and
-`director` command groups. A first arena, in the order you need it:
+Admins need `ninjaarena.admin`. `/narena` on its own lists the commands allowed by your
+permissions, including the `arena`, `portal` and `director` setup groups. A first arena,
+in the order you need it:
 
 1. `/narena arena create dojo` registers the arena in the next free cell of the arena
    world and puts it in edit mode. The reply shows the cell's coordinates.
@@ -45,6 +46,36 @@ Admins need `ninjaarena.admin`. `/narena` on its own lists the `arena`, `portal`
    inside it and run `/narena portal setcorner 1`, then `/narena portal setcorner 2 ~ ~2 ~`
    so the portal is a doorway rather than a flat pad. Move sideways first for a wider
    door. `/narena portal create dojo-door dojo` binds it to the arena.
+
+## Commands and permissions
+
+`/ninjaarena` is the registered root; `/narena` is its permanent short alias. Run either
+root on its own, or add `help`, to list the commands your permissions allow. Replies use
+plain text, with no clickable chat. Existing `arena`, `portal` and `director` paths stay
+under the root.
+
+| Command | Permission | Behavior |
+| :--- | :--- | :--- |
+| `help` | Any tier below | List permitted commands |
+| `leave` | `ninjaarena.play` | Leave the waiting room or match and restore your snapshot |
+| `accept <host>` | `ninjaarena.play` | Not available yet; reserved for accepting an invitation |
+| `host <arena>` | `ninjaarena.host` | Not available yet; reserved for opening a match |
+| `invite <player>` | `ninjaarena.host` | Not available yet; reserved for inviting a player |
+| `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
+| `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals |
+| `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
+| `admin reload` | `ninjaarena.admin` | Not available yet; reserved for safe configuration reload |
+
+The player and host commands require a player sender. The reserved commands report that
+the feature is not available yet; they do not start matches, create invitations, move
+players or reload files. Walking through a portal remains the way to enter the Arena.
+
+`ninjaarena.play` defaults to everyone. `ninjaarena.host` and `ninjaarena.admin` default
+to operators. The declared permission children grant play from host, and host from admin;
+the play leaf has an explicit empty children block. The root accepts any of these tiers,
+and dispatch, help and tab completion check the route's own permission. Denying play
+explicitly therefore blocks player routes without blocking an otherwise granted admin
+or host route.
 
 ## Icon artwork
 

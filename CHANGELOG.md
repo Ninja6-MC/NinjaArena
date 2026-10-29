@@ -13,6 +13,10 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Permission-filtered command help and completion for player, host and admin routes.
+  `accept <host>`, `host <arena>`, `invite <player>` and `admin reload` report that they are
+  not available yet. Existing leave, arena, portal and director paths remain, and every
+  permission tier declares its children explicitly.
 - Round feedback: a round timer bossbar that turns red for Overrun, team points and living
   enemy counts in the actionbar, round start and end titles, and standard sound cues for
   successful enemy spawns and round ends. Eliminated players retain the HUD while

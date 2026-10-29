@@ -12,19 +12,29 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 
-/**
- * The {@code /ninjaarena} root (alias {@code /narena}). {@value #LEAVE} is for players and
- * needs {@value #PLAY}; every other subcommand is an admin one, so {@value #ADMIN} is checked
- * before anything else is parsed or completed.
- */
+/** The {@code /ninjaarena} root (alias {@code /narena}), with play, host and admin routes. */
 public final class NinjaArenaCommand implements TabExecutor {
 
     public static final String ADMIN = "ninjaarena.admin";
+    public static final String HOST = "ninjaarena.host";
     public static final String PLAY = "ninjaarena.play";
     /** Leaves the waiting room or match the player is in and sends them home. */
     public static final String LEAVE = "leave";
 
-    private static final List<String> GROUPS = List.of(ArenaCommand.NAME, PortalCommand.NAME, DirectorCommand.NAME);
+    private record Route(String name, String permission, String usage, String description) {
+    }
+
+    private static final List<Route> ROUTES = List.of(
+            new Route(LEAVE, PLAY, LEAVE, "leave the waiting room or match you are in"),
+            new Route("accept", PLAY, "accept <host>", "accept an invitation (not available yet)"),
+            new Route("host", HOST, "host <arena>", "open a match in the Arena (not available yet)"),
+            new Route("invite", HOST, "invite <player>", "invite a player (not available yet)"),
+            new Route(ArenaCommand.NAME, ADMIN, ArenaCommand.NAME + " <subcommand>", "create, edit and set up arenas"),
+            new Route(PortalCommand.NAME, ADMIN, PortalCommand.NAME + " <subcommand>",
+                    "mark out portals that lead to arenas"),
+            new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]",
+                    "show the enemy director of a running match"),
+            new Route("admin", ADMIN, "admin reload", "reload the Arena configuration (not available yet)"));
 
     private final ArenaCommand arena;
     private final PortalCommand portal;
@@ -45,41 +55,91 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length > 0 && args[0].equalsIgnoreCase(LEAVE) && sender.hasPermission(PLAY)) {
-            leave(sender);
+        if (!canUseRoot(sender)) {
+            denied(sender);
             return true;
         }
-        if (!sender.hasPermission(ADMIN)) {
-            if (args.length == 0 && sender.hasPermission(PLAY)) {
-                sender.sendMessage(Component.text("Usage: /" + label + " " + LEAVE, NamedTextColor.RED));
+        if (args.length == 0) {
+            help(sender, label, null);
+            return true;
+        }
+        String group = args[0].toLowerCase(Locale.ROOT);
+        if (group.equals("help")) {
+            if (args.length == 1) {
+                help(sender, label, null);
             } else {
-                sender.sendMessage(Component.text("You do not have permission to use this command.",
-                        NamedTextColor.RED));
+                usage(sender, label, "help");
             }
             return true;
         }
-        String group = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
-        switch (group) {
-            case ArenaCommand.NAME -> arena.execute(sender, label, tail(args));
-            case PortalCommand.NAME -> portal.execute(sender, label, tail(args));
-            case DirectorCommand.NAME -> director.execute(sender, label, tail(args));
-            default -> help(sender, label, args.length == 0 ? null : args[0]);
+        Route route = ROUTES.stream().filter(candidate -> candidate.name().equals(group)).findFirst().orElse(null);
+        if (route == null) {
+            help(sender, label, args[0]);
+        } else if (!sender.hasPermission(route.permission())) {
+            denied(sender);
+        } else {
+            switch (group) {
+                case LEAVE -> {
+                    if (args.length == 1) {
+                        leave(sender);
+                    } else {
+                        usage(sender, label, route.usage());
+                    }
+                }
+                case "accept", "host", "invite" -> {
+                    if (args.length != 2) {
+                        usage(sender, label, route.usage());
+                    } else if (!(sender instanceof Player)) {
+                        sender.sendMessage(Component.text("Only players can use this Arena command.", NamedTextColor.RED));
+                    } else {
+                        unavailable(sender, group);
+                    }
+                }
+                case "admin" -> {
+                    if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
+                        unavailable(sender, "Configuration reload");
+                    } else {
+                        usage(sender, label, route.usage());
+                    }
+                }
+                case ArenaCommand.NAME -> arena.execute(sender, label, tail(args));
+                case PortalCommand.NAME -> portal.execute(sender, label, tail(args));
+                case DirectorCommand.NAME -> director.execute(sender, label, tail(args));
+                default -> throw new IllegalStateException("No handler for " + group);
+            }
         }
         return true;
     }
 
-    /** Lists the command groups, for an admin who gave none or an unknown one. */
+    private static boolean canUseRoot(CommandSender sender) {
+        return sender.hasPermission(PLAY) || sender.hasPermission(HOST) || sender.hasPermission(ADMIN);
+    }
+
+    private static void denied(CommandSender sender) {
+        sender.sendMessage(Component.text("You do not have permission to use this command.", NamedTextColor.RED));
+    }
+
+    private static void usage(CommandSender sender, String label, String usage) {
+        sender.sendMessage(Component.text("Usage: /" + label + " " + usage, NamedTextColor.RED));
+    }
+
+    private static void unavailable(CommandSender sender, String feature) {
+        sender.sendMessage(Component.text(feature + " is not available yet in the Arena.", NamedTextColor.YELLOW));
+    }
+
+    /** Lists only the routes the sender can use. */
     private static void help(CommandSender sender, String label, String unknown) {
         if (unknown != null) {
-            sender.sendMessage(Component.text("Unknown command " + unknown + ". Subcommands sit under a group:",
-                    NamedTextColor.RED));
+            sender.sendMessage(Component.text("Unknown command " + unknown + ". Available commands:", NamedTextColor.RED));
         } else {
-            sender.sendMessage(Component.text("NinjaArena commands:", NamedTextColor.GOLD));
+            sender.sendMessage(Component.text("The Arena commands:", NamedTextColor.GOLD));
         }
-        line(sender, label, ArenaCommand.NAME + " <subcommand>", "create, edit and set up arenas");
-        line(sender, label, PortalCommand.NAME + " <subcommand>", "mark out portals that lead to arenas");
-        line(sender, label, DirectorCommand.NAME + " [arena]", "show the enemy director of a running match");
-        line(sender, label, LEAVE, "leave the waiting room or match you are in");
+        line(sender, label, "help", "show the commands you can use");
+        for (Route route : ROUTES) {
+            if (sender.hasPermission(route.permission())) {
+                line(sender, label, route.usage(), route.description());
+            }
+        }
     }
 
     private static void line(CommandSender sender, String label, String usage, String description) {
@@ -97,27 +157,28 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
-        boolean admin = sender.hasPermission(ADMIN);
+        if (!canUseRoot(sender)) {
+            return List.of();
+        }
         if (args.length <= 1) {
             String prefix = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
             List<String> out = new ArrayList<>();
-            if (sender.hasPermission(PLAY) && LEAVE.startsWith(prefix)) {
-                out.add(LEAVE);
+            if ("help".startsWith(prefix)) {
+                out.add("help");
             }
-            if (!admin) {
-                return out;
-            }
-            for (String group : GROUPS) {
-                if (group.startsWith(prefix)) {
-                    out.add(group);
+            for (Route route : ROUTES) {
+                if (sender.hasPermission(route.permission()) && route.name().startsWith(prefix)) {
+                    out.add(route.name());
                 }
             }
             return out;
         }
-        if (!admin) {
+        if (!sender.hasPermission(ADMIN)) {
             return List.of();
         }
         return switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "admin" -> args.length == 2 && "reload".startsWith(args[1].toLowerCase(Locale.ROOT))
+                    ? List.of("reload") : List.of();
             case ArenaCommand.NAME -> arena.complete(sender, tail(args));
             case PortalCommand.NAME -> portal.complete(sender, tail(args));
             case DirectorCommand.NAME -> director.complete(sender, tail(args));
