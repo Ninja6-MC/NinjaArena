@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="linear-gradient-1" x1="0" y1="24" x2="64" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#364a55" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#405664" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#1d303b" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <title>portal-surface-64</title>
+  <g id="Surface_Base" data-name="Surface Base">
+    <path id="Dark_Curtain" data-name="Dark Curtain" d="M0 0 L64 0 L64 64 L0 64 Z" fill="#0c151c" opacity="0.94"/>
+  </g>
+  <g id="Smoke">
+    <path id="Smoke_Fold_-_Left" data-name="Smoke Fold - Left" d="M-8 -8 C25 3 -1 25 21 36 C44 48 15 62 37 73 L20 75 C-3 63 22 49 6 39 C-16 24 9 7 -14 -2 Z" fill="url(#linear-gradient-1)" opacity="0.45"/>
+    <path id="Smoke_Fold_-_Right" data-name="Smoke Fold - Right" d="M37 -8 C66 7 40 20 61 35 C80 49 55 58 75 74 L55 75 C37 62 62 49 45 37 C25 22 52 8 25 -6 Z" fill="url(#linear-gradient-1)" opacity="0.45"/>
+  </g>
+  <g id="Portal_Glow" data-name="Portal Glow">
+    <path id="Glow_Fold_-_Left" data-name="Glow Fold - Left" d="M6 -8 C29 4 1 23 24 35 C45 48 21 62 40 74" fill="none" stroke="#ffffff" stroke-width="1.25" stroke-linecap="round" stroke-miterlimit="10" opacity="0.38"/>
+    <path id="Glow_Fold_-_Right" data-name="Glow Fold - Right" d="M42 -8 C67 7 43 21 64 34 C82 47 59 61 76 74" fill="none" stroke="#ffffff" stroke-width="1.25" stroke-linecap="round" stroke-miterlimit="10" opacity="0.38"/>
+  </g>
+</svg>

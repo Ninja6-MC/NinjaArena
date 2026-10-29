@@ -1,0 +1,7 @@
+# Regenerable review output; keep only the curated sets below.
+previews/*
+!previews/team-colours/
+!previews/portal-surface-review.png
+!previews/portal-surface-review.svg
+# Delivery bundles are rebuilt from exports/ in CI.
+exports/*.zip

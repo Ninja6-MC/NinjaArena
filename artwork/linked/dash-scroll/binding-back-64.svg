@@ -1,0 +1,57 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs>
+    <linearGradient id="linear-gradient-1" x1="29" y1="22" x2="39" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#333b44" />
+      <stop offset="0.4" stop-color="#282f37" />
+      <stop offset="1" stop-color="#151b22" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="46" y1="17" x2="56" y2="37" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#46515d" />
+      <stop offset="0.45" stop-color="#343e49" />
+      <stop offset="1" stop-color="#1d252f" />
+    </linearGradient>
+    <radialGradient id="radial-gradient-1" cx="0" cy="0" r="20" gradientTransform="matrix(0.6 0.8 -1.28 0.96 32 28)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#59636e" stop-opacity="0.52" />
+      <stop offset="0.45" stop-color="#424c57" stop-opacity="0.35" />
+      <stop offset="1" stop-color="#303943" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="linear-gradient-3" x1="33" y1="34" x2="39" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11171e" stop-opacity="0" />
+      <stop offset="0.65" stop-color="#11171e" stop-opacity="0.13" />
+      <stop offset="1" stop-color="#11171e" stop-opacity="0.48" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-4" x1="11" y1="31" x2="26" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#68717b" />
+      <stop offset="0.35" stop-color="#505963" />
+      <stop offset="1" stop-color="#303740" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-5" x1="18" y1="30" x2="45" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#515b65" />
+      <stop offset="0.2" stop-color="#414b55" />
+      <stop offset="0.55" stop-color="#343c45" />
+      <stop offset="1" stop-color="#303740" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-6" x1="21" y1="33" x2="54.5" y2="26.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11171d" stop-opacity="0.35" />
+      <stop offset="0.5" stop-color="#11171d" stop-opacity="0.23" />
+      <stop offset="0.8" stop-color="#11171d" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#11171d" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-7" x1="20.1" y1="33.5" x2="24.4" y2="31.3" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#858f98" stop-opacity="0.72" />
+      <stop offset="0.45" stop-color="#78838c" stop-opacity="0.4" />
+      <stop offset="1" stop-color="#78838c" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-8" x1="25" y1="23.2" x2="25" y2="21.6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5c5c5" />
+      <stop offset="1" stop-color="#8c8c8c" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-9" x1="34" y1="47.8" x2="34" y2="49.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5c5c5" />
+      <stop offset="1" stop-color="#8c8c8c" />
+    </linearGradient>
+  <clipPath id="visible-rear-cloth" clipPathUnits="userSpaceOnUse"><path d="M-64 -64 H128 V128 H-64 Z M13 29 L42 15 C47 13 52 17 54 23 L56 34 C56 38 50 41 45 43 L24 52 C18 54 12 50 10 44 C7 38 8 32 13 29 Z" fill-rule="evenodd" clip-rule="evenodd" /></clipPath></defs>
+  <g id="Binding_Back" data-name="Binding Back" clip-path="url(#visible-rear-cloth)">
+    <path id="Binding_-_Back_Wrap" data-name="Binding - Back Wrap" d="M22.7 23.4 C24.4 22 26.8 20.7 28.3 21.2 C34 27 38 39 37.8 46.8 C36.7 48.7 33.9 50.1 31.7 49.7 L31.9 48.3 C34.1 48 35.9 47 36.3 45.9 C36.4 39.1 32.4 27.8 27 22.5 C26.1 22.1 24.9 23.3 24 24.3 Z" fill="#929292" />
+  </g>
+  </svg>

@@ -1,0 +1,43 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs>
+    <radialGradient id="radial-gradient-1" cx="0" cy="0" r="25.495" gradientTransform="matrix(0.902 0.431 -0.475 0.992 24 32)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b6269" stop-opacity="0.75" />
+      <stop offset="0.28" stop-color="#4b525a" stop-opacity="0.65" />
+      <stop offset="0.65" stop-color="#343a42" stop-opacity="0.4" />
+      <stop offset="1" stop-color="#25282d" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="0" cy="0" r="28.302" gradientTransform="matrix(-0.848 -0.53 0.636 -1.018 45 49)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10151b" stop-opacity="0.65" />
+      <stop offset="0.45" stop-color="#171c22" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#25282d" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-3" cx="30" cy="27" r="4" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#646e77" stop-opacity="0.13" />
+      <stop offset="1" stop-color="#404850" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-4" cx="27" cy="49" r="6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4c5660" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#303840" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-5" cx="23" cy="32" r="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#858b90" stop-opacity="0.9" />
+      <stop offset="0.55" stop-color="#697077" stop-opacity="0.8" />
+      <stop offset="1" stop-color="#414950" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="linear-gradient-1" x1="49" y1="35" x2="52" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8b8b8" />
+      <stop offset="1" stop-color="#626262" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="44" y1="53" x2="47.3" y2="53" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8b8b8" />
+      <stop offset="1" stop-color="#626262" />
+    </linearGradient>
+  </defs>
+  <g id="Clay_Seal" data-name="Clay Seal">
+    <path id="Clay_Contact_Shadow" data-name="Clay Contact Shadow" d="M26.892 23.518 C26.892 20.482 31.446 18.964 36 18.964 C40.554 18.964 44.349 22 45.108 25.036 C45.108 27.313 40.554 29.59 35.241 28.831 C30.687 28.831 26.892 27.313 26.892 23.518 Z" fill="#202429" />
+    <path id="Hand-Pressed_Clay_Ring" data-name="Hand-Pressed Clay Ring" d="M27.803 22.455 C27.044 20.027 28.562 16.839 31.294 16.535 C33.116 16.08 34.178 17.446 36.152 17.142 C38.581 16.839 41.313 18.66 41.92 20.634 C42.376 22 44.349 22.911 43.59 25.036 C42.983 27.768 38.884 28.072 35.696 27.465 C32.66 27.313 29.169 26.554 28.258 24.732 Z" fill="#373c42" />
+    <path id="Clay_Centre_Depression" data-name="Clay Centre Depression" d="M32.509 20.482 C32.964 18.812 35.089 19.268 36.759 19.875 C38.732 20.027 39.947 21.241 39.491 22.759 C38.884 24.277 36.152 24.125 34.33 23.366 C32.66 22.911 31.75 21.848 32.509 20.482 Z" fill="#20252a" />
+    <path id="Clay_Rounded_Light_-_Left" data-name="Clay Rounded Light - Left" d="M29.321 21.241 C28.714 18.964 30.383 17.75 31.75 17.75 C32.964 17.901 33.419 18.964 32.509 19.723 C31.446 20.634 31.75 22.455 32.964 23.518 C34.027 24.732 35.696 25.036 36.759 25.188 C35.089 26.099 31.598 25.036 30.383 23.518 C29.776 22.911 29.624 22.304 29.321 21.241 Z" fill="#626970" />
+    <path id="Clay_Rim_Glare" data-name="Clay Rim Glare" d="M28.1 20.6 C27.9 19.1 28.9 17.5 30 17.4 C30.6 17.3 30.9 17.7 30.5 18.1 C29.7 18.8 29.3 19.4 29.2 20.2 C29.2 20.7 28.4 21.1 28.1 20.6 Z" fill="#92999e" />
+  </g>
+  </svg>

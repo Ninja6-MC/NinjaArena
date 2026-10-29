@@ -1,0 +1,15 @@
+{
+  "colours": [
+    "red",
+    "blue",
+    "green"
+  ],
+  "master": "shuriken-64.vectorcraft",
+  "texture_sizes": [
+    16,
+    32,
+    64
+  ],
+  "sha256": "CD3FF9003BD88C000678A6A82C069B0DAE0647F26D322705DF09372FD8A731E6",
+  "description": "Reference before broader blade-root experiment"
+}

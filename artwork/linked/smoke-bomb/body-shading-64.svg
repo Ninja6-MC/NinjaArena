@@ -1,0 +1,42 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs>
+    <radialGradient id="radial-gradient-1" cx="0" cy="0" r="25.495" gradientTransform="matrix(0.902 0.431 -0.475 0.992 24 32)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b6269" stop-opacity="0.75" />
+      <stop offset="0.28" stop-color="#4b525a" stop-opacity="0.65" />
+      <stop offset="0.65" stop-color="#343a42" stop-opacity="0.4" />
+      <stop offset="1" stop-color="#25282d" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="0" cy="0" r="28.302" gradientTransform="matrix(-0.848 -0.53 0.636 -1.018 45 49)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10151b" stop-opacity="0.65" />
+      <stop offset="0.45" stop-color="#171c22" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#25282d" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-3" cx="30" cy="27" r="4" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#646e77" stop-opacity="0.13" />
+      <stop offset="1" stop-color="#404850" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-4" cx="27" cy="49" r="6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4c5660" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#303840" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-5" cx="23" cy="32" r="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#858b90" stop-opacity="0.9" />
+      <stop offset="0.55" stop-color="#697077" stop-opacity="0.8" />
+      <stop offset="1" stop-color="#414950" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="linear-gradient-1" x1="49" y1="35" x2="52" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8b8b8" />
+      <stop offset="1" stop-color="#626262" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="44" y1="53" x2="47.3" y2="53" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8b8b8" />
+      <stop offset="1" stop-color="#626262" />
+    </linearGradient>
+  </defs>
+  <g id="Body_Shading" data-name="Body Shading">
+    <path id="Broad_Charcoal_Light" data-name="Broad Charcoal Light" d="M50.735 40.08 C50.291 51.236 41.4 60.28 30.875 60.28 C20.35 60.28 12.178 51.236 12.622 40.08 C13.066 28.924 21.958 19.88 32.482 19.88 C43.007 19.88 51.179 28.924 50.735 40.08 Z" fill="url(#radial-gradient-1)" />
+    <path id="Broad_Charcoal_Shadow" data-name="Broad Charcoal Shadow" d="M50.735 40.08 C50.291 51.236 41.4 60.28 30.875 60.28 C20.35 60.28 12.178 51.236 12.622 40.08 C13.066 28.924 21.958 19.88 32.482 19.88 C43.007 19.88 51.179 28.924 50.735 40.08 Z" fill="url(#radial-gradient-2)" />
+    <path id="Faint_Surface_Variation_-_Shoulder" data-name="Faint Surface Variation - Shoulder" d="M33.8 27 C33.8 27.994 32.546 28.8 31 28.8 C29.454 28.8 28.2 27.994 28.2 27 C28.2 26.006 29.454 25.2 31 25.2 C32.546 25.2 33.8 26.006 33.8 27 Z" fill="url(#radial-gradient-3)" />
+    <path id="Faint_Surface_Variation_-_Lower_Front" data-name="Faint Surface Variation - Lower Front" d="M32 49 C32 50.546 29.761 51.8 27 51.8 C24.239 51.8 22 50.546 22 49 C22 47.454 24.239 46.2 27 46.2 C29.761 46.2 32 47.454 32 49 Z" fill="url(#radial-gradient-4)" />
+  </g>
+  </svg>

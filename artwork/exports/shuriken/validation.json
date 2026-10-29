@@ -1,0 +1,78 @@
+{
+  "neutral_layers_verified": true,
+  "recombination": [
+    {
+      "size": 16,
+      "colour": "blue",
+      "tint_bounds": [
+        6,
+        6,
+        10,
+        10
+      ],
+      "alpha_identical": true,
+      "centre_clear": true
+    },
+    {
+      "size": 16,
+      "colour": "green",
+      "tint_bounds": [
+        6,
+        6,
+        10,
+        10
+      ],
+      "alpha_identical": true,
+      "centre_clear": true
+    },
+    {
+      "size": 32,
+      "colour": "blue",
+      "tint_bounds": [
+        13,
+        13,
+        19,
+        19
+      ],
+      "alpha_identical": true,
+      "centre_clear": true
+    },
+    {
+      "size": 32,
+      "colour": "green",
+      "tint_bounds": [
+        13,
+        13,
+        19,
+        19
+      ],
+      "alpha_identical": true,
+      "centre_clear": true
+    },
+    {
+      "size": 64,
+      "colour": "blue",
+      "tint_bounds": [
+        26,
+        26,
+        38,
+        38
+      ],
+      "alpha_identical": true,
+      "centre_clear": true
+    },
+    {
+      "size": 64,
+      "colour": "green",
+      "tint_bounds": [
+        26,
+        26,
+        38,
+        38
+      ],
+      "alpha_identical": true,
+      "centre_clear": true
+    }
+  ],
+  "adobe_illustrator_tested": false
+}

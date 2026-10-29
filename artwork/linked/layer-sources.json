@@ -1,0 +1,86 @@
+{
+  "dash-scroll": [
+    {
+      "name": "Binding Back",
+      "role": "accent",
+      "path": "linked/dash-scroll/binding-back-64.svg"
+    },
+    {
+      "name": "Scroll Shape",
+      "role": "base",
+      "path": "linked/dash-scroll/scroll-shape-64.svg"
+    },
+    {
+      "name": "Body Shading",
+      "role": "base",
+      "path": "linked/dash-scroll/body-shading-64.svg"
+    },
+    {
+      "name": "Rolled Ends",
+      "role": "base",
+      "path": "linked/dash-scroll/rolled-ends-64.svg"
+    },
+    {
+      "name": "Outer Sheet Edge",
+      "role": "base",
+      "path": "linked/dash-scroll/outer-sheet-edge-64.svg"
+    },
+    {
+      "name": "Wind Symbol",
+      "role": "base",
+      "path": "linked/dash-scroll/wind-symbol-64.svg"
+    },
+    {
+      "name": "Team Binding",
+      "role": "accent",
+      "path": "linked/dash-scroll/team-binding-64.svg"
+    },
+    {
+      "name": "Binding Details",
+      "role": "accent",
+      "path": "linked/dash-scroll/binding-details-64.svg"
+    }
+  ],
+  "smoke-bomb": [
+    {
+      "name": "Body Shape",
+      "role": "base",
+      "path": "linked/smoke-bomb/body-shape-64.svg"
+    },
+    {
+      "name": "Body Shading",
+      "role": "base",
+      "path": "linked/smoke-bomb/body-shading-64.svg"
+    },
+    {
+      "name": "Clay Seal",
+      "role": "base",
+      "path": "linked/smoke-bomb/clay-seal-64.svg"
+    },
+    {
+      "name": "Body Highlights",
+      "role": "base",
+      "path": "linked/smoke-bomb/body-highlights-64.svg"
+    },
+    {
+      "name": "Team Band",
+      "role": "accent",
+      "path": "linked/smoke-bomb/team-band-64.svg"
+    },
+    {
+      "name": "Band Details",
+      "role": "accent",
+      "path": "linked/smoke-bomb/band-details-64.svg"
+    },
+    {
+      "name": "Fuse",
+      "role": "base",
+      "path": "linked/smoke-bomb/fuse-64.svg"
+    },
+    {
+      "name": "Seal Details",
+      "role": "base",
+      "path": "linked/smoke-bomb/seal-details-64.svg"
+    }
+  ]
+}

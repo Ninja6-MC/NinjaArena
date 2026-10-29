@@ -1,0 +1,499 @@
+%!PS-Adobe-3.0
+%%Creator: VectorCraft 0.17.0
+%%Title: (shuriken-64.svg)
+%%CreationDate: (10/28/2026) (13:48)
+%%BoundingBox: 4 4 60 60
+%%HiResBoundingBox: 4 4 60 60
+%%DocumentProcessColors: Cyan Magenta Yellow Black
+%AI5_FileFormat 3
+%AI3_ColorUsage: Color
+%AI3_TemplateBox: 32 32 32 32
+%AI3_TileBox: 0 0 64 64
+%AI3_DocumentPreview: None
+%AI5_ArtSize: 64 64
+%AI5_RulerUnits: 2
+%AI5_NumLayers: 4
+%%DocumentSuppliedResources: procset VectorCraft_Legacy 1 0
+%%EndComments
+%%BeginProlog
+%%BeginResource: procset VectorCraft_Legacy 1 0
+/VCLegacy 96 dict def
+VCLegacy begin
+/bd {bind def} bind def
+% State: the fill and stroke colours (procedures that set them), their overprints, the fill rule,
+% a clip to make at the next painting operator, a compound path being built, a guide being
+% drawn, whether the layer prints, and what the compound path is painted with.
+/_fc {0 setgray} def /_sc {0 setgray} def
+/_fo false def /_so false def /_eo false def /_w false def /_cp false def /_g false def
+/_on true def /_rf false def /_rs false def
+% Painting: a fill and a stroke that keep the path; the path painted as _rf and _rs say (after
+% the clip W asked for), then ended.
+/_fill {gsave _fc _fo setoverprint _eo {eofill} {fill} ifelse grestore} bd
+/_stroke {gsave _sc _so setoverprint stroke grestore} bd
+/_draw {_w {_eo {eoclip} {clip} ifelse /_w false def} if
+ _on _g not and {_rf {_fill} if _rs {_stroke} if} if newpath} bd
+% close? fill? stroke? _r: paints now, or at the end of the compound path being built.
+/_r {/_rs exch def /_rf exch def {closepath} if _cp not {_draw} if} bd
+% Path construction (section 5.3.2) and painting (5.3.3).
+/m {moveto} bd /l {lineto} bd /L {lineto} bd /c {curveto} bd /C {curveto} bd
+/N {false false false _r} bd /n {true false false _r} bd
+/F {false true false _r} bd /f {true true false _r} bd
+/S {false false true _r} bd /s {true false true _r} bd
+/B {false true true _r} bd /b {true true true _r} bd
+/XR {1 eq /_eo exch def} bd
+% Compound paths (5.3.5): one path, painted at its end.
+/*u {/_cp true def} bd /*U {/_cp false def _draw} bd
+% Groups, clipping groups and masks (5.6), locking (5.1), guides (6.1).
+/u {} bd /U {} bd /q {gsave} bd /Q {grestore} bd
+/H {} bd /h {closepath} bd /W {/_w true def} bd
+/A {pop} bd
+/* {pop _g {newpath /_g false def} {/_g true def} ifelse} bd
+% Colours (5.4): fill and stroke colours, overprints; a custom colour as its CMYK equivalent at
+% its tint (tint 0 is the full colour).
+/g {/setgray load 2 array astore cvx /_fc exch def} bd
+/G {/setgray load 2 array astore cvx /_sc exch def} bd
+/k {/setcmykcolor load 5 array astore cvx /_fc exch def} bd
+/K {/setcmykcolor load 5 array astore cvx /_sc exch def} bd
+/Xa {/setrgbcolor load 4 array astore cvx /_fc exch def} bd
+/XA {/setrgbcolor load 4 array astore cvx /_sc exch def} bd
+/_tint {1 exch sub /_t exch def pop 4 {_t mul 4 1 roll} repeat} bd
+/x {_tint k} bd /X {_tint K} bd
+/O {1 eq /_fo exch def} bd /R {1 eq /_so exch def} bd
+/w {setlinewidth} bd /J {setlinecap} bd /j {setlinejoin} bd /M {setmiterlimit} bd /d {setdash} bd
+% Gradients (3.5): definitions are skipped; an instance fills with the colour set before it
+% (the writer sets its first stop's), and BB strokes the path as its flag says.
+/Bn {pop} bd /Bd {pop pop pop} bd /BD {cleartomark} bd
+/Bb {gsave} bd /Bg {12 {pop} repeat} bd /Bh {pop pop pop pop} bd
+/BB {grestore _cp {0 gt {/_rs true def} if}
+ {dup 2 eq {closepath} if 0 gt _on and {_stroke} if newpath} ifelse} bd
+% Layers (9): a layer that is hidden or doesn't print marks nothing.
+/Lb {6 {pop} repeat exch pop exch pop 1 eq exch 1 eq and /_on exch def} bd
+/Ln {pop} bd /LB {/_on true def} bd
+% Images (8): the samples, in hex on the comment lines that follow XI, read a line at a time.
+/_l 256 string def /_s 128 string def
+/_row {{currentfile _l readline not {exit} if dup length 1 gt {exit} if pop} loop
+ dup length 1 gt {dup length 1 sub 1 exch getinterval /ASCIIHexDecode filter _s readstring pop} {pop ()} ifelse} bd
+/XI {pop pop pop pop /_ic exch def /_ib exch def /_ih exch def /_iw exch def pop pop pop pop
+ [1 0 0 -1 0 0] exch matrix concatmatrix
+ _on {gsave concat _iw _ih _ib [1 0 0 1 0 0] /_row load false _ic 1 eq {1} {_ic} ifelse colorimage grestore} {pop} ifelse} bd
+% Type (15) is set by the app that reads the file: its operators take their operands and mark
+% nothing; encodings (3.3) are skipped.
+/TE {cleartomark} bd /TZ {cleartomark} bd
+/To {pop} bd /Tp {7 {pop} repeat} bd /TP {} bd /TO {} bd
+/Tr {pop} bd /Tf {pop pop pop pop} bd /Ts {pop} bd /Tz {pop pop} bd /Tt {pop} bd /TA {pop} bd
+/Tl {pop pop} bd /Ta {pop} bd /Ti {pop pop pop} bd /Tx {pop} bd
+% The page trailer (3): annotatepage marks nothing.
+/annotatepage {} bd
+end
+%%EndResource
+%%EndProlog
+%%BeginSetup
+VCLegacy begin
+%%EndSetup
+%AI5_BeginLayer
+1 1 1 1 0 0 0 79 128 255 Lb
+(Blade Shape) Ln
+0 A
+0.1098 0.1216 0.1412 Xa
+0 O
+0 XR
+*u
+46 44 m
+60 28 L
+46 25 L
+39 19 L
+32 22 L
+26 32 L
+34 46 L
+46 44 L
+f
+31 35 m
+29 33 L
+29 31 L
+31 29 L
+33 29 L
+35 31 L
+35 33 L
+33 35 L
+31 35 L
+f
+*U
+0.098 0.1098 0.1294 Xa
+0 O
+0 XR
+*u
+44 18 m
+28 4 L
+25 18 L
+19 25 L
+22 32 L
+32 38 L
+46 30 L
+44 18 L
+f
+31 35 m
+29 33 L
+29 31 L
+31 29 L
+33 29 L
+35 31 L
+35 33 L
+33 35 L
+31 35 L
+f
+*U
+0.1765 0.1882 0.2078 Xa
+0 O
+0 XR
+*u
+18 20 m
+4 36 L
+18 39 L
+25 45 L
+32 42 L
+38 32 L
+30 18 L
+18 20 L
+f
+31 35 m
+29 33 L
+29 31 L
+31 29 L
+33 29 L
+35 31 L
+35 33 L
+33 35 L
+31 35 L
+f
+*U
+0.1451 0.1569 0.1765 Xa
+0 O
+0 XR
+*u
+20 46 m
+36 60 L
+39 46 L
+45 39 L
+42 32 L
+32 26 L
+18 34 L
+20 46 L
+f
+31 35 m
+29 33 L
+29 31 L
+31 29 L
+33 29 L
+35 31 L
+35 33 L
+33 35 L
+31 35 L
+f
+*U
+LB
+%AI5_EndLayer--
+%AI5_BeginLayer
+1 1 1 1 0 0 1 255 79 79 Lb
+(Steel Facets) Ln
+0 A
+0.3804 0.4 0.4275 Xa
+0 O
+1 XR
+36 60 m
+32 44 L
+25 41 L
+20 46 L
+36 60 L
+f
+0.2588 0.2784 0.3098 Xa
+0 O
+1 XR
+60 28 m
+44 32 L
+41 39 L
+46 44 L
+60 28 L
+f
+0.2039 0.2235 0.2549 Xa
+0 O
+1 XR
+28 4 m
+32 20 L
+39 23 L
+44 18 L
+28 4 L
+f
+0.4549 0.4745 0.498 Xa
+0 O
+1 XR
+4 36 m
+20 32 L
+23 25 L
+18 20 L
+4 36 L
+f
+0.2627 0.2824 0.3098 Xa
+0 O
+0 XR
+20 46 m
+32 44 L
+34 39 L
+25 33 L
+18 34 L
+20 46 L
+f
+0.1882 0.2039 0.2314 Xa
+0 O
+0 XR
+46 44 m
+44 32 L
+39 30 L
+33 39 L
+34 46 L
+46 44 L
+f
+0.1529 0.1686 0.1961 Xa
+0 O
+0 XR
+44 18 m
+32 20 L
+30 25 L
+39 31 L
+46 30 L
+44 18 L
+f
+0.3255 0.3451 0.3725 Xa
+0 O
+0 XR
+18 20 m
+20 32 L
+25 34 L
+31 25 L
+30 18 L
+18 20 L
+f
+LB
+%AI5_EndLayer--
+%AI5_BeginLayer
+1 1 1 1 0 0 2 79 255 79 Lb
+(Sharpened Bevels) Ln
+0 A
+0.0745 0.0902 0.1098 Xa
+0 O
+0 XR
+4 36 m
+18 20 L
+30 18 L
+29 25 L
+20 28 L
+9 35 L
+4 36 L
+f
+0.0745 0.0902 0.1098 Xa
+0 O
+0 XR
+28 4 m
+44 18 L
+46 30 L
+39 29 L
+36 20 L
+29 9 L
+28 4 L
+f
+0.0745 0.0902 0.1098 Xa
+0 O
+0 XR
+60 28 m
+46 44 L
+34 46 L
+35 39 L
+44 36 L
+55 29 L
+60 28 L
+f
+0.0745 0.0902 0.1098 Xa
+0 O
+0 XR
+36 60 m
+20 46 L
+18 34 L
+25 35 L
+28 44 L
+35 55 L
+36 60 L
+f
+0.7294 0.7608 0.7922 Xa
+0 O
+1 XR
+36 60 m
+20 46 L
+18 34 L
+23 36 L
+25 44 L
+35 57 L
+36 60 L
+f
+0.5608 0.6 0.6392 Xa
+0 O
+1 XR
+60 28 m
+46 44 L
+34 46 L
+36 41 L
+44 39 L
+57 29 L
+60 28 L
+f
+0.4392 0.4863 0.5373 Xa
+0 O
+1 XR
+28 4 m
+44 18 L
+46 30 L
+41 28 L
+39 20 L
+29 7 L
+28 4 L
+f
+0.8039 0.8275 0.851 Xa
+0 O
+1 XR
+4 36 m
+18 20 L
+30 18 L
+28 23 L
+20 25 L
+7 35 L
+4 36 L
+f
+0.9412 0.9529 0.9608 Xa
+0 O
+1 XR
+*u
+34 58.25 m
+22.4 48.1 L
+23.3 47.6 L
+34.5 57.5 L
+34 58.25 L
+f
+20 46 m
+18 34 L
+19.6 36 L
+21.4 45 L
+20 46 L
+f
+*U
+0.7647 0.8 0.8275 Xa
+0 O
+1 XR
+*u
+58.25 30 m
+48.1 41.6 L
+47.6 40.7 L
+57.5 29.5 L
+58.25 30 L
+f
+46 44 m
+34 46 L
+36 44.4 L
+45 42.6 L
+46 44 L
+f
+*U
+0.6863 0.7255 0.7608 Xa
+0 O
+1 XR
+*u
+30 5.75 m
+41.6 15.9 L
+40.7 16.4 L
+29.5 6.5 L
+30 5.75 L
+f
+44 18 m
+46 30 L
+44.4 28 L
+42.6 19 L
+44 18 L
+f
+*U
+0.9686 0.9725 0.9804 Xa
+0 O
+1 XR
+*u
+5.75 34 m
+15.9 22.4 L
+16.4 23.3 L
+6.5 34.5 L
+5.75 34 L
+f
+18 20 m
+30 18 L
+28 19.6 L
+19 21.4 L
+18 20 L
+f
+*U
+LB
+%AI5_EndLayer--
+%AI5_BeginLayer
+1 1 1 1 0 0 3 79 79 255 Lb
+(Centre) Ln
+0 A
+0.0706 0.0863 0.102 Xa
+0 O
+1 XR
+*u
+29 40 m
+35 40 L
+40 35 L
+40 29 L
+35 24 L
+29 24 L
+24 29 L
+24 35 L
+29 40 L
+f
+31 35 m
+33 35 L
+35 33 L
+35 31 L
+33 29 L
+31 29 L
+29 31 L
+29 33 L
+31 35 L
+f
+*U
+1 1 1 Xa
+0 O
+1 XR
+*u
+30 38 m
+34 38 L
+38 34 L
+38 30 L
+34 26 L
+30 26 L
+26 30 L
+26 34 L
+30 38 L
+f
+31 35 m
+33 35 L
+35 33 L
+35 31 L
+33 29 L
+31 29 L
+29 31 L
+29 33 L
+31 35 L
+f
+*U
+LB
+%AI5_EndLayer--
+%%PageTrailer
+gsave annotatepage grestore showpage
+%%Trailer
+end
+%%EOF

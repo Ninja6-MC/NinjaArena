@@ -1,0 +1,64 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs>
+    <linearGradient id="linear-gradient-1" x1="29" y1="22" x2="39" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#333b44" />
+      <stop offset="0.4" stop-color="#282f37" />
+      <stop offset="1" stop-color="#151b22" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="46" y1="17" x2="56" y2="37" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#46515d" />
+      <stop offset="0.45" stop-color="#343e49" />
+      <stop offset="1" stop-color="#1d252f" />
+    </linearGradient>
+    <radialGradient id="radial-gradient-1" cx="0" cy="0" r="20" gradientTransform="matrix(0.6 0.8 -1.28 0.96 32 28)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#59636e" stop-opacity="0.52" />
+      <stop offset="0.45" stop-color="#424c57" stop-opacity="0.35" />
+      <stop offset="1" stop-color="#303943" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="linear-gradient-3" x1="33" y1="34" x2="39" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11171e" stop-opacity="0" />
+      <stop offset="0.65" stop-color="#11171e" stop-opacity="0.13" />
+      <stop offset="1" stop-color="#11171e" stop-opacity="0.48" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-4" x1="11" y1="31" x2="26" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#68717b" />
+      <stop offset="0.35" stop-color="#505963" />
+      <stop offset="1" stop-color="#303740" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-5" x1="18" y1="30" x2="45" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#515b65" />
+      <stop offset="0.2" stop-color="#414b55" />
+      <stop offset="0.55" stop-color="#343c45" />
+      <stop offset="1" stop-color="#303740" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-6" x1="21" y1="33" x2="54.5" y2="26.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11171d" stop-opacity="0.35" />
+      <stop offset="0.5" stop-color="#11171d" stop-opacity="0.23" />
+      <stop offset="0.8" stop-color="#11171d" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#11171d" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-7" x1="20.1" y1="33.5" x2="24.4" y2="31.3" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#858f98" stop-opacity="0.72" />
+      <stop offset="0.45" stop-color="#78838c" stop-opacity="0.4" />
+      <stop offset="1" stop-color="#78838c" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-8" x1="25" y1="23.2" x2="25" y2="21.6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5c5c5" />
+      <stop offset="1" stop-color="#8c8c8c" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-9" x1="34" y1="47.8" x2="34" y2="49.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5c5c5" />
+      <stop offset="1" stop-color="#8c8c8c" />
+    </linearGradient>
+  </defs>
+  <g id="Binding_Details" data-name="Binding Details">
+    <path id="Binding_Fold_-_Right_Edge" data-name="Binding Fold - Right Edge" d="M26.7 21.85 L28 21.05 C30.4 23.55 32.2 27.4 33.8 31.3 L34 32.5 C36.3 37.5 37.8 42.5 37.2 47 L35.8 47.6 C36.6 42.9 35 37.7 32.8 32.8 L32.4 31.6 C30.8 27.9 29 24.35 26.7 21.85 Z" fill="#a6a6a6" />
+    <path id="Knot_-_Compressed_Fold" data-name="Knot - Compressed Fold" d="M29.6 32.6 C30 33.5 30.1 34.9 29.6 36.1 L30.6 36.4 C31.2 35 31 33.8 30.7 32.6 Z" fill="#9d9d9d" />
+    <path id="Left_Tail_-_Soft_Fold" data-name="Left Tail - Soft Fold" d="M30.1 36.1 C30.2 38.6 28.8 41.6 27.4 43.4 L28.2 43.5 C30.4 41.1 31 38.1 31 36.3 Z" fill="#adadad" />
+    <path id="Cotton_Fibres_-_Upper" data-name="Cotton Fibres - Upper" d="M26.2 26.3 L27.2 27.5 M27.3 27.9 L28 28.9" fill="none" stroke="#e2e2e2" stroke-width="0.16" stroke-linecap="round" stroke-miterlimit="10" opacity="0.35" />
+    <path id="Cotton_Fibres_-_Lower" data-name="Cotton Fibres - Lower" d="M33.7 41.7 L34 43 M33.5 43.6 L33.8 44.7" fill="none" stroke="#e2e2e2" stroke-width="0.16" stroke-linecap="round" stroke-miterlimit="10" opacity="0.35" />
+    <path id="Binding_-_Top_Return" data-name="Binding - Top Return" d="M23 23.25 C24.7 21.95 26.8 20.95 28 21.05 L28.55 21.75 C27.3 21.9 25.2 22.8 23.7 24 Z" fill="url(#linear-gradient-8)" />
+    <path id="Binding_-_Bottom_Return" data-name="Binding - Bottom Return" d="M31.9 48.5 C33.5 48.1 35.3 47.5 37.2 46.4 L37.2 47 C35.6 48.3 33.7 49.4 31.9 49.5 Z" fill="url(#linear-gradient-9)" />
+    <path id="Right_Tail_-_Soft_Fold" data-name="Right Tail - Soft Fold" d="M32.5 35.6 C35 36.6 36.3 38 37.1 39.5 L39.1 42.2 L38.6 43.1 C37 41.6 36.5 39.6 35 38.2 C34 37.2 33.2 36.6 32.5 35.6 Z" fill="#a2a2a2" />
+  </g>
+</svg>

@@ -1,0 +1,60 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs>
+    <linearGradient id="linear-gradient-1" x1="29" y1="22" x2="39" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#333b44" />
+      <stop offset="0.4" stop-color="#282f37" />
+      <stop offset="1" stop-color="#151b22" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="46" y1="17" x2="56" y2="37" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#46515d" />
+      <stop offset="0.45" stop-color="#343e49" />
+      <stop offset="1" stop-color="#1d252f" />
+    </linearGradient>
+    <radialGradient id="radial-gradient-1" cx="0" cy="0" r="20" gradientTransform="matrix(0.6 0.8 -1.28 0.96 32 28)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#59636e" stop-opacity="0.52" />
+      <stop offset="0.45" stop-color="#424c57" stop-opacity="0.35" />
+      <stop offset="1" stop-color="#303943" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="linear-gradient-3" x1="33" y1="34" x2="39" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11171e" stop-opacity="0" />
+      <stop offset="0.65" stop-color="#11171e" stop-opacity="0.13" />
+      <stop offset="1" stop-color="#11171e" stop-opacity="0.48" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-4" x1="11" y1="31" x2="26" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#68717b" />
+      <stop offset="0.35" stop-color="#505963" />
+      <stop offset="1" stop-color="#303740" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-5" x1="18" y1="30" x2="45" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#515b65" />
+      <stop offset="0.2" stop-color="#414b55" />
+      <stop offset="0.55" stop-color="#343c45" />
+      <stop offset="1" stop-color="#303740" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-6" x1="21" y1="33" x2="54.5" y2="26.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11171d" stop-opacity="0.35" />
+      <stop offset="0.5" stop-color="#11171d" stop-opacity="0.23" />
+      <stop offset="0.8" stop-color="#11171d" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#11171d" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-7" x1="20.1" y1="33.5" x2="24.4" y2="31.3" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#858f98" stop-opacity="0.72" />
+      <stop offset="0.45" stop-color="#78838c" stop-opacity="0.4" />
+      <stop offset="1" stop-color="#78838c" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-8" x1="25" y1="23.2" x2="25" y2="21.6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5c5c5" />
+      <stop offset="1" stop-color="#8c8c8c" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-9" x1="34" y1="47.8" x2="34" y2="49.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5c5c5" />
+      <stop offset="1" stop-color="#8c8c8c" />
+    </linearGradient>
+  </defs>
+  <g id="Wind_Symbol" data-name="Wind Symbol">
+    <path id="Upper_Wind_-_Recess" data-name="Upper Wind - Recess" d="M28.92 38.92 C32.44 38.656 35.96 37.776 38.336 36.632 C40.272 35.488 42.912 34.96 44.936 32.76 C47.048 30.56 46.08 27.392 43.44 27.128 C41.328 26.952 40.184 28.536 40.976 30.032 C41.68 31.44 43.88 31.264 44.056 29.856 C44.144 29.064 43.44 28.712 42.912 29.064" fill="none" stroke="#141b23" stroke-width="2.068" stroke-linecap="round" stroke-linejoin="round" />
+    <path id="Upper_Wind_-_Silver" data-name="Upper Wind - Silver" d="M28.92 38.92 C32.44 38.656 35.96 37.776 38.336 36.632 C40.272 35.488 42.912 34.96 44.936 32.76 C47.048 30.56 46.08 27.392 43.44 27.128 C41.328 26.952 40.184 28.536 40.976 30.032 C41.68 31.44 43.88 31.264 44.056 29.856 C44.144 29.064 43.44 28.712 42.912 29.064" fill="none" stroke="#bcc6ce" stroke-width="1.188" stroke-linecap="round" stroke-linejoin="round" />
+    <path id="Lower_Wind_-_Recess" data-name="Lower Wind - Recess" d="M30.68 43.32 C33.32 42.704 36.4 41.12 38.952 39.976 C40.8 38.656 43 37.248 45.2 37.248 C47.752 37.16 47.928 39.448 45.992 40.24 C44.848 40.68 43.88 40.064 44.144 39.184" fill="none" stroke="#141b23" stroke-width="2.068" stroke-linecap="round" stroke-linejoin="round" />
+    <path id="Lower_Wind_-_Silver" data-name="Lower Wind - Silver" d="M30.68 43.32 C33.32 42.704 36.4 41.12 38.952 39.976 C40.8 38.656 43 37.248 45.2 37.248 C47.752 37.16 47.928 39.448 45.992 40.24 C44.848 40.68 43.88 40.064 44.144 39.184" fill="none" stroke="#bcc6ce" stroke-width="1.188" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  </svg>

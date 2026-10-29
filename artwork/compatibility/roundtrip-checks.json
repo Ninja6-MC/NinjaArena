@@ -1,0 +1,82 @@
+[
+  {
+    "file": "shuriken-64.vectorcraft",
+    "groups": [
+      "Centre",
+      "Sharpened Bevels",
+      "Steel Facets",
+      "Blade Shape"
+    ],
+    "object_names_retained": true,
+    "changed_pixels": 0,
+    "artboard": [
+      {
+        "height": 64.0,
+        "name": "Artboard 1",
+        "width": 64.0,
+        "x": 0.0,
+        "y": 0.0
+      }
+    ]
+  },
+  {
+    "file": "shuriken-64.svg",
+    "groups": [
+      "Centre",
+      "Sharpened Bevels",
+      "Steel Facets",
+      "Blade Shape"
+    ],
+    "object_names_retained": true,
+    "changed_pixels": 0,
+    "artboard": [
+      {
+        "height": 64.0,
+        "name": "Artboard 1",
+        "width": 64.0,
+        "x": 0.0,
+        "y": 0.0
+      }
+    ]
+  },
+  {
+    "file": "shuriken-pdf-64.ai",
+    "groups": [
+      "Centre",
+      "Sharpened Bevels",
+      "Steel Facets",
+      "Blade Shape"
+    ],
+    "object_names_retained": true,
+    "changed_pixels": 0,
+    "artboard": [
+      {
+        "height": 64.0,
+        "name": "Artboard 1",
+        "width": 64.0,
+        "x": 0.0,
+        "y": 0.0
+      }
+    ]
+  },
+  {
+    "file": "shuriken-legacy7-64.ai",
+    "groups": [
+      "Centre",
+      "Sharpened Bevels",
+      "Steel Facets",
+      "Blade Shape"
+    ],
+    "object_names_retained": false,
+    "changed_pixels": 0,
+    "artboard": [
+      {
+        "height": 64.0,
+        "name": "Artboard 1",
+        "width": 64.0,
+        "x": 0.0,
+        "y": 0.0
+      }
+    ]
+  }
+]
