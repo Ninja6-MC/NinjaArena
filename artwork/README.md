@@ -74,7 +74,7 @@ packaging are handled by the resource-pack implementation.
 Artwork and Team Colour Accent, with Base - Pixel Cleanup and Accent -
 Pixel Cleanup layers above the source layers.
 The accepted 16-pixel base and accent exports are in the production
-folders. The comparison sheet is in `previews/pixel-adaptations/`.
+folders.
 On a master change, refresh the derived full SVG in VectorCraft, run
 `python artwork/tools/export-svg-layers.py` from the repository root, and
 use Replace Contents on each corresponding PhotoCraft Smart Object from
@@ -99,9 +99,10 @@ This surface artwork does not implement an in-game portal renderer.
 
 ## Equipment bundle
 
-`exports/equipment-textures.zip` contains the 18 current base/accent PNGs
-and `equipment-manifest.json`, which records dimensions and SHA-256 hashes.
-It contains texture assets, not an installable Java or Bedrock pack.
+The 18 current base/accent PNGs are listed in `exports/equipment-manifest.json`,
+which records dimensions and SHA-256 hashes. A texture bundle is built from
+`exports/` when packing and is not committed; it holds texture assets, not an
+installable Java or Bedrock pack.
 
 ## Maintenance workflow
 
@@ -119,6 +120,6 @@ derived. Never edit an exported PNG directly.
    layers are grayscale, and that 16-pixel files have no partial alpha.
 5. Commit the source and exports together.
 
-Review sheets are not committed, apart from `previews/team-colours/` and the
-portal review images kept as curated references; they never go into a pack. The
-texture zips are rebuilt from `exports/` when packing.
+Regenerable review sheets are not committed. Kept as references, and never
+packed: `previews/team-colours/`, the portal review images, and the preserved
+history under `variants/`. Texture zips are not committed.
