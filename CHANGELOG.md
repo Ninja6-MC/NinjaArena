@@ -13,6 +13,10 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Round feedback: a round timer bossbar that turns red for Overrun, team points and living
+  enemy counts in the actionbar, round start and end titles, and standard sound cues for
+  successful enemy spawns and round ends. Eliminated players retain the HUD while
+  spectating; leaving, match end and plugin disable clear it.
 - Enemy spawn diagnostics. When no enemy spawn point qualifies, one log line names the check
   that refused each point (too close, in view, chunk not loaded, blocked space), and a
   spawn the world cancels is logged too; each reason at most once per round per match, at

@@ -26,6 +26,7 @@ import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.kit.RoundKitListener;
 import com.ninja6.ninjaarena.match.MatchDeathListener;
+import com.ninja6.ninjaarena.match.MatchHud;
 import com.ninja6.ninjaarena.match.MatchListener;
 import com.ninja6.ninjaarena.match.MatchProtectionListener;
 import com.ninja6.ninjaarena.match.MatchService;
@@ -72,6 +73,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private MatchService matches;
     private MatchDeathListener deaths;
     private TeamScores scores;
+    private MatchHud hud;
     private DirectorService directors;
     private EnemyLifecycle enemyLifecycle;
     private KitItems kitItems;
@@ -162,9 +164,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         // from each match's director. Set before any fight can create a director.
         StabilitySettings stability = StabilitySettings.from(getConfig().getConfigurationSection("stability"));
         DirectorService enemyDirectors = directors;
-        directors.setGate(new StabilityGate(stability,
+        hud = new MatchHud(inMatch::matches, getServer()::getPlayer, scores,
+                match -> enemyDirectors.director(match).map(director -> (int) director.enemies().stream()
+                        .filter(MatchDirector.Enemy::isAlive).count()).orElse(0));
+        getServer().getPluginManager().registerEvents(hud, this);
+        hud.start(this);
+        directors.setGate(hud.withSpawnCues(new StabilityGate(stability,
                 match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
-                Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger()));
+                Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger())));
         waitingRooms.setStartAllowed(() -> inMatch.matches().size() < stability.maxMatches());
         waitingRooms.start();
         PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
@@ -185,6 +192,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (waitingRooms != null) {
             waitingRooms.close();
             waitingRooms = null;
+        }
+        if (hud != null) {
+            hud.close();
+            hud = null;
         }
         if (enemyLifecycle != null) {
             enemyLifecycle.close();

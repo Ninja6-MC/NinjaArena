@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -337,9 +336,6 @@ public final class MatchService implements MatchStart {
     public void tick() {
         for (Running running : new ArrayList<>(matches.values())) {
             apply(running, running.match().tick());
-            if (!running.match().isClosed()) {
-                showStatus(running);
-            }
         }
     }
 
@@ -540,39 +536,6 @@ public final class MatchService implements MatchStart {
             broadcast(running, Component.text("Returning in " + settings.matchEndSeconds() + " seconds.",
                     NamedTextColor.GRAY));
         }
-    }
-
-    private void showStatus(Running running) {
-        Match match = running.match();
-        String round = match.isExtraRound() ? "Extra round" : "Round " + match.round() + "/" + settings.rounds();
-        Component line = switch (match.phase()) {
-            case WAITING -> Component.empty();
-            case PREP -> Component.text(round + " - Prep " + match.secondsLeft() + "s", NamedTextColor.GOLD);
-            case COMBAT -> Component.text(round + " - " + clock(match.secondsLeft()) + " - " + alive(match),
-                    NamedTextColor.YELLOW);
-            case OVERRUN -> Component.text(round + " - OVERRUN - " + alive(match), NamedTextColor.DARK_RED);
-            case ROUND_END -> Component.text("Next round in " + match.secondsLeft() + "s", NamedTextColor.GRAY);
-            case MATCH_END -> Component.text("Returning in " + match.secondsLeft() + "s", NamedTextColor.GRAY);
-        };
-        for (UUID playerId : match.players()) {
-            Player player = plugin.getServer().getPlayer(playerId);
-            if (player != null) {
-                player.sendActionBar(line);
-            }
-        }
-    }
-
-    private static String alive(Match match) {
-        List<String> teams = new ArrayList<>();
-        for (int team : match.startingTeams()) {
-            long count = match.alivePlayers().stream().filter(player -> match.teamOf(player) == team).count();
-            teams.add("T" + team + ": " + count);
-        }
-        return String.join("  ", teams);
-    }
-
-    private static String clock(int seconds) {
-        return seconds / 60 + ":" + String.format(Locale.ROOT, "%02d", seconds % 60);
     }
 
     private static String join(List<Integer> teams) {
