@@ -212,6 +212,20 @@ belongings, game mode and location. Quitting leaves the restore to the next join
 Every exit first clears spectator mode, so an unsuccessful restore leaves the player in
 Adventure mode while their snapshot remains available for a retry.
 
+## Round feedback
+
+During a match, the bossbar shows the round and the time left in preparation or combat.
+Overrun turns it red and shows its remaining time; an unlimited Overrun keeps a full bar
+without a countdown. Between rounds it shows the next-round countdown. The actionbar
+shows each starting team's points and the number of living enemies currently in play,
+including enemies carried over from an earlier round; it is not a fixed wave total.
+Eliminated teammates keep seeing this feedback while spectating.
+
+Titles mark preparation, the start of combat and the round result. A quiet cue announces
+each successful enemy spawn to that match, and a level-up sound marks each round end,
+including a draw. These use standard client sounds and plain text for Java and Bedrock.
+Leaving, match end and plugin disable clear the bossbar, actionbar and titles.
+
 ## Match scoring
 
 Teams earn 5 points for a round win and 2 for killing an opposing player in the same

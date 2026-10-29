@@ -23,6 +23,9 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import net.kyori.adventure.bossbar.BossBar;
+import net.kyori.adventure.sound.Sound;
+import net.kyori.adventure.title.Title;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.GameMode;
@@ -81,6 +84,10 @@ abstract class MatchFixture {
         PlayerInventory inventory;
         InventoryView view;
         final List<String> messages = new ArrayList<>();
+        final List<String> actionBars = new ArrayList<>();
+        final List<Title> titles = new ArrayList<>();
+        final List<Sound> sounds = new ArrayList<>();
+        final List<BossBar> bossBars = new ArrayList<>();
         final List<Location> teleports = new ArrayList<>();
         final List<PotionEffect> effects = new ArrayList<>();
         final Map<Material, Integer> cooldowns = new HashMap<>();
@@ -97,6 +104,8 @@ abstract class MatchFixture {
 
     protected final Map<UUID, Fake> players = new HashMap<>();
     protected final List<Runnable> nextTick = new ArrayList<>();
+    protected final List<Runnable> repeating = new ArrayList<>();
+    protected int cancellations;
     protected final List<UUID> restored = new ArrayList<>();
     protected final List<UUID> readied = new ArrayList<>();
     protected final List<MatchEvent> events = new ArrayList<>();
@@ -165,14 +174,17 @@ abstract class MatchFixture {
         Logger logger = Logger.getAnonymousLogger();
         logger.setLevel(Level.OFF);
         BukkitTask task = (BukkitTask) Proxy.newProxyInstance(BukkitTask.class.getClassLoader(),
-                new Class<?>[] {BukkitTask.class}, (proxy, method, args) -> null);
+                new Class<?>[] {BukkitTask.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("cancel")) { cancellations++; }
+                    return null;
+                });
         BukkitScheduler scheduler = (BukkitScheduler) Proxy.newProxyInstance(BukkitScheduler.class.getClassLoader(),
                 new Class<?>[] {BukkitScheduler.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "runTask" -> {
                         nextTick.add((Runnable) args[1]);
                         yield task;
                     }
-                    case "runTaskTimer" -> task;
+                    case "runTaskTimer" -> { repeating.add((Runnable) args[1]); yield task; }
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
         Server server = (Server) Proxy.newProxyInstance(Server.class.getClassLoader(), new Class<?>[] {Server.class},
@@ -309,7 +321,13 @@ abstract class MatchFixture {
                         fake.messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
                         yield null;
                     }
-                    case "sendActionBar" -> null;
+                    case "sendActionBar" -> { fake.actionBars.add(PlainTextComponentSerializer.plainText()
+                            .serialize((Component) args[0])); yield null; }
+                    case "showBossBar" -> { fake.bossBars.add((BossBar) args[0]); yield null; }
+                    case "hideBossBar" -> { fake.bossBars.remove((BossBar) args[0]); yield null; }
+                    case "showTitle" -> { fake.titles.add((Title) args[0]); yield null; }
+                    case "clearTitle" -> { fake.titles.clear(); yield null; }
+                    case "playSound" -> { fake.sounds.add((Sound) args[0]); yield null; }
                     case "hashCode" -> id.hashCode();
                     case "equals" -> proxy == args[0];
                     default -> throw new UnsupportedOperationException(method.getName());
