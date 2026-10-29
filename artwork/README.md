@@ -119,5 +119,6 @@ derived. Never edit an exported PNG directly.
    layers are grayscale, and that 16-pixel files have no partial alpha.
 5. Commit the source and exports together.
 
-Review sheets under `previews/` and the texture zips are not committed; the
-zips are rebuilt from `exports/` when packing.
+Review sheets are not committed, apart from `previews/team-colours/` and the
+portal review images kept as curated references; they never go into a pack. The
+texture zips are rebuilt from `exports/` when packing.

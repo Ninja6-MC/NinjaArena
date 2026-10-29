@@ -51,15 +51,24 @@ function encodePng(w, h, px) {
   ]);
 }
 function decodePng(buf) {
-  let pos = 8, w = 0, h = 0;
+  let pos = 8, w = 0, h = 0, depth = 0, colour = 0, interlace = 0;
   const idat = [];
   while (pos < buf.length) {
     const len = buf.readUInt32BE(pos);
     const type = buf.toString("ascii", pos + 4, pos + 8);
     const data = buf.subarray(pos + 8, pos + 8 + len);
-    if (type === "IHDR") { w = data.readUInt32BE(0); h = data.readUInt32BE(4); }
+    if (type === "IHDR") {
+      w = data.readUInt32BE(0);
+      h = data.readUInt32BE(4);
+      depth = data[8];
+      colour = data[9];
+      interlace = data[12];
+    }
     if (type === "IDAT") idat.push(data);
     pos += 12 + len;
+  }
+  if (depth !== 8 || colour !== 6 || interlace !== 0) {
+    throw new Error("expected 8-bit RGBA, non-interlaced");
   }
   const raw = zlib.inflateSync(Buffer.concat(idat));
   const s = w * 4, out = Buffer.alloc(s * h);
@@ -82,12 +91,13 @@ function decodePng(buf) {
   }
   return { w, h, px: out };
 }
-const sha256 = (f) => crypto.createHash("sha256").update(fs.readFileSync(f)).digest("hex");
 const readJson = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
-const writeJson = (f, o) => fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
 
 const manifestFile = path.join(ROOT, "exports", "equipment-manifest.json");
 const manifest = readJson(manifestFile);
+
+const pending = [];
+const stage = (file, content) => pending.push([file, content]);
 
 for (const asset of Object.keys(manifest.assets)) {
   const dir = path.join(ROOT, "exports", asset);
@@ -95,11 +105,19 @@ for (const asset of Object.keys(manifest.assets)) {
   for (const kind of ["base", "accent"]) {
     const name = `${asset}-${kind}-16.png`;
     const file = path.join(dir, name);
-    const img = decodePng(fs.readFileSync(file));
+    let img;
+    try {
+      img = decodePng(fs.readFileSync(file));
+    } catch (e) {
+      throw new Error(`${name}: ${e.message}`);
+    }
+    if (img.w !== 16 || img.h !== 16) throw new Error(`${name}: expected 16x16, got ${img.w}x${img.h}`);
     for (let i = 3; i < img.px.length; i += 4) img.px[i] = img.px[i] >= CUTOFF ? 255 : 0;
-    fs.writeFileSync(file, encodePng(img.w, img.h, img.px));
-    hashes[name] = sha256(file);
+    const png = encodePng(img.w, img.h, img.px);
+    stage(file, png);
+    hashes[name] = crypto.createHash("sha256").update(png).digest("hex");
     const entry = manifest.assets[asset].textures.find((t) => t.path === `${asset}/${name}`);
+    if (!entry) throw new Error(`${name}: not in the manifest`);
     entry.sha256 = hashes[name];
   }
 
@@ -108,14 +126,15 @@ for (const asset of Object.keys(manifest.assets)) {
   for (const [name, sha] of Object.entries(hashes)) {
     if (validation[name]) validation[name].sha256 = sha;
   }
-  writeJson(validationFile, validation);
+  stage(validationFile, JSON.stringify(validation, null, 2) + "\n");
 
   const settingsFile = path.join(dir, "export-settings.json");
   const settings = readJson(settingsFile);
   settings.alpha_cutoff_16 = CUTOFF;
   settings.alpha_cutoff_16_note =
     "16px layers are hard-edged: alpha >= cutoff becomes 255, otherwise 0 (tools/crisp-16.js).";
-  writeJson(settingsFile, settings);
+  stage(settingsFile, JSON.stringify(settings, null, 2) + "\n");
 }
-writeJson(manifestFile, manifest);
+stage(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
+for (const [file, content] of pending) fs.writeFileSync(file, content);
 console.log("16px exports hardened; hashes updated");

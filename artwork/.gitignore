@@ -3,5 +3,8 @@ previews/*
 !previews/team-colours/
 !previews/portal-surface-review.png
 !previews/portal-surface-review.svg
+# Review sheets next to the production exports.
+exports/*-review-*
+exports/*-resolutions-*
 # Delivery bundles are rebuilt from exports/ in CI.
-exports/*.zip
+*.zip
