@@ -1,0 +1,41 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs>
+    <radialGradient id="radial-gradient-1" cx="0" cy="0" r="25.495" gradientTransform="matrix(0.902 0.431 -0.475 0.992 24 32)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b6269" stop-opacity="0.75" />
+      <stop offset="0.28" stop-color="#4b525a" stop-opacity="0.65" />
+      <stop offset="0.65" stop-color="#343a42" stop-opacity="0.4" />
+      <stop offset="1" stop-color="#25282d" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="0" cy="0" r="28.302" gradientTransform="matrix(-0.848 -0.53 0.636 -1.018 45 49)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10151b" stop-opacity="0.65" />
+      <stop offset="0.45" stop-color="#171c22" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#25282d" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-3" cx="30" cy="27" r="4" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#646e77" stop-opacity="0.13" />
+      <stop offset="1" stop-color="#404850" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-4" cx="27" cy="49" r="6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4c5660" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#303840" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="radial-gradient-5" cx="23" cy="32" r="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#858b90" stop-opacity="0.9" />
+      <stop offset="0.55" stop-color="#697077" stop-opacity="0.8" />
+      <stop offset="1" stop-color="#414950" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="linear-gradient-1" x1="49" y1="35" x2="52" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8b8b8" />
+      <stop offset="1" stop-color="#626262" />
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="44" y1="53" x2="47.3" y2="53" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8b8b8" />
+      <stop offset="1" stop-color="#626262" />
+    </linearGradient>
+  </defs>
+  <g id="Seal_Details" data-name="Seal Details">
+    <path id="Fuse_Entry_Contact_Shadow" data-name="Fuse Entry Contact Shadow" d="M33.1 22 C34 23.3 37.5 24.2 39.4 22.3 L39.7 23.2 C37.7 24.7 34.3 24 33.1 22.7 Z" fill="#292e34" />
+    <path id="Clay_Lip_Over_Fuse" data-name="Clay Lip Over Fuse" d="M27.803 22.455 C31 22.9 33.7 23 36.2 23 C38.6 23 40.5 21.9 41.92 20.634 C42.376 22 44.349 22.911 43.59 25.036 C42.983 27.768 38.884 28.072 35.696 27.465 C32.66 27.313 29.169 26.554 28.258 24.732 Z" fill="#373c42" />
+    <path id="Clay_Soft_Front" data-name="Clay Soft Front" d="M31.901 25.036 C34.786 26.25 38.581 26.554 41.161 24.884 C40.554 26.554 38.125 27.161 35.696 26.554 C34.33 26.554 32.812 25.795 31.901 25.036 Z" fill="#494f56" />
+  </g>
+</svg>

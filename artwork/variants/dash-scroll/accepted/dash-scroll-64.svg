@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="linear-gradient-1" x1="29" y1="22" x2="39" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#333b44"/>
+      <stop offset="0.4" stop-color="#282f37"/>
+      <stop offset="1" stop-color="#151b22"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="46" y1="17" x2="56" y2="37" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#46515d"/>
+      <stop offset="0.45" stop-color="#343e49"/>
+      <stop offset="1" stop-color="#1d252f"/>
+    </linearGradient>
+    <radialGradient id="radial-gradient-1" cx="0" cy="0" r="20" gradientTransform="matrix(0.6 0.8 -1.28 0.96 32 28)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#59636e" stop-opacity="0.52"/>
+      <stop offset="0.45" stop-color="#424c57" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#303943" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="linear-gradient-3" x1="33" y1="34" x2="39" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11171e" stop-opacity="0"/>
+      <stop offset="0.65" stop-color="#11171e" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="#11171e" stop-opacity="0.48"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-4" x1="11" y1="31" x2="26" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#68717b"/>
+      <stop offset="0.35" stop-color="#505963"/>
+      <stop offset="1" stop-color="#303740"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-5" x1="18" y1="30" x2="45" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#515b65"/>
+      <stop offset="0.2" stop-color="#414b55"/>
+      <stop offset="0.55" stop-color="#343c45"/>
+      <stop offset="1" stop-color="#303740"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-6" x1="21" y1="33" x2="54.5" y2="26.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11171d" stop-opacity="0.35"/>
+      <stop offset="0.5" stop-color="#11171d" stop-opacity="0.23"/>
+      <stop offset="0.8" stop-color="#11171d" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#11171d" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-7" x1="20.1" y1="33.5" x2="24.4" y2="31.3" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#858f98" stop-opacity="0.72"/>
+      <stop offset="0.45" stop-color="#78838c" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#78838c" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-8" x1="25" y1="23.2" x2="25" y2="21.6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5c5c5"/>
+      <stop offset="1" stop-color="#8c8c8c"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-9" x1="34" y1="47.8" x2="34" y2="49.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5c5c5"/>
+      <stop offset="1" stop-color="#8c8c8c"/>
+    </linearGradient>
+  </defs>
+  <title>dash-scroll-64</title>
+  <g id="Binding_Back" data-name="Binding Back">
+    <path id="Binding_-_Back_Wrap" data-name="Binding - Back Wrap" d="M22.7 23.4 C24.4 22 26.8 20.7 28.3 21.2 C34 27 38 39 37.8 46.8 C36.7 48.7 33.9 50.1 31.7 49.7 L31.9 48.3 C34.1 48 35.9 47 36.3 45.9 C36.4 39.1 32.4 27.8 27 22.5 C26.1 22.1 24.9 23.3 24 24.3 Z" fill="#929292"/>
+  </g>
+  <g id="Scroll_Shape" data-name="Scroll Shape">
+    <path id="Rolled_Scroll_Body" data-name="Rolled Scroll Body" d="M13 29 L42 15 C47 13 52 17 54 23 L56 34 C56 38 50 41 45 43 L24 52 C18 54 12 50 10 44 C7 38 8 32 13 29 Z" fill="url(#linear-gradient-1)"/>
+    <path id="Left_Rolled_End" data-name="Left Rolled End" d="M13 29 C18 27 24 32 26 39 C29 46 27 51 23 52 C17 54 11 48 9 42 C7 36 8 31 13 29 Z" fill="#181c22"/>
+    <path id="Right_Rolled_Edge" data-name="Right Rolled Edge" d="M42 15 C47 13 52 17 54 23 L56 34 C56 37 53 39 50 40 C52 36 51 30 49 25 C47 20 44 18 40 17 Z" fill="url(#linear-gradient-2)"/>
+  </g>
+  <g id="Body_Shading" data-name="Body Shading">
+    <path id="Leather_-_Broad_Soft_Light" data-name="Leather - Broad Soft Light" d="M13 29 L40 17 C44 18 47 21 49 25 C51 30 52 36 50 40 L24 52 C18 54 12 50 10 44 C7 38 8 32 13 29 Z" fill="url(#radial-gradient-1)"/>
+    <path id="Leather_-_Underside_Shade" data-name="Leather - Underside Shade" d="M13 29 L40 17 C44 18 47 21 49 25 C51 30 52 36 50 40 L24 52 C18 54 12 50 10 44 C7 38 8 32 13 29 Z" fill="url(#linear-gradient-3)"/>
+  </g>
+  <g id="Rolled_Ends" data-name="Rolled Ends">
+    <path id="Left_End_-_Rolled_Paper" data-name="Left End - Rolled Paper" d="M13.5 31 C17.6 29.4 22.2 33.4 24.3 39.4 C26.5 45.3 25.4 49.5 22.1 50.1 C17.7 51 12.9 46.6 11.1 41.1 C9.4 36.4 10.5 32.5 13.5 31 Z" fill="url(#linear-gradient-4)"/>
+    <path id="Left_End_-_Paper_Spiral" data-name="Left End - Paper Spiral" d="M21.116 32.798 C21.601 33.385 22.05 34.022 22.454 34.69 C22.858 35.359 23.217 36.059 23.523 36.772 C23.829 37.485 24.082 38.211 24.279 38.932 C24.476 39.653 24.616 40.368 24.697 41.059 C24.779 41.751 24.803 42.42 24.77 43.049 C24.737 43.679 24.647 44.269 24.506 44.808 C24.365 45.346 24.172 45.832 23.934 46.256 C23.696 46.68 23.414 47.042 23.095 47.335 C22.776 47.628 22.421 47.853 22.041 48.006 C21.661 48.16 21.256 48.242 20.836 48.254 C20.416 48.265 19.983 48.207 19.546 48.083 C19.11 47.959 18.671 47.77 18.241 47.522 C17.81 47.275 17.388 46.97 16.985 46.618 C16.583 46.266 16.198 45.866 15.842 45.431 C15.485 44.997 15.157 44.527 14.862 44.037 C14.568 43.546 14.308 43.034 14.088 42.514 C13.868 41.995 13.687 41.469 13.548 40.948 C13.409 40.428 13.312 39.915 13.258 39.421 C13.203 38.926 13.191 38.452 13.218 38.007 C13.246 37.562 13.314 37.148 13.418 36.773 C13.522 36.398 13.663 36.063 13.833 35.773 C14.004 35.483 14.206 35.238 14.43 35.043 C14.655 34.848 14.904 34.702 15.167 34.606 C15.431 34.51 15.711 34.464 15.998 34.466 C16.285 34.468 16.579 34.518 16.872 34.612 C17.166 34.706 17.459 34.843 17.743 35.017 C18.027 35.192 18.303 35.403 18.563 35.644 C18.824 35.884 19.069 36.153 19.294 36.442 C19.519 36.731 19.724 37.04 19.903 37.358 C20.083 37.677 20.238 38.005 20.367 38.334 C20.495 38.663 20.597 38.992 20.671 39.313 C20.745 39.633 20.792 39.945 20.812 40.241 C20.833 40.536 20.826 40.815 20.796 41.071 C20.766 41.327 20.712 41.56 20.637 41.766 C20.562 41.972 20.467 42.151 20.357 42.299 C20.246 42.448 20.119 42.567 19.982 42.655 C19.845 42.743 19.698 42.801 19.545 42.83 C19.392 42.858 19.234 42.858 19.076 42.832 C18.919 42.805 18.761 42.753 18.609 42.679 C18.456 42.605 18.309 42.509 18.17 42.398 C18.032 42.286 17.903 42.159 17.786 42.022 C17.669 41.884 17.564 41.737 17.474 41.586 C17.383 41.435 17.307 41.281 17.247 41.128 C17.186 40.976 17.14 40.826 17.109 40.684 C17.078 40.542 17.062 40.408 17.059 40.285 C17.056 40.162 17.067 40.052 17.088 39.956 C17.11 39.86 17.143 39.779 17.183 39.715 C17.223 39.65 17.272 39.602 17.324 39.571" fill="none" stroke="#181c22" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="Rolled_Paper_-_Lit_Layer_Edge" data-name="Rolled Paper - Lit Layer Edge" d="M20.206 33.549 L20.372 33.754 L20.535 33.963 L20.695 34.177 L20.852 34.394 L21.005 34.616 L21.155 34.841 L21.301 35.069 L21.444 35.301 L21.583 35.535 L21.718 35.772 L21.849 36.011 L21.975 36.253 L22.098 36.497 L22.216 36.742 L22.329 36.989 L22.438 37.238 L22.543 37.487 L22.643 37.737 L22.738 37.988 L22.828 38.239 L22.914 38.49 L22.994 38.742 L23.07 38.992 L23.141 39.243 L23.207 39.492 L23.267 39.741 L23.323 39.988 L23.374 40.234 L23.419 40.478 L23.46 40.72 L23.495 40.96 L23.525 41.198 L23.551 41.433 L23.571 41.665 L23.587 41.894 L23.597 42.12 L23.603 42.343 L23.604 42.562 L23.6 42.777 L23.591 42.988 L23.578 43.194 L23.56 43.397 L23.538 43.595 L23.512 43.788 L23.481 43.976 L23.446 44.158 L23.408 44.336 L23.365 44.508 L23.319 44.675 L23.269 44.836 L23.216 44.992 L23.159 45.141 L23.1 45.284 L23.038 45.422 L22.973 45.553 L22.905 45.679 L22.835 45.798 L22.763 45.911 L22.69 46.019 L22.614 46.12 L22.537 46.215 L22.458 46.305 L22.377 46.389 L22.296 46.467 L22.213 46.54 L22.129 46.607 L22.044 46.67 L21.958 46.728 L21.87 46.781 L21.782 46.829 L21.691 46.873 L21.6 46.912 L21.507 46.947 L21.412 46.978 L21.316 47.005 L21.217 47.027 L21.117 47.045 L21.014 47.059 L20.91 47.069 L20.803 47.074 L20.694 47.075 L20.582 47.071 L20.469 47.063 L20.353 47.05 L20.235 47.032 L20.115 47.009 L19.993 46.981 L19.869 46.948 L19.743 46.91 L19.616 46.867 L19.487 46.818 L19.357 46.765 L19.226 46.706 L19.094 46.642 L18.962 46.573 L18.828 46.499 L18.695 46.42 L18.561 46.336 L18.427 46.247 L18.293 46.153 L18.159 46.054 L18.026 45.95 L17.894 45.842 L17.762 45.73 L17.631 45.613 L17.502 45.492 L17.373 45.366 L17.246 45.237 L17.121 45.104 L16.997 44.967 L16.874 44.827 L16.754 44.683 L16.636 44.536 L16.52 44.386 L16.406 44.233 L16.295 44.077 L16.186 43.919 L16.079 43.758 L15.975 43.595 L15.874 43.43 L15.776 43.263 L15.681 43.094 L15.589 42.923 L15.499 42.752 L15.413 42.579 L15.33 42.404 L15.251 42.229 L15.174 42.054 L15.101 41.877 L15.032 41.701 L14.966 41.524 L14.903 41.347 L14.844 41.171 L14.789 40.995 L14.737 40.819 L14.688 40.644 L14.643 40.47 L14.602 40.297 L14.565 40.125 L14.531 39.955 L14.5 39.786 L14.474 39.619 L14.45 39.454 L14.431 39.291 L14.414 39.13 L14.402 38.972 L14.393 38.816 L14.387 38.663 L14.384 38.513 L14.385 38.365 L14.389 38.221 L14.396 38.08 L14.406 37.943 L14.419 37.809 L14.435 37.679 L14.454 37.553 L14.476 37.431 L14.5 37.313 L14.526 37.199 L14.555 37.089 L14.586 36.984 L14.619 36.883 L14.654 36.786 L14.69 36.694 L14.728 36.607 L14.768 36.524 L14.808 36.445 L14.85 36.372 L14.893 36.302 L14.936 36.237 L14.98 36.177 L15.024 36.12 L15.069 36.068 L15.114 36.02 L15.159 35.975 L15.204 35.934 L15.249 35.897 L15.294 35.862 L15.34 35.831 L15.385 35.803 L15.431 35.777 L15.477 35.754 L15.523 35.733 L15.571 35.715 L15.619 35.699 L15.668 35.685 L15.718 35.673 L15.769 35.663 L15.822 35.656 L15.876 35.65 L15.932 35.647 L15.989 35.646 L16.049 35.648 L16.11 35.652 L16.173 35.659 L16.238 35.669 L16.304 35.681 L16.372 35.696 L16.442 35.715 L16.514 35.736 L16.586 35.761 L16.66 35.789 L16.736 35.82 L16.812 35.854 L16.889 35.891 L16.968 35.932 L17.046 35.976 L17.126 36.023 L17.205 36.074 L17.285 36.127 L17.365 36.184 L17.446 36.243 L17.526 36.306 L17.605 36.372 L17.685 36.44 L17.763 36.511 L17.842 36.585 L17.919 36.661 L17.996 36.74 L18.071 36.821 L18.146 36.904 L18.22 36.99 L18.292 37.077 L18.363 37.167 L18.433 37.258 L18.501 37.351 L18.568 37.446 L18.633 37.542 L18.696 37.639 L18.758 37.738 L18.818 37.837 L18.876 37.938 L18.932 38.04 L18.986 38.142 L19.038 38.245 L19.088 38.348 L19.136 38.452 L19.182 38.556 L19.226 38.66 L19.268 38.763 L19.307 38.867 L19.345 38.971 L19.38 39.074 L19.412 39.176 L19.443 39.278 L19.471 39.379 L19.498 39.48 L19.522 39.579 L19.543 39.677 L19.563 39.774 L19.58 39.869 L19.595 39.963 L19.608 40.055 L19.619 40.146 L19.628 40.235 L19.635 40.321 L19.64 40.406 L19.643 40.489 L19.644 40.569 L19.643 40.647 L19.641 40.722 L19.637 40.795 L19.631 40.865 L19.624 40.933 L19.616 40.997 L19.606 41.059 L19.595 41.118 L19.583 41.173 L19.57 41.226 L19.557 41.275 L19.542 41.321 L19.528 41.364 L19.512 41.404 L19.497 41.44 L19.482 41.474 L19.467 41.504 L19.452 41.531 L19.437 41.555 L19.423 41.576 L19.41 41.594 L19.398 41.61 L19.387 41.623 L19.377 41.634 L19.368 41.643 L19.36 41.65 L19.353 41.656 L19.348 41.66 L19.344 41.663 L19.34 41.665 L19.337 41.666 L19.335 41.667 L19.334 41.668 L19.332 41.669 L19.331 41.669 L19.329 41.669 L19.327 41.67 L19.324 41.67 L19.32 41.671 L19.316 41.671 L19.31 41.671 L19.302 41.671 L19.293 41.671 L19.283 41.669 L19.271 41.668 L19.258 41.665 L19.243 41.662 L19.226 41.657 L19.208 41.652 L19.189 41.645 L19.168 41.637 L19.146 41.628 L19.123 41.617 L19.099 41.605 L19.074 41.591 L19.048 41.576 L19.022 41.56 L18.995 41.542 L18.967 41.522 L18.939 41.501 L18.911 41.479 L18.882 41.455 L18.853 41.43 L18.825 41.404 L18.796 41.377 L18.768 41.348 L18.74 41.319 L18.712 41.288 L18.684 41.257 L18.657 41.224 L18.631 41.191 L18.605 41.157 L18.58 41.123 L18.555 41.088 L18.531 41.052 L18.508 41.016 L18.486 40.98 L18.465 40.943 L18.444 40.907 L18.425 40.87 L18.406 40.834 L18.389 40.797 L18.372 40.761 L18.357 40.725 L18.342 40.69 L18.329 40.655 L18.316 40.621 L18.305 40.587 L18.294 40.555 L18.285 40.523 L18.276 40.492 L18.269 40.462 L18.262 40.433 L18.256 40.406 L18.252 40.38 L18.248 40.355 L18.245 40.332 L18.242 40.311 L18.24 40.292 L18.239 40.274 L18.239 40.258 L18.239 40.244 L18.239 40.233 L18.239 40.224 L18.24 40.217 L18.24 40.213 L18.241 40.211 L18.24 40.211" fill="none" stroke="#858f98" stroke-width="0.42" stroke-linecap="round" stroke-linejoin="round" opacity="0.72"/>
+  </g>
+  <g id="Outer_Sheet_Edge" data-name="Outer Sheet Edge">
+    <path id="Outer_Sheet_-_Overlapping_Surface" data-name="Outer Sheet - Overlapping Surface" d="M13 29 C22.8 25.3 31.1 20.8 40 17 C43.2 18.5 45.2 20.4 46.5 22.1 C38.1 24.9 29 29.1 21.116 32.797 C19.7 30.5 16.7 28 13 29 Z" fill="url(#linear-gradient-5)"/>
+    <path id="Outer_Sheet_-_Soft_Contact_Shadow" data-name="Outer Sheet - Soft Contact Shadow" d="M21.116 32.797 C29 29.1 38.1 24.9 46.5 22.1 C49.5 21.9 52.4 24 54.5 26.5 C52.2 24.4 49.4 22.55 46.55 22.65 C38.3 25.6 29.2 29.9 21.3 33.25 Z" fill="url(#linear-gradient-6)"/>
+    <path id="Roll_To_Sheet_-_Edge_Transition" data-name="Roll To Sheet - Edge Transition" d="M20.08 33.45 C20.45 33.09 20.78 32.78 21.12 32.8 C22.15 32.25 23.25 31.73 24.35 31.2 L24.42 31.53 C23.25 32.1 22.15 32.55 21.28 33.02 C20.92 33.18 20.7 33.53 20.4 33.78 Z" fill="url(#linear-gradient-7)"/>
+  </g>
+  <g id="Wind_Symbol" data-name="Wind Symbol">
+    <path id="Upper_Wind_-_Recess" data-name="Upper Wind - Recess" d="M28.92 38.92 C32.44 38.656 35.96 37.776 38.336 36.632 C40.272 35.488 42.912 34.96 44.936 32.76 C47.048 30.56 46.08 27.392 43.44 27.128 C41.328 26.952 40.184 28.536 40.976 30.032 C41.68 31.44 43.88 31.264 44.056 29.856 C44.144 29.064 43.44 28.712 42.912 29.064" fill="none" stroke="#141b23" stroke-width="2.068" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="Upper_Wind_-_Silver" data-name="Upper Wind - Silver" d="M28.92 38.92 C32.44 38.656 35.96 37.776 38.336 36.632 C40.272 35.488 42.912 34.96 44.936 32.76 C47.048 30.56 46.08 27.392 43.44 27.128 C41.328 26.952 40.184 28.536 40.976 30.032 C41.68 31.44 43.88 31.264 44.056 29.856 C44.144 29.064 43.44 28.712 42.912 29.064" fill="none" stroke="#bcc6ce" stroke-width="1.188" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="Lower_Wind_-_Recess" data-name="Lower Wind - Recess" d="M30.68 43.32 C33.32 42.704 36.4 41.12 38.952 39.976 C40.8 38.656 43 37.248 45.2 37.248 C47.752 37.16 47.928 39.448 45.992 40.24 C44.848 40.68 43.88 40.064 44.144 39.184" fill="none" stroke="#141b23" stroke-width="2.068" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="Lower_Wind_-_Silver" data-name="Lower Wind - Silver" d="M30.68 43.32 C33.32 42.704 36.4 41.12 38.952 39.976 C40.8 38.656 43 37.248 45.2 37.248 C47.752 37.16 47.928 39.448 45.992 40.24 C44.848 40.68 43.88 40.064 44.144 39.184" fill="none" stroke="#bcc6ce" stroke-width="1.188" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g id="Team_Binding" data-name="Team Binding">
+    <path id="Binding_Wrap" data-name="Binding Wrap" d="M23 23.25 C24.8 22.25 26.8 21.2 28 21.05 C30.4 23.55 32.2 27.4 33.8 31.3 L34 32.5 C36.3 37.5 37.8 42.5 37.2 47 L35.2 48.1 L34.5 47.9 L31.9 49.5 C32.4 44.3 30.8 38.2 28.6 33.5 L28.4 32.5 C26.8 28.8 25 25.55 23 23.25 Z" fill="#d2d2d2"/>
+    <path id="Binding_Tail_-_Left" data-name="Binding Tail - Left" d="M29.2 35 C28.9 37.2 27.9 39.1 26.6 40.8 L25.1 43.5 L26.4 43.4 L27.4 44 L28.2 43.5 L28.9 43.8 C31 41.2 31.8 38.9 32 36 Z" fill="#c5c5c5"/>
+    <path id="Binding_Tail_-_Right" data-name="Binding Tail - Right" d="M31.6 34.9 C34 35.2 36.5 37.2 37.7 39.2 L40.3 42.4 L39 42.3 L38.6 43.5 L37.8 43 C35.9 41.8 35.5 39.5 34.1 38 C33 37 32 36.7 31.2 36 Z" fill="#b8b8b8"/>
+    <path id="Binding_Knot" data-name="Binding Knot" d="M28.5 32.4 C29.9 31.9 31.3 32.2 32.2 32.7 L33.5 35 C32.9 36.6 30.3 36.8 28.8 35.9 L28.1 34.3 Z" fill="#cdcdcd"/>
+  </g>
+  <g id="Binding_Details" data-name="Binding Details">
+    <path id="Binding_Fold_-_Right_Edge" data-name="Binding Fold - Right Edge" d="M26.7 21.85 L28 21.05 C30.4 23.55 32.2 27.4 33.8 31.3 L34 32.5 C36.3 37.5 37.8 42.5 37.2 47 L35.8 47.6 C36.6 42.9 35 37.7 32.8 32.8 L32.4 31.6 C30.8 27.9 29 24.35 26.7 21.85 Z" fill="#a6a6a6"/>
+    <path id="Knot_-_Compressed_Fold" data-name="Knot - Compressed Fold" d="M29.6 32.6 C30 33.5 30.1 34.9 29.6 36.1 L30.6 36.4 C31.2 35 31 33.8 30.7 32.6 Z" fill="#9d9d9d"/>
+    <path id="Left_Tail_-_Soft_Fold" data-name="Left Tail - Soft Fold" d="M30.1 36.1 C30.2 38.6 28.8 41.6 27.4 43.4 L28.2 43.5 C30.4 41.1 31 38.1 31 36.3 Z" fill="#adadad"/>
+    <path id="Cotton_Fibres_-_Upper" data-name="Cotton Fibres - Upper" d="M26.2 26.3 L27.2 27.5 M27.3 27.9 L28 28.9" fill="none" stroke="#e2e2e2" stroke-width="0.16" stroke-linecap="round" stroke-miterlimit="10" opacity="0.35"/>
+    <path id="Cotton_Fibres_-_Lower" data-name="Cotton Fibres - Lower" d="M33.7 41.7 L34 43 M33.5 43.6 L33.8 44.7" fill="none" stroke="#e2e2e2" stroke-width="0.16" stroke-linecap="round" stroke-miterlimit="10" opacity="0.35"/>
+    <path id="Binding_-_Top_Return" data-name="Binding - Top Return" d="M23 23.25 C24.7 21.95 26.8 20.95 28 21.05 L28.55 21.75 C27.3 21.9 25.2 22.8 23.7 24 Z" fill="url(#linear-gradient-8)"/>
+    <path id="Binding_-_Bottom_Return" data-name="Binding - Bottom Return" d="M31.9 48.5 C33.5 48.1 35.3 47.5 37.2 46.4 L37.2 47 C35.6 48.3 33.7 49.4 31.9 49.5 Z" fill="url(#linear-gradient-9)"/>
+    <path id="Right_Tail_-_Soft_Fold" data-name="Right Tail - Soft Fold" d="M32.5 35.6 C35 36.6 36.3 38 37.1 39.5 L39.1 42.2 L38.6 43.1 C37 41.6 36.5 39.6 35 38.2 C34 37.2 33.2 36.6 32.5 35.6 Z" fill="#a2a2a2"/>
+  </g>
+</svg>

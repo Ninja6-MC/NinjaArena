@@ -1,0 +1,75 @@
+{
+  "smoke-bomb-base-16.png": {
+    "size": [
+      16,
+      16
+    ],
+    "nonempty_alpha": true,
+    "grayscale": false,
+    "source": "adaptations/smoke-bomb-16.pcraft",
+    "sha256": "73444f5c593c13e1ddeaf7bbd89832079f39fce5ca72911c919176945f094373"
+  },
+  "smoke-bomb-accent-16.png": {
+    "size": [
+      16,
+      16
+    ],
+    "nonempty_alpha": true,
+    "grayscale": true,
+    "source": "adaptations/smoke-bomb-16.pcraft",
+    "sha256": "e6036b744b9be589dc9a0dcb9c6725fe992dea97150cf66b3a2b0f43e2286c89"
+  },
+  "smoke-bomb-base-32.png": {
+    "size": [
+      32,
+      32
+    ],
+    "nonempty_alpha": true,
+    "grayscale": false,
+    "sha256": "8a716b0dad1fce71547f30565567b6f4f5cea19dcc137e2e4f68ad6f4f7b83c3"
+  },
+  "smoke-bomb-accent-32.png": {
+    "size": [
+      32,
+      32
+    ],
+    "nonempty_alpha": true,
+    "grayscale": true,
+    "sha256": "3b2533d0dc54582b68f024c2f5c9b32438575f8b65d10a06de8d63ede06ac23d"
+  },
+  "recombination_32": {
+    "max_premultiplied_channel_difference": 16,
+    "mean_premultiplied_channel_difference": 0.045,
+    "note": "Premultiplied comparison ignores hidden RGB in transparent pixels; antialiased overlapping edges can differ."
+  },
+  "smoke-bomb-base-64.png": {
+    "size": [
+      64,
+      64
+    ],
+    "nonempty_alpha": true,
+    "grayscale": false,
+    "sha256": "7999a4d3d27f76d52cdcef5a8f5ef2b3eba3e39c147fab07563c9fd2bb0b74ef"
+  },
+  "smoke-bomb-accent-64.png": {
+    "size": [
+      64,
+      64
+    ],
+    "nonempty_alpha": true,
+    "grayscale": true,
+    "sha256": "a894c396709f99908ac6ef6921289d8d6f178d9b919a0a3ae8d1f2b706d96f17"
+  },
+  "recombination_64": {
+    "max_premultiplied_channel_difference": 24,
+    "mean_premultiplied_channel_difference": 0.01,
+    "note": "Premultiplied comparison ignores hidden RGB in transparent pixels; antialiased overlapping edges can differ."
+  },
+  "adaptation_16": {
+    "status": "accepted",
+    "source": "adaptations/smoke-bomb-16.pcraft",
+    "comparison": "../../previews/smart-object-migration/migration-review.png",
+    "note": "Intentional pixel adaptation differs from the direct vector render; previous direct-render comparison is not applicable.",
+    "source_layers": "Eight SVG Smart Objects and two pixel cleanup layers"
+  }
+}

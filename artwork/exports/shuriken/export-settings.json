@@ -1,0 +1,23 @@
+{
+  "master": "../../shuriken-64.vectorcraft",
+  "interchange": "../../shuriken-64.svg",
+  "sizes": [
+    16,
+    32,
+    64
+  ],
+  "rasterizer": "VectorCraft",
+  "anti_alias": "art",
+  "layers": {
+    "base": "All artwork except Team Colour Mask",
+    "accent": "Team Colour Mask only, pure white with transparent background"
+  },
+  "size_16": {
+    "centre_hole": "Square [28,28,8,8] in the 64-unit artboard; clear across all layers",
+    "accent_outer_path": "M28 24 H36 L40 28 V36 L36 40 H28 L24 36 V28 Z",
+    "hub_outer_path": "M28 22 H36 L42 28 V36 L36 42 H28 L22 36 V28 Z"
+  },
+  "team_colours": "Runtime RGB tint applied to accent layer only",
+  "alpha_cutoff_16": 128,
+  "alpha_cutoff_16_note": "16px layers are hard-edged: alpha >= cutoff becomes 255, otherwise 0 (tools/crisp-16.js)."
+}

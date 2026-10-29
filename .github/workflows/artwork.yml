@@ -1,0 +1,31 @@
+name: Artwork
+
+on:
+  pull_request:
+    paths:
+      - 'artwork/**'
+      - '.github/workflows/artwork.yml'
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Artwork Exports
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Exports Against The Manifest
+        run: node artwork/tools/validate-exports.js

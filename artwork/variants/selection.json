@@ -1,0 +1,7 @@
+{
+  "fallback_sha256": "CD3FF9003BD88C000678A6A82C069B0DAE0647F26D322705DF09372FD8A731E6",
+  "master": "shuriken-64.vectorcraft",
+  "selected": "broad-root",
+  "sha256": "EAE2CB51B7E39E36DF7448EA76CEC900F2EB258B6E4494376924D691A4863EA1",
+  "fallback": "baseline/shuriken-64.vectorcraft"
+}

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="440" viewBox="0 0 800 440">
+<title>Shuriken comparison in all team colours</title>
+<rect width="800" height="440" fill="#12161A"/>
+<g font-family="sans-serif" fill="#E8EDF2" text-anchor="middle">
+<text x="192" y="25" font-size="17">Red</text>
+<text x="136" y="48" font-size="11">Previous</text>
+<text x="248" y="48" font-size="11">Broader roots</text>
+<text x="432" y="25" font-size="17">Blue</text>
+<text x="376" y="48" font-size="11">Previous</text>
+<text x="488" y="48" font-size="11">Broader roots</text>
+<text x="672" y="25" font-size="17">Green</text>
+<text x="616" y="48" font-size="11">Previous</text>
+<text x="728" y="48" font-size="11">Broader roots</text>
+<text x="38" y="116" font-size="13">16 x 16</text>
+<image href="baseline/textures/shuriken-red-16.png" x="88" y="64" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-red-16.png" x="200" y="64" width="96" height="96" image-rendering="pixelated"/>
+<image href="baseline/textures/shuriken-blue-16.png" x="328" y="64" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-blue-16.png" x="440" y="64" width="96" height="96" image-rendering="pixelated"/>
+<image href="baseline/textures/shuriken-green-16.png" x="568" y="64" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-green-16.png" x="680" y="64" width="96" height="96" image-rendering="pixelated"/>
+<text x="38" y="236" font-size="13">32 x 32</text>
+<image href="baseline/textures/shuriken-red-32.png" x="88" y="184" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-red-32.png" x="200" y="184" width="96" height="96" image-rendering="pixelated"/>
+<image href="baseline/textures/shuriken-blue-32.png" x="328" y="184" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-blue-32.png" x="440" y="184" width="96" height="96" image-rendering="pixelated"/>
+<image href="baseline/textures/shuriken-green-32.png" x="568" y="184" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-green-32.png" x="680" y="184" width="96" height="96" image-rendering="pixelated"/>
+<text x="38" y="356" font-size="13">64 x 64</text>
+<image href="baseline/textures/shuriken-red-64.png" x="88" y="304" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-red-64.png" x="200" y="304" width="96" height="96" image-rendering="pixelated"/>
+<image href="baseline/textures/shuriken-blue-64.png" x="328" y="304" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-blue-64.png" x="440" y="304" width="96" height="96" image-rendering="pixelated"/>
+<image href="baseline/textures/shuriken-green-64.png" x="568" y="304" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-green-64.png" x="680" y="304" width="96" height="96" image-rendering="pixelated"/>
+<text x="400" y="425" font-size="11">Textures enlarged to the same display size for comparison.</text>
+</g>
+</svg>

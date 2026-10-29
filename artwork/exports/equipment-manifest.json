@@ -1,0 +1,135 @@
+{
+  "assets": {
+    "shuriken": {
+      "master": "shuriken-64.vectorcraft",
+      "master_sha256": "eae2cb51b7e39e36df7448ea76cec900f2eb258b6e4494376924d691a4863ea1",
+      "textures": [
+        {
+          "path": "shuriken/shuriken-base-16.png",
+          "sha256": "293a76fa80c862f8e89182288e6e5b048672200c9c7e22d0475432b3110e2f43",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "path": "shuriken/shuriken-accent-16.png",
+          "sha256": "754c52b09b9d09894d5a6713cfef045db80f8098e2bc1e6f0ced0f2eea9feb64",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "path": "shuriken/shuriken-base-32.png",
+          "sha256": "fe573ef97dc0da2822cf3dcfb81768f4ea0b4122cfa14fb15e779344575e4172",
+          "width": 32,
+          "height": 32
+        },
+        {
+          "path": "shuriken/shuriken-accent-32.png",
+          "sha256": "fb1b34c953b86dda8922d0b722caec124fb8c9f3910dcb976b20583289aac757",
+          "width": 32,
+          "height": 32
+        },
+        {
+          "path": "shuriken/shuriken-base-64.png",
+          "sha256": "a20dcd8cafe0479cf01d83079dabd515c839db4af4a7f3931290512d6e87fe4f",
+          "width": 64,
+          "height": 64
+        },
+        {
+          "path": "shuriken/shuriken-accent-64.png",
+          "sha256": "fbba283c269adee7987c43428aa09fcc6ccce8dda6ff407a6ba6ec7d8b16b02e",
+          "width": 64,
+          "height": 64
+        }
+      ]
+    },
+    "smoke-bomb": {
+      "master": "smoke-bomb-64.vectorcraft",
+      "master_sha256": "99cf6b2a55a7bff83875e7db4f894464957ef189467052d35b9a0249029b52bd",
+      "textures": [
+        {
+          "path": "smoke-bomb/smoke-bomb-base-16.png",
+          "sha256": "73444f5c593c13e1ddeaf7bbd89832079f39fce5ca72911c919176945f094373",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "path": "smoke-bomb/smoke-bomb-accent-16.png",
+          "sha256": "e6036b744b9be589dc9a0dcb9c6725fe992dea97150cf66b3a2b0f43e2286c89",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "path": "smoke-bomb/smoke-bomb-base-32.png",
+          "sha256": "8a716b0dad1fce71547f30565567b6f4f5cea19dcc137e2e4f68ad6f4f7b83c3",
+          "width": 32,
+          "height": 32
+        },
+        {
+          "path": "smoke-bomb/smoke-bomb-accent-32.png",
+          "sha256": "3b2533d0dc54582b68f024c2f5c9b32438575f8b65d10a06de8d63ede06ac23d",
+          "width": 32,
+          "height": 32
+        },
+        {
+          "path": "smoke-bomb/smoke-bomb-base-64.png",
+          "sha256": "7999a4d3d27f76d52cdcef5a8f5ef2b3eba3e39c147fab07563c9fd2bb0b74ef",
+          "width": 64,
+          "height": 64
+        },
+        {
+          "path": "smoke-bomb/smoke-bomb-accent-64.png",
+          "sha256": "a894c396709f99908ac6ef6921289d8d6f178d9b919a0a3ae8d1f2b706d96f17",
+          "width": 64,
+          "height": 64
+        }
+      ],
+      "adaptation_16": "adaptations/smoke-bomb-16.pcraft",
+      "adaptation_16_sha256": "23aa6599a0d7dbb34b080e9061ccdd50ae81d34ae559ec009c1f225a4b5ad253"
+    },
+    "dash-scroll": {
+      "master": "dash-scroll-64.vectorcraft",
+      "master_sha256": "fd7f6e818d974d75b454ac864f8e7de27dbb361ce45274e4e0b138fc451a0d90",
+      "textures": [
+        {
+          "path": "dash-scroll/dash-scroll-base-16.png",
+          "sha256": "5924c0f0a490856ccf927f3ac8f694ebfb3c1e6295a77a4ec056e2c2263a9a1f",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "path": "dash-scroll/dash-scroll-accent-16.png",
+          "sha256": "086deafff96a52f18b21bc0dee25643276f736a40a3f8327e4d8265cfc1a77c2",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "path": "dash-scroll/dash-scroll-base-32.png",
+          "sha256": "d01e574c3ada426dd20bf47f14213c9defd04f23a3cbe3fd414d862113352401",
+          "width": 32,
+          "height": 32
+        },
+        {
+          "path": "dash-scroll/dash-scroll-accent-32.png",
+          "sha256": "ea0ef712110bdb666848f49468b448c4968689f1b61e83fa8dc86afdee033596",
+          "width": 32,
+          "height": 32
+        },
+        {
+          "path": "dash-scroll/dash-scroll-base-64.png",
+          "sha256": "f33a85904ed7dc7ec3dd5c5c028d26e3010641f0ed801c2bf9decbea5809576b",
+          "width": 64,
+          "height": 64
+        },
+        {
+          "path": "dash-scroll/dash-scroll-accent-64.png",
+          "sha256": "3ccf7dc9aef437df4c6cf1d988d9613b728ba325f4f4ea65ca0dcf4797601a05",
+          "width": 64,
+          "height": 64
+        }
+      ],
+      "adaptation_16": "adaptations/dash-scroll-16.pcraft",
+      "adaptation_16_sha256": "5c23b1fd7bf009c9be30ae57f64cde4f9d813e7853981f3ea6504ba5de6bcaef"
+    }
+  },
+  "runtime_tint": "Multiply grayscale accent RGB by selected team RGB; preserve alpha; draw over base."
+}

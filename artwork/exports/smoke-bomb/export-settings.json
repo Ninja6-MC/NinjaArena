@@ -1,0 +1,21 @@
+{
+  "master": "../../smoke-bomb-64.vectorcraft",
+  "sizes": [
+    16,
+    32,
+    64
+  ],
+  "anti_alias": "art",
+  "base": "All artwork except Team Band and Band Details",
+  "accent": [
+    "Team Band",
+    "Band Details"
+  ],
+  "team_colour": "Multiply accent grayscale RGB by team RGB, retain alpha, then composite over base",
+  "size_16": "Dedicated PhotoCraft pixel adaptation; export base and accent layer pairs from the adaptation source.",
+  "adaptation_16": "../../adaptations/smoke-bomb-16.pcraft",
+  "adaptation_16_sha256": "23aa6599a0d7dbb34b080e9061ccdd50ae81d34ae559ec009c1f225a4b5ad253",
+  "adaptation_source_layers": "Separate embedded SVG Smart Objects with pixel cleanup above; refresh with Replace Contents.",
+  "alpha_cutoff_16": 128,
+  "alpha_cutoff_16_note": "16px layers are hard-edged: alpha >= cutoff becomes 255, otherwise 0 (tools/crisp-16.js)."
+}

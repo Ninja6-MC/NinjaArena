@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="64" height="64" viewBox="0 0 64 64">
+  <title>shuriken-64.svg</title>
+  <g id="Blade_Shape" data-name="Blade Shape">
+    <path id="Blade_-_Right" data-name="Blade - Right" d="M28 32 L34 20 L45 23 L60 36 L46 36 L39 43 L33 40 Z M31 29 L29 31 L29 33 L31 35 L33 35 L35 33 L35 31 L33 29 Z" fill="#1c1f24"/>
+    <path id="Blade_-_Bottom" data-name="Blade - Bottom" d="M24 33 L32 28 L44 34 L41 45 L28 60 L28 46 L21 39 Z M31 29 L29 31 L29 33 L31 35 L33 35 L35 33 L35 31 L33 29 Z" fill="#191c21"/>
+    <path id="Blade_-_Left" data-name="Blade - Left" d="M18 28 L25 21 L31 24 L36 32 L30 44 L19 41 L4 28 Z M31 29 L29 31 L29 33 L31 35 L33 35 L35 33 L35 31 L33 29 Z" fill="#2d3035"/>
+    <path id="Blade_-_Top" data-name="Blade - Top" d="M23 19 L36 4 L36 18 L43 25 L40 31 L32 36 L20 30 Z M31 29 L29 31 L29 33 L31 35 L33 35 L35 33 L35 31 L33 29 Z" fill="#25282d"/>
+  </g>
+  <g id="Steel_Facets" data-name="Steel Facets">
+    <path id="Steel_Facet_-_Top" data-name="Steel Facet - Top" d="M36 4 L31 20 L24 23 L23 19 Z" fill="#61666d" fill-rule="evenodd"/>
+    <path id="Steel_Facet_-_Right" data-name="Steel Facet - Right" d="M60 36 L44 31 L41 24 L45 23 Z" fill="#42474f" fill-rule="evenodd"/>
+    <path id="Steel_Facet_-_Bottom" data-name="Steel Facet - Bottom" d="M28 60 L33 44 L40 41 L41 45 Z" fill="#343941" fill-rule="evenodd"/>
+    <path id="Steel_Facet_-_Left" data-name="Steel Facet - Left" d="M4 28 L20 33 L23 40 L19 41 Z" fill="#74797f" fill-rule="evenodd"/>
+    <path id="Shoulder_Facet_-_Top" data-name="Shoulder Facet - Top" d="M23 19 L31 20 L32 24 L24 29 L20 30 Z" fill="#43484f"/>
+    <path id="Shoulder_Facet_-_Right" data-name="Shoulder Facet - Right" d="M45 23 L44 31 L40 32 L35 24 L34 20 Z" fill="#30343b"/>
+    <path id="Shoulder_Facet_-_Bottom" data-name="Shoulder Facet - Bottom" d="M41 45 L33 44 L32 40 L40 35 L44 34 Z" fill="#272b32"/>
+    <path id="Shoulder_Facet_-_Left" data-name="Shoulder Facet - Left" d="M19 41 L20 33 L24 32 L29 40 L30 44 Z" fill="#53585f"/>
+  </g>
+  <g id="Sharpened_Bevels" data-name="Sharpened Bevels">
+    <path id="Bevel_Border_-_Left" data-name="Bevel Border - Left" d="M4 28 L19 41 L30 44 L28 38 L20 35 L9 29 Z" fill="#13171c"/>
+    <path id="Bevel_Border_-_Bottom" data-name="Bevel Border - Bottom" d="M28 60 L41 45 L44 34 L38 36 L35 44 L29 55 Z" fill="#13171c"/>
+    <path id="Bevel_Border_-_Right" data-name="Bevel Border - Right" d="M60 36 L45 23 L34 20 L36 26 L44 29 L55 35 Z" fill="#13171c"/>
+    <path id="Bevel_Border_-_Top" data-name="Bevel Border - Top" d="M36 4 L23 19 L20 30 L26 28 L29 20 L35 9 Z" fill="#13171c"/>
+    <path id="Silver_Bevel_-_Top" data-name="Silver Bevel - Top" d="M36 4 L23 19 L20 30 L24 28 L27 20 L35 7 Z" fill="#bac2ca" fill-rule="evenodd"/>
+    <path id="Silver_Bevel_-_Right" data-name="Silver Bevel - Right" d="M60 36 L45 23 L34 20 L36 24 L44 27 L57 35 Z" fill="#8f99a3" fill-rule="evenodd"/>
+    <path id="Silver_Bevel_-_Bottom" data-name="Silver Bevel - Bottom" d="M28 60 L41 45 L44 34 L40 36 L37 44 L29 57 Z" fill="#707c89" fill-rule="evenodd"/>
+    <path id="Silver_Bevel_-_Left" data-name="Silver Bevel - Left" d="M4 28 L19 41 L30 44 L28 40 L20 37 L7 29 Z" fill="#cdd3d9" fill-rule="evenodd"/>
+    <path id="Edge_Highlight_-_Top" data-name="Edge Highlight - Top" d="M34.3 6 L25.1 16.6 L25.9 17.1 L34.7 7 Z M23 19 L20 30 L21.4 28 L24.3 19.7 Z" fill="#f0f3f5" fill-rule="evenodd"/>
+    <path id="Edge_Highlight_-_Right" data-name="Edge Highlight - Right" d="M58 34.3 L47.4 25.1 L46.9 25.9 L57 34.7 Z M45 23 L34 20 L36 21.4 L44.3 24.3 Z" fill="#c3ccd3" fill-rule="evenodd"/>
+    <path id="Edge_Highlight_-_Bottom" data-name="Edge Highlight - Bottom" d="M29.7 58 L38.9 47.4 L38.1 46.9 L29.3 57 Z M41 45 L44 34 L42.6 36 L39.7 44.3 Z" fill="#afb9c2" fill-rule="evenodd"/>
+    <path id="Edge_Highlight_-_Left" data-name="Edge Highlight - Left" d="M6 29.7 L16.6 38.9 L17.1 38.1 L7 29.3 Z M19 41 L30 44 L28 42.6 L19.7 39.7 Z" fill="#f7f8fa" fill-rule="evenodd"/>
+  </g>
+  <g id="Centre">
+    <path id="Dark_Hub" data-name="Dark Hub" d="M29 24 L35 24 L40 29 L40 35 L35 40 L29 40 L24 35 L24 29 Z M31 29 L33 29 L35 31 L35 33 L33 35 L31 35 L29 33 L29 31 Z" fill="#12161a" fill-rule="evenodd"/>
+    <path id="Team_Colour_Mask" data-name="Team Colour Mask" d="M30 26 L34 26 L38 30 L38 34 L34 38 L30 38 L26 34 L26 30 Z M31 29 L33 29 L35 31 L35 33 L33 35 L31 35 L29 33 L29 31 Z" fill="#e8edf2" fill-rule="evenodd"/>
+  </g>
+</svg>

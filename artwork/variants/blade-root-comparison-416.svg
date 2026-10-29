@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="464" height="416" viewBox="0 0 464 416">
+<title>Shuriken blade-root comparison</title>
+<rect width="464" height="416" fill="#12161A"/>
+<g fill="#E8EDF2" font-family="sans-serif" font-size="13" text-anchor="middle">
+<text x="152" y="26">Saved version</text>
+<text x="352" y="26">Broader roots</text>
+<text x="232" y="405" font-size="10">Red team shown. Each texture enlarged to the same display size.</text>
+<text x="32" y="100" font-size="11">16 x 16</text>
+<image href="baseline/textures/shuriken-red-16.png" x="104" y="48" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-red-16.png" x="304" y="48" width="96" height="96" image-rendering="pixelated"/>
+<text x="32" y="220" font-size="11">32 x 32</text>
+<image href="baseline/textures/shuriken-red-32.png" x="104" y="168" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-red-32.png" x="304" y="168" width="96" height="96" image-rendering="pixelated"/>
+<text x="32" y="340" font-size="11">64 x 64</text>
+<image href="baseline/textures/shuriken-red-64.png" x="104" y="288" width="96" height="96" image-rendering="pixelated"/>
+<image href="broad-root/textures/shuriken-red-64.png" x="304" y="288" width="96" height="96" image-rendering="pixelated"/>
+</g>
+</svg>

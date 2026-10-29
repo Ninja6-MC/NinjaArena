@@ -1,0 +1,14 @@
+{
+  "design": "Shadow equipment dash scroll with Mystic wind motif",
+  "status": "accepted",
+  "master": "dash-scroll-64.vectorcraft",
+  "team_colour_layers": [
+    "Team Binding",
+    "Binding Details",
+    "Binding Back"
+  ],
+  "files_sha256": {
+    "dash-scroll-64.vectorcraft": "93ccf37e1b2376eb96db80559fc525bc16cb2d3d48a66856474a5d32ee3f4dbe",
+    "dash-scroll-64.svg": "f604ecca1f1673ffbf3299ebc196da5430aecf34bb259f3c463471ebc94cb7f7"
+  }
+}

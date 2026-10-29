@@ -1,0 +1,23 @@
+{
+  "master": "../../dash-scroll-64.vectorcraft",
+  "sizes": [
+    16,
+    32,
+    64
+  ],
+  "anti_alias": "art",
+  "accent_layers": [
+    "Team Binding",
+    "Binding Details",
+    "Binding Back"
+  ],
+  "rear_binding_occlusion": "Clip Binding Back against the inverse Rolled Scroll Body silhouette before isolated accent rendering",
+  "accent_source": "../../linked/dash-scroll-accent-64.svg",
+  "team_colour": "Multiply grayscale accent RGB by team RGB; retain alpha; composite over base",
+  "size_16": "Dedicated PhotoCraft pixel adaptation; export base and accent layer pairs from the adaptation source.",
+  "adaptation_16": "../../adaptations/dash-scroll-16.pcraft",
+  "adaptation_16_sha256": "5c23b1fd7bf009c9be30ae57f64cde4f9d813e7853981f3ea6504ba5de6bcaef",
+  "adaptation_source_layers": "Separate embedded SVG Smart Objects with pixel cleanup above; refresh with Replace Contents.",
+  "alpha_cutoff_16": 128,
+  "alpha_cutoff_16_note": "16px layers are hard-edged: alpha >= cutoff becomes 255, otherwise 0 (tools/crisp-16.js)."
+}
