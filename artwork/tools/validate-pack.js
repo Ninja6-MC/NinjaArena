@@ -27,7 +27,8 @@ for (const file of fs.readdirSync(itemDir)) {
   const model = def.model && def.model.model;
   if (!model) { errors.push(`items/${file}: no model`); continue; }
   const modelFile = resolve("standard", model, "models", "json");
-  if (modelFile && !fs.existsSync(modelFile)) { errors.push(`items/${file}: missing model ${model}`); continue; }
+  if (!modelFile) continue; // a vanilla model, nothing of ours to check
+  if (!fs.existsSync(modelFile)) { errors.push(`items/${file}: missing model ${model}`); continue; }
   const textures = Object.values(read(modelFile).textures || {});
   for (const tex of textures) {
     for (const variant of ["standard", "detailed"]) {
