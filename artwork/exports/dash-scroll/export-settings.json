@@ -12,7 +12,7 @@
     "Binding Back"
   ],
   "rear_binding_occlusion": "Clip Binding Back against the inverse Rolled Scroll Body silhouette before isolated accent rendering",
-  "accent_source": "../../previews/dash-scroll-layer-export/dash-scroll-accent-clipped-64.svg",
+  "accent_source": "../../linked/dash-scroll-accent-64.svg",
   "team_colour": "Multiply grayscale accent RGB by team RGB; retain alpha; composite over base",
   "size_16": "Dedicated PhotoCraft pixel adaptation; export base and accent layer pairs from the adaptation source.",
   "adaptation_16": "../../adaptations/dash-scroll-16.pcraft",
