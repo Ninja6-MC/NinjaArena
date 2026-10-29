@@ -151,14 +151,7 @@ public final class HostingService implements HostingCommands, Listener {
             return;
         }
         if (rooms.isWaiting(id)) {
-            if (!rooms.arenaOf(id).orElseThrow().equals(open.arena)) {
-                tell(player, "Leave your current waiting room before accepting.");
-                return;
-            }
-            open.accepted.add(id);
-            open.invited.remove(id);
-            rooms.refreshParty(open.arena);
-            tell(player, "You accepted " + host.getName() + "'s invitation.");
+            acceptWaiting(player, open);
             return;
         }
         if (entering.containsKey(id)) {
@@ -197,12 +190,16 @@ public final class HostingService implements HostingCommands, Listener {
         if (player == null || !player.isOnline() || hosted.get(open.host) != open || !open.invited.contains(id)) {
             return;
         }
-        if (error != null) {
-            tell(player, "The Arena could not load. Your invitation is still open; try accepting again.");
+        if (!eligible(player, NinjaArenaCommand.PLAY) || inMatch.test(id)
+                || hosted.containsKey(id)) {
             return;
         }
-        if (!eligible(player, NinjaArenaCommand.PLAY) || rooms.isWaiting(id) || inMatch.test(id)
-                || hosted.containsKey(id)) {
+        if (rooms.isWaiting(id)) {
+            acceptWaiting(player, open);
+            return;
+        }
+        if (error != null) {
+            tell(player, "The Arena could not load. Your invitation is still open; try accepting again.");
             return;
         }
         // The room's party supplier sees the acceptance during the synchronous join. Failure rolls it back.
@@ -217,6 +214,19 @@ public final class HostingService implements HostingCommands, Listener {
                 open.accepted.remove(id);
             }
         }
+    }
+
+    private void acceptWaiting(Player player, Open open) {
+        UUID id = player.getUniqueId();
+        if (!rooms.arenaOf(id).orElseThrow().equals(open.arena)) {
+            tell(player, "Leave your current waiting room before accepting.");
+            return;
+        }
+        entering.remove(id);
+        open.accepted.add(id);
+        open.invited.remove(id);
+        rooms.refreshParty(open.arena);
+        tell(player, "You accepted the invitation to arena " + open.arena + ".");
     }
 
     /** Also cancels a reservation when its host has not entered the room yet. */

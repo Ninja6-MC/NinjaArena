@@ -341,6 +341,26 @@ class HostingServiceTest extends MatchFixture {
     }
 
     @Test
+    void enteringThroughAPortalWhileAcceptedEntryLoadsStillRecordsThePartyWithoutRecapture() throws Exception {
+        inviteBob();
+        hosting.accept(player(BOB), "Alice");
+        PlayerSnapshot original = snapshot(player(BOB));
+        snapshots.persist(original);
+        player(BOB).teleport(new org.bukkit.Location(arenaWorld, ROOM.x(), ROOM.y(), ROOM.z()));
+        rooms.join(player(BOB), "dojo");
+        finish();
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(CAROL), "dojo");
+
+        assertEquals(rooms.teamOf(ALICE), rooms.teamOf(BOB));
+        assertEquals(original, snapshots.load(BOB).orElseThrow());
+        assertTrue(captured.isEmpty());
+        assertEquals(1, players.get(BOB).teleports.size());
+        hosting.invite(player(ALICE), "Bob");
+        assertTrue(players.get(ALICE).messages.getLast().contains("already accepted"));
+    }
+
+    @Test
     void closingBeforeLoadedEntryDiscardsRequestsWithoutMovement() {
         inviteBob();
         hosting.accept(player(BOB), "Alice");
