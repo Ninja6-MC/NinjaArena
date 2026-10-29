@@ -13,10 +13,10 @@ commands:
   # The long name is the registered root and the short one an alias, so a collision on the
   # alias costs only the short form.
   ninjaarena:
-    description: NinjaArena command
+    description: The Arena commands
     usage: /<command>
     aliases: [narena]
-    permission: ninjaarena.play
+    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin
 
 permissions:
   # Each tier is a declared child of the one above it. Bukkit gives the dots in a node name
@@ -24,13 +24,14 @@ permissions:
   ninjaarena.play:
     description: Join and play arena matches
     default: true
+    children: {}
   ninjaarena.host:
     description: Host and run arena matches
     default: op
     children:
       ninjaarena.play: true
   ninjaarena.admin:
-    description: Administer NinjaArena
+    description: Administer the Arena
     default: op
     children:
       ninjaarena.host: true

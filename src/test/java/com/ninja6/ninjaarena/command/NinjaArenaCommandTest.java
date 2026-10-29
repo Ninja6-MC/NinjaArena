@@ -18,6 +18,7 @@ import com.ninja6.ninjaarena.portal.PortalStore;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -42,6 +43,7 @@ class NinjaArenaCommandTest {
             match -> Optional.empty());
 
     private final List<String> messages = new ArrayList<>();
+    private final List<Component> components = new ArrayList<>();
     private ArenaRegistry registry;
     private NinjaArenaCommand command;
     private final List<String> left = new ArrayList<>();
@@ -149,16 +151,17 @@ class NinjaArenaCommandTest {
         CommandSender sender = console(true);
         command.onCommand(sender, null, "narena", new String[0]);
         List<String> help = List.of(
+                "/narena help - show the commands you can use",
                 "/narena arena <subcommand> - create, edit and set up arenas",
                 "/narena portal <subcommand> - mark out portals that lead to arenas",
                 "/narena director [arena] - show the enemy director of a running match",
-                "/narena leave - leave the waiting room or match you are in");
-        assertEquals("NinjaArena commands:", messages.get(0));
+                "/narena admin reload - reload the Arena configuration (not available yet)");
+        assertEquals("The Arena commands:", messages.get(0));
         assertEquals(help, messages.subList(1, messages.size()));
 
         messages.clear();
         run(sender, "create dojo");
-        assertEquals("Unknown command create. Subcommands sit under a group:", messages.get(0));
+        assertEquals("Unknown command create. Available commands:", messages.get(0));
         assertEquals(help, messages.subList(1, messages.size()));
         assertTrue(registry.all().isEmpty());
     }
@@ -190,8 +193,8 @@ class NinjaArenaCommandTest {
     void tabCompletesSubcommandsNamesAndModes() {
         CommandSender sender = console(true);
         run(sender, "arena create dojo");
-        assertEquals(List.of("arena"), command.onTabComplete(sender, null, "narena", new String[] {"a"}));
-        assertEquals(List.of("arena", "portal", "director"),
+        assertEquals(List.of("arena", "admin"), command.onTabComplete(sender, null, "narena", new String[] {"a"}));
+        assertEquals(List.of("help", "arena", "portal", "director", "admin"),
                 command.onTabComplete(sender, null, "narena", new String[] {""}));
         assertEquals(List.of("setbounds", "setwaitingroom", "setteamspawn"),
                 command.onTabComplete(sender, null, "narena", new String[] {"arena", "set"}));
@@ -211,10 +214,15 @@ class NinjaArenaCommandTest {
 
     /** A player who holds only the play node. */
     private Player playerWithPlay() {
+        return playerWithPermissions(NinjaArenaCommand.PLAY);
+    }
+
+    private Player playerWithPermissions(String... permissions) {
         return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
-                    case "hasPermission" -> NinjaArenaCommand.PLAY.equals(args[0]);
+                    case "hasPermission" -> Arrays.asList(permissions).contains(args[0]);
                     case "sendMessage" -> {
+                        components.add((Component) args[0]);
                         messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
                         yield null;
                     }
@@ -224,7 +232,7 @@ class NinjaArenaCommandTest {
     }
 
     @Test
-    void playersCanLeaveAWaitingRoomButNothingElse() {
+    void playersCanLeaveAWaitingRoomButCannotAdministerArenas() {
         Player player = playerWithPlay();
         waiting = true;
         run(player, "leave");
@@ -238,7 +246,8 @@ class NinjaArenaCommandTest {
         messages.clear();
         run(player, "arena list");
         assertEquals(List.of("You do not have permission to use this command."), messages);
-        assertEquals(List.of("leave"), command.onTabComplete(player, null, "narena", new String[] {""}));
+        assertEquals(List.of("help", "leave", "accept"),
+                command.onTabComplete(player, null, "narena", new String[] {""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
     }
 
@@ -310,6 +319,130 @@ class NinjaArenaCommandTest {
     void leaveNeedsThePlayNode() {
         run(console(false), "leave");
         assertEquals(List.of("You do not have permission to use this command."), messages);
+        assertTrue(left.isEmpty());
+    }
+
+    @Test
+    void playAndHostHelpOnlyShowTheirPermittedRoutes() {
+        Player player = playerWithPlay();
+        command.onCommand(player, null, "ninjaarena", new String[0]);
+        assertEquals(List.of("The Arena commands:",
+                "/ninjaarena help - show the commands you can use",
+                "/ninjaarena leave - leave the waiting room or match you are in",
+                "/ninjaarena accept <host> - accept an invitation (not available yet)"), messages);
+
+        messages.clear();
+        Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
+        run(host, "HELP");
+        assertEquals(6, messages.size());
+        assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena host <arena>")));
+        assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena invite <player>")));
+        assertFalse(messages.stream().anyMatch(message -> message.contains("admin") || message.contains("portal")));
+        assertEquals(List.of("help", "leave", "accept", "host", "invite"),
+                command.onTabComplete(host, null, "narena", new String[] {""}));
+        assertEquals(List.of("help", "host"), command.onTabComplete(host, null, "narena", new String[] {"H"}));
+        assertEquals(List.of("accept"), command.onTabComplete(player, null, "narena", new String[] {"AC"}));
+    }
+
+    @Test
+    void unfinishedCommandsReportTheirStatusWithoutChangingAnything() {
+        Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST, NinjaArenaCommand.ADMIN);
+        for (String line : List.of("host dojo", "invite Bob", "accept Alice", "ADMIN RELOAD")) {
+            messages.clear();
+            run(host, line);
+            assertEquals(1, messages.size(), line);
+            assertTrue(messages.getFirst().contains("not available yet in the Arena"), messages.toString());
+        }
+        assertTrue(left.isEmpty());
+        assertTrue(registry.all().isEmpty());
+    }
+
+    @Test
+    void deniedCommandsCannotLeaveOrChangeRegistries() {
+        Player player = playerWithPlay();
+        for (String line : List.of("host dojo", "invite Bob", "admin reload", "arena create dojo", "portal list",
+                "director dojo")) {
+            messages.clear();
+            run(player, line);
+            assertEquals(List.of("You do not have permission to use this command."), messages, line);
+        }
+        Player hostOnly = playerWithPermissions(NinjaArenaCommand.HOST);
+        for (String line : List.of("leave", "accept Alice", "admin reload")) {
+            messages.clear();
+            run(hostOnly, line);
+            assertEquals(List.of("You do not have permission to use this command."), messages, line);
+        }
+        assertTrue(left.isEmpty());
+        assertTrue(registry.all().isEmpty());
+        assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"admin", ""}));
+        assertEquals(List.of(), command.onTabComplete(hostOnly, null, "narena", new String[] {"arena", ""}));
+    }
+
+    @Test
+    void malformedPlayerAndPlaceholderCommandsDoNotRun() {
+        Player all = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST, NinjaArenaCommand.ADMIN);
+        for (String line : List.of("leave extra", "accept", "accept Alice extra", "host", "host dojo extra",
+                "invite", "invite Bob extra", "admin", "admin reload extra", "admin unknown", "help extra")) {
+            messages.clear();
+            run(all, line);
+            assertEquals(1, messages.size(), line);
+            assertTrue(messages.getFirst().startsWith("Usage: /narena "), messages.toString());
+        }
+        assertTrue(left.isEmpty());
+        assertTrue(registry.all().isEmpty());
+    }
+
+    @Test
+    void consoleCanInspectAndReloadPlaceholderButCannotUsePlayerRoutes() {
+        CommandSender all = (CommandSender) Proxy.newProxyInstance(ConsoleCommandSender.class.getClassLoader(),
+                new Class<?>[] {ConsoleCommandSender.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "hasPermission" -> true;
+                    case "sendMessage" -> {
+                        messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
+                        yield null;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        for (String line : List.of("host dojo", "invite Bob", "accept Alice", "leave")) {
+            messages.clear();
+            run(all, line);
+            assertTrue(messages.getFirst().startsWith("Only players can "), messages.toString());
+        }
+        messages.clear();
+        run(all, "admin reload");
+        assertEquals(List.of("Configuration reload is not available yet in the Arena."), messages);
+        assertEquals(List.of("reload"), command.onTabComplete(all, null, "narena", new String[] {"ADMIN", "RE"}));
+        assertEquals(List.of(), command.onTabComplete(all, null, "narena", new String[] {"admin", "reload", ""}));
+        assertTrue(left.isEmpty());
+        assertTrue(registry.all().isEmpty());
+    }
+
+    @Test
+    void helpAndRepliesHaveNoClickOrHoverActions() {
+        Player all = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST, NinjaArenaCommand.ADMIN);
+        for (String line : List.of("help", "host dojo", "invite Bob", "accept Alice", "admin reload", "leave extra",
+                "unknown")) {
+            run(all, line);
+        }
+        assertFalse(components.isEmpty());
+        components.forEach(NinjaArenaCommandTest::assertPlain);
+    }
+
+    private static void assertPlain(Component component) {
+        assertEquals(null, component.clickEvent());
+        assertEquals(null, component.hoverEvent());
+        component.children().forEach(NinjaArenaCommandTest::assertPlain);
+    }
+
+    @Test
+    void rootWithoutAnyTierDeniesHelpAndUnknownCommandsToo() {
+        Player none = playerWithPermissions();
+        for (String[] args : List.of(new String[0], new String[] {"help"}, new String[] {"unknown"})) {
+            messages.clear();
+            command.onCommand(none, null, "narena", args);
+            assertEquals(List.of("You do not have permission to use this command."), messages);
+        }
+        assertEquals(List.of(), command.onTabComplete(none, null, "narena", new String[0]));
         assertTrue(left.isEmpty());
     }
 }
