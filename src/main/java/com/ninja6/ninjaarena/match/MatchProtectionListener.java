@@ -1,8 +1,11 @@
 package com.ninja6.ninjaarena.match;
 
+import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
@@ -28,7 +31,8 @@ public final class MatchProtectionListener implements Listener {
 
     private final MatchService matches;
     private final Function<UUID, Player> players;
-    private final boolean friendlyFire;
+    private boolean friendlyFire;
+    private final Map<MatchView, Boolean> matchFriendlyFire = new IdentityHashMap<>();
     private final Predicate<UUID> spectators;
 
     public MatchProtectionListener(MatchService matches, Function<UUID, Player> players, boolean friendlyFire,
@@ -37,6 +41,21 @@ public final class MatchProtectionListener implements Listener {
         this.players = Objects.requireNonNull(players, "players");
         this.friendlyFire = friendlyFire;
         this.spectators = Objects.requireNonNull(spectators, "spectators");
+    }
+
+    /** Applies to future matches only, including matches that have not taken damage yet. */
+    public void setFriendlyFire(boolean friendlyFire) {
+        for (MatchView match : matches.matches()) {
+            if (match.result().isEmpty()) {
+                matchFriendlyFire.putIfAbsent(match, this.friendlyFire);
+            }
+        }
+        this.friendlyFire = friendlyFire;
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onMatchEnd(MatchEndEvent event) {
+        matchFriendlyFire.remove(event.match());
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -99,11 +118,12 @@ public final class MatchProtectionListener implements Listener {
     }
 
     private boolean teammate(Player attacker, Player victim) {
-        if (friendlyFire || attacker == null || attacker.getUniqueId().equals(victim.getUniqueId())) {
+        if (attacker == null || attacker.getUniqueId().equals(victim.getUniqueId())) {
             return false;
         }
         return matches.matchOf(attacker.getUniqueId())
-                .filter(match -> match.contains(victim.getUniqueId())
+                .filter(match -> !matchFriendlyFire.getOrDefault(match, friendlyFire)
+                        && match.contains(victim.getUniqueId())
                         && match.teamOf(attacker.getUniqueId()) == match.teamOf(victim.getUniqueId()))
                 .isPresent();
     }

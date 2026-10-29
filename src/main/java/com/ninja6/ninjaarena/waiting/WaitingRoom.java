@@ -75,8 +75,8 @@ public final class WaitingRoom {
     public record Left(int team, Optional<Move> move, boolean countdownCancelled) {
     }
 
-    private final int minPlayers;
-    private final int countdownSeconds;
+    private int minPlayers;
+    private int countdownSeconds;
     /** Each team's players in the order they joined it. */
     private final List<SequencedSet<UUID>> teams = new ArrayList<>();
 
@@ -102,6 +102,20 @@ public final class WaitingRoom {
         this.countdownSeconds = countdownSeconds;
         for (int i = 0; i < teamCount; i++) {
             teams.add(new LinkedHashSet<>());
+        }
+    }
+
+    /** Keeps a viable countdown's remaining time while changing future countdowns. */
+    public void setSettings(int minPlayers, int countdownSeconds) {
+        if (minPlayers < 1 || countdownSeconds < 1) {
+            throw new IllegalArgumentException("waiting settings must be positive");
+        }
+        this.minPlayers = minPlayers;
+        this.countdownSeconds = countdownSeconds;
+        if (size() < minPlayers) {
+            secondsLeft = 0;
+        } else if (secondsLeft == 0) {
+            secondsLeft = countdownSeconds;
         }
     }
 

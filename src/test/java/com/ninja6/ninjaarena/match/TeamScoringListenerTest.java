@@ -22,10 +22,11 @@ import org.junit.jupiter.api.Test;
 class TeamScoringListenerTest extends MatchFixture {
 
     private TeamScores scores;
+    private TeamScoringListener scoring;
 
     private void useScoring(MatchSettings matchSettings, ScoringSettings settings) {
         scores = new TeamScores();
-        var scoring = new TeamScoringListener(scores, settings, plugin.getServer()::getPlayer);
+        scoring = new TeamScoringListener(scores, settings, plugin.getServer()::getPlayer);
         matches = new MatchService(plugin, arenas, () -> arenaWorld, matchSettings, player -> {
             restored.add(player.getUniqueId());
             return RestoreResult.RESTORED;
@@ -264,4 +265,20 @@ class TeamScoringListenerTest extends MatchFixture {
             assertFalse(players.get(id).messages.stream().anyMatch(message -> message.startsWith("Final scores:")));
         }
     }
+
+    @Test
+    void scoringReloadKeepsAwardsForMatchesWithoutAnyPriorScoreEvent() {
+        useScoring(SETTINGS, ScoringSettings.DEFAULTS);
+        startTwoOnTwo();
+        scoring.setSettings(new ScoringSettings(50, 20), matches.matches());
+        ticks(2);
+        winRound(BOB, DAVE, ALICE);
+        assertEquals(9, scores.score(current(), 1));
+        matches.close();
+        startTwoOnTwo();
+        ticks(2);
+        winRound(BOB, DAVE, ALICE);
+        assertEquals(90, scores.score(current(), 1));
+    }
+
 }

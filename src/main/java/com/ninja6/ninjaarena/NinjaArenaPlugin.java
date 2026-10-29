@@ -1,12 +1,14 @@
 package com.ninja6.ninjaarena;
 
 import com.ninja6.ninjaarena.arena.Arena;
+import com.ninja6.ninjaarena.arena.ArenaGrid;
 import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.DirectorCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
+import com.ninja6.ninjaarena.config.ConfigReload;
 import com.ninja6.ninjaarena.director.AggroSteering;
 import com.ninja6.ninjaarena.director.DirectorService;
 import com.ninja6.ninjaarena.director.EnemyCosts;
@@ -107,12 +109,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         deaths = new MatchDeathListener(this, matches, arenas);
         getServer().getPluginManager().registerEvents(deaths, this);
         getServer().getPluginManager().registerEvents(new MatchListener(matches, deaths), this);
-        getServer().getPluginManager().registerEvents(new MatchProtectionListener(matches,
-                getServer()::getPlayer, getConfig().getBoolean("match.friendly-fire", false), deaths::isSpectating), this);
+        MatchProtectionListener protection = new MatchProtectionListener(matches,
+                getServer()::getPlayer, getConfig().getBoolean("match.friendly-fire", false), deaths::isSpectating);
+        getServer().getPluginManager().registerEvents(protection, this);
         scores = new TeamScores();
         matches.setStandings(scores);
-        getServer().getPluginManager().registerEvents(new TeamScoringListener(scores,
-                ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer), this);
+        TeamScoringListener scoring = new TeamScoringListener(scores,
+                ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer);
+        getServer().getPluginManager().registerEvents(scoring, this);
         // Starts and stops each match's spawn loop with its fights; closed before the matches.
         directors = new DirectorService(this,
                 IntensitySettings.from(getConfig().getConfigurationSection("director.intensity")),
@@ -145,8 +149,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(steering, this);
         var kitFile = getDataFolder().toPath().resolve("kits.yml");
         var kit = KitDefinition.open(kitFile, getLogger(), () -> saveResource("kits.yml", false));
-        getServer().getPluginManager().registerEvents(new RoundKitListener(matches, getServer()::getPlayer,
-                kit, kitItems, getLogger()), this);
+        RoundKitListener roundKits = new RoundKitListener(matches, getServer()::getPlayer, kit, kitItems, getLogger());
+        getServer().getPluginManager().registerEvents(roundKits, this);
         matches.start();
         deaths.start();
         // A finished countdown hands its players to the match engine.
@@ -178,10 +182,64 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
                 snapshots, portalCommand::forget, waitingRooms::join), this);
+        ConfigReload reloader = new ConfigReload(getDataFolder().toPath(), getConfig(), kit, kitItems,
+                new ConfigReload.Target() {
+                    @Override
+                    public boolean canResize() {
+                        return arenas.canResize() && inMatch.matches().isEmpty();
+                    }
+
+                    @Override
+                    public void world(ArenaWorldSettings settings) {
+                        arenaWorld.setDistances(settings.viewDistance(), settings.simulationDistance());
+                    }
+
+                    @Override
+                    public void grid(int cellSize, double borderSize) {
+                        if (!canResize()) {
+                            throw new IllegalStateException("The arena grid is in use");
+                        }
+                        ArenaGrid old = arenas.grid();
+                        ArenaGrid next = new ArenaGrid(cellSize, borderSize, old.minY(), old.maxY());
+                        arenaWorld.world().getWorldBorder().setSize(borderSize);
+                        arenas.setGrid(next);
+                    }
+
+                    @Override
+                    public void waiting(WaitingRoomSettings settings) {
+                        waiting.setSettings(settings);
+                    }
+
+                    @Override
+                    public void match(MatchSettings settings, boolean friendlyFire, ScoringSettings awards) {
+                        protection.setFriendlyFire(friendlyFire);
+                        scoring.setSettings(awards, inMatch.matches());
+                        inMatch.setSettings(settings);
+                    }
+
+                    @Override
+                    public void tools(ToolSettings settings) {
+                        tools.setSettings(settings);
+                    }
+
+                    @Override
+                    public void kit(KitDefinition definition) {
+                        roundKits.setDefinition(definition);
+                    }
+
+                    @Override
+                    public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
+                        for (String path : settings.getKeys(true)) {
+                            if (!settings.isConfigurationSection(path)) {
+                                getConfig().set(path, settings.get(path));
+                            }
+                        }
+                    }
+                });
         NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world), portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 player -> waitingRooms.leave(player, Exit.COMMAND)
-                        || matches.leave(player, MatchService.Exit.COMMAND));
+                        || matches.leave(player, MatchService.Exit.COMMAND), reloader::execute);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");

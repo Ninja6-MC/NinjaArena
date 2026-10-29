@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -34,12 +35,13 @@ public final class NinjaArenaCommand implements TabExecutor {
                     "mark out portals that lead to arenas"),
             new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]",
                     "show the enemy director of a running match"),
-            new Route("admin", ADMIN, "admin reload", "reload the Arena configuration (not available yet)"));
+            new Route("admin", ADMIN, "admin reload", "safely reload the Arena configuration"));
 
     private final ArenaCommand arena;
     private final PortalCommand portal;
     private final DirectorCommand director;
     private final Predicate<Player> leave;
+    private final Consumer<CommandSender> reload;
 
     /**
      * @param leave takes the player out of their waiting room or match and sends them home;
@@ -47,10 +49,16 @@ public final class NinjaArenaCommand implements TabExecutor {
      */
     public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
             Predicate<Player> leave) {
+        this(arena, portal, director, leave, null);
+    }
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave, Consumer<CommandSender> reload) {
         this.arena = Objects.requireNonNull(arena, "arena");
         this.portal = Objects.requireNonNull(portal, "portal");
         this.director = Objects.requireNonNull(director, "director");
         this.leave = Objects.requireNonNull(leave, "leave");
+        this.reload = reload;
     }
 
     @Override
@@ -97,7 +105,10 @@ public final class NinjaArenaCommand implements TabExecutor {
                 }
                 case "admin" -> {
                     if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
-                        unavailable(sender, "Configuration reload");
+                        if (reload == null) {
+                            unavailable(sender, "Configuration reload");
+                        }
+                        else reload.accept(sender);
                     } else {
                         usage(sender, label, route.usage());
                     }

@@ -354,4 +354,29 @@ class MatchServiceTest extends MatchFixture {
         assertEquals(List.of(2), result.winners());
         assertEquals(2, result.standings().getLast().roundsWon());
     }
+
+    @Test
+    void timerReloadRetainsExistingRoundsAndMessagesAndAppliesToTheNextMatch() {
+        startTwoOnTwo();
+        MatchSettings next = new MatchSettings(7, 8, 0, 9, 99, 1, 0);
+        matches.setSettings(next);
+        assertEquals(SETTINGS, matches.match("dojo").orElseThrow().settings());
+        ticks(2);
+        matches.died(player(BOB), player(ALICE));
+        matches.died(player(DAVE), player(ALICE));
+        runNextTick();
+        ticks(1);
+        assertTrue(players.get(ALICE).messages.stream().anyMatch(message -> message.contains("Round 2 of 2.")));
+        ticks(2);
+        matches.died(player(BOB), player(ALICE));
+        matches.died(player(DAVE), player(ALICE));
+        runNextTick();
+        ticks(1);
+        assertTrue(players.get(ALICE).messages.contains("Returning in 2 seconds."));
+        ticks(2);
+        startTwoOnTwo();
+        assertEquals(next, matches.match("dojo").orElseThrow().settings());
+        assertEquals(7, matches.match("dojo").orElseThrow().secondsLeft());
+    }
+
 }

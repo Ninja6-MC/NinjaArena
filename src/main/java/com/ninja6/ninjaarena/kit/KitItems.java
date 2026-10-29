@@ -12,6 +12,7 @@ import org.bukkit.inventory.ItemStack;
 public final class KitItems {
 
     private final Map<String, Function<Player, ItemStack>> providers = new HashMap<>();
+    private final Map<String, Integer> stackLimits = new HashMap<>();
     private final Function<Material, ItemStack> vanilla;
 
     public KitItems() {
@@ -23,6 +24,14 @@ public final class KitItems {
     }
 
     public void register(String id, Function<Player, ItemStack> provider) {
+        register(id, 1, provider);
+    }
+
+    /** Declares a safe stack limit so reload validation need not call a player-dependent provider. */
+    public void register(String id, int stackLimit, Function<Player, ItemStack> provider) {
+        if (stackLimit < 1 || stackLimit > 99) {
+            throw new IllegalArgumentException("stack limit must be from 1 to 99");
+        }
         if (!validId(id)) {
             throw new IllegalArgumentException("item id must be namespaced: " + id);
         }
@@ -30,6 +39,12 @@ public final class KitItems {
         if (providers.putIfAbsent(id, provider) != null) {
             throw new IllegalArgumentException("item provider already registered: " + id);
         }
+        stackLimits.put(id, stackLimit);
+    }
+
+    /** Zero means an unregistered id. Legacy providers without metadata safely allow one item. */
+    public int stackLimit(String id) {
+        return stackLimits.getOrDefault(id, 0);
     }
 
     static boolean validId(String id) {

@@ -64,11 +64,11 @@ under the root.
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
 | `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals |
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
-| `admin reload` | `ninjaarena.admin` | Not available yet; reserved for safe configuration reload |
+| `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration and kits |
 
-The player and host commands require a player sender. The reserved commands report that
-the feature is not available yet; they do not start matches, create invitations, move
-players or reload files. Walking through a portal remains the way to enter the Arena.
+The player and host commands require a player sender. Hosting and invitations remain
+reserved and report that they are not available yet. Walking through a portal remains
+the way to enter the Arena. Admin reload also works from the console.
 
 `ninjaarena.play` defaults to everyone. `ninjaarena.host` and `ninjaarena.admin` default
 to operators. The declared permission children grant play from host, and host from admin;
@@ -76,6 +76,36 @@ the play leaf has an explicit empty children block. The root accepts any of thes
 and dispatch, help and tab completion check the route's own permission. Denying play
 explicitly therefore blocks player routes without blocking an otherwise granted admin
 or host route.
+
+## Safe configuration reload
+
+Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml` or `kits.yml`.
+Both files are read and validated before anything changes. A missing file, malformed YAML,
+duplicate or unknown key, wrong type, out-of-range or non-finite number, invalid kit entry,
+unregistered item ID or excessive stack amount rejects the whole reload. The reply names
+the file, setting and source line; the previous settings and kit remain active. Omitted
+config settings use the bundled defaults. Reload never reads arenas, portals or snapshots,
+and never moves match players or restarts a match.
+
+| Settings | Reload behavior |
+| :--- | :--- |
+| Waiting-room minimum, countdown and radius | Apply immediately; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
+| Match timers, rounds, extra rounds, friendly fire and scoring | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
+| Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
+| Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |
+| Grid cell size and world border | Apply only before any arena exists and while no match runs. Otherwise refuse the change and require a restart. |
+
+The reply separates changed settings, postponed changes (next match or round), and refused
+changes. Refused settings remain unchanged in memory; the files are not rewritten. Director
+and stability settings are validated but remain restart-only. An invalid value is rejected
+even in a setting whose valid change would require a restart.
+
+Kit reload validation does not call player-dependent item factories. The built-in tool
+providers declare stack limits of 16 for shuriken and smoke bombs and 1 for dash. Custom
+providers can declare a safe limit with `kitItems.register(id, maxStackSize, provider)`;
+the existing two-argument registration conservatively permits one item during reload
+validation. Item providers still resolve at round-kit application time.
 
 ## Icon artwork
 

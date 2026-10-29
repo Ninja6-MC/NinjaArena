@@ -2,7 +2,10 @@ package com.ninja6.ninjaarena.kit;
 
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.ninja6.ninjaarena.match.MatchService;
+import com.ninja6.ninjaarena.match.MatchView;
+import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -21,7 +24,8 @@ public final class RoundKitListener implements Listener {
 
     private final MatchService matches;
     private final Function<UUID, Player> players;
-    private final KitDefinition definition;
+    private KitDefinition definition;
+    private final Map<MatchView, KitDefinition> roundKits = new IdentityHashMap<>();
     private final KitItems items;
     private final Logger logger;
 
@@ -34,8 +38,24 @@ public final class RoundKitListener implements Listener {
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
+    /** The current round, including its delayed respawns, keeps its kit definition. */
+    public void setDefinition(KitDefinition definition) {
+        for (MatchView match : matches.matches()) {
+            if (match.result().isEmpty()) {
+                roundKits.putIfAbsent(match, this.definition);
+            }
+        }
+        this.definition = Objects.requireNonNull(definition, "definition");
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onMatchEnd(MatchEndEvent event) {
+        roundKits.remove(event.match());
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onRoundStart(RoundStartEvent event) {
+        roundKits.put(event.match(), definition);
         for (UUID id : event.match().players()) {
             Player player = players.apply(id);
             if (player != null) {
@@ -58,7 +78,8 @@ public final class RoundKitListener implements Listener {
         }
         Map<Integer, ItemStack> kit = new LinkedHashMap<>();
         try {
-            for (var entry : definition.items()) {
+            KitDefinition roundKit = roundKits.computeIfAbsent(matches.matchOf(id).orElseThrow(), match -> definition);
+            for (var entry : roundKit.items()) {
                 kit.put(entry.slot(), items.create(entry, player));
             }
         } catch (RuntimeException e) {

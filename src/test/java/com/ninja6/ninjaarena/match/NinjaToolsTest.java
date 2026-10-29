@@ -140,6 +140,8 @@ class NinjaToolsTest extends MatchFixture {
                     return !spawned.removed;
                 case "getLocation":
                     return at.clone();
+                case "getRadius":
+                    return spawned.values.getOrDefault("setRadius", 0f);
                 case "getShooter":
                     return shooter;
                 case "addCustomEffect":
@@ -508,4 +510,29 @@ class NinjaToolsTest extends MatchFixture {
         matches.leave(player(ALICE), MatchService.Exit.COMMAND);
         assertTrue(Arrays.stream(alice.storage).allMatch(Objects::isNull));
     }
+
+    @Test
+    void reloadChangesNewToolUsesButKeepsExistingCloudRadiusAndCooldownDeadline() {
+        fight();
+        hit(launch(ALICE, NinjaTool.SMOKE_BOMB).projectile(), null);
+        use(ALICE, item(NinjaTool.DASH, 1));
+        var centre = player(ALICE).getLocation();
+        assertFalse(tools.inSmoke(centre.clone().add(4, 0, 0)));
+        tools.setSettings(new ToolSettings(9, 6, 4, 7, 8, 3, 1.5, 0.4));
+        assertFalse(tools.inSmoke(centre.clone().add(4, 0, 0)));
+        assertEquals(80, clouds.getFirst().values.get("setDuration"));
+        players.get(ALICE).velocity = null;
+        use(ALICE, item(NinjaTool.DASH, 1));
+        assertNull(players.get(ALICE).velocity);
+        tick = 160;
+        use(ALICE, item(NinjaTool.DASH, 1));
+        assertEquals(60, players.get(ALICE).cooldowns.get(Material.FEATHER));
+        assertEquals(0.4, players.get(ALICE).velocity.getY());
+        hit(launch(ALICE, NinjaTool.SMOKE_BOMB).projectile(), null);
+        assertTrue(tools.inSmoke(centre.clone().add(4, 0, 0)));
+        assertEquals(180, clouds.getLast().values.get("setDuration"));
+        hit(launch(ALICE, NinjaTool.SHURIKEN).projectile(), player(BOB));
+        assertEquals(7, strikes.getLast().damage());
+    }
+
 }

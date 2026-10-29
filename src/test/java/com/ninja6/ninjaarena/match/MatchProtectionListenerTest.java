@@ -287,4 +287,24 @@ class MatchProtectionListenerTest extends MatchFixture {
         assertTrue(config.contains("match.friendly-fire"));
         assertFalse(config.getBoolean("match.friendly-fire"));
     }
+
+    @Test
+    void friendlyFireReloadFreezesUntouchedMatchesAndAppliesToNewMatches() {
+        var protection = protection(false);
+        startTwoOnTwo();
+        protection.setFriendlyFire(true);
+        var old = damage(player(ALICE), player(CAROL));
+        protection.onDamage(old);
+        assertTrue(old.isCancelled());
+        matches.close();
+        startTwoOnTwo();
+        var next = damage(player(ALICE), player(CAROL));
+        protection.onDamage(next);
+        assertFalse(next.isCancelled());
+        protection.setFriendlyFire(false);
+        var still = damage(player(ALICE), player(CAROL));
+        protection.onDamage(still);
+        assertFalse(still.isCancelled());
+    }
+
 }

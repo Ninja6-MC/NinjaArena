@@ -441,4 +441,21 @@ class WaitingRoomServiceTest {
         assertFalse(rooms.isWaiting(ALICE));
         assertEquals(List.of(ALICE), restored);
     }
+
+    @Test
+    void shrinkingRoomRadiusImmediatelyUsesTheExistingLeaveAndRestoreFlow() {
+        rooms.join(players.get(ALICE).proxy, "dojo");
+        rooms.join(players.get(BOB).proxy, "dojo");
+        players.get(BOB).location = new Location(arenaWorld, ROOM.x() + 3, ROOM.y(), ROOM.z());
+        assertTrue(rooms.inRoom(BOB, players.get(BOB).location));
+        rooms.setSettings(new WaitingRoomSettings(2, 9, 2));
+        assertFalse(rooms.isWaiting(BOB));
+        assertTrue(rooms.isWaiting(ALICE));
+        assertTrue(restored.isEmpty());
+        List<Runnable> tasks = new ArrayList<>(nextTick);
+        nextTick.clear();
+        tasks.forEach(Runnable::run);
+        assertEquals(List.of(BOB), restored);
+    }
+
 }
