@@ -26,3 +26,6 @@ Thumbs.db
 # Output JARs
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
+
+# Python test harness caches
+__pycache__/
