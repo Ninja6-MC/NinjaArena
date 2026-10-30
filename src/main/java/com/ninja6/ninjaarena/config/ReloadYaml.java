@@ -48,7 +48,7 @@ final class ReloadYaml {
             Node root = yaml.compose(new StringReader(text));
             if (root != null) {
                 if (!(root instanceof MappingNode)) {
-                    throw document.invalid("", "expected a mapping");
+                    throw document.invalid("", "expected a mapping", root);
                 }
                 document.index("", root, 0);
                 document.indexValues("", yaml.load(text));

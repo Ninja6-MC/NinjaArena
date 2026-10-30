@@ -242,6 +242,20 @@ class ConfigReloadTest {
     }
 
     @Test
+    void nonMappingRootsReportTheirSourceLineWithoutChangingSettings() throws Exception {
+        String invalidRoot = "# comment\n\n# another\n- invalid-root\n";
+        write(invalidRoot, EMPTY_KIT);
+        assertEquals("The Arena reload was rejected: config.yml: line 4: expected a mapping. Nothing changed.",
+                reload.reload().getFirst());
+        assertTrue(target.calls.isEmpty());
+
+        write("", invalidRoot);
+        assertEquals("The Arena reload was rejected: kits.yml: line 4: expected a mapping. Nothing changed.",
+                reload.reload().getFirst());
+        assertTrue(target.calls.isEmpty());
+    }
+
+    @Test
     void invalidKitsRejectUnknownKeysDuplicateSlotsNonItemsAndExcessiveAmounts() throws Exception {
         for (String entry : List.of("slot: 1\n    material: WATER", "slot: 1\n    material: WOODEN_SWORD\n    amount: 2",
                 "slot: 1\n    id: ninjaarena:dash\n    amount: 2", "slot: 1\n    id: ninjaarena:dash\n    other: 1",
