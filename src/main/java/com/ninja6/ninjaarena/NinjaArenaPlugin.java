@@ -36,6 +36,7 @@ import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.match.TeamScores;
 import com.ninja6.ninjaarena.match.TeamScoringListener;
+import com.ninja6.ninjaarena.portal.ArenaAdmission;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.portal.PortalListener;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
@@ -46,6 +47,7 @@ import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import com.ninja6.ninjaarena.tool.ToolSettings;
+import com.ninja6.ninjaarena.waiting.HostingService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
@@ -81,6 +83,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private KitItems kitItems;
     private NinjaTools tools;
     private WaitingRoomService waitingRooms;
+    private HostingService hosting;
 
     @Override
     public void onEnable() {
@@ -180,6 +183,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         waitingRooms.start();
         PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
         PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);
+        ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots, waitingRooms::join);
+        hosting = new HostingService(this, arenas, waitingRooms, entry, admission, arenaWorld::world,
+                inMatch::isInMatch);
+        getServer().getPluginManager().registerEvents(hosting, this);
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
                 snapshots, portalCommand::forget, waitingRooms::join), this);
         ConfigReload reloader = new ConfigReload(getDataFolder().toPath(), getConfig(), kit, kitItems,
@@ -238,8 +245,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 });
         NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world), portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
-                player -> waitingRooms.leave(player, Exit.COMMAND)
-                        || matches.leave(player, MatchService.Exit.COMMAND), reloader::execute);
+                player -> {
+                    boolean cancelled = hosting.leave(player);
+                    return waitingRooms.leave(player, Exit.COMMAND)
+                            || matches.leave(player, MatchService.Exit.COMMAND) || cancelled;
+                }, hosting, reloader::execute);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -247,6 +257,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (hosting != null) {
+            hosting.close();
+            hosting = null;
+        }
         if (waitingRooms != null) {
             waitingRooms.close();
             waitingRooms = null;

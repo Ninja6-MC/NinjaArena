@@ -27,9 +27,9 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     private static final List<Route> ROUTES = List.of(
             new Route(LEAVE, PLAY, LEAVE, "leave the waiting room or match you are in"),
-            new Route("accept", PLAY, "accept <host>", "accept an invitation (not available yet)"),
-            new Route("host", HOST, "host <arena>", "open a match in the Arena (not available yet)"),
-            new Route("invite", HOST, "invite <player>", "invite a player (not available yet)"),
+            new Route("accept", PLAY, "accept <host>", "accept an invitation to the Arena"),
+            new Route("host", HOST, "host <arena>", "open a match in the Arena"),
+            new Route("invite", HOST, "invite <player>", "invite a player to the Arena"),
             new Route(ArenaCommand.NAME, ADMIN, ArenaCommand.NAME + " <subcommand>", "create, edit and set up arenas"),
             new Route(PortalCommand.NAME, ADMIN, PortalCommand.NAME + " <subcommand>",
                     "mark out portals that lead to arenas"),
@@ -41,6 +41,7 @@ public final class NinjaArenaCommand implements TabExecutor {
     private final PortalCommand portal;
     private final DirectorCommand director;
     private final Predicate<Player> leave;
+    private final HostingCommands hosting;
     private final Consumer<CommandSender> reload;
 
     /**
@@ -49,15 +50,26 @@ public final class NinjaArenaCommand implements TabExecutor {
      */
     public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
             Predicate<Player> leave) {
-        this(arena, portal, director, leave, null);
+        this(arena, portal, director, leave, null, null);
+    }
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave, HostingCommands hosting) {
+        this(arena, portal, director, leave, hosting, null);
     }
 
     public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
             Predicate<Player> leave, Consumer<CommandSender> reload) {
+        this(arena, portal, director, leave, null, reload);
+    }
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload) {
         this.arena = Objects.requireNonNull(arena, "arena");
         this.portal = Objects.requireNonNull(portal, "portal");
         this.director = Objects.requireNonNull(director, "director");
         this.leave = Objects.requireNonNull(leave, "leave");
+        this.hosting = hosting;
         this.reload = reload;
     }
 
@@ -97,10 +109,17 @@ public final class NinjaArenaCommand implements TabExecutor {
                 case "accept", "host", "invite" -> {
                     if (args.length != 2) {
                         usage(sender, label, route.usage());
-                    } else if (!(sender instanceof Player)) {
+                    } else if (!(sender instanceof Player player)) {
                         sender.sendMessage(Component.text("Only players can use this Arena command.", NamedTextColor.RED));
-                    } else {
+                    } else if (hosting == null) {
                         unavailable(sender, group);
+                    } else {
+                        switch (group) {
+                            case "host" -> hosting.host(player, args[1]);
+                            case "invite" -> hosting.invite(player, args[1]);
+                            case "accept" -> hosting.accept(player, args[1]);
+                            default -> throw new IllegalStateException(group);
+                        }
                     }
                 }
                 case "admin" -> {

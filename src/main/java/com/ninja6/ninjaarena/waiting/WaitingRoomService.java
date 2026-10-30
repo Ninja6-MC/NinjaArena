@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -89,6 +90,34 @@ public final class WaitingRoomService {
     /** Rooms held at their last second for a free match slot, by arena, with the order they were held in. */
     private final Map<String, Long> heldSince = new HashMap<>();
     private long holds;
+    private Function<String, List<UUID>> party = arena -> List.of();
+    private BiConsumer<UUID, String> departed = (player, arena) -> { };
+    private Consumer<String> closedRoom = arena -> { };
+
+    public void setParty(Function<String, List<UUID>> party) {
+        this.party = Objects.requireNonNull(party, "party");
+    }
+
+    public void onDeparture(BiConsumer<UUID, String> departed) {
+        this.departed = Objects.requireNonNull(departed, "departed");
+    }
+
+    /** Called when a room closes, including handing its players to a match. */
+    public void onClose(Consumer<String> closedRoom) {
+        this.closedRoom = Objects.requireNonNull(closedRoom, "closedRoom");
+    }
+
+    public boolean hasRoom(String arena) {
+        return rooms.containsKey(Arena.normalizeName(arena));
+    }
+
+    public void refreshParty(String arena) {
+        Room room = rooms.get(arena);
+        if (room != null) {
+            room.state().setParty(party.apply(arena));
+            notifyMoves(room.state().refreshParty());
+        }
+    }
 
     /**
      * @param restore {@code RestoreService#restore}
@@ -169,8 +198,10 @@ public final class WaitingRoomService {
                     Math.max(1, found.teamSpawns().size()), settings.minPlayers(), settings.countdownSeconds()));
             rooms.put(found.name(), room);
         }
+        room.state().setParty(party.apply(room.arena()));
         WaitingRoom.Joined joined = room.state().join(playerId);
         arenaOf.put(playerId, room.arena());
+        notifyMoves(joined.moves());
         player.sendMessage(Component.text("You joined arena " + room.arena() + " on team " + joined.team() + ".",
                 NamedTextColor.GREEN));
         broadcast(room, playerId, Component.text(player.getName() + " joined team " + joined.team() + " "
@@ -222,19 +253,15 @@ public final class WaitingRoomService {
             return false;
         }
         Room room = rooms.get(arena);
+        departed.accept(playerId, arena);
+        room.state().setParty(party.apply(arena));
         WaitingRoom.Left left = room.state().leave(playerId).orElseThrow();
         if (room.state().isEmpty()) {
             rooms.remove(arena);
         } else {
             broadcast(room, null, Component.text(player.getName() + " left " + count(room) + ".",
                     NamedTextColor.GRAY));
-            left.move().ifPresent(move -> {
-                Player moved = plugin.getServer().getPlayer(move.player());
-                if (moved != null) {
-                    moved.sendMessage(Component.text("You were moved to team " + move.to()
-                            + " to keep the teams even.", NamedTextColor.YELLOW));
-                }
-            });
+            notifyMoves(left.moves());
             if (left.countdownCancelled()) {
                 broadcast(room, null, Component.text("Not enough players. The countdown stopped.",
                         NamedTextColor.RED));
@@ -274,7 +301,9 @@ public final class WaitingRoomService {
      * entering edit mode or being deleted. Does nothing if no one is waiting for it.
      */
     public void closeRoom(String arenaName) {
-        Room room = rooms.remove(Arena.normalizeName(arenaName));
+        String name = Arena.normalizeName(arenaName);
+        closedRoom.accept(name);
+        Room room = rooms.remove(name);
         if (room == null) {
             return;
         }
@@ -332,6 +361,9 @@ public final class WaitingRoomService {
         // Restores put off to a tick that will now never run happen here too.
         List<UUID> waiting = new ArrayList<>(arenaOf.keySet());
         waiting.addAll(homeBound);
+        for (String arena : new ArrayList<>(rooms.keySet())) {
+            closedRoom.accept(arena);
+        }
         rooms.clear();
         heldSince.clear();
         arenaOf.clear();
@@ -345,6 +377,7 @@ public final class WaitingRoomService {
     }
 
     private void launch(Room room, List<List<UUID>> teams) {
+        closedRoom.accept(room.arena());
         rooms.remove(room.arena());
         for (List<UUID> team : teams) {
             for (UUID playerId : team) {
@@ -382,6 +415,16 @@ public final class WaitingRoomService {
         if (result == RestoreResult.FAILED) {
             player.sendMessage(Component.text("Your belongings could not be returned yet. Rejoin the server,"
                     + " or ask an admin if this keeps happening.", NamedTextColor.RED));
+        }
+    }
+
+    private void notifyMoves(List<WaitingRoom.Move> moves) {
+        for (WaitingRoom.Move move : moves) {
+            Player moved = plugin.getServer().getPlayer(move.player());
+            if (moved != null) {
+                moved.sendMessage(Component.text("You were moved to team " + move.to()
+                        + " to keep the teams even.", NamedTextColor.YELLOW));
+            }
         }
     }
 

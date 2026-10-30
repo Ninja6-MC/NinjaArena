@@ -3,7 +3,6 @@ package com.ninja6.ninjaarena.portal;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.portal.PortalEntry.Refusal;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -14,7 +13,6 @@ import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
@@ -28,8 +26,6 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
-import org.bukkit.inventory.CraftingInventory;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -72,9 +68,8 @@ public final class PortalListener implements Listener {
     private final PortalRegistry portals;
     private final PortalEntry entry;
     private final Supplier<World> arenaWorld;
-    private final SnapshotService snapshots;
+    private final ArenaAdmission admission;
     private final Consumer<UUID> onQuit;
-    private final BiConsumer<Player, String> onEnter;
 
     /** Players whose entry is waiting for the waiting room's chunk. */
     private final Set<UUID> entering = new HashSet<>();
@@ -90,9 +85,8 @@ public final class PortalListener implements Listener {
         this.portals = Objects.requireNonNull(portals, "portals");
         this.entry = Objects.requireNonNull(entry, "entry");
         this.arenaWorld = Objects.requireNonNull(arenaWorld, "arenaWorld");
-        this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
+        this.admission = new ArenaAdmission(plugin, entry, arenaWorld, snapshots, onEnter);
         this.onQuit = Objects.requireNonNull(onQuit, "onQuit");
-        this.onEnter = Objects.requireNonNull(onEnter, "onEnter");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -154,67 +148,12 @@ public final class PortalListener implements Listener {
                 || !isAt(portal, player.getLocation())) {
             return;
         }
-        // The snapshot saves storage, armour and offhand, and the waiting room empties the
-        // cursor and crafting grid. Closing the screen would drop at the portal whatever does
-        // not fit back in, so items still held loose keep the player out instead.
-        if (holdsLooseItems(player)) {
+        admission.enter(player, portal.arena(), message -> {
             if (portal.equals(portals.at(player.getLocation()))) {
                 player.teleport(outside, TeleportCause.PLUGIN);
             }
-            tell(player, "Put away the items on your cursor or in your crafting grid, then walk in again.");
-            return;
-        }
-        player.closeInventory();
-        Optional<Refusal> refusal = entry.admit(player, portal);
-        if (refusal.isPresent()) {
-            if (portal.equals(portals.at(player.getLocation()))) {
-                player.teleport(outside, TeleportCause.PLUGIN);
-            }
-            tell(player, refusal.get());
-            return;
-        }
-        ArenaPoint room = entry.waitingRoom(portal).orElseThrow();
-        Location target = new Location(arenaWorld.get(), room.x(), room.y(), room.z(), room.yaw(), room.pitch());
-        boolean moved;
-        try {
-            moved = player.teleport(target, TeleportCause.PLUGIN);
-            if (!moved) {
-                plugin.getLogger().warning("The teleport of " + player.getName() + " (" + playerId + ") to arena "
-                        + portal.arena() + " was refused.");
-            }
-        } catch (RuntimeException e) {
-            plugin.getLogger().log(Level.SEVERE, "Could not teleport " + player.getName() + " (" + playerId
-                    + ") to arena " + portal.arena(), e);
-            moved = false;
-        }
-        if (moved) {
-            onEnter.accept(player, portal.arena());
-            return;
-        }
-        // The player never left, so what they have now is theirs and the snapshot is stale.
-        try {
-            snapshots.delete(playerId);
-        } catch (IOException e) {
-            plugin.getLogger().log(Level.SEVERE, "Could not delete the snapshot of " + player.getName() + " ("
-                    + playerId + ") after a failed arena teleport; it will be restored on their next join.", e);
-        }
-        tell(player, "You could not be sent to the arena.");
-    }
-
-    /** Whether the player holds items on the cursor or in a crafting grid. */
-    static boolean holdsLooseItems(Player player) {
-        ItemStack cursor = player.getItemOnCursor();
-        if (cursor != null && !cursor.isEmpty()) {
-            return true;
-        }
-        if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory grid) {
-            for (ItemStack item : grid.getMatrix()) {
-                if (item != null && !item.isEmpty()) {
-                    return true;
-                }
-            }
-        }
-        return false;
+            tell(player, message);
+        });
     }
 
     /** Whether the location is in the portal or in a block touching it, in the portal's world. */

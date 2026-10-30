@@ -168,6 +168,70 @@ class WaitingRoomTest {
     }
 
     @Test
+    void acceptedPlayersReuniteWithTheHostWhenLaterArrivalsMakeRoom() {
+        WaitingRoom room = new WaitingRoom(2, 10, 30);
+        room.setParty(List.of(player(1), player(2), player(3)));
+        room.join(player(2));
+        room.join(player(3));
+        assertEquals(List.of(1, 1), sizes(room));
+        room.join(player(1));
+        assertEquals(room.teamOf(player(1)), room.teamOf(player(2)));
+        room.join(player(4));
+        room.join(player(5));
+        assertEquals(room.teamOf(player(1)), room.teamOf(player(2)));
+        assertEquals(room.teamOf(player(1)), room.teamOf(player(3)));
+        room.join(player(6));
+        room.leave(player(4));
+        assertEquals(room.teamOf(player(1)), room.teamOf(player(3)));
+        assertEquals(List.of(3, 2).stream().sorted().toList(), sizes(room).stream().sorted().toList());
+    }
+
+    @Test
+    void aDepartureMovesASoloPlayerBeforeSplittingAHostParty() {
+        WaitingRoom room = new WaitingRoom(2, 20, 30);
+        room.setParty(List.of(player(1), player(2)));
+        for (int i = 1; i <= 6; i++) {
+            room.join(player(i));
+        }
+        int partyTeam = room.teamOf(player(1));
+        List<UUID> other = new ArrayList<>(room.teams().get(2 - partyTeam));
+        room.leave(other.get(0));
+        room.leave(other.get(1));
+        assertEquals(room.teamOf(player(1)), room.teamOf(player(2)));
+        assertEquals(List.of(2, 2), sizes(room));
+    }
+
+    @Test
+    void hostedBalancingKeepsPlayersAndBalancedSizesAcrossArrivalsAndDepartures() {
+        for (int teamCount = 2; teamCount <= 4; teamCount++) {
+            WaitingRoom room = new WaitingRoom(teamCount, 1000, 30);
+            List<UUID> party = List.of(player(0), player(2), player(4), player(6));
+            room.setParty(party);
+            List<UUID> present = new ArrayList<>();
+            int next = 0;
+            for (int step = 0; step < 250; step++) {
+                if (present.size() < 8 || step % 3 != 2) {
+                    UUID id = player(next++);
+                    room.join(id);
+                    present.add(id);
+                } else {
+                    room.leave(present.remove((step * 7) % present.size()));
+                }
+                List<Integer> counts = sizes(room);
+                assertTrue(counts.stream().mapToInt(Integer::intValue).max().orElseThrow()
+                        - counts.stream().mapToInt(Integer::intValue).min().orElseThrow() <= 1, counts.toString());
+                assertEquals(present.size(), room.players().size());
+                assertEquals(java.util.Set.copyOf(present), java.util.Set.copyOf(room.players()));
+                List<UUID> together = party.stream().filter(present::contains).toList();
+                if (together.size() <= (present.size() + teamCount - 1) / teamCount && !together.isEmpty()) {
+                    int team = room.teamOf(together.getFirst());
+                    assertTrue(together.stream().allMatch(id -> room.teamOf(id) == team));
+                }
+            }
+        }
+    }
+
+    @Test
     void reloadChangesMinimumAndFutureCountdownButKeepsAViableCountdownLength() {
         WaitingRoom room = new WaitingRoom(2, 2, 5);
         room.join(player(1));

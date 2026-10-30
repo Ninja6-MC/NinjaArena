@@ -58,17 +58,17 @@ under the root.
 | :--- | :--- | :--- |
 | `help` | Any tier below | List permitted commands |
 | `leave` | `ninjaarena.play` | Leave the waiting room or match and restore your snapshot |
-| `accept <host>` | `ninjaarena.play` | Not available yet; reserved for accepting an invitation |
-| `host <arena>` | `ninjaarena.host` | Not available yet; reserved for opening a match |
-| `invite <player>` | `ninjaarena.host` | Not available yet; reserved for inviting a player |
+| `accept <host>` | `ninjaarena.play` | Accept an invitation and enter the waiting room |
+| `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
+| `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
 | `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals |
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration and kits |
 
-The player and host commands require a player sender. Hosting and invitations remain
-reserved and report that they are not available yet. Walking through a portal remains
-the way to enter the Arena. Admin reload also works from the console.
+The player and host commands require a player sender. Enter the Arena by walking
+through a portal or explicitly accepting an invitation. Admin reload also works from
+the console.
 
 `ninjaarena.play` defaults to everyone. `ninjaarena.host` and `ninjaarena.admin` default
 to operators. The declared permission children grant play from host, and host from admin;
@@ -76,6 +76,33 @@ the play leaf has an explicit empty children block. The root accepts any of thes
 and dispatch, help and tab completion check the route's own permission. Denying play
 explicitly therefore blocks player routes without blocking an otherwise granted admin
 or host route.
+
+## Hosting and invitations
+
+With `ninjaarena.host`, run `/narena host dojo` to open a ready arena with no match,
+waiting players or other host. Opening reserves it for one host and does not move anyone.
+Walk through its portal to join, and use `/narena invite Bob` to invite an online player.
+Inviting only sends a plain message; Bob enters by typing `/narena accept <host-name>`.
+Invitations may be sent and accepted before the host walks in. The ordinary waiting-room
+countdown starts the match once enough players have arrived; portal entrants can still join.
+
+Accepting loads the room's chunk, checks admission again, saves the player's snapshot and
+teleports them through the same entry flow as a portal. Pending snapshots, loose cursor or
+crafting-grid items, death and spectator mode prevent entry. A failed load, snapshot,
+teleport or room preparation leaves the invitation open for a retry. `/narena leave`
+cancels an entry that is still loading. A player already waiting in that arena can accept
+without another snapshot or teleport; leave a different room or match before accepting.
+
+Waiting-room teams stay within one player of each other. The host and accepted invitees
+stay together where one balanced team has room; otherwise the host and earliest accepted
+players take that team's capacity. Later arrivals reunite the party when room permits,
+and departures move unrelated players before splitting those kept together.
+
+A host's `/narena leave`, departure from the waiting room, disconnect, room closure,
+match start, arena edit or deletion, and plugin shutdown cancel the reservation and its
+unaccepted invitations. Losing the host permission also invalidates it at the next hosting
+operation or pending entry check. Players already in the waiting room remain there and
+can leave through the normal snapshot restore.
 
 ## Safe configuration reload
 

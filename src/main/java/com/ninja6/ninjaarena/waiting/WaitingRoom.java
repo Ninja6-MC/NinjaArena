@@ -1,8 +1,10 @@
 package com.ninja6.ninjaarena.waiting;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SequencedSet;
@@ -16,7 +18,9 @@ import java.util.UUID;
  * <p><b>Balancing.</b> A player who arrives joins the smallest team, the lowest-numbered
  * one on a tie. When someone leaves and the largest team is then two or more ahead of the
  * smallest, the player who joined the largest team last moves to the smallest. Arrivals and
- * departures come one at a time, so team sizes never differ by more than one.
+ * departures come one at a time, so team sizes never differ by more than one. A hosted
+ * party is kept together up to one balanced team's capacity, host first, and reunites as
+ * later arrivals make room. Unrelated players move before those kept together.
  *
  * <p><b>Countdown.</b> It starts as soon as {@code minPlayers} are waiting and runs for
  * {@code countdownSeconds} calls to {@link #tick()}, one a second. A departure that takes
@@ -59,7 +63,10 @@ public final class WaitingRoom {
      * @param team             the team the player was put on, numbered from 1
      * @param countdownStarted whether this arrival reached the minimum and started the countdown
      */
-    public record Joined(int team, boolean countdownStarted) {
+    public record Joined(int team, boolean countdownStarted, List<Move> moves) {
+        public Joined {
+            moves = List.copyOf(moves);
+        }
     }
 
     /** A player moved from one team to another to keep the teams even. */
@@ -68,17 +75,36 @@ public final class WaitingRoom {
 
     /**
      * @param team               the team the player was on, numbered from 1
-     * @param move               the player moved to rebalance the teams, if any
+     * @param moves              the players moved to rebalance the teams
      * @param countdownCancelled whether this departure took the count below the minimum
      *                           while the countdown ran
      */
-    public record Left(int team, Optional<Move> move, boolean countdownCancelled) {
+    public record Left(int team, List<Move> moves, boolean countdownCancelled) {
+        public Left {
+            moves = List.copyOf(moves);
+        }
+
+        public Optional<Move> move() {
+            return moves.stream().findFirst();
+        }
     }
 
     private int minPlayers;
     private int countdownSeconds;
     /** Each team's players in the order they joined it. */
     private final List<SequencedSet<UUID>> teams = new ArrayList<>();
+    private List<UUID> party = List.of();
+
+    /** Hosted players, host first; missing members may arrive later. */
+    public void setParty(List<UUID> party) {
+        this.party = List.copyOf(party);
+    }
+
+    public List<Move> refreshParty() {
+        Map<UUID, Integer> before = assignments();
+        balanceParty();
+        return moves(before);
+    }
 
     /** Seconds left while counting; 0 when no countdown runs. */
     private int secondsLeft;
@@ -130,14 +156,16 @@ public final class WaitingRoom {
         if (contains(player)) {
             throw new IllegalStateException(player + " is already waiting");
         }
+        Map<UUID, Integer> before = assignments();
         int team = smallest();
         teams.get(team).add(player);
+        balanceParty();
         boolean started = false;
         if (secondsLeft == 0 && size() >= minPlayers) {
             secondsLeft = countdownSeconds;
             started = true;
         }
-        return new Joined(team + 1, started);
+        return new Joined(teamOf(player), started, moves(before));
     }
 
     /**
@@ -152,13 +180,18 @@ public final class WaitingRoom {
             return Optional.empty();
         }
         teams.get(team).remove(player);
-        Optional<Move> move = rebalance();
+        Map<UUID, Integer> before = assignments();
+        if (party.isEmpty()) {
+            rebalance();
+        } else {
+            balanceParty();
+        }
         boolean cancelled = false;
         if (secondsLeft > 0 && size() < minPlayers) {
             secondsLeft = 0;
             cancelled = true;
         }
-        return Optional.of(new Left(team + 1, move, cancelled));
+        return Optional.of(new Left(team + 1, moves(before), cancelled));
     }
 
     /** Advances the countdown by one second. */
@@ -269,5 +302,66 @@ public final class WaitingRoom {
         UUID moved = teams.get(from).removeLast();
         teams.get(to).add(moved);
         return Optional.of(new Move(moved, from + 1, to + 1));
+    }
+
+    private Map<UUID, Integer> assignments() {
+        Map<UUID, Integer> out = new HashMap<>();
+        for (UUID id : players()) {
+            out.put(id, teamOf(id));
+        }
+        return out;
+    }
+
+    private List<Move> moves(Map<UUID, Integer> before) {
+        List<Move> moved = new ArrayList<>();
+        for (UUID id : players()) {
+            Integer from = before.get(id);
+            if (from != null && from != teamOf(id)) {
+                moved.add(new Move(id, from, teamOf(id)));
+            }
+        }
+        return List.copyOf(moved);
+    }
+
+    /** Reserve one balanced team's capacity for the host and accepted players, in that order. */
+    private void balanceParty() {
+        List<UUID> present = party.stream().filter(this::contains).toList();
+        if (present.isEmpty()) {
+            rebalance();
+            return;
+        }
+        int capacity = (size() + teams.size() - 1) / teams.size();
+        List<UUID> together = present.subList(0, Math.min(capacity, present.size()));
+        int target = indexOf(together.getFirst());
+        for (UUID id : together) {
+            int from = indexOf(id);
+            if (from != target) {
+                teams.get(from).remove(id);
+                teams.get(target).add(id);
+            }
+        }
+        while (teams.get(largest()).size() - teams.get(smallest()).size() >= 2) {
+            int to = smallest();
+            int from = -1;
+            UUID candidate = null;
+            for (int i = teams.size() - 1; i >= 0; i--) {
+                if (teams.get(i).size() <= teams.get(to).size() + 1
+                        || (from >= 0 && teams.get(i).size() < teams.get(from).size())) {
+                    continue;
+                }
+                for (UUID id : teams.get(i).reversed()) {
+                    if (!together.contains(id)) {
+                        from = i;
+                        candidate = id;
+                        break;
+                    }
+                }
+            }
+            if (candidate == null) {
+                throw new IllegalStateException("No movable player in unbalanced waiting room");
+            }
+            teams.get(from).remove(candidate);
+            teams.get(to).add(candidate);
+        }
     }
 }
