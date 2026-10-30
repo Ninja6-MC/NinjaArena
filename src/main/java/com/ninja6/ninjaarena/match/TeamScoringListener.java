@@ -4,6 +4,9 @@ import com.ninja6.ninjaarena.match.MatchUpdate.Cause;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
@@ -19,13 +22,24 @@ import org.bukkit.event.Listener;
 public final class TeamScoringListener implements Listener {
 
     private final TeamScores scores;
-    private final ScoringSettings settings;
+    private ScoringSettings settings;
+    private final Map<MatchView, ScoringSettings> matchSettings = new IdentityHashMap<>();
     private final Function<UUID, Player> players;
 
     public TeamScoringListener(TeamScores scores, ScoringSettings settings, Function<UUID, Player> players) {
         this.scores = Objects.requireNonNull(scores, "scores");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.players = Objects.requireNonNull(players, "players");
+    }
+
+    /** Existing matches keep their awards even if no award has been made yet. */
+    public void setSettings(ScoringSettings settings, List<MatchView> running) {
+        for (MatchView match : running) {
+            if (match.result().isEmpty()) {
+                matchSettings.putIfAbsent(match, this.settings);
+            }
+        }
+        this.settings = Objects.requireNonNull(settings, "settings");
     }
 
     @EventHandler
@@ -37,7 +51,7 @@ public final class TeamScoringListener implements Listener {
             int team = event.match().teamOf(killer);
             if (event.match().contains(killer) && team > 0 && team != event.team()
                     && !killer.equals(event.player())) {
-                scores.addPoints(event.match(), team, settings.playerKillPoints());
+                scores.addPoints(event.match(), team, matchSettings.getOrDefault(event.match(), settings).playerKillPoints());
             }
         });
     }
@@ -45,7 +59,8 @@ public final class TeamScoringListener implements Listener {
     @EventHandler
     public void onRoundEnd(RoundEndEvent event) {
         if (!event.result().isDraw()) {
-            scores.addPoints(event.match(), event.result().winner(), settings.roundWinPoints());
+            scores.addPoints(event.match(), event.result().winner(),
+                    matchSettings.getOrDefault(event.match(), settings).roundWinPoints());
         }
     }
 
@@ -65,6 +80,7 @@ public final class TeamScoringListener implements Listener {
             }
         } finally {
             scores.finish(event.match());
+            matchSettings.remove(event.match());
         }
     }
 }

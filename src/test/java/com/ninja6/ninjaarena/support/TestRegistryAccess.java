@@ -48,6 +48,12 @@ public final class TestRegistryAccess implements RegistryAccess {
                                     new Class<?>[] {ItemType.Typed.class}, (p, m, a) -> switch (m.getName()) {
                                         case "typed" -> p;
                                         case "getKey" -> NamespacedKey.minecraft(value);
+                                        case "getMaxStackSize" -> switch (value) {
+                                            case "wooden_sword" -> 1;
+                                            case "snowball" -> 16;
+                                            case "stone" -> 64;
+                                            default -> throw new UnsupportedOperationException("stack limit: " + value);
+                                        };
                                         default -> throw new UnsupportedOperationException(m.getName());
                                     });
                         }

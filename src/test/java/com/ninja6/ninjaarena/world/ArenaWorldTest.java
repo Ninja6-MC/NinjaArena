@@ -93,4 +93,19 @@ class ArenaWorldTest {
         arenaWorld.close();
         assertEquals(List.of("save", "setAutoSave(false)"), calls);
     }
+
+    @Test
+    void reloadSetsDistancesWithoutResettingBorderRulesOrSaving() {
+        World world = (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[] {World.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "setAutoSave" -> null;
+                    case "setViewDistance", "setSimulationDistance" -> { calls.add(method.getName() + ":" + args[0]); yield null; }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        var arenaWorld = new ArenaWorld(world);
+        arenaWorld.setDistances(12, 9);
+        assertEquals(List.of("setViewDistance:12", "setSimulationDistance:9"), calls);
+        assertFalse(arenaWorld.isSavingEnabled());
+    }
+
 }

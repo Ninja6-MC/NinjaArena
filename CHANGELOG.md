@@ -13,9 +13,15 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Safe `/narena admin reload` validates both configuration and kits with file and line
+  diagnostics before applying changes. Waiting-room, tool and world-distance settings
+  apply immediately; running countdowns, matches and round kits retain their values at
+  the documented boundaries. Empty registries can resize the grid and border; occupied
+  ones refuse those changes. Replies separate changed, postponed and refused settings,
+  while arenas, portals and snapshots are never reloaded.
 - Permission-filtered command help and completion for player, host and admin routes.
-  `accept <host>`, `host <arena>`, `invite <player>` and `admin reload` report that they are
-  not available yet. Existing leave, arena, portal and director paths remain, and every
+  `accept <host>`, `host <arena>` and `invite <player>` report that they are not available
+  yet. Existing leave, arena, portal and director paths remain, and every
   permission tier declares its children explicitly.
 - Round feedback: a round timer bossbar that turns red for Overrun, team points and living
   enemy counts in the actionbar, round start and end titles, and standard sound cues for

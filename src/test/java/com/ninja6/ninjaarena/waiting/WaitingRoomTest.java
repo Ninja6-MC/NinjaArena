@@ -166,4 +166,23 @@ class WaitingRoomTest {
         assertThrows(IllegalArgumentException.class, () -> new WaitingRoom(2, 0, 30));
         assertThrows(IllegalArgumentException.class, () -> new WaitingRoom(2, 2, 0));
     }
+
+    @Test
+    void reloadChangesMinimumAndFutureCountdownButKeepsAViableCountdownLength() {
+        WaitingRoom room = new WaitingRoom(2, 2, 5);
+        room.join(player(1));
+        room.join(player(2));
+        room.tick();
+        room.setSettings(2, 9);
+        assertEquals(4, room.secondsLeft());
+        room.setSettings(3, 9);
+        assertFalse(room.isCounting());
+        room.setSettings(2, 9);
+        assertEquals(9, room.secondsLeft());
+        room.leave(player(2));
+        assertFalse(room.isCounting());
+        room.join(player(3));
+        assertEquals(9, room.secondsLeft());
+    }
+
 }

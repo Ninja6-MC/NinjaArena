@@ -463,4 +463,18 @@ class ArenaRegistryTest {
         assertEquals(1, failed.size());
         assertFalse(registry.isEditing("dojo"));
     }
+
+    @Test
+    void gridReloadOnlyChangesAnEmptyRegistryAndNeverLoadsArenaFiles() throws Exception {
+        assertTrue(registry.canResize());
+        var changed = new ArenaGrid(512, 4096, -64, 320);
+        registry.setGrid(changed);
+        assertEquals(changed, registry.grid());
+        assertFalse(Files.exists(dir.resolve("arenas.yml")));
+        buildComplete("dojo");
+        assertFalse(registry.canResize());
+        assertThrows(IllegalStateException.class, () -> registry.setGrid(Arenas.GRID));
+        assertEquals(changed, registry.grid());
+    }
+
 }
