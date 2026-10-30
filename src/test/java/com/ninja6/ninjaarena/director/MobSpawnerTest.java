@@ -112,6 +112,18 @@ class MobSpawnerTest {
     }
 
     @Test
+    void directorLimitsReachTheExistingStatusDiagnostics() {
+        var arena = new Arena("dojo", new GridCell(0, 0), null, null, List.of(), List.of());
+        var spawner = new MobSpawner(world, new SpawnPlacement(arena), match, id -> null, diagnostics, BOW);
+        spawner.blocked(MatchDirector.Blockage.BUDGET, 0.5, 0);
+        assertEquals("round 1, the threat budget cannot afford another enemy (target 0.50, in play 0.00)",
+                spawner.lastRefusal().orElseThrow());
+        spawner.blocked(MatchDirector.Blockage.GATE, 3, 0);
+        assertEquals("round 1, the spawn gate is holding back enemies", spawner.lastRefusal().orElseThrow());
+        assertTrue(added.isEmpty());
+    }
+
+    @Test
     void spawnedUndeadDoNotBurnUnderTheFixedNoonSky() {
         var arena = new Arena("dojo", new GridCell(0, 0), null, null, List.of(),
                 List.of(new ArenaPoint(10.5, 64, 10.5, 0, 0)));

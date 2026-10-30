@@ -42,6 +42,8 @@ Java 25, and does not run on Folia.
   FINE, or at INFO with `director.debug` on. `/narena director [arena]` (admins) shows the
   round budget, intensity, enemies in play with their threat and the last refused or
   cancelled spawn for the match the admin is in or the one running in the named arena.
+  Budget and spawn-gate limits also explain why spawning is held back, once per reason per
+  round at the same log level, and appear in the director status.
 - Enemy lifecycle and arena teardown: enemies are non-persistent, cannot pick up items,
   and drop neither items nor experience. Enemies stuck within a quarter block or outside
   their arena for 10 seconds are removed, returning their threat cost through the director.

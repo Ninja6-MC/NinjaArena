@@ -91,6 +91,11 @@ public final class MobSpawner implements MatchDirector.Spawner {
         return diagnostics.last();
     }
 
+    @Override
+    public void blocked(MatchDirector.Blockage reason, double targetThreat, double inPlay) {
+        diagnostics.blocked(reason, targetThreat, inPlay);
+    }
+
     /** The match's players alive in the round who are online and in the arena world. */
     private List<Player> alivePlayers() {
         List<Player> alive = new ArrayList<>();

@@ -112,7 +112,7 @@ class DirectorStatusCommandTest {
         assertEquals(List.of("Director of arena dojo, round 1 (combat):",
                 "Round budget: 10.00, intensity 0.15",
                 "Enemies in play: 1, threat 1.00: 1 zombie (threat 1)",
-                "Last placement refusal: round 1, no enemy spawn point for a spider: point 1 in view"), messages);
+                "Last spawn refusal: round 1, no enemy spawn point for a spider: point 1 in view"), messages);
         assertEquals(List.of("dojo"), command.onTabComplete(sender(ConsoleCommandSender.class, null), null, "narena",
                 new String[] {"director", "d"}));
     }

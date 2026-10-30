@@ -67,6 +67,15 @@ public final class MatchDirector {
         default Optional<String> lastRefusal() {
             return Optional.empty();
         }
+
+        /** Explains why the director held back spawning before trying a placement. */
+        default void blocked(Blockage reason, double targetThreat, double inPlay) {
+        }
+    }
+
+    /** A limit that holds spawning back before placement. */
+    public enum Blockage {
+        BUDGET, GATE
     }
 
     /** The living enemies of one kind, and the threat they hold. */
@@ -236,20 +245,34 @@ public final class MatchDirector {
     private void spend(double threat, Weights weights) {
         EnumSet<EnemyKind> usable = EnumSet.allOf(EnemyKind.class);
         double inPlay = threatInPlay();
+        boolean placed = false;
+        boolean refused = false;
         while (true) {
             double gap = threat - inPlay;
             List<EnemyKind> affordable = usable.stream().filter(kind -> kind.cost(costs) <= gap).toList();
-            if (affordable.isEmpty() || !gate.maySpawn(match)) {
+            if (affordable.isEmpty()) {
+                // A successful fill is not a refusal; placement failures already explain themselves.
+                if (!placed && !refused) {
+                    spawner.blocked(Blockage.BUDGET, threat, inPlay);
+                }
+                return;
+            }
+            if (!gate.maySpawn(match)) {
+                if (!refused) {
+                    spawner.blocked(Blockage.GATE, threat, inPlay);
+                }
                 return;
             }
             EnemyKind kind = affordable.get(index(affordable.size()));
             Optional<Enemy> spawned = spawner.spawn(kind, Targeting.pick(weights.of(kind), random));
             if (spawned.isEmpty()) {
+                refused = true;
                 usable.remove(kind);
                 continue;
             }
             int cost = kind.cost(costs);
             enemies.add(new Tracked(spawned.get(), cost));
+            placed = true;
             inPlay += cost;
             gate.spawned(match, kind);
         }

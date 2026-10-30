@@ -61,19 +61,31 @@ class MatchDirectorTest {
     record Attempt(EnemyKind kind, UUID target) {
     }
 
+    record HeldBack(MatchDirector.Blockage reason, double targetThreat, double inPlay) {
+    }
+
     private final Map<Integer, Integer> points = new HashMap<>();
     private final MatchStandings standings = (match, team) -> points.getOrDefault(team, 0);
     private final List<Attempt> attempts = new ArrayList<>();
     private final List<FakeEnemy> spawned = new ArrayList<>();
     private final Set<EnemyKind> refused = EnumSet.noneOf(EnemyKind.class);
-    private final MatchDirector.Spawner spawner = (kind, target) -> {
-        attempts.add(new Attempt(kind, target));
-        if (refused.contains(kind)) {
-            return Optional.empty();
+    private final List<HeldBack> heldBack = new ArrayList<>();
+    private final MatchDirector.Spawner spawner = new MatchDirector.Spawner() {
+        @Override
+        public Optional<MatchDirector.Enemy> spawn(EnemyKind kind, UUID target) {
+            attempts.add(new Attempt(kind, target));
+            if (refused.contains(kind)) {
+                return Optional.empty();
+            }
+            FakeEnemy enemy = new FakeEnemy(kind, target);
+            spawned.add(enemy);
+            return Optional.of(enemy);
         }
-        FakeEnemy enemy = new FakeEnemy(kind, target);
-        spawned.add(enemy);
-        return Optional.of(enemy);
+
+        @Override
+        public void blocked(MatchDirector.Blockage reason, double targetThreat, double inPlay) {
+            heldBack.add(new HeldBack(reason, targetThreat, inPlay));
+        }
     };
     private double roll;
     private FakeMatch match;
@@ -98,6 +110,74 @@ class MatchDirectorTest {
     private MatchDirector director(SpawnGate gate, TargetWeigher weigher) {
         return new MatchDirector(match, IntensitySettings.DEFAULTS, new ThreatBudget(20), EnemyCosts.DEFAULTS,
                 standings, spawner, gate, weigher, () -> roll);
+    }
+
+    @Test
+    void reportsBudgetOnlyWhenItHoldsBackAnOtherwiseIdleTick() {
+        var director = director();
+        director.tick();
+        assertTrue(heldBack.isEmpty(), "a successful budget fill is not a refusal");
+        director.tick();
+        assertEquals(List.of(new HeldBack(MatchDirector.Blockage.BUDGET, 3, 3)), heldBack);
+    }
+
+    @Test
+    void reportsAnUnaffordableBudgetWithoutAskingTheGateOrTryingPlacement() {
+        var director = director(new SpawnGate() {
+            @Override
+            public double intensity(MatchView view, double target) {
+                return 0.01;
+            }
+
+            @Override
+            public boolean maySpawn(MatchView view) {
+                throw new AssertionError("the budget cannot afford any enemy");
+            }
+        });
+        director.tick();
+        assertTrue(attempts.isEmpty());
+        assertEquals(List.of(new HeldBack(MatchDirector.Blockage.BUDGET, 0.2, 0)), heldBack);
+    }
+
+    @Test
+    void reportsGateBeforeAnySpawnAndAfterAPartialFill() {
+        for (int limit : List.of(0, 1)) {
+            heldBack.clear();
+            spawned.clear();
+            var director = director(new SpawnGate() {
+                @Override
+                public boolean maySpawn(MatchView view) {
+                    return spawned.size() < limit;
+                }
+            });
+            director.tick();
+            assertEquals(limit, spawned.size());
+            assertEquals(List.of(new HeldBack(MatchDirector.Blockage.GATE, 3, limit)), heldBack);
+        }
+    }
+
+    @Test
+    void placementRefusalsAreNotOverwrittenByBudgetOrGateMessages() {
+        refused.addAll(EnumSet.allOf(EnemyKind.class));
+        director().tick();
+        assertTrue(heldBack.isEmpty(), "all affordable kinds failed placement");
+
+        director(new SpawnGate() {
+            @Override
+            public double intensity(MatchView view, double target) {
+                return 0.075;
+            }
+        }).tick();
+        assertTrue(heldBack.isEmpty(), "zombie refused placement; remaining kinds are unaffordable");
+
+        int[] checks = {0};
+        director(new SpawnGate() {
+            @Override
+            public boolean maySpawn(MatchView view) {
+                return checks[0]++ == 0;
+            }
+        }).tick();
+        assertTrue(heldBack.isEmpty(), "a placement refusal precedes the gate limit");
     }
 
     @Test
