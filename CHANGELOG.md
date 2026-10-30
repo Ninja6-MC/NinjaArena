@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Nothing has been released yet. The plugin targets Paper 26.3, needs the server to run on
 Java 25, and does not run on Folia.
 
+### Fixed
+- Director enemies remain protected from daylight ignition when Paper ignores their
+  daylight-burning flag. Fire, lava and attacks can still ignite them.
+
 ### Added
 - Safe `/narena admin reload` validates both configuration and kits with file and line
   diagnostics before applying changes. Waiting-room, tool and world-distance settings
