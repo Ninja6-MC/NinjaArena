@@ -67,6 +67,45 @@ class RegionEvidenceTest(unittest.TestCase):
             self.assertEqual(1, differences(result, changed)["changed_nbt"])
             self.assertEqual(0, differences(result, changed)["changed_blocks"])
 
+    def test_entity_region_detects_spawn_position_and_content_changes(self):
+        def entity(position, health):
+            return (tag(8, "id", text("minecraft:zombie"))
+                    + tag(9, "Pos", bytes([6]) + struct.pack(">i3d", 3, *position))
+                    + tag(5, "Health", struct.pack(">f", health)) + b"\0")
+
+        def write_entities(directory, entries):
+            root = bytes([10]) + text("")
+            root += tag(9, "Entities", bytes([10]) + struct.pack(">i", len(entries)) + b"".join(entries))
+            root += b"\0"
+            compressed = zlib.compress(root)
+            payload = struct.pack(">i", len(compressed) + 1) + bytes([2]) + compressed
+            header = bytearray(8192)
+            header[:4] = (2 << 8 | 1).to_bytes(4, "big")
+            folder = directory / "entities"
+            folder.mkdir(exist_ok=True)
+            (folder / "r.0.0.mca").write_bytes(header + payload + bytes(4096 - len(payload)))
+            return inspect(directory, {})
+
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            empty = write_entities(directory, [])
+            spawned = write_entities(directory, [entity((1.5, 64, 2.5), 20)])
+            moved = write_entities(directory, [entity((2.5, 64, 2.5), 20)])
+            damaged = write_entities(directory, [entity((2.5, 64, 2.5), 10)])
+            for before, after in ((empty, spawned), (spawned, moved), (moved, damaged), (damaged, empty)):
+                with self.subTest(before=before, after=after):
+                    delta = differences(before, after)
+                    self.assertEqual(1, delta["changed_nbt"])
+                    self.assertEqual(1, delta["changed_entities"])
+                    self.assertEqual(0, delta["changed_blocks"])
+            (directory / "entities" / "r.0.0.mca").unlink()
+            absent = inspect(directory, {})
+            self.assertEqual(1, differences(absent, spawned)["added_chunks"])
+            self.assertEqual(1, differences(absent, spawned)["changed_entities"])
+            self.assertEqual(1, differences(spawned, absent)["removed_chunks"])
+            self.assertEqual(1, differences(spawned, absent)["changed_entities"])
+            self.assertEqual(0, differences(absent, empty)["changed_entities"])
+
     def test_truncated_nbt_fails_instead_of_certifying_empty_data(self):
         with self.assertRaises(ValueError):
             Nbt(bytes([10, 0])).root()

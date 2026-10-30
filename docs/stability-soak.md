@@ -10,7 +10,7 @@ The existing suite already covers director scalar boundaries, snapshot round tri
 and safe-landing geometry. The additions cover composed pressure over all 35 rounds
 and a 3600-second timer, repeated round trips of every byte value and quoted Unicode
 world names, and negative-coordinate plus diagonal/vertical search boundaries.
-The full Java suite passes 591 tests. Four Python tests verify the save evidence
+The full Java suite passes 591 tests. Five Python tests verify the save evidence
 reader and warmup/population aggregation.
 
 ## Local workload, 2026-10-30
@@ -19,7 +19,7 @@ reader and warmup/population aggregation.
 - Temurin 25.0.4+7, Node.js 24.11.1, Mineflayer 4.39.0.
 - ViaVersion and ViaBackwards 5.12.1, clients using protocol 1.21.11.
 - Windows 11 build 26300; AMD64, 12 logical processors; server limited to two.
-- Server heap 256â€“768 MiB; eight clients in one Node process with a 384 MiB
+- Server heap 256 to 768 MiB; eight clients in one Node process with a 384 MiB
   old-space limit; no simultaneous Gradle or other test workload.
 - Four independent 64 by 64 arenas, two stationary survival clients each, normal
   production spawning, AI, targeting, snapshots, restoration, and match teardown.
@@ -86,9 +86,14 @@ Save comparisons distinguish startup writes from match activity:
 Raw region hashes were identical between settled pre-match and active matches.
 All four marker positions were gold blocks in the live world and air in saved NBT.
 At shutdown, four block-state encodings changed, but decoding all 4096 states per
-section found no semantic block changes. Saved markers were still air and no
-entities were present in the dimension's saved chunk records. Arena structure-copy
-hashes were unchanged in the preceding diagnostic. The failed strict run does not
+section found no semantic block changes. Saved markers were still air. No separate
+`entities/*.mca` files were present at these checkpoints; direct inspection of the region records found their lowercase
+`entities` lists empty. The original reader skipped entity-region payloads, so its
+zero entity-change metric did not validate separate entity files. The corrected
+reader now digests root `Entities` lists and counts changed payloads across added
+and removed entity chunks, with a regression fixture for spawning, movement, and
+health changes. Re-reading the retained save snapshots with the corrected reader
+confirmed the same counts. Arena structure-copy hashes were unchanged in the preceding diagnostic. The failed strict run does not
 certify overall no-write behavior: startup metadata and shutdown-generated chunks
 changed raw hashes, and 5112 chunk records remained on disk. Paper reported saving
 5096 block chunks and 1160 entity chunks during shutdown; an entity chunk count does

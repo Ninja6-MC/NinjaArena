@@ -102,6 +102,8 @@ def inspect(directory, markers):
             for index, chunk in chunks(file):
                 key = f"{folder}/{file.name}:{index}"
                 result["chunks"][key] = {"full": digest(chunk)}
+                if folder == "entities":
+                    result["chunks"][key]["entities"] = digest(chunk.get("Entities", []))
                 if folder != "region":
                     continue
                 sections = chunk.get("sections", [])
@@ -136,6 +138,7 @@ def differences(before, after):
     keys = before["chunks"].keys() | after["chunks"].keys()
     summary = {"added_chunks": 0, "removed_chunks": 0, "changed_nbt": 0,
                "changed_blocks": 0, "changed_block_encoding": 0, "changed_block_entities": 0, "changed_entities": 0}
+    empty_entities = digest([])
     for key in keys:
         old, new = before["chunks"].get(key), after["chunks"].get(key)
         if old is None:
@@ -147,5 +150,7 @@ def differences(before, after):
             summary["changed_blocks"] += old.get("blocks") != new.get("blocks")
             summary["changed_block_encoding"] += old.get("block_encoding") != new.get("block_encoding")
             summary["changed_block_entities"] += old.get("block_entities") != new.get("block_entities")
-            summary["changed_entities"] += old.get("entities") != new.get("entities")
+        old_entities = old.get("entities", empty_entities) if old is not None else empty_entities
+        new_entities = new.get("entities", empty_entities) if new is not None else empty_entities
+        summary["changed_entities"] += old_entities != new_entities
     return summary
