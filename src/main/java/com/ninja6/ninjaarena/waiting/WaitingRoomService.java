@@ -76,7 +76,7 @@ public final class WaitingRoomService {
 
     private final Plugin plugin;
     private final ArenaRegistry arenas;
-    private final WaitingRoomSettings settings;
+    private WaitingRoomSettings settings;
     private final Function<Player, RestoreResult> restore;
     private final Consumer<Player> empty;
     private final MatchStart matchStart;
@@ -132,6 +132,23 @@ public final class WaitingRoomService {
         this.restore = Objects.requireNonNull(restore, "restore");
         this.empty = Objects.requireNonNull(empty, "empty");
         this.matchStart = Objects.requireNonNull(matchStart, "matchStart");
+    }
+
+    /** Applies room thresholds and radius now, retaining viable countdowns' remaining time. */
+    public void setSettings(WaitingRoomSettings settings) {
+        this.settings = Objects.requireNonNull(settings, "settings");
+        for (Room room : new ArrayList<>(rooms.values())) {
+            room.state().setSettings(settings.minPlayers(), settings.countdownSeconds());
+            for (UUID id : room.state().players()) {
+                Player player = plugin.getServer().getPlayer(id);
+                if (player != null && !inRoom(id, player.getLocation())) {
+                    leave(player, Exit.WALKED_OUT);
+                }
+            }
+            if (rooms.containsKey(room.arena())) {
+                showStatus(room);
+            }
+        }
     }
 
     /** Starts ticking the countdowns once a second. */

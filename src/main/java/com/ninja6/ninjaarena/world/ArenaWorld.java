@@ -92,6 +92,12 @@ public final class ArenaWorld {
         }
     }
 
+    /** Changes distances without resetting the border, time, rules or saving state. */
+    public void setDistances(int viewDistance, int simulationDistance) {
+        world.setViewDistance(viewDistance);
+        world.setSimulationDistance(simulationDistance);
+    }
+
     public World world() {
         return world;
     }

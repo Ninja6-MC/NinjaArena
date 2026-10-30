@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'artwork/**'
+      - 'resourcepack/**'
       - '.github/workflows/artwork.yml'
   merge_group:
   workflow_dispatch:
@@ -29,3 +30,6 @@ jobs:
 
       - name: Validate Exports Against The Manifest
         run: node artwork/tools/validate-exports.js
+
+      - name: Validate Resource Pack Tree
+        run: node artwork/tools/validate-pack.js

@@ -55,7 +55,7 @@ import org.bukkit.plugin.Plugin;
 public final class ArenaRegistry {
 
     private final ArenaStore store;
-    private final ArenaGrid grid;
+    private ArenaGrid grid;
     private final Consumer<Boolean> worldSaving;
     private final ChunkTickets tickets;
     private final ArenaCopies copies;
@@ -82,6 +82,18 @@ public final class ArenaRegistry {
         this.worldSaving = Objects.requireNonNull(worldSaving, "worldSaving");
         this.tickets = Objects.requireNonNull(tickets, "tickets");
         this.copies = Objects.requireNonNull(copies, "copies");
+    }
+
+    public boolean canResize() {
+        return arenas.isEmpty() && held.isEmpty() && !unreadable;
+    }
+
+    /** Changes the grid only before any arena exists, without reloading the registry. */
+    public void setGrid(ArenaGrid grid) {
+        if (!canResize()) {
+            throw new IllegalStateException("The arena grid requires an empty, readable registry");
+        }
+        this.grid = Objects.requireNonNull(grid, "grid");
     }
 
     /**

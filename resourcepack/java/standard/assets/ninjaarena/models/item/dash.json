@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "ninjaarena:item/dash",
+    "layer1": "ninjaarena:item/dash_accent"
+  }
+}

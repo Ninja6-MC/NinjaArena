@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
+import com.ninja6.ninjaarena.config.ConfigReload;
+import com.ninja6.ninjaarena.config.ReloadFiles;
+import com.ninja6.ninjaarena.kit.KitDefinition;
+import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.portal.ArenaAdmission;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
@@ -14,11 +18,14 @@ import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService.CaptureResult;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
 import com.ninja6.ninjaarena.support.TestTaggedItem;
+import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.HostingService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
+import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -421,5 +428,66 @@ class HostingServiceTest extends MatchFixture {
         hosting.accept(player(BOB), "Alice");
         assertTrue(loads.isEmpty());
         assertTrue(captured.isEmpty());
+    }
+
+    @Test
+    void reloadingCountdownKeepsTheHostedPartyAndPendingInvitationThroughMatchStart() throws Exception {
+        inviteBob();
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(CAROL), "dojo");
+        rooms.tick();
+        hosting.accept(player(BOB), "Alice");
+        reloadWaiting(new WaitingRoomSettings(2, 9, 4));
+        finish();
+        assertEquals(rooms.teamOf(ALICE), rooms.teamOf(BOB));
+        assertTrue(snapshots.hasPending(BOB));
+        rooms.tick();
+        assertTrue(matches.matches().isEmpty());
+        rooms.tick();
+        var match = matches.match("dojo").orElseThrow();
+        assertEquals(match.teamOf(ALICE), match.teamOf(BOB));
+        assertFalse(hosting.leave(player(ALICE)));
+    }
+
+    @Test
+    void radiusReloadRestoresDepartingHostAndCancelsThePendingInvitation() throws Exception {
+        inviteBob();
+        rooms.join(player(ALICE), "dojo");
+        rooms.join(player(CAROL), "dojo");
+        players.get(ALICE).location = new org.bukkit.Location(arenaWorld, ROOM.x() + 3, ROOM.y(), ROOM.z());
+        hosting.accept(player(BOB), "Alice");
+        reloadWaiting(new WaitingRoomSettings(2, 3, 2));
+        finish();
+        assertTrue(restored.contains(ALICE));
+        assertFalse(rooms.isWaiting(ALICE));
+        assertTrue(rooms.isWaiting(CAROL));
+        assertFalse(rooms.isWaiting(BOB));
+        assertTrue(captured.isEmpty());
+        assertTrue(players.get(BOB).teleports.isEmpty());
+        assertFalse(hosting.leave(player(ALICE)));
+    }
+
+    private void reloadWaiting(WaitingRoomSettings settings) throws Exception {
+        var initial = ReloadFiles.defaults();
+        initial.set("waiting-room.min-players", 2);
+        initial.set("waiting-room.countdown-seconds", 3);
+        initial.set("waiting-room.radius", 4);
+        var reload = new ConfigReload(dir, initial, KitDefinition.EMPTY, new KitItems(), new ConfigReload.Target() {
+            @Override public boolean canResize() { return false; }
+            @Override public void world(ArenaWorldSettings settings) { throw new AssertionError("world unchanged"); }
+            @Override public void grid(int cellSize, double borderSize) { throw new AssertionError("grid unchanged"); }
+            @Override public void waiting(WaitingRoomSettings settings) { rooms.setSettings(settings); }
+            @Override public void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring) {
+                throw new AssertionError("match unchanged");
+            }
+            @Override public void tools(ToolSettings settings) { throw new AssertionError("tools unchanged"); }
+            @Override public void kit(KitDefinition definition) { throw new AssertionError("kit unchanged"); }
+        });
+        initial.set("waiting-room.min-players", settings.minPlayers());
+        initial.set("waiting-room.countdown-seconds", settings.countdownSeconds());
+        initial.set("waiting-room.radius", settings.radius());
+        Files.writeString(dir.resolve("config.yml"), initial.saveToString());
+        Files.writeString(dir.resolve("kits.yml"), "format: 1\nitems: []\n");
+        assertTrue(reload.reload().get(1).contains("waiting-room"));
     }
 }

@@ -157,7 +157,7 @@ class NinjaArenaCommandTest {
                 "/narena arena <subcommand> - create, edit and set up arenas",
                 "/narena portal <subcommand> - mark out portals that lead to arenas",
                 "/narena director [arena] - show the enemy director of a running match",
-                "/narena admin reload - reload the Arena configuration (not available yet)");
+                "/narena admin reload - safely reload the Arena configuration");
         assertEquals("The Arena commands:", messages.get(0));
         assertEquals(help, messages.subList(1, messages.size()));
 
@@ -469,4 +469,40 @@ class NinjaArenaCommandTest {
         run(console(true), "host dojo");
         assertEquals(3, calls.size());
     }
+
+    @Test
+    void reloadInvokesBackendOnlyForAdminsWithExactArguments() {
+        List<String> reloaded = new ArrayList<>();
+        command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null),
+                new PortalCommand(new com.ninja6.ninjaarena.portal.PortalRegistry(
+                        new com.ninja6.ninjaarena.portal.PortalStore(dir.resolve("reload-portals.yml"))), registry,
+                        world -> true), NO_DIRECTOR, player -> false, sender -> reloaded.add("reload"));
+        run(playerWithPlay(), "admin reload");
+        run(console(true), "admin reload extra");
+        assertTrue(reloaded.isEmpty());
+        run(console(true), "ADMIN RELOAD");
+        assertEquals(List.of("reload"), reloaded);
+    }
+
+    @Test
+    void hostingAndReloadShareTheCommandTreeWithoutCrossDispatching() {
+        List<String> calls = new ArrayList<>();
+        HostingCommands hosting = new HostingCommands() {
+            public void host(Player player, String arena) { calls.add("host " + arena); }
+            public void invite(Player player, String invitee) { calls.add("invite " + invitee); }
+            public void accept(Player player, String host) { calls.add("accept " + host); }
+        };
+        command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null), portalCommand, NO_DIRECTOR,
+                player -> false, hosting, sender -> calls.add("reload"));
+        Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
+        run(host, "host dojo");
+        run(host, "invite Bob");
+        run(playerWithPlay(), "accept Alice");
+        run(host, "admin reload");
+        run(console(true), "admin reload extra");
+        assertEquals(List.of("host dojo", "invite Bob", "accept Alice"), calls);
+        run(console(true), "ADMIN RELOAD");
+        assertEquals(List.of("host dojo", "invite Bob", "accept Alice", "reload"), calls);
+    }
+
 }

@@ -92,7 +92,7 @@ public final class NinjaTools implements Listener {
     private final MatchService matches;
     private final Function<UUID, Player> players;
     private final Function<String, Optional<ArenaBounds>> bounds;
-    private final ToolSettings settings;
+    private ToolSettings settings;
     private final LongSupplier ticks;
     private final Strike strike;
     private final Function<Location, AreaEffectCloud> clouds;
@@ -129,10 +129,15 @@ public final class NinjaTools implements Listener {
                 .withCausingEntity(thrower).build());
     }
 
+    /** New uses take the new values; existing durations and cooldown deadlines keep their values. */
+    public void setSettings(ToolSettings settings) {
+        this.settings = Objects.requireNonNull(settings, "settings");
+    }
+
     /** Registers every tool's kit item, such as {@code ninjaarena:shuriken}. */
     public static void registerItems(KitItems items) {
         for (NinjaTool tool : NinjaTool.values()) {
-            items.register(tool.kitId(), player -> tool.create());
+            items.register(tool.kitId(), tool == NinjaTool.DASH ? 1 : 16, player -> tool.create());
         }
     }
 
@@ -160,9 +165,9 @@ public final class NinjaTools implements Listener {
         if (smoke.isEmpty() || at.getWorld() == null) {
             return false;
         }
-        double radius = settings.smokeRadius();
         for (Smoke cloud : smoke.values()) {
             AreaEffectCloud entity = cloud.cloud();
+            double radius = entity.getRadius();
             if (!entity.isValid()) {
                 continue;
             }

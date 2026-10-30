@@ -97,7 +97,7 @@ public final class MatchService implements MatchStart {
     private final Plugin plugin;
     private final ArenaRegistry arenas;
     private final Supplier<World> arenaWorld;
-    private final MatchSettings settings;
+    private MatchSettings settings;
     private final Function<Player, RestoreResult> restore;
     private final Consumer<? super MatchEvent> events;
     private final Consumer<Player> readyForRound;
@@ -144,6 +144,11 @@ public final class MatchService implements MatchStart {
         player.setExhaustion(0);
         player.setFireTicks(0);
         player.setFallDistance(0);
+    }
+
+    /** Changes the defaults for the next match; existing matches retain their settings. */
+    public void setSettings(MatchSettings settings) {
+        this.settings = Objects.requireNonNull(settings, "settings");
     }
 
     /** Starts ticking the matches once a second. */
@@ -503,12 +508,12 @@ public final class MatchService implements MatchStart {
         Match match = running.match();
         switch (phase) {
             case PREP -> broadcast(running, Component.text((match.isExtraRound() ? "Extra round! "
-                    : "Round " + match.round() + " of " + settings.rounds() + ". ") + "The fight starts in "
+                    : "Round " + match.round() + " of " + match.settings().rounds() + ". ") + "The fight starts in "
                     + match.secondsLeft() + " seconds.", NamedTextColor.GOLD));
             case COMBAT -> broadcast(running, Component.text("Fight!", NamedTextColor.RED));
             case OVERRUN -> broadcast(running, Component.text("Overrun! Time is up: the round goes on until one"
-                    + " team is left" + (settings.overrunLimitSeconds() > 0 ? ", for at most "
-                    + settings.overrunLimitSeconds() + " seconds." : "."), NamedTextColor.DARK_RED));
+                    + " team is left" + (match.settings().overrunLimitSeconds() > 0 ? ", for at most "
+                    + match.settings().overrunLimitSeconds() + " seconds." : "."), NamedTextColor.DARK_RED));
             case WAITING, ROUND_END, MATCH_END -> {
                 // Round and match results are announced with their own update.
             }
@@ -533,7 +538,7 @@ public final class MatchService implements MatchStart {
 
     private void announceReturn(Running running, MatchResult result) {
         if (result.reason() != Reason.STOPPED && result.reason() != Reason.ABANDONED) {
-            broadcast(running, Component.text("Returning in " + settings.matchEndSeconds() + " seconds.",
+            broadcast(running, Component.text("Returning in " + running.match().settings().matchEndSeconds() + " seconds.",
                     NamedTextColor.GRAY));
         }
     }

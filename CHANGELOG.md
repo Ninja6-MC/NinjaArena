@@ -13,6 +13,12 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Safe `/narena admin reload` validates both configuration and kits with file and line
+  diagnostics before applying changes. Waiting-room, tool and world-distance settings
+  apply immediately; running countdowns, matches and round kits retain their values at
+  the documented boundaries. Empty registries can resize the grid and border; occupied
+  ones refuse those changes. Replies separate changed, postponed and refused settings,
+  while arenas, portals and snapshots are never reloaded.
 - Hosted matches with plain-command invitations and explicit acceptance. Opening and
   inviting move nobody; accepted entry reuses portal snapshot and teleport safeguards.
   Reservations end on host exit, room closure, match start, arena changes and shutdown.

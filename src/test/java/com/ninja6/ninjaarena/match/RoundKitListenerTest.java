@@ -283,4 +283,26 @@ class RoundKitListenerTest extends MatchFixture {
             assertEmptyInventory(id);
         }
     }
+
+    @Test
+    void kitReloadWaitsForNextRoundAndDelayedRespawnUsesItsRoundsDefinition() {
+        standardKit();
+        startTwoOnTwo();
+        items.register("test:new", player -> new TestItemStack(Material.PAPER, "new-kit", 1));
+        var next = new KitDefinition(List.of(new KitDefinition.Entry(0, null, "test:new", 1)));
+        players.get(ALICE).dead = true;
+        kits.setDefinition(next);
+        respawn(ALICE);
+        assertEquals("tool-data", ((TestItemStack) players.get(ALICE).storage[0]).marker());
+        die(ALICE);
+        die(BOB);
+        die(DAVE);
+        runNextTick();
+        ticks(1);
+        assertTrue(players.get(ALICE).dead);
+        respawn(ALICE);
+        assertEquals("new-kit", ((TestItemStack) players.get(ALICE).storage[0]).marker());
+        assertEquals("new-kit", ((TestItemStack) players.get(CAROL).storage[0]).marker());
+    }
+
 }
