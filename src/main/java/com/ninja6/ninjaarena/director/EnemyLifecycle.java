@@ -21,6 +21,7 @@ import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -67,6 +68,23 @@ public final class EnemyLifecycle implements Listener {
                     }
                 }
             });
+        }
+    }
+
+    /** Paper can ignite undead in daylight despite their should-burn-in-day flag. */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onCombust(EntityCombustEvent event) {
+        // Block and entity sources (lava, fire and attacks) must still ignite enemies.
+        if (event.getClass() != EntityCombustEvent.class) {
+            return;
+        }
+        for (MatchView match : matches.get()) {
+            for (MobSpawner.MobEnemy enemy : enemies(match)) {
+                if (enemy.mob().equals(event.getEntity())) {
+                    event.setCancelled(true);
+                    return;
+                }
+            }
         }
     }
 
