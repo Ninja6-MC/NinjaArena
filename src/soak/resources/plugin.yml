@@ -1,0 +1,5 @@
+name: ArenaSoakProbe
+version: '1.0'
+main: com.ninja6.ninjaarena.soak.SoakProbe
+api-version: '26.3'
+depend: [NinjaArena]

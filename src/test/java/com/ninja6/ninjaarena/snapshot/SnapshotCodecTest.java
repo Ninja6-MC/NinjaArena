@@ -40,6 +40,26 @@ class SnapshotCodecTest {
     }
 
     @Test
+    void repeatedRoundTripsPreserveEveryByteAndQuotedWorldNames() throws Exception {
+        PlayerSnapshot sample = Snapshots.sample(PLAYER);
+        byte[] bytes = new byte[256];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) i;
+        }
+        var location = new SnapshotLocation(sample.location().worldId(), "arena: '\u96ea' #1\nsecond line",
+                -0.0000001, -63.5, 29999983.123456, -179.99f, 89.99f);
+        var original = new PlayerSnapshot(sample.playerId(), sample.playerName(), sample.capturedAt(), location,
+                bytes, bytes, bytes, sample.level(), sample.exp(), sample.totalExperience(), sample.health(),
+                sample.foodLevel(), sample.saturation(), sample.exhaustion(), sample.effects(), sample.gameMode(),
+                sample.fireTicks(), sample.fallDistance());
+        PlayerSnapshot decoded = original;
+        for (int cycle = 0; cycle < 25; cycle++) {
+            decoded = SnapshotCodec.decode(SnapshotCodec.encode(decoded));
+            assertEquals(original, decoded, "round trip " + cycle);
+        }
+    }
+
+    @Test
     void rejectsAnUnknownFormatVersion() {
         String text = SnapshotCodec.encode(Snapshots.sample(PLAYER))
                 .replace("format: " + SnapshotCodec.FORMAT_VERSION, "format: 99");

@@ -13,6 +13,10 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Unit coverage for composed director pressure, repeated binary snapshots and safe-landing
+  search boundaries. A separate local Paper stability probe records tick durations, decoded
+  save comparisons and pending chunkholders. The short diagnostic reproduces retained
+  holders after matches; the full acceptance soak remains incomplete.
 - Safe `/narena admin reload` validates both configuration and kits with file and line
   diagnostics before applying changes. Waiting-room, tool and world-distance settings
   apply immediately; running countdowns, matches and round kits retain their values at
