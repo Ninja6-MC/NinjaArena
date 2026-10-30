@@ -96,7 +96,7 @@ public final class DirectorCommand {
         }
         line(sender, "Enemies in play", count + ", threat " + format(director.threatInPlay())
                 + (count == 0 ? "" : ": " + kinds));
-        line(sender, "Last placement refusal", director.lastRefusal().orElse("none"));
+        line(sender, "Last spawn refusal", director.lastRefusal().orElse("none"));
     }
 
     private static String format(double value) {

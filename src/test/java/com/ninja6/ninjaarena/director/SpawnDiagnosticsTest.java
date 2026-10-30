@@ -45,6 +45,36 @@ class SpawnDiagnosticsTest {
     }
 
     @Test
+    void budgetAndGateReasonsShareTheRoundDeduplicationAndKeepLatestStatus() {
+        var diagnostics = new SpawnDiagnostics(match, new SpawnSettings(100, true), logger);
+        diagnostics.blocked(MatchDirector.Blockage.BUDGET, 0.5, 0);
+        diagnostics.blocked(MatchDirector.Blockage.BUDGET, 2.5, 2);
+        assertEquals(1, records.size());
+        assertEquals("round 1, the threat budget cannot afford another enemy (target 2.50, in play 2.00)",
+                diagnostics.last().orElseThrow());
+        diagnostics.blocked(MatchDirector.Blockage.GATE, 3, 0);
+        diagnostics.blocked(MatchDirector.Blockage.GATE, 3, 0);
+        assertEquals(2, records.size());
+        assertEquals("round 1, the spawn gate is holding back enemies", diagnostics.last().orElseThrow());
+        assertTrue(records.stream().allMatch(record -> record.getLevel() == Level.INFO));
+
+        match.nextRound();
+        diagnostics.blocked(MatchDirector.Blockage.BUDGET, 0.5, 0);
+        diagnostics.blocked(MatchDirector.Blockage.GATE, 3, 0);
+        assertEquals(4, records.size());
+        assertTrue(messages().getLast().startsWith("Arena dojo, round 2, "));
+    }
+
+    @Test
+    void budgetAndGateReasonsLogAtFineWithoutDebug() {
+        var diagnostics = new SpawnDiagnostics(match, SpawnSettings.DEFAULTS, logger);
+        diagnostics.blocked(MatchDirector.Blockage.BUDGET, 0.5, 0);
+        diagnostics.blocked(MatchDirector.Blockage.GATE, 3, 0);
+        assertEquals(2, records.size());
+        assertTrue(records.stream().allMatch(record -> record.getLevel() == Level.FINE));
+    }
+
+    @Test
     void namesTheCheckThatRefusedEachPoint() {
         var diagnostics = new SpawnDiagnostics(match, new SpawnSettings(100, true), logger);
         assertTrue(diagnostics.last().isEmpty());

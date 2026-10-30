@@ -14,15 +14,16 @@ import org.bukkit.Location;
 
 /**
  * Explains a match's spawns that did not happen: no registered point qualified, or the world
- * cancelled the spawn. Each reason is logged at most once per round, at INFO with
+ * cancelled the spawn, or a budget or gate held spawning back. Each reason is logged at most
+ * once per round, at INFO with
  * {@link SpawnSettings#debug()} on and at FINE otherwise; the latest one is kept for the
  * director status. Call on the server thread.
  */
 public final class SpawnDiagnostics {
 
-    /** What can stop a spawn; the placement refusals plus a spawn the world cancelled. */
+    /** What can stop a spawn, before placement, during placement or in the world. */
     private enum Reason {
-        NO_POINTS, TOO_CLOSE, IN_VIEW, CHUNK_NOT_LOADED, BLOCKED, CANCELLED
+        NO_POINTS, TOO_CLOSE, IN_VIEW, CHUNK_NOT_LOADED, BLOCKED, CANCELLED, BUDGET, GATE
     }
 
     private final MatchView match;
@@ -62,7 +63,17 @@ public final class SpawnDiagnostics {
                 + String.format(Locale.ROOT, "%.1f, %.1f, %.1f", at.getX(), at.getY(), at.getZ()));
     }
 
-    /** The latest refused or cancelled spawn, with its round, whether or not it was logged. */
+    /** Spawning was held back before placement by the target threat budget or spawn gate. */
+    public void blocked(MatchDirector.Blockage reason, double targetThreat, double inPlay) {
+        String detail = switch (reason) {
+            case BUDGET -> String.format(Locale.ROOT,
+                    "the threat budget cannot afford another enemy (target %.2f, in play %.2f)", targetThreat, inPlay);
+            case GATE -> "the spawn gate is holding back enemies";
+        };
+        report(EnumSet.of(Reason.valueOf(reason.name())), detail);
+    }
+
+    /** The latest placement, cancellation or limit reason, with its round, logged or not. */
     public Optional<String> last() {
         return Optional.ofNullable(last);
     }
