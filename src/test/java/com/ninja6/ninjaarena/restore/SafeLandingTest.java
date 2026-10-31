@@ -259,4 +259,21 @@ class SafeLandingTest {
         assertEquals(Optional.of(new Spot(3.5, 1, 0.5, true)), SafeLanding.find(grid, 0.5, 0, 0.5));
         assertTrue(SafeLanding.find(new Grid(), 0.5, 127, 0.5).isEmpty());
     }
+    @Test
+    void fractionalNegativeCoordinatesSearchFromTheFlooredBlock() {
+        Grid grid = new Grid().set(-9, 63, -1, Cell.SOLID);
+
+        assertEquals(Optional.of(new Spot(-8.5, 64, -0.5, true)), SafeLanding.find(grid, -0.1, 64, -0.1));
+        assertTrue(SafeLanding.find(grid, 0.1, 64, -0.1).isEmpty());
+    }
+
+    @Test
+    void searchRadiusIncludesDiagonalCornersAndTheVerticalBoundary() {
+        Grid corner = new Grid().set(8, 71, 8, Cell.SOLID);
+        Grid tooHigh = new Grid().set(8, 72, 8, Cell.SOLID);
+
+        assertEquals(Optional.of(new Spot(8.5, 72, 8.5, true)), SafeLanding.find(corner, 0.5, 64, 0.5));
+        assertTrue(SafeLanding.find(tooHigh, 0.5, 64, 0.5).isEmpty());
+    }
+
 }

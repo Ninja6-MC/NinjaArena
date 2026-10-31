@@ -119,6 +119,23 @@ class IntensityTest {
         assertEquals(1, Intensity.target(settings, combat(5, 239)), DELTA);
     }
 
+    @Test
+    void composedPressureRemainsBoundedAcrossEveryCycleOfAMaximumLengthMatch() {
+        var settings = IntensitySettings.DEFAULTS;
+        for (int round = 1; round <= 35; round++) {
+            for (int second = 0; second <= 3600; second++) {
+                double previous = 1;
+                for (double damage : new double[] {0, 5, 20, 1000}) {
+                    double level = Intensity.target(settings,
+                            new Inputs(MatchPhase.COMBAT, round, second, 3600, 1, 4, damage));
+                    assertTrue(Double.isFinite(level) && level >= 0 && level <= 1);
+                    assertTrue(level <= previous, "damage must never increase pressure");
+                    previous = level;
+                }
+            }
+        }
+    }
+
     private static Inputs damaged(double perPlayer) {
         return new Inputs(MatchPhase.COMBAT, 1, 45, 240, 2, 2, perPlayer);
     }

@@ -48,3 +48,18 @@ tasks {
         useJUnitPlatform()
     }
 }
+
+// Kept outside the production JAR; only installed by the local stability harness.
+val soak = sourceSets.create("soak") {
+    compileClasspath += sourceSets.main.get().output + configurations.testCompileClasspath.get()
+    runtimeClasspath += output + compileClasspath
+}
+
+tasks.register<Jar>("soakProbeJar") {
+    archiveClassifier.set("soak-probe")
+    from(soak.output)
+}
+
+tasks.check {
+    dependsOn(soak.classesTaskName)
+}

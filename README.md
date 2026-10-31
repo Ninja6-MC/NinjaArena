@@ -21,6 +21,14 @@ through its toolchain support; the wrapper downloads Gradle itself.
 On Windows, use `gradlew.bat build`. The plugin JAR is written to `build/libs/`, and
 `./gradlew test` runs the unit tests on their own.
 
+## Verification
+
+A local Paper 26.3 build 226 run passed 600 measured seconds after 60 seconds of
+warmup across four concurrent matches. Separate small and large fixtures verified
+startup and match restoration, idle retirement, collection and reconnect behavior.
+See the [stability and lifecycle report](docs/stability-soak.md) for measurements,
+save-padding evidence and remaining containment and continuous-residency limits.
+
 ## Setting up an arena
 
 Admins need `ninjaarena.admin`. `/narena` on its own lists the commands allowed by your
