@@ -50,6 +50,36 @@ class NinjaArenaCommandTest {
     private final List<String> left = new ArrayList<>();
     private boolean waiting;
 
+    @Test
+    void adminTeleportRetainsItsWorldOperationUntilTheScheduledCompletionEvenOnFailure() throws Exception {
+        registry.create("dojo", new GridCell(1, 0));
+        for (boolean exceptional : List.of(false, true)) {
+            CompletableFuture<Boolean> teleport = new CompletableFuture<>();
+            List<Runnable> completions = new ArrayList<>();
+            int[] operations = {0};
+            Player admin = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(),
+                    new Class<?>[] {Player.class}, (object, method, args) -> switch (method.getName()) {
+                        case "teleportAsync" -> teleport;
+                        case "sendMessage" -> null;
+                        default -> throw new UnsupportedOperationException(method.getName());
+                    });
+            ArenaCommand route = new ArenaCommand(registry, () -> null, () -> {
+                operations[0]++;
+                return () -> operations[0]--;
+            }, completions::add);
+            route.execute(admin, "narena", new String[] {"tp", "dojo"});
+            assertEquals(1, operations[0]);
+            if (exceptional) {
+                teleport.completeExceptionally(new IllegalStateException("teleport failure"));
+            } else {
+                teleport.complete(false);
+            }
+            assertEquals(1, operations[0]);
+            completions.getFirst().run();
+            assertEquals(0, operations[0]);
+        }
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         ChunkTickets noTickets = new ChunkTickets() {

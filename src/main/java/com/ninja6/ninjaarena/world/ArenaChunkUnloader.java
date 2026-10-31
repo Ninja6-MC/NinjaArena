@@ -1,7 +1,9 @@
 package com.ninja6.ninjaarena.world;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Chunk;
 import org.bukkit.World;
@@ -9,11 +11,12 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 /**
- * Unloads arena world chunks that nothing holds, without saving them.
+ * Retires idle arena worlds without saving, and sweeps ticketless full chunks while busy.
  *
  * <p>With auto-save off the server never unloads a chunk in the arena world, so every chunk
- * loaded there (by a visit, a match or the startup reset) stays loaded until shutdown, and
- * the shutdown save then writes all of them. Every few seconds this unloads, with saving
+ * loaded there (by a visit, a match or the startup reset) can stay loaded until shutdown,
+ * including partial holders absent from Bukkit's loaded chunks. Every few seconds this
+ * first asks the lifecycle owner to retire the entire idle world. If busy, it unloads, with saving
  * off, the loaded chunks that have no ticket left: no player near, no held arena, no force
  * load. Their load level is then {@link Chunk.LoadLevel#INACCESSIBLE}; any ticket raises it.
  * Nothing in such a chunk is meant to be kept: arenas are put back from their saved copies
@@ -38,7 +41,8 @@ public final class ArenaChunkUnloader {
      */
     static final int MAX_PER_SWEEP = 64;
 
-    private final World world;
+    private final Supplier<Optional<World>> currentWorld;
+    private final BooleanSupplier retireIdleWorld;
     private final BooleanSupplier saving;
     private final Logger logger;
 
@@ -50,7 +54,13 @@ public final class ArenaChunkUnloader {
      * @param saving whether the arena world's saving is on ({@code ArenaWorld#isSavingEnabled})
      */
     public ArenaChunkUnloader(World world, BooleanSupplier saving, Logger logger) {
-        this.world = Objects.requireNonNull(world, "world");
+        this(() -> Optional.of(world), saving, () -> false, logger);
+    }
+
+    public ArenaChunkUnloader(Supplier<Optional<World>> currentWorld, BooleanSupplier saving,
+            BooleanSupplier retireIdleWorld, Logger logger) {
+        this.currentWorld = Objects.requireNonNull(currentWorld, "currentWorld");
+        this.retireIdleWorld = Objects.requireNonNull(retireIdleWorld, "retireIdleWorld");
         this.saving = Objects.requireNonNull(saving, "saving");
         this.logger = Objects.requireNonNull(logger, "logger");
     }
@@ -69,6 +79,14 @@ public final class ArenaChunkUnloader {
      */
     public int sweep() {
         if (saving.getAsBoolean()) {
+            return 0;
+        }
+        if (retireIdleWorld.getAsBoolean()) {
+            logger.info("Released the idle arena world without saving; it will reopen before the next use.");
+            return 0;
+        }
+        World world = currentWorld.get().orElse(null);
+        if (world == null) {
             return 0;
         }
         int count = 0;

@@ -157,6 +157,11 @@ plugins such as EssentialsX have reset flight for the world change). The arena w
 keeps inventories on death, so a fall while building loses no items; match deaths are
 handled by the match as described below.
 
+When fully idle, the arena world unloads without saving. Its next use reopens it and
+restores the saved arena copies before entry; active edits, players, matches, tickets
+and pending teleports keep it loaded. See [arena world retirement](docs/arena-world-lifecycle.md)
+for save behavior, failure handling and the remaining continuous-use limitation.
+
 ## Round kits and inventory
 
 Players arrive in the waiting room with an empty inventory. Once their snapshot is saved
