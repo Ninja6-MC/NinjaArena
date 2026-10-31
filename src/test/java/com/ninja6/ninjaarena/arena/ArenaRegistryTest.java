@@ -63,6 +63,42 @@ class ArenaRegistryTest {
     }
 
     @Test
+    void idleReleaseIsBlockedByHeldEditedAndFailedArenas() throws Exception {
+        assertTrue(registry.canReleaseWorld());
+        buildComplete("dojo");
+        registry.hold("dojo");
+        assertFalse(registry.canReleaseWorld());
+        registry.release("dojo");
+        assertTrue(registry.canReleaseWorld());
+        registry.startEdit("dojo");
+        assertFalse(registry.canReleaseWorld());
+        copies.failing = true;
+        assertThrows(ArenaException.class, () -> registry.finishEdit("dojo"));
+        assertFalse(registry.canReleaseWorld());
+        copies.failing = false;
+        registry.finishEdit("dojo");
+        copies.failing = true;
+        assertThrows(ArenaException.class, () -> registry.reset("dojo"));
+        assertFalse(registry.canReleaseWorld());
+        copies.failing = false;
+        registry.reset("dojo");
+        assertTrue(registry.canReleaseWorld());
+    }
+
+    @Test
+    void reopenedWorldCannotAdoptDirtyDiskWhenTheAuthoritativeCopyIsMissing() throws Exception {
+        buildComplete("dojo");
+        copies.saved.remove("dojo");
+        copies.calls.clear();
+        ArenaRegistry.ResetReport report = registry.resetExistingCopies();
+        assertEquals(1, report.failed().size());
+        assertTrue(report.failed().getFirst().contains("authoritative saved copy is missing"));
+        assertTrue(copies.calls.isEmpty(), "neither save nor restore may invent a missing copy");
+        assertFalse(registry.isAvailable("dojo"));
+        assertFalse(registry.canReleaseWorld());
+    }
+
+    @Test
     void startingAnEditOrDeletingNotifiesButCreatingDoesNot() throws Exception {
         List<String> notified = new ArrayList<>();
         registry.onEditOrDelete(notified::add);

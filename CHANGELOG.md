@@ -13,6 +13,14 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Fixed
+- Idle arena worlds now unload without saving through the world lifecycle, releasing
+  Paper's partial chunk holders as well as full chunks. A later use reopens the same world
+  and restores authoritative arena copies before admission. Pending entry and teleport
+  operations, players, tickets, edits, held arenas and failed resets prevent retirement.
+  This does not bound partial holders in a world that remains continuously busy.
+- Leaving an arena clears arena-sourced player combat references before restoration,
+  including deferred and failed restores, so removed enemies do not retain retired
+  worlds through Paper's last damage source. Other-world damage records are preserved.
 - Director enemies remain protected from daylight ignition when Paper ignores their
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
@@ -233,8 +241,9 @@ Java 25, and does not run on Folia.
   arena, for the match engine at match start and end. A reset loads each chunk's
   entities before clearing them, and the startup reset logs how long it took.
 - Arena world chunks that nothing holds (no player near, no arena held by a match) are
-  unloaded every five seconds without being saved, up to 64 at a time, so the loaded set
-  stays bounded and the shutdown save writes only what is still in use. Nothing is
+  swept every five seconds without being saved, up to 64 full chunks at a time. This
+  sweep does not enumerate Paper's partial holders; idle world retirement releases those.
+  Nothing is
   unloaded this way while an arena is in edit mode. Plugin disable logs how many chunks
   were unloaded and how many were still loaded. Since the world save can hold what a
   match left behind, starting an edit first resets the arena from its copy, and an edit
