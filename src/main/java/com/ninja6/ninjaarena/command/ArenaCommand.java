@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -41,13 +42,26 @@ public final class ArenaCommand {
 
     private final ArenaRegistry registry;
     private final Supplier<World> world;
+    private final Supplier<Runnable> acquireWorld;
+    private final Consumer<Runnable> completeOnServer;
 
     /**
      * @param world the arena world, for {@code tp}
      */
     public ArenaCommand(ArenaRegistry registry, Supplier<World> world) {
+        this(registry, world, () -> () -> { });
+    }
+
+    public ArenaCommand(ArenaRegistry registry, Supplier<World> world, Supplier<Runnable> acquireWorld) {
+        this(registry, world, acquireWorld, Runnable::run);
+    }
+
+    public ArenaCommand(ArenaRegistry registry, Supplier<World> world, Supplier<Runnable> acquireWorld,
+            Consumer<Runnable> completeOnServer) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.world = Objects.requireNonNull(world, "world");
+        this.acquireWorld = Objects.requireNonNull(acquireWorld, "acquireWorld");
+        this.completeOnServer = Objects.requireNonNull(completeOnServer, "completeOnServer");
     }
 
     void execute(CommandSender sender, String label, String[] args) {
@@ -171,29 +185,44 @@ public final class ArenaCommand {
             return;
         }
         Arena arena = require(args[0]);
-        World arenaWorld = world.get();
-        ArenaBounds cell = registry.grid().cellBounds(arena.cell());
-        boolean hover = arena.waitingRoom() == null;
-        Location target;
-        if (!hover) {
-            ArenaPoint room = arena.waitingRoom();
-            target = new Location(arenaWorld, room.x(), room.y(), room.z(), room.yaw(), room.pitch());
-        } else {
-            target = new Location(arenaWorld, (cell.minX() + cell.maxX() + 1) / 2.0, 64,
-                    (cell.minZ() + cell.maxZ() + 1) / 2.0);
+        Runnable releaseWorld = acquireWorld.get();
+        try {
+            World arenaWorld = world.get();
+            ArenaBounds cell = registry.grid().cellBounds(arena.cell());
+            boolean hover = arena.waitingRoom() == null;
+            Location target;
+            if (!hover) {
+                ArenaPoint room = arena.waitingRoom();
+                target = new Location(arenaWorld, room.x(), room.y(), room.z(), room.yaw(), room.pitch());
+            } else {
+                target = new Location(arenaWorld, (cell.minX() + cell.maxX() + 1) / 2.0, 64,
+                        (cell.minZ() + cell.maxZ() + 1) / 2.0);
+            }
+            success(sender, "Teleporting to arena " + arena.name() + " in cell " + arena.cell().describe() + " ("
+                    + cell.describe() + "). Bounds: " + (arena.bounds() == null ? "not set" : arena.bounds().describe())
+                    + ".");
+            player.teleportAsync(target).whenComplete((moved, error) -> {
+                try {
+                    completeOnServer.accept(() -> {
+                        try {
+                            if (error != null || !Boolean.TRUE.equals(moved)) {
+                                error(sender, "The teleport to arena " + arena.name() + " failed.");
+                            } else if (hover) {
+                                hover(player);
+                            }
+                        } finally {
+                            releaseWorld.run();
+                        }
+                    });
+                } catch (RuntimeException failure) {
+                    releaseWorld.run();
+                    throw failure;
+                }
+            });
+        } catch (RuntimeException | Error failure) {
+            releaseWorld.run();
+            throw failure;
         }
-        success(sender, "Teleporting to arena " + arena.name() + " in cell " + arena.cell().describe() + " ("
-                + cell.describe() + "). Bounds: " + (arena.bounds() == null ? "not set" : arena.bounds().describe())
-                + ".");
-        player.teleportAsync(target).thenAccept(moved -> {
-            if (!moved) {
-                error(sender, "The teleport to arena " + arena.name() + " failed.");
-                return;
-            }
-            if (hover) {
-                hover(player);
-            }
-        });
     }
 
     /**

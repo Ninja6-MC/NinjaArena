@@ -3,8 +3,10 @@ package com.ninja6.ninjaarena.restore;
 import com.ninja6.ninjaarena.snapshot.PlayerSnapshot;
 import com.ninja6.ninjaarena.snapshot.SnapshotEffect;
 import com.ninja6.ninjaarena.snapshot.SnapshotLocation;
+import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -32,9 +34,16 @@ import org.bukkit.util.Vector;
 public final class PlayerRestorer implements RestoreService.Applier {
 
     private final Logger logger;
+    private final Supplier<World> arenaWorld;
 
     public PlayerRestorer(Logger logger) {
+        this(logger, null);
+    }
+
+    /** Arena-origin snapshots reopen the managed world before resolving their saved landing. */
+    public PlayerRestorer(Logger logger, Supplier<World> arenaWorld) {
         this.logger = logger;
+        this.arenaWorld = arenaWorld;
     }
 
     @Override
@@ -84,7 +93,10 @@ public final class PlayerRestorer implements RestoreService.Applier {
     }
 
     /** By UID first; by name if the world was recreated under a new UID. */
-    private static World savedWorld(SnapshotLocation saved) {
+    World savedWorld(SnapshotLocation saved) {
+        if (arenaWorld != null && ArenaWorld.NAME.equals(saved.worldName())) {
+            return arenaWorld.get();
+        }
         World world = Bukkit.getWorld(saved.worldId());
         return world != null ? world : Bukkit.getWorld(saved.worldName());
     }

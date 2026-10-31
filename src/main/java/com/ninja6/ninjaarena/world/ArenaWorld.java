@@ -1,6 +1,13 @@
 package com.ninja6.ninjaarena.world;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.GameRule;
@@ -19,8 +26,10 @@ import org.bukkit.WorldCreator;
  * saved. It does not stop the shutdown save, which turns saving back on for every world before
  * writing all loaded chunks, nor {@code /save-all} or {@link World#save()}. The world save can
  * therefore hold what a match left behind; arenas are put back from their own saved copies
- * instead ({@code ArenaRegistry#resetAll}). {@link ArenaChunkUnloader} unloads, without
- * saving, the chunks nothing holds.
+ * instead ({@code ArenaRegistry#resetAll}). {@link ArenaChunkUnloader} retires the entire
+ * world without saving when nothing uses it, including the partial chunks Bukkit cannot
+ * enumerate. The next use reopens it and restores the copies before publishing it.
+ * Continuously busy worlds are not retired.
  */
 public final class ArenaWorld {
 
@@ -29,11 +38,32 @@ public final class ArenaWorld {
     /** Noon, so the sky is the same in every arena. */
     static final long FIXED_TIME = 6000;
 
-    private final World world;
+    private enum State { READY, UNLOADED, LOADING, UNLOADING, FAILED, CLOSED }
+
+    private World world;
+    private World preparing;
+    private final Supplier<World> loader;
+    private final Predicate<World> unloader;
+    private final AtomicInteger operations = new AtomicInteger();
+    private ArenaWorldSettings settings = ArenaWorldSettings.DEFAULTS;
+    private Runnable restoreCopies = () -> { };
+    private State state = State.READY;
+    private final UUID identity;
     private boolean savingEnabled;
 
     ArenaWorld(World world) {
+        this(world, () -> { throw new IllegalStateException("No world loader configured"); }, ignored -> false);
+    }
+
+    ArenaWorld(World world, Supplier<World> loader, Predicate<World> unloader) {
+        this(world, loader, unloader, null);
+    }
+
+    ArenaWorld(World world, Supplier<World> loader, Predicate<World> unloader, UUID identity) {
         this.world = Objects.requireNonNull(world, "world");
+        this.loader = Objects.requireNonNull(loader, "loader");
+        this.unloader = Objects.requireNonNull(unloader, "unloader");
+        this.identity = identity;
         world.setAutoSave(false);
     }
 
@@ -43,6 +73,16 @@ public final class ArenaWorld {
      * takes effect on the next start.
      */
     public static ArenaWorld load(ArenaWorldSettings settings, Logger logger) {
+        World world = open();
+        ArenaWorld arenaWorld = new ArenaWorld(world, ArenaWorld::open, current -> Bukkit.unloadWorld(current, false),
+                world.getUID());
+        arenaWorld.settings = settings;
+        configure(arenaWorld.world, settings);
+        logger.info("Arena world " + NAME + " loaded with saving off.");
+        return arenaWorld;
+    }
+
+    private static World open() {
         World world = Bukkit.getWorld(NAME);
         if (world == null) {
             world = new WorldCreator(NAME)
@@ -55,10 +95,7 @@ public final class ArenaWorld {
                 throw new IllegalStateException("The server refused to create the world " + NAME);
             }
         }
-        ArenaWorld arenaWorld = new ArenaWorld(world);
-        configure(world, settings);
-        logger.info("Arena world " + NAME + " loaded with saving off.");
-        return arenaWorld;
+        return world;
     }
 
     static void configure(World world, ArenaWorldSettings settings) {
@@ -94,12 +131,126 @@ public final class ArenaWorld {
 
     /** Changes distances without resetting the border, time, rules or saving state. */
     public void setDistances(int viewDistance, int simulationDistance) {
-        world.setViewDistance(viewDistance);
-        world.setSimulationDistance(simulationDistance);
+        settings = new ArenaWorldSettings(settings.borderSize(), viewDistance, simulationDistance);
+        currentWorld().ifPresent(current -> {
+            current.setViewDistance(settings.viewDistance());
+            current.setSimulationDistance(settings.simulationDistance());
+        });
     }
 
+    /** Keeps a configuration reload's border when the next world generation opens. */
+    public void setBorderSize(double size) {
+        settings = new ArenaWorldSettings(size, settings.viewDistance(), settings.simulationDistance());
+        currentWorld().ifPresent(current -> current.getWorldBorder().setSize(settings.borderSize()));
+    }
+
+    /** Reopens lazily and restores authoritative copies before publishing the new world. */
     public World world() {
+        if (state == State.UNLOADED) {
+            state = State.LOADING;
+            World loaded = null;
+            try {
+                loaded = Objects.requireNonNull(loader.get(), "loaded world");
+                preparing = loaded;
+                if (state != State.LOADING) {
+                    throw new IllegalStateException("Arena world was closed during loading");
+                }
+                if (identity != null && !identity.equals(preparing.getUID())) {
+                    throw new IllegalStateException("Arena world identity changed while it was unloaded");
+                }
+                preparing.setAutoSave(false);
+                configure(preparing, settings);
+                restoreCopies.run();
+                if (state != State.LOADING) {
+                    throw new IllegalStateException("Arena world was closed during restoration");
+                }
+                world = loaded;
+                preparing = null;
+                state = State.READY;
+            } catch (RuntimeException | Error failure) {
+                // Keep a refused cleanup reachable for shutdown, but never publish it as usable.
+                world = loaded;
+                preparing = null;
+                if (state != State.CLOSED) {
+                    state = State.FAILED;
+                }
+                try {
+                    if (world != null && unloader.test(world)) {
+                        world = null;
+                    }
+                } catch (RuntimeException cleanupFailure) {
+                    failure.addSuppressed(cleanupFailure);
+                }
+                throw failure;
+            }
+        }
+        if (state != State.READY) {
+            throw new IllegalStateException("Arena world is not ready: " + state);
+        }
         return world;
+    }
+
+    /** Does not load a world; diagnostics and idle tasks use this instead of {@link #world()}. */
+    public Optional<World> currentWorld() {
+        return state == State.READY ? Optional.of(world) : Optional.empty();
+    }
+
+    /** For the registry's copy restoration only, while a new generation is being prepared. */
+    public World copyWorld() {
+        return state == State.LOADING && preparing != null ? preparing : world();
+    }
+
+    /** Installed after the initial registry reset; reopened worlds must never adopt dirty disk blocks. */
+    public void onReopen(Runnable restoreCopies) {
+        this.restoreCopies = Objects.requireNonNull(restoreCopies, "restoreCopies");
+    }
+
+    /** Holds the world through an asynchronous operation and its server-thread completion. */
+    public Runnable acquire() {
+        if (!acceptingOperations()) {
+            throw new IllegalStateException("Arena world cannot accept an operation: " + state);
+        }
+        operations.incrementAndGet();
+        AtomicBoolean released = new AtomicBoolean();
+        return () -> {
+            if (released.compareAndSet(false, true)) {
+                operations.decrementAndGet();
+            }
+        };
+    }
+
+    /** Rejects reentrant arena mutations while Bukkit load/unload events are being dispatched. */
+    public boolean acceptingOperations() {
+        return state == State.READY || state == State.UNLOADED;
+    }
+
+    /**
+     * Drops the entire idle world without saving, including Paper's partial chunk holders.
+     * A busy world is never retired, and a cancelled WorldUnloadEvent leaves it usable.
+     */
+    public boolean releaseIfIdle(BooleanSupplier registryIdle) {
+        if (state != State.READY || savingEnabled || operations.get() != 0 || !registryIdle.getAsBoolean()
+                || !world.getPlayers().isEmpty() || !world.getForceLoadedChunks().isEmpty()
+                || !world.getPluginChunkTickets().isEmpty()) {
+            return false;
+        }
+        state = State.UNLOADING;
+        try {
+            boolean released = unloader.test(world);
+            if (state != State.UNLOADING) {
+                return released;
+            }
+            if (!released) {
+                return false;
+            }
+            world = null;
+            state = State.UNLOADED;
+            return true;
+        } finally {
+            if (state == State.UNLOADING) {
+                state = State.READY;
+            }
+        }
     }
 
     public boolean isSavingEnabled() {
@@ -115,14 +266,17 @@ public final class ArenaWorld {
             return;
         }
         if (!enabled) {
-            world.save();
+            world().save();
         }
-        world.setAutoSave(enabled);
+        world().setAutoSave(enabled);
         savingEnabled = enabled;
     }
 
     /** Called on plugin disable: an edit left open is saved and closed. */
     public void close() {
         setSavingEnabled(false);
+        state = State.CLOSED;
+        world = null;
+        preparing = null;
     }
 }

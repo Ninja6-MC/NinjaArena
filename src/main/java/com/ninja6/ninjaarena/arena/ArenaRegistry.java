@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.UnaryOperator;
 import java.util.logging.Level;
 import org.bukkit.World;
@@ -68,6 +69,7 @@ public final class ArenaRegistry {
 
     /** Set when the file could not be read, so a later write cannot replace what is in it. */
     private boolean unreadable;
+    private BooleanSupplier worldAcceptingOperations = () -> true;
 
     private final List<Consumer<String>> editOrDeleteListeners = new ArrayList<>();
 
@@ -85,7 +87,7 @@ public final class ArenaRegistry {
     }
 
     public boolean canResize() {
-        return arenas.isEmpty() && held.isEmpty() && !unreadable;
+        return worldAcceptingOperations.getAsBoolean() && arenas.isEmpty() && held.isEmpty() && !unreadable;
     }
 
     /** Changes the grid only before any arena exists, without reloading the registry. */
@@ -133,18 +135,19 @@ public final class ArenaRegistry {
         ChunkTickets tickets = new ChunkTickets() {
             @Override
             public void add(int chunkX, int chunkZ) {
-                world.addPluginChunkTicket(chunkX, chunkZ, plugin);
+                arenaWorld.world().addPluginChunkTicket(chunkX, chunkZ, plugin);
             }
 
             @Override
             public void remove(int chunkX, int chunkZ) {
-                world.removePluginChunkTicket(chunkX, chunkZ, plugin);
+                arenaWorld.world().removePluginChunkTicket(chunkX, chunkZ, plugin);
             }
         };
         ArenaStore store = new ArenaStore(plugin.getDataFolder().toPath().resolve("arenas.yml"));
-        ArenaCopies copies = new StructureArenaCopies(plugin.getDataFolder().toPath().resolve("arena-copies"), world,
-                plugin.getServer().getStructureManager());
+        ArenaCopies copies = new StructureArenaCopies(plugin.getDataFolder().toPath().resolve("arena-copies"),
+                arenaWorld::copyWorld, plugin.getServer().getStructureManager());
         ArenaRegistry registry = new ArenaRegistry(store, grid, arenaWorld::setSavingEnabled, tickets, copies);
+        registry.worldAcceptingOperations = arenaWorld::acceptingOperations;
         try {
             registry.load();
             plugin.getLogger().info("Loaded " + registry.all().size() + " arena(s) on a " + grid.cellSize()
@@ -166,6 +169,12 @@ public final class ArenaRegistry {
             plugin.getLogger().info("Saved a first copy of " + String.join(", ", report.copied()) + ".");
         }
         report.failed().forEach(problem -> plugin.getLogger().warning(problem));
+        arenaWorld.onReopen(() -> {
+            ResetReport reopened = registry.resetExistingCopies();
+            if (!reopened.failed().isEmpty()) {
+                throw new IllegalStateException(String.join("; ", reopened.failed()));
+            }
+        });
         return registry;
     }
 
@@ -188,6 +197,7 @@ public final class ArenaRegistry {
      * @param cell the cell to build it in, or {@code null} for the free cell nearest the origin
      */
     public Arena create(String name, GridCell cell) throws ArenaException {
+        requireWorldAccess();
         String key = Arena.normalizeName(name);
         if (!Arena.isValidName(key)) {
             throw new ArenaException("Arena names are 1 to 32 letters, digits, _ or -.");
@@ -222,6 +232,7 @@ public final class ArenaRegistry {
 
     /** Removes an arena and its saved copy from the registry. Its blocks stay in the world. */
     public void delete(String name) throws ArenaException {
+        requireWorldAccess();
         Arena arena = require(name);
         if (held.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is in use by a match.");
@@ -255,6 +266,7 @@ public final class ArenaRegistry {
      *                        with bounds but no copy is edited without a reset
      */
     public void startEdit(String name) throws ArenaException {
+        requireWorldAccess();
         Arena arena = require(name);
         if (held.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is in use by a match.");
@@ -302,6 +314,7 @@ public final class ArenaRegistry {
      * @throws ArenaException if the copy cannot be saved; the arena then stays in edit mode
      */
     public List<String> finishEdit(String name) throws ArenaException {
+        requireWorldAccess();
         Arena arena = require(name);
         if (!editing.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is not in edit mode.");
@@ -335,6 +348,7 @@ public final class ArenaRegistry {
      *                        write fails; the arena is then unchanged
      */
     public Arena update(String name, UnaryOperator<Arena> change) throws ArenaException {
+        requireWorldAccess();
         Arena arena = require(name);
         if (!editing.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is not in edit mode. Start it with edit "
@@ -365,7 +379,7 @@ public final class ArenaRegistry {
     public boolean isAvailable(String name) {
         String key = Arena.normalizeName(name);
         Arena arena = arenas.get(key);
-        return arena != null
+        return worldAcceptingOperations.getAsBoolean() && arena != null
                 && editing.isEmpty()
                 && !held.contains(key)
                 && !unreset.contains(key)
@@ -382,6 +396,7 @@ public final class ArenaRegistry {
      *                        available until a reset succeeds or an edit finishes
      */
     public void reset(String name) throws ArenaException {
+        requireWorldAccess();
         Arena arena = require(name);
         if (editing.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is in edit mode; a reset would undo the edit.");
@@ -403,6 +418,15 @@ public final class ArenaRegistry {
      * until a later reset succeeds or an edit finishes.
      */
     public ResetReport resetAll() {
+        return resetAll(true);
+    }
+
+    /** Reopened generations must never promote stale world-save blocks to a new copy. */
+    ResetReport resetExistingCopies() {
+        return resetAll(false);
+    }
+
+    private ResetReport resetAll(boolean allowFirstCopy) {
         List<String> reset = new ArrayList<>();
         List<String> copied = new ArrayList<>();
         List<String> failed = new ArrayList<>();
@@ -414,9 +438,11 @@ public final class ArenaRegistry {
                 if (copies.exists(arena.name())) {
                     copies.restore(arena.name());
                     reset.add(arena.name());
-                } else {
+                } else if (allowFirstCopy) {
                     copies.save(arena.name(), arena.bounds());
                     copied.add(arena.name());
+                } else {
+                    throw new IOException("the authoritative saved copy is missing");
                 }
                 unreset.remove(arena.name());
             } catch (IOException e) {
@@ -451,6 +477,7 @@ public final class ArenaRegistry {
      *                        edit mode
      */
     public void hold(String name) throws ArenaException {
+        requireWorldAccess();
         Arena arena = require(name);
         if (held.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is already in use by a match.");
@@ -493,6 +520,11 @@ public final class ArenaRegistry {
         return held.contains(Arena.normalizeName(name));
     }
 
+    /** No active arena or failed reset may be discarded by idle world retirement. */
+    public boolean canReleaseWorld() {
+        return !unreadable && held.isEmpty() && editing.isEmpty() && unreset.isEmpty();
+    }
+
     /**
      * Releases every held arena and ends every edit, saving the copy of each arena that was
      * being edited. Called on plugin disable.
@@ -513,6 +545,7 @@ public final class ArenaRegistry {
                 try {
                     copies.save(name, arena.bounds());
                 } catch (IOException e) {
+                    unreset.add(name);
                     failed.add("Could not save the copy of " + name + " while closing its edit: " + e.getMessage());
                 }
             }
@@ -531,10 +564,10 @@ public final class ArenaRegistry {
     }
 
     private void enterEdit(String key) {
-        editing.add(key);
-        if (editing.size() == 1) {
+        if (editing.isEmpty()) {
             worldSaving.accept(true);
         }
+        editing.add(key);
     }
 
     private void leaveEdit(String key) {
@@ -558,6 +591,12 @@ public final class ArenaRegistry {
             throw new ArenaException("No arena called " + name + ".");
         }
         return arena;
+    }
+
+    private void requireWorldAccess() throws ArenaException {
+        if (!worldAcceptingOperations.getAsBoolean()) {
+            throw new ArenaException("The arena world is changing state; try again once it is ready.");
+        }
     }
 
     private void write(Map<String, Arena> next) throws ArenaException {

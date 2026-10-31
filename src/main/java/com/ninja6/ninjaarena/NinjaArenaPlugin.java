@@ -41,6 +41,7 @@ import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.portal.PortalListener;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
 import com.ninja6.ninjaarena.restore.PlayerRestorer;
+import com.ninja6.ninjaarena.restore.ArenaCombatCleanup;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
@@ -97,12 +98,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        restores = new RestoreService(snapshots, new PlayerRestorer(getLogger()), getLogger());
+        restores = new RestoreService(snapshots, new PlayerRestorer(getLogger(), () -> arenaWorld.world()), getLogger(),
+                new ArenaCombatCleanup(getLogger()));
         restores.markPendingOnStartup();
         getServer().getPluginManager().registerEvents(new RestoreListener(this, restores), this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         arenas = ArenaRegistry.open(this, arenaWorld);
-        chunkUnloader = new ArenaChunkUnloader(arenaWorld.world(), arenaWorld::isSavingEnabled, getLogger());
+        chunkUnloader = new ArenaChunkUnloader(arenaWorld::currentWorld, arenaWorld::isSavingEnabled,
+                () -> arenaWorld.releaseIfIdle(arenas::canReleaseWorld), getLogger());
         chunkUnloader.start(this);
         getServer().getPluginManager().registerEvents(new ArenaProtectionListener(arenas), this);
         portals = PortalRegistry.open(this);
@@ -185,10 +188,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);
         ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots, waitingRooms::join);
         hosting = new HostingService(this, arenas, waitingRooms, entry, admission, arenaWorld::world,
-                inMatch::isInMatch);
+                inMatch::isInMatch, arenaWorld::acquire);
         getServer().getPluginManager().registerEvents(hosting, this);
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
-                snapshots, portalCommand::forget, waitingRooms::join), this);
+                snapshots, portalCommand::forget, waitingRooms::join, arenaWorld::acquire), this);
         ConfigReload reloader = new ConfigReload(getDataFolder().toPath(), getConfig(), kit, kitItems,
                 new ConfigReload.Target() {
                     @Override
@@ -208,7 +211,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         }
                         ArenaGrid old = arenas.grid();
                         ArenaGrid next = new ArenaGrid(cellSize, borderSize, old.minY(), old.maxY());
-                        arenaWorld.world().getWorldBorder().setSize(borderSize);
+                        arenaWorld.setBorderSize(borderSize);
                         arenas.setGrid(next);
                     }
 
@@ -243,7 +246,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         }
                     }
                 });
-        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world), portalCommand,
+        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world,
+                arenaWorld::acquire, task -> getServer().getScheduler().runTask(this, task)), portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 player -> {
                     boolean cancelled = hosting.leave(player);
@@ -293,12 +297,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         }
         if (arenas != null) {
             arenas.close().forEach(getLogger()::warning);
+            arenaWorld.releaseIfIdle(arenas::canReleaseWorld);
             arenas = null;
         }
         if (chunkUnloader != null) {
             chunkUnloader.close();
             getLogger().info("Unloaded " + chunkUnloader.unloaded() + " arena world chunk(s) this run; "
-                    + arenaWorld.world().getLoadedChunks().length + " still loaded at shutdown.");
+                    + arenaWorld.currentWorld().map(world -> world.getLoadedChunks().length).orElse(0)
+                    + " still loaded at shutdown.");
             chunkUnloader = null;
         }
         if (arenaWorld != null) {

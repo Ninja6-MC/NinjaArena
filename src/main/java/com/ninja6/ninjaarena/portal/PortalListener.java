@@ -4,11 +4,9 @@ import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.portal.PortalEntry.Refusal;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -68,11 +66,12 @@ public final class PortalListener implements Listener {
     private final PortalRegistry portals;
     private final PortalEntry entry;
     private final Supplier<World> arenaWorld;
+    private final Supplier<Runnable> acquireWorld;
     private final ArenaAdmission admission;
     private final Consumer<UUID> onQuit;
 
     /** Players whose entry is waiting for the waiting room's chunk. */
-    private final Set<UUID> entering = new HashSet<>();
+    private final Map<UUID, Object> entering = new HashMap<>();
     private final Map<UUID, Long> lastMessage = new HashMap<>();
 
     /**
@@ -81,10 +80,17 @@ public final class PortalListener implements Listener {
      */
     public PortalListener(Plugin plugin, PortalRegistry portals, PortalEntry entry, Supplier<World> arenaWorld,
             SnapshotService snapshots, Consumer<UUID> onQuit, BiConsumer<Player, String> onEnter) {
+        this(plugin, portals, entry, arenaWorld, snapshots, onQuit, onEnter, () -> () -> { });
+    }
+
+    public PortalListener(Plugin plugin, PortalRegistry portals, PortalEntry entry, Supplier<World> arenaWorld,
+            SnapshotService snapshots, Consumer<UUID> onQuit, BiConsumer<Player, String> onEnter,
+            Supplier<Runnable> acquireWorld) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.portals = Objects.requireNonNull(portals, "portals");
         this.entry = Objects.requireNonNull(entry, "entry");
         this.arenaWorld = Objects.requireNonNull(arenaWorld, "arenaWorld");
+        this.acquireWorld = Objects.requireNonNull(acquireWorld, "acquireWorld");
         this.admission = new ArenaAdmission(plugin, entry, arenaWorld, snapshots, onEnter);
         this.onQuit = Objects.requireNonNull(onQuit, "onQuit");
     }
@@ -101,7 +107,7 @@ public final class PortalListener implements Listener {
         }
         Player player = event.getPlayer();
         UUID playerId = player.getUniqueId();
-        if (player.getGameMode() == GameMode.SPECTATOR || entering.contains(playerId)) {
+        if (player.getGameMode() == GameMode.SPECTATOR || entering.containsKey(playerId)) {
             return;
         }
         Location outside = event.getFrom().clone();
@@ -114,9 +120,38 @@ public final class PortalListener implements Listener {
             return;
         }
         ArenaPoint room = entry.waitingRoom(portal).orElseThrow();
-        entering.add(playerId);
-        arenaWorld.get().getChunkAtAsync(Math.floorDiv(room.blockX(), 16), Math.floorDiv(room.blockZ(), 16))
-                .whenComplete((chunk, error) -> later(() -> enter(playerId, portal, outside)));
+        Object request = new Object();
+        Runnable releaseWorld;
+        try {
+            releaseWorld = acquireWorld.get();
+        } catch (RuntimeException failure) {
+            tell(player, "The arena could not load. Please try again.");
+            return;
+        }
+        entering.put(playerId, request);
+        try {
+            arenaWorld.get().getChunkAtAsync(Math.floorDiv(room.blockX(), 16), Math.floorDiv(room.blockZ(), 16))
+                    .whenComplete((chunk, error) -> {
+                        try {
+                            if (!later(() -> {
+                                try {
+                                    enter(playerId, request, portal, outside, error);
+                                } finally {
+                                    releaseWorld.run();
+                                }
+                            })) {
+                                releaseWorld.run();
+                            }
+                        } catch (RuntimeException failure) {
+                            releaseWorld.run();
+                            throw failure;
+                        }
+                    });
+        } catch (RuntimeException failure) {
+            entering.remove(playerId, request);
+            releaseWorld.run();
+            tell(player, "The arena could not load. Please try again.");
+        }
     }
 
     /** Lets the region, not the frame, decide where a player standing in a portal goes. */
@@ -135,12 +170,18 @@ public final class PortalListener implements Listener {
         onQuit.accept(playerId);
     }
 
-    private void enter(UUID playerId, Portal portal, Location outside) {
-        if (!entering.remove(playerId)) {
+    private void enter(UUID playerId, Object request, Portal portal, Location outside, Throwable error) {
+        if (!entering.remove(playerId, request)) {
             // The player left while the chunk loaded.
             return;
         }
         Player player = plugin.getServer().getPlayer(playerId);
+        if (error != null) {
+            if (player != null) {
+                tell(player, "The arena could not load. Please try again.");
+            }
+            return;
+        }
         // The player must still be where they walked in. One teleported away while the chunk
         // loaded would otherwise be snapshotted, and later restored, wherever they ended up.
         if (player == null || !player.isOnline() || player.isDead()
@@ -188,9 +229,11 @@ public final class PortalListener implements Listener {
      * Runs the task on the server thread on a later tick. Never runs it inline, because a chunk
      * that is already loaded completes its future at once, inside the move event.
      */
-    private void later(Runnable task) {
+    private boolean later(Runnable task) {
         if (plugin.isEnabled()) {
             plugin.getServer().getScheduler().runTask(plugin, task);
+            return true;
         }
+        return false;
     }
 }

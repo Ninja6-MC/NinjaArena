@@ -28,6 +28,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.entity.EntityCombustByBlockEvent;
+import org.bukkit.event.entity.EntityCombustByEntityEvent;
+import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
@@ -111,6 +114,65 @@ class EnemyLifecycleTest {
         List<ItemStack> drops = new ArrayList<>();
         drops.add(new TestItemStack(Material.ROTTEN_FLESH, "drop", 1));
         return new EntityDeathEvent((Mob) body.entity, source, drops, 8);
+    }
+
+    @Test
+    void daylightIgnitionIsCancelledForEveryTrackedEnemyKind() {
+        for (EnemyKind kind : EnemyKind.values()) {
+            spawned.clear();
+            roll = (kind.ordinal() + 0.1) / EnemyKind.values().length;
+            director.tick();
+            assertEquals(kind, director.enemies().getFirst().kind());
+            Body body = spawned.getFirst();
+            EntityCombustEvent event = new EntityCombustEvent(body.entity, 8.0F);
+            lifecycle.onCombust(event);
+            assertTrue(event.isCancelled(), kind.name());
+            body.removed = true;
+        }
+    }
+
+    @Test
+    void daylightProtectionFollowsOwnershipBetweenRoundsAndOutsideBounds() {
+        director.tick();
+        Body body = spawned.getFirst();
+        body.at.setX(-50);
+        match.phase = MatchPhase.ROUND_END;
+        hasBounds = false;
+        EntityCombustEvent event = new EntityCombustEvent(body.entity, 8.0F);
+        lifecycle.onCombust(event);
+        assertTrue(event.isCancelled());
+
+        hasDirector = false;
+        EntityCombustEvent afterDisposal = new EntityCombustEvent(body.entity, 8.0F);
+        lifecycle.onCombust(afterDisposal);
+        assertFalse(afterDisposal.isCancelled());
+    }
+
+    @Test
+    void untrackedMobsAndPlayersKeepTheirIgnition() {
+        director.tick();
+        for (Class<? extends Entity> type : List.of(Mob.class, Player.class)) {
+            EntityCombustEvent event = new EntityCombustEvent(body(type, 5, 5).entity, 8.0F);
+            lifecycle.onCombust(event);
+            assertFalse(event.isCancelled());
+        }
+    }
+
+    @Test
+    void blockAndEntityFireSourcesStillIgniteTrackedEnemies() {
+        director.tick();
+        Entity enemy = spawned.getFirst().entity;
+        Entity attacker = body(Entity.class, 5, 5).entity;
+        List<EntityCombustEvent> events = List.of(
+                new EntityCombustByBlockEvent(null, enemy, 8.0F),
+                new EntityCombustByEntityEvent(attacker, enemy, 8.0F));
+        for (EntityCombustEvent event : events) {
+            lifecycle.onCombust(event);
+            assertFalse(event.isCancelled());
+            event.setCancelled(true);
+            lifecycle.onCombust(event);
+            assertTrue(event.isCancelled(), "existing cancellations are preserved");
+        }
     }
 
     @Test
@@ -283,6 +345,10 @@ class EnemyLifecycleTest {
 
     @Test
     void handlersRunBeforeRegistryDisposalAndSkipCancelledDeaths() throws Exception {
+        EventHandler combust = EnemyLifecycle.class.getMethod("onCombust", EntityCombustEvent.class)
+                .getAnnotation(EventHandler.class);
+        assertEquals(EventPriority.HIGHEST, combust.priority());
+        assertTrue(combust.ignoreCancelled());
         EventHandler death = EnemyLifecycle.class.getMethod("onDeath", EntityDeathEvent.class)
                 .getAnnotation(EventHandler.class);
         assertEquals(EventPriority.HIGHEST, death.priority());

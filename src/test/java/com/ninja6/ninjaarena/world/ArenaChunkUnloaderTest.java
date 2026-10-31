@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
@@ -30,6 +31,20 @@ class ArenaChunkUnloaderTest {
     /** Chunks, by {@code "x,z"}, that stay loaded when asked to unload. */
     private final Set<String> refusing = new HashSet<>();
     private ArenaChunkUnloader unloader;
+
+    @Test
+    void wholeWorldRetirementAndAbsentWorldDiagnosticsNeverReopenOrSweepAWorld() {
+        int[] retirements = {0};
+        ArenaChunkUnloader retiring = new ArenaChunkUnloader(() -> {
+            throw new AssertionError("a retired world must not be accessed by the full-chunk sweep");
+        }, () -> false, () -> { retirements[0]++; return true; }, Logger.getAnonymousLogger());
+        assertEquals(0, retiring.sweep());
+        assertEquals(1, retirements[0]);
+        ArenaChunkUnloader absent = new ArenaChunkUnloader(Optional::empty, () -> false, () -> false,
+                Logger.getAnonymousLogger());
+        assertEquals(0, absent.sweep());
+        assertTrue(unloads.isEmpty());
+    }
 
     @BeforeEach
     void open() {

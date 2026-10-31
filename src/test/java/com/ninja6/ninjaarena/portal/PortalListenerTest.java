@@ -41,6 +41,7 @@ import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.CraftingInventory;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
@@ -84,6 +85,7 @@ class PortalListenerTest {
     private boolean teleportRefused;
     /** Whether the waiting room's chunk is already loaded, so its future is complete at once. */
     private boolean chunkLoaded;
+    private int operations;
     /** What the player holds on the cursor, and in the first slot of their 2x2 crafting grid. */
     private Material cursor = Material.AIR;
     private Material gridItem = Material.AIR;
@@ -136,6 +138,15 @@ class PortalListenerTest {
                 (player, arena) -> {
                     entered.add(arena);
                     rooms.join(player, arena);
+                }, () -> {
+                    operations++;
+                    boolean[] released = {false};
+                    return () -> {
+                        if (!released[0]) {
+                            released[0] = true;
+                            operations--;
+                        }
+                    };
                 });
         location = new Location(overworld, 11.5, 64, 9.5);
     }
@@ -272,6 +283,45 @@ class PortalListenerTest {
         List<Runnable> tasks = new ArrayList<>(nextTick);
         nextTick.clear();
         tasks.forEach(Runnable::run);
+    }
+
+    @Test
+    void worldOperationLastsThroughChunkCompletionAndScheduledAdmission() {
+        move(11.5, 64, 10.5, 0);
+        assertEquals(1, operations);
+        chunkLoads.getFirst().complete(null);
+        assertEquals(1, operations);
+        runNextTick();
+        assertEquals(0, operations);
+        assertEquals(1, captures);
+    }
+
+    @Test
+    void quitAndNewEntryDoNotLetAnOldCallbackConsumeTheNewRequest() {
+        move(11.5, 64, 10.5, 0);
+        listener.onQuit(new PlayerQuitEvent(player(), (Component) null, PlayerQuitEvent.QuitReason.DISCONNECTED));
+        move(11.5, 64, 9.5, 0);
+        move(11.5, 64, 10.5, 0);
+        assertEquals(2, operations);
+        chunkLoads.getFirst().complete(null);
+        runNextTick();
+        assertEquals(0, captures);
+        assertEquals(1, operations);
+        chunkLoads.getLast().complete(null);
+        runNextTick();
+        assertEquals(1, captures);
+        assertEquals(0, operations);
+    }
+
+    @Test
+    void failedChunkLoadReleasesTheOperationWithoutCapturingOrTeleporting() {
+        move(11.5, 64, 10.5, 0);
+        chunkLoads.getFirst().completeExceptionally(new IllegalStateException("chunk failure"));
+        assertEquals(1, operations);
+        runNextTick();
+        assertEquals(0, operations);
+        assertEquals(0, captures);
+        assertTrue(teleports.isEmpty());
     }
 
     @Test
