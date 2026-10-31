@@ -12,6 +12,9 @@ import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import java.io.PrintWriter;
+import java.lang.ref.WeakReference;
+import java.util.Optional;
+import org.bukkit.event.world.WorldUnloadEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -36,9 +39,16 @@ public final class SoakProbe extends JavaPlugin implements Listener {
     private ArenaRegistry arenas;
     private DirectorService directors;
     private SnapshotService snapshots;
-    private World world;
-    private Object holderManager;
-    private java.lang.reflect.Method holderCount;
+    private Object worldManager;
+    private String worldName;
+    private WeakReference<World> retired = new WeakReference<>(null);
+    private long closedNanos;
+    private long unloadEventNanos;
+    private long unloadCompletionObservedMs = -1;
+    private long heapAtClose;
+    private long closeDurationMs;
+    private int gcAttempts;
+    private Runnable initialLease;
     private PrintWriter ticks;
     private PrintWriter samples;
     private int seconds;
@@ -60,11 +70,18 @@ public final class SoakProbe extends JavaPlugin implements Listener {
             arenas = plugin.arenas();
             directors = plugin.directors();
             snapshots = plugin.snapshots();
-            world = plugin.arenaWorld().world();
-            Object level = world.getClass().getMethod("getHandle").invoke(world);
-            Object scheduler = level.getClass().getMethod("moonrise$getChunkTaskScheduler").invoke(level);
-            holderManager = scheduler.getClass().getField("chunkHolderManager").get(scheduler);
-            holderCount = holderManager.getClass().getMethod("size");
+            worldManager = plugin.arenaWorld();
+            worldName = plugin.arenaWorld().world().getName();
+            try {
+                initialLease = (Runnable) worldManager.getClass().getMethod("acquire").invoke(worldManager);
+            } catch (NoSuchMethodException oldVersion) {
+                initialLease = null;
+            }
+            if (stage.startsWith("lifecycle-")) {
+                releaseInitialLease();
+                new LifecycleProbe(this, plugin, stage, output).start();
+                return;
+            }
             if (stage.equals("setup")) {
                 setup();
                 mark("setup-complete");
@@ -74,7 +91,7 @@ public final class SoakProbe extends JavaPlugin implements Listener {
             if (stage.equals("verify")) {
                 for (var arena : arenas.all()) {
                     var b = arena.bounds();
-                    if (world.getBlockAt(b.minX() + 4, 64, b.minZ() + 4).getType() != Material.AIR) {
+                    if (world().getBlockAt(b.minX() + 4, 64, b.minZ() + 4).getType() != Material.AIR) {
                         throw new IllegalStateException("Marker survived restart");
                     }
                 }
@@ -116,10 +133,10 @@ public final class SoakProbe extends JavaPlugin implements Listener {
             var bounds = new ArenaBounds(x, 63, z, x + 63, 75, z + 63);
             for (int bx = x; bx <= x + 63; bx++) {
                 for (int bz = z; bz <= z + 63; bz++) {
-                    world.getBlockAt(bx, 63, bz).setType(Material.STONE, false);
+                    world().getBlockAt(bx, 63, bz).setType(Material.STONE, false);
                     if (bx == x || bx == x + 63 || bz == z || bz == z + 63) {
                         for (int y = 64; y <= 68; y++) {
-                            world.getBlockAt(bx, y, bz).setType(Material.STONE, false);
+                            world().getBlockAt(bx, y, bz).setType(Material.STONE, false);
                         }
                     }
                 }
@@ -127,7 +144,7 @@ public final class SoakProbe extends JavaPlugin implements Listener {
             // The central wall hides enemy spawn lanes without disabling placement checks.
             for (int bz = z + 8; bz <= z + 54; bz++) {
                 for (int y = 64; y <= 67; y++) {
-                    world.getBlockAt(x + 32, y, bz).setType(Material.STONE, false);
+                    world().getBlockAt(x + 32, y, bz).setType(Material.STONE, false);
                 }
             }
             arenas.update(name, a -> a.withBounds(bounds)
@@ -190,7 +207,7 @@ public final class SoakProbe extends JavaPlugin implements Listener {
                     samples.printf(Locale.ROOT, "%d,%s,%s,%.6f,%d,%.3f,%.3f,%s,%d,%.3f,%.6f,%.3f,%d%n", seconds - startedAt,
                             match.arena(), match.phase(), director.intensity(), StabilityGate.alive(director),
                             director.threatInPlay(), director.roundBudget(), directors.isLooping(match),
-                            world.getLoadedChunks().length,
+                            world().getLoadedChunks().length,
                             clients().stream().mapToDouble(Player::getHealth).min().orElse(0),
                             Bukkit.getAverageTickTime(), Bukkit.getTPS()[0], holders());
                     if (match.phase().isFighting() && !directors.isLooping(match)) {
@@ -201,25 +218,43 @@ public final class SoakProbe extends JavaPlugin implements Listener {
                 if (seconds - startedAt == 30) {
                     for (var arena : arenas.all()) {
                         var b = arena.bounds();
-                        if (world.getBlockAt(b.minX() + 4, 64, b.minZ() + 4).getType() != Material.GOLD_BLOCK) {
+                        if (world().getBlockAt(b.minX() + 4, 64, b.minZ() + 4).getType() != Material.GOLD_BLOCK) {
                             throw new IllegalStateException("Live marker missing: " + arena.name());
                         }
                     }
                     mark("active");
                 }
                 if (seconds - startedAt >= duration + WARMUP_SECONDS) {
+                    retired = new WeakReference<>(world());
+                    closedNanos = System.nanoTime();
                     matches.close();
+                    closeDurationMs = (System.nanoTime() - closedNanos) / 1_000_000;
+                    heapAtClose = heapUsed();
                     endedAt = seconds;
                     mark("matches-closed");
                 }
             } else if (seconds - endedAt >= 45) {
-                Files.writeString(output.resolve("teardown-chunks.json"),
-                        "{\"full_chunks\":" + world.getLoadedChunks().length
-                                + ",\"holders\":" + holders()
-                                + ",\"plugin_ticket_chunks\":" + world.getPluginChunkTickets().values().stream().mapToInt(java.util.Collection::size).sum() + "}");
-                if (world.getLoadedChunks().length != 0 || holders() != 0) {
-                    throw new IllegalStateException("Arena chunks/holders remain: " + world.getLoadedChunks().length + "/" + holders());
+                if (Bukkit.getWorld(worldName) != null || currentWorld().isPresent()) {
+                    throw new IllegalStateException("Arena world remains registered/current after idle release");
                 }
+                // Never resolve the weak referent in the stack that requests GC. Check
+                // only on a later tick after four unconditional collection requests.
+                if (gcAttempts < 4) {
+                    gcAttempts++;
+                    System.gc();
+                    return;
+                }
+                if (retired.get() != null) {
+                    throw new IllegalStateException("Retired arena world remains strongly reachable after bounded GC attempts");
+                }
+                Files.writeString(output.resolve("teardown-chunks.json"),
+                        "{\"world_registered\":false,\"current_world\":false,\"retired_world_collected\":true,"
+                                + "\"full_chunks\":null,\"holders\":null,\"gc_attempts\":" + gcAttempts
+                                + ",\"heap_used_bytes\":" + heapUsed()
+                                + ",\"heap_at_close_bytes\":" + heapAtClose
+                                + ",\"match_close_ms\":" + closeDurationMs
+                                + ",\"release_observed_ms\":" + ((System.nanoTime() - closedNanos) / 1_000_000)
+                                + ",\"unload_completion_observed_ms\":" + unloadCompletionObservedMs + "}");
                 for (var arena : arenas.all()) {
                     if (arenas.isHeld(arena.name())) {
                         throw new IllegalStateException("Arena still held: " + arena.name());
@@ -231,6 +266,7 @@ public final class SoakProbe extends JavaPlugin implements Listener {
                 mark("chunks-released");
                 finished = true;
                 mark("complete");
+                Files.writeString(output.resolve("shutdown-requested"), Long.toString(System.currentTimeMillis()));
                 Bukkit.shutdown();
             }
         } catch (Exception e) {
@@ -238,12 +274,47 @@ public final class SoakProbe extends JavaPlugin implements Listener {
         }
     }
 
+    private World world() {
+        World current = Bukkit.getWorld(worldName);
+        if (current == null) {
+            throw new IllegalStateException("Active arena world is not registered");
+        }
+        return current;
+    }
+
+    private Optional<?> currentWorld() throws ReflectiveOperationException {
+        return (Optional<?>) worldManager.getClass().getMethod("currentWorld").invoke(worldManager);
+    }
+
     private int holders() throws ReflectiveOperationException {
-        return (Integer) holderCount.invoke(holderManager);
+        return holders(world());
+    }
+
+    private int holders(World current) throws ReflectiveOperationException {
+        Object level = current.getClass().getMethod("getHandle").invoke(current);
+        Object scheduler = level.getClass().getMethod("moonrise$getChunkTaskScheduler").invoke(level);
+        Object manager = scheduler.getClass().getField("chunkHolderManager").get(scheduler);
+        return (Integer) manager.getClass().getMethod("size").invoke(manager);
+    }
+
+    private static long heapUsed() {
+        return Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    public void onUnload(WorldUnloadEvent event) {
+        if (event.getWorld().getName().equals(worldName) && !event.isCancelled()) {
+            unloadEventNanos = System.nanoTime();
+            Bukkit.getScheduler().runTask(this, () -> {
+                if (Bukkit.getWorld(worldName) == null) {
+                    unloadCompletionObservedMs = (System.nanoTime() - unloadEventNanos) / 1_000_000;
+                }
+            });
+        }
     }
 
     private void start() throws Exception {
-        matches.setSettings(new MatchSettings(2, 2, 1800, 1, 1, 1, 0));
+        matches.setSettings(new MatchSettings(2, 2, duration + WARMUP_SECONDS, 1, 1, 1, 0));
         List<Player> players = clients();
         var home = Bukkit.getWorlds().getFirst().getSpawnLocation();
         for (Player player : players) {
@@ -262,9 +333,10 @@ public final class SoakProbe extends JavaPlugin implements Listener {
         }
         for (var arena : arenas.all()) {
             var b = arena.bounds();
-            world.getBlockAt(b.minX() + 4, 64, b.minZ() + 4).setType(Material.GOLD_BLOCK, false);
+            world().getBlockAt(b.minX() + 4, 64, b.minZ() + 4).setType(Material.GOLD_BLOCK, false);
         }
         startedAt = seconds;
+        releaseInitialLease();
         mark("started");
     }
 
@@ -286,19 +358,36 @@ public final class SoakProbe extends JavaPlugin implements Listener {
         try {
             Files.createDirectories(output);
             Files.writeString(output.resolve("failed"), error.toString());
+            World previous = retired.get();
+            if (endedAt >= 0 && previous != null) {
+                Files.writeString(output.resolve("teardown-chunks.json"),
+                        "{\"world_registered\":" + (Bukkit.getWorld(worldName) != null)
+                                + ",\"retired_world_collected\":false,\"retired_full_chunks\":" + previous.getLoadedChunks().length
+                                + ",\"retired_holders\":" + holders(previous)
+                                + ",\"retired_plugin_ticket_chunks\":" + previous.getPluginChunkTickets().values().stream()
+                                        .mapToInt(java.util.Collection::size).sum() + "}");
+            }
         } catch (Exception writeError) {
             getLogger().severe(writeError.toString());
         }
-        Bukkit.shutdown();
+        FailureArtifacts.shutdown(this, output);
     }
 
     @Override
     public void onDisable() {
+        releaseInitialLease();
         if (ticks != null) {
             ticks.close();
         }
         if (samples != null) {
             samples.close();
+        }
+    }
+
+    private void releaseInitialLease() {
+        if (initialLease != null) {
+            initialLease.run();
+            initialLease = null;
         }
     }
 }

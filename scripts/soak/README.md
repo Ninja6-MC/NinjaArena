@@ -22,6 +22,7 @@ output directory and binds the server and eight offline clients to loopback only
 ./gradlew build soakProbeJar --no-daemon
 ./gradlew --stop
 python scripts/soak/run.py --java /path/to/java --paper /path/to/paper.jar \
+  --plugin /path/to/candidate-production.jar \
   --via /path/to/ViaVersion-5.12.1.jar \
   --backwards /path/to/ViaBackwards-5.12.1.jar \
   --modules /path/to/node_modules --cache /path/to/paper-cache \
@@ -35,6 +36,12 @@ all logs, raw CSV measurements, checkpoint files, process IDs, and `summary.json
 Only processes launched by this invocation are eligible for cleanup. Setup and
 verification have four-minute deadlines; client arrival and soak completion also
 have bounded deadlines. The server has a 60-second tick watchdog.
+
+`--plugin` selects a separately built production candidate and reads that JAR's
+bundled configuration before applying the soak threat-budget override. Without it,
+the runner uses this checkout's production JAR and configuration as before. Build
+`soakProbeJar` in the validation checkout; do not rebuild an older production base
+over the candidate. The report records the production JAR's SHA-256.
 
 ## Workload and evidence
 
@@ -71,9 +78,14 @@ within both caps.
 Gold marker blocks are placed after matches start. Thirty seconds into the run,
 the runner hashes the dimension files again while those changes are live. At the
 end it closes matches through the normal service, which restores players, resets
-arenas, and releases tickets. After 45 seconds, the probe requires no loaded arena
-chunks or pending chunkholders, no held arenas, and no pending snapshots, then shuts down without
-reloading any arena chunks. Region/entity/POI hashes are compared with both the setup baseline and the
+arenas, and releases tickets. Every active sample resolves the currently registered
+world and its actual Paper holder manager. No strong world or holder-manager
+reference is retained by the probe after close. After 45 seconds it requires the
+world to be absent from Bukkit, the production manager's `currentWorld()` to be
+empty, and the retired world's weak reference to clear. At most four explicit GC
+attempts are made, on separate server ticks. A retained world is a failure; an
+absent world is not reported as a fabricated zero-holder count. No arena may stay
+held and no player snapshot may remain pending. Region/entity/POI hashes are compared with both the setup baseline and the
 pre-match checkpoint after startup settles. Match-phase and shutdown hashes must
 match that pre-match checkpoint; startup differences remain in the report.
 Saved-copy hashes must match the setup baseline. A separate restart checks that markers are absent.
@@ -98,3 +110,58 @@ The local run recorded in [the stability report](../../docs/stability-soak.md)
 failed chunk release. The 600-second acceptance soak has not run. The strict probe
 retains this failure; it does not discard pending holders or change production
 world, director, or storage behavior.
+
+## Separate dirty-disk lifecycle fixture
+
+Use `--lifecycle` with a fresh output name and the candidate JAR. This fixture is
+separate from the clean stability workload and uses the same localhost-only
+dependencies. It deliberately saves a gold marker, a zombie, item, snowball, arrow and XP
+orb after capturing the authoritative arena copy. Python decodes the saved NBT and
+requires every entity type and the dirty marker to exist before startup testing.
+An outside diamond block and armor stand must survive restoration.
+
+Add `--dirty-reopen` for a separate forced-save challenge after the ordinary
+recycle and collection checks. It deliberately saves dirty blocks and temporary
+entities again, retires the world, and waits while Python independently decodes
+the absent world's save and verifies its UUID. Only then may public access reopen
+it; canonical state must be available immediately. The new dirty baseline is
+recorded separately and governs subsequent reconnect and shutdown comparisons.
+The intentional save is reported explicitly.
+
+The next server start must expose canonical blocks and no temporary entities.
+Real clients exercise ordinary match start/end, snapshot restoration, and an
+outside player's preservation. A real Paper ignition event is dispatched to the
+installed protection listener; this is event-level integration evidence, not a
+claim that a client sent a fire-use packet. The fixture retires the world through
+the production public API, requires unregistering and eventual weak collection,
+then reopens it. The same UUID and canonical arena must be available immediately
+when public world access returns. Region, entity and POI hashes must remain equal
+across match teardown, unload, reopen, reconnect and shutdown against a settled
+post-startup baseline. Paper can force a bootstrap save after startup restoration;
+the dirty setup NBT and hashes are retained separately, and the summary reports
+startup hash and NBT changes explicitly. All players return to the default world
+before the final guarded retirement, so shutdown observes an absent arena world.
+
+Raw file hashes and byte-identity flags remain in both reports. Shutdown content
+comparison permits only Paper's sector padding: an unaligned recognized region,
+entity or POI file may gain zero bytes up to its immediate next 4096-byte boundary,
+with its entire original prefix unchanged. File inventories must match and every
+decoded NBT, block and entity difference must be zero. The report lists each padded
+file and appended byte count; every other storage change fails acceptance. Active
+workload and in-process lifecycle comparisons still require exact raw hashes.
+
+```sh
+python scripts/soak/run.py <the same local dependency arguments> \
+  --plugin /path/to/candidate-production.jar --lifecycle \
+  --port 25580 --name lifecycle-small
+python scripts/soak/run.py <the same local dependency arguments> \
+  --plugin /path/to/candidate-production.jar --lifecycle --large --heap-mib 1536 \
+  --port 25581 --name lifecycle-large
+```
+
+Small bounds are 32 by 13 by 32. `--large` uses 128 by 65 by 128, requires an
+explicit 1536 or 2048 MiB heap, and retains the server watchdog and bounded stage
+deadlines. Only one server is run at a time. Evidence includes copy/reset/reopen
+time, heap observations, unload duration, shutdown time, raw NBT and strict save
+hashes. Neither fixture substitutes for continuous-load admission bounds or a
+ten-minute stability acceptance run.

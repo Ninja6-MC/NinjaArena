@@ -1,139 +1,160 @@
-# Stability soak: chunk release failure
+# Stability soak and arena lifecycle verification
 
-Issue #29 remains incomplete. A real local Paper diagnostic reproduced retained
-chunkholders after all four matches ended. The 600-second acceptance soak has not
-run. No production world, director, or storage code changes are included.
+The 600-second acceptance soak passed on Paper 26.3 build 226 with production
+candidate `f4556da`. Its plugin SHA-256 was
+`afa795cc3e30608d39141e4fab4bc38dda3f78b5f5d4e9e7c9c2d27576a6ecda`.
+Separate small and large lifecycle fixtures also passed. These results establish
+idle-world retirement and the tested restoration paths, not a bound on chunk
+retention while the arena world remains continuously busy. Issue #50 remains open
+for the broader containment and residency work described below.
 
-## Test coverage
+## Workload and environment
 
-The existing suite already covers director scalar boundaries, snapshot round trips,
-and safe-landing geometry. The additions cover composed pressure over all 35 rounds
-and a 3600-second timer, repeated round trips of every byte value and quoted Unicode
-world names, and negative-coordinate plus diagonal/vertical search boundaries.
-The full Java suite passes 591 tests. Five Python tests verify the save evidence
-reader and warmup/population aggregation.
+The local runs used Paper 26.3 build 226, Temurin 25.0.4+7, Node.js 24.11.1,
+Mineflayer 4.39.0, ViaVersion and ViaBackwards 5.12.1, and protocol 1.21.11.
+Windows 11 build 26300 reported 12 logical processors; the server was limited to
+two. The acceptance server used a 256 to 768 MiB heap. Eight clients shared one
+Node process with a 384 MiB old-space limit. Builds did not run alongside Paper.
 
-## Local workload, 2026-10-30
+Four independent 64 by 64 arenas each hosted two stationary survival clients.
+Production spawning, AI, targeting, snapshots, restoration and teardown remained
+active. Resistance V and saturation kept clients alive; threat base 200 filled the
+unchanged caps of 25 enemies per match and 80 globally, with four spawns per tick.
+Two seconds each of PREP and COMBAT preceded OVERRUN. After 60 seconds of warmup,
+the harness measured 600 seconds: 2400 match samples and 12000 server ticks.
+This workload does not measure player combat, ordinary survival difficulty or
+remote network latency.
 
-- Paper 26.3 build 226, API compile target 26.3 build 223.
-- Temurin 25.0.4+7, Node.js 24.11.1, Mineflayer 4.39.0.
-- ViaVersion and ViaBackwards 5.12.1, clients using protocol 1.21.11.
-- Windows 11 build 26300; AMD64, 12 logical processors; server limited to two.
-- Server heap 256 to 768 MiB; eight clients in one Node process with a 384 MiB
-  old-space limit; no simultaneous Gradle or other test workload.
-- Four independent 64 by 64 arenas, two stationary survival clients each, normal
-  production spawning, AI, targeting, snapshots, restoration, and match teardown.
-- Resistance V and saturation kept clients alive. The threat base was 200 to fill
-  the unchanged caps: 25 per match, 80 globally, four spawns per tick.
-- Two seconds each of PREP and COMBAT, followed by OVERRUN; 60 seconds of warmup
-  followed by 60 measured seconds. This is a diagnostic, not a ten-minute soak.
+## Acceptance results
 
-This workload does not measure player combat, ordinary survival difficulty, or
-remote network latency. Startup average tick time reached 50.7 ms, causing the
-normal stability tier drop. Spawning resumed at 23.9 ms with the configured
-30-second intensity recovery. Those readings remain in the raw data; they fall
-within the documented warmup.
-
-## Measured results
-
-Each arena provided 60 measured samples at actual director intensity 1. All four
-normal director loops remained active.
+Every arena supplied 600 measured samples at intensity 1. All four director loops
+remained active and every measured match sample was in OVERRUN.
 
 | Arena | Live enemies: minimum / median / maximum |
 | :--- | ---: |
-| soak0 | 24 / 25 / 25 |
-| soak1 | 24 / 25 / 25 |
-| soak2 | 25 / 25 / 25 |
+| soak0 | 23 / 25 / 25 |
+| soak1 | 22 / 25 / 25 |
+| soak2 | 24 / 25 / 25 |
 | soak3 | 4 / 5 / 5 |
 
-The global population was 79 / 80 / 80. The shared cap explains the smaller last
-arena. Minimum player health was 20 and minimum reported one-minute TPS was 19.995.
+The global population was 77 / 80 / 80. The shared cap accounts for the smaller
+fourth arena. Minimum player health was 20; minimum reported one-minute TPS was
+19.995.
 
-| Tick duration, 1200 measured ticks | Milliseconds |
+| Tick duration, 12000 measured ticks | Milliseconds |
 | :--- | ---: |
-| Mean | 3.491 |
-| Median | 3.134 |
-| p95 | 5.769 |
-| p99 | 9.293 |
-| Maximum | 24.742 |
+| Mean | 2.973 |
+| Median | 2.662 |
+| p95 | 5.267 |
+| p99 | 7.644 |
+| Maximum | 41.344 |
 
-No measured tick exceeded 50 ms. These short-window values do not establish
-long-term stability.
+No measured tick exceeded 50 ms. The measured loaded set stayed at 1224 full chunks
+and 5112 holders. This stable set for repeated work in the same four arenas is not
+a general limit for new arenas or continuous world activity.
 
-## Release and save evidence
+After normal match close, the arena world became absent from both Bukkit and the
+manager's current-world reference. The retired world's weak reference cleared
+after four bounded collection attempts. Heap usage fell from 474587512 bytes at
+match close to 366155440 bytes at the teardown observation. Match close took
+603 ms; retirement was observed after 49848 ms, including the idle wait, and unload
+completion was observed 151 ms after the unload event. Shutdown took 2.414 seconds.
+No live-world accessor was used to inspect an already retired world. Restart
+verification passed and all four saved marker positions remained air.
 
-After normal match close and a further 45 seconds, the strict probe recorded:
+## Save evidence and its limits
 
-```json
-{"full_chunks":0,"holders":5112,"plugin_ticket_chunks":0}
-```
+Setup shutdown and settled pre-match saves differ: 64 chunk NBT payloads changed
+during bootstrap, with no semantic block or entity changes. Match activity is
+compared against the settled pre-match baseline. Active-match raw hashes were
+identical to that baseline, and arena structure-copy hashes stayed identical.
 
-It failed with `Arena chunks/holders remain: 0/5112`. All plugin chunk tickets were
-released; the earlier diagnostic also verified that no arena remained held and no
-snapshots remained pending. The
-strict run stopped before its later snapshot/restart assertions, so those are not
-claimed as completed in this run. The runner and all owned server/client processes
-exited, and the loopback listener closed.
+At shutdown, raw hash equality was **false** for `region/r.0.0.mca`. Its length grew
+from 74355 to 77824 bytes: the complete original prefix was unchanged and the
+3469 appended bytes were zero padding to the immediate next 4096-byte boundary.
+All other files were identical; file inventories matched. Decoded comparisons
+reported zero added or removed chunks and zero changes in NBT, blocks, block-state
+encoding, block entities or entities. This is preserved saved gameplay content,
+not byte identity or an absence of disk writes. The report retains the unequal raw
+hashes and the explicit padding record.
 
-Save comparisons distinguish startup writes from match activity:
+The shutdown comparison accepts only this narrow padding shape for recognized
+region, entity and POI files, with an unchanged original prefix and zero decoded
+differences. Nonzero suffixes, extra sectors, partial padding, shrinking, prefix or
+header changes, and added or removed files fail. Unit cases cover those failures.
 
-| Checkpoint comparison | Added chunks | Changed NBT | Changed blocks | Changed block entities | Changed entities |
-| :--- | ---: | ---: | ---: | ---: | ---: |
-| Setup shutdown to settled pre-match | 0 | 56 | 0 | 0 | 0 |
-| Pre-match to active matches at 30 s | 0 | 0 | 0 | 0 | 0 |
-| Pre-match to failed-run shutdown | 2408 | 2688 | 0 | 0 | 0 |
+## Dirty-disk lifecycle fixtures
 
-Raw region hashes were identical between settled pre-match and active matches.
-All four marker positions were gold blocks in the live world and air in saved NBT.
-At shutdown, four block-state encodings changed, but decoding all 4096 states per
-section found no semantic block changes. Saved markers were still air. No separate
-`entities/*.mca` files were present at these checkpoints; direct inspection of the region records found their lowercase
-`entities` lists empty. The original reader skipped entity-region payloads, so its
-zero entity-change metric did not validate separate entity files. The corrected
-reader now digests root `Entities` lists and counts changed payloads across added
-and removed entity chunks, with a regression fixture for spawning, movement, and
-health changes. Re-reading the retained save snapshots with the corrected reader
-confirmed the same counts. Arena structure-copy hashes were unchanged in the preceding diagnostic. The failed strict run does not
-certify overall no-write behavior: startup metadata and shutdown-generated chunks
-changed raw hashes, and 5112 chunk records remained on disk. Paper reported saving
-5096 block chunks and 1160 entity chunks during shutdown; an entity chunk count does
-not mean mobs were persisted.
+The separate fixtures force-save a gold block plus a zombie, dropped item,
+snowball, arrow and experience orb after recording the authoritative arena copy.
+Python independently decodes their saved NBT before startup. An outside diamond
+block and armor stand provide preservation controls. The small fixture covers
+32 by 13 by 32 blocks; the large fixture covers 128 by 65 by 128 blocks and uses a
+1536 MiB server heap.
 
-An earlier 60-second diagnostic restarted successfully and found all four markers
-absent. The strict final diagnostic intentionally did not restart after its holder
-failure. The raw save snapshots, per-chunk digests, CSV files, and shutdown logs are
-retained under the ignored run output.
+Both passed startup restoration before first public world access, normal match
+start and end restoration after fresh deliberate mutations, preservation of the
+outside player and decoration, retirement and weak collection, same-UUID reopening,
+and exact arena-origin snapshot restoration after disconnect and world retirement.
+Pending snapshots cleared. Every player moved to the default world before final
+guarded retirement; the arena world was absent before shutdown.
 
-## Observed cause and scope
+| Fixture | Startup reset | Public reopen before availability | Unload | Shutdown |
+| :--- | ---: | ---: | ---: | ---: |
+| Small | 1872 ms | 128.947 ms | 120.123 ms | 2.438 s |
+| Large | 3163 ms | 899.593 ms | 119.976 ms | 2.505 s |
 
-In Paper build 226, `CraftWorld.getLoadedChunks()` enumerates the full-chunk map.
-It does not enumerate every pending or partially generated holder. Cached server
-bytecode also shows `ChunkMap.tick` skipping unload processing while the world's
-`noSave` flag is set. The current arena sweep examines only full chunks with load
-level `INACCESSIBLE`; it reported zero unloads while the holder manager retained
-5112 entries. A zero full-chunk count is therefore insufficient release evidence.
+Paper's forced bootstrap save persisted the startup restoration in these runs.
+Their dirty setup evidence is retained separately from the settled post-startup
+baseline. Region/entity/POI hashes were byte-identical from that settled baseline
+through match teardown, recycle, reconnect and shutdown. Consequently these two
+reopen checks establish reopening a clean saved generation; they do not alone
+prove reopening an operator-forced dirty save.
 
-The public API exposes `setAutoSave(boolean)` but no separate per-world automatic
-save interval setter. Allowing normal automatic saving merely to enable unloading
-would also allow held-match data to be saved. `ChunkUnloadEvent.setSaveChunk(false)`
-does not by itself suppress periodic saves of chunks still held by matches. No
-production workaround or internal-server mutation is included. The chunk lifecycle
-failure must be resolved before issue #29 can satisfy its acceptance conditions.
+The optional `--dirty-reopen` fixture adds that distinct challenge: deliberately
+save dirty state after the ordinary recycle checks, retire the world, require
+independent Python NBT and persisted-UUID proof while it is absent, then require
+canonical public access before admission. The focused run passed: independent saved NBT contained all five temporary entity
+types plus the outside armor stand, and Paper's persisted metadata UUID matched
+the live UUID. Dirty-disk public reopening returned canonical state in 126.174 ms
+before admission. Subsequent reconnect, final retirement and shutdown preserved the
+new deliberately dirty baseline byte-for-byte. Shutdown took 2.311 seconds; the
+saved inside marker remained gold while the reopened in-memory marker was air.
+The intentional save creates a new, explicitly reported comparison baseline; no
+no-write claim spans that deliberate mutation.
 
-## Reproduction
+## Remaining scope and checks
 
-Follow [the local harness instructions](../scripts/soak/README.md). Use a fresh name
-and an unused loopback port. The diagnostic invocation differs from the default
-acceptance command only in duration:
+Idle retirement does not guarantee bounded loaded chunks while players, edits,
+matches or other leases keep the world busy. Continued activity and visiting new
+arenas need separate residency work and acceptance evidence.
 
-```sh
-python -B scripts/soak/run.py --java /path/to/java --paper /path/to/paper.jar \
-  --via /path/to/ViaVersion-5.12.1.jar \
-  --backwards /path/to/ViaBackwards-5.12.1.jar \
-  --modules /path/to/node_modules --cache /path/to/paper-cache \
-  --seconds 60 --port 25579 --name stability-diagnostic
-```
+The fixtures verify cancellation of a real Paper ignition event outside the arena
+bounds. They do not certify full outside-bounds containment. Source inspection
+still finds no piston extend/retract event handling, and adventure-mode players
+can operate levers. A live regression involving a pre-extended piston and outside
+blocks remains needed; broader existing protection unit tests do not close this
+gap. Issue #50's reset/entity and large-arena measurements are verified here, but
+its broader containment requirements remain open.
 
-A nonzero result with `teardown-chunks.json` and `failed-save-diagnostics.json` is
-the reproduced failure. Do not describe it as a passing stability soak. The default
-600-second measurement remains reserved for acceptance after chunk release works.
+The production candidate's suite passed 626 Java tests. The separate validation
+checkout retained 591 passing Java test results, and its current Python suite
+passes 15 tests. These separate counts are not a combined integration-suite run.
+The harness also derives its OVERRUN limit from duration plus warmup so the
+supported 1800-second duration does not expire early; that boundary is checked by
+source arithmetic, not a claimed 30-minute runtime. Both client scripts pass Node syntax checks and the standards checker reports no
+violations. Combined integration validation is pending.
+
+## Reproduction and retained evidence
+
+Follow [the local harness instructions](../scripts/soak/README.md), pass the
+production candidate explicitly with `--plugin`, and use fresh names and unused
+loopback ports. The default duration is 600 measured seconds plus 60 warmup;
+`--lifecycle`, `--lifecycle --large --heap-mib 1536`, and
+`--lifecycle --dirty-reopen` select the separate lifecycle workloads.
+
+The passing run names are `chunk-release-acceptance1`, `lifecycle-small3` and
+`lifecycle-large1`, plus the focused `lifecycle-dirty-reopen1`. Their ignored local output retains summary JSON, raw hashes,
+NBT evidence, saved snapshots, CSV data and console logs. The earlier short run
+that retained 5112 holders was a failed diagnostic; it is superseded by the
+candidate results above, not relabeled as a pass.
