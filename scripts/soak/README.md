@@ -85,10 +85,13 @@ world to be absent from Bukkit, the production manager's `currentWorld()` to be
 empty, and the retired world's weak reference to clear. At most four explicit GC
 attempts are made, on separate server ticks. A retained world is a failure; an
 absent world is not reported as a fabricated zero-holder count. No arena may stay
-held and no player snapshot may remain pending. Region/entity/POI hashes are compared with both the setup baseline and the
-pre-match checkpoint after startup settles. Match-phase and shutdown hashes must
-match that pre-match checkpoint; startup differences remain in the report.
-Saved-copy hashes must match the setup baseline. A separate restart checks that markers are absent.
+held and no player snapshot may remain pending. Region/entity/POI hashes are
+compared with both the setup baseline and the settled pre-match checkpoint.
+Active match-phase hashes must match the pre-match checkpoint exactly. Shutdown
+must preserve its saved content, allowing only the narrow sector-padding shape
+described below, with raw hash inequality and padding disclosed explicitly.
+Startup differences remain in the report. Saved-copy hashes must match the setup
+baseline. A separate restart checks that markers are absent.
 
 A passing result requires all runtime and process checks, at least the requested
 number of full-intensity samples per arena, positive enemy populations, and
@@ -106,10 +109,10 @@ python -B -m unittest discover -s scripts/soak -p 'test_*.py'
 node --check scripts/soak/clients.cjs
 ```
 
-The local run recorded in [the stability report](../../docs/stability-soak.md)
-failed chunk release. The 600-second acceptance soak has not run. The strict probe
-retains this failure; it does not discard pending holders or change production
-world, director, or storage behavior.
+The 600-second acceptance soak passed, as did the small, large and focused
+dirty-reopen lifecycle fixtures. The [stability report](../../docs/stability-soak.md)
+records their workload, results and remaining limits. The earlier short diagnostic
+failed chunk release; its retained evidence remains a historical failure.
 
 ## Separate dirty-disk lifecycle fixture
 

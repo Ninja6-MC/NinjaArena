@@ -137,13 +137,16 @@ blocks remains needed; broader existing protection unit tests do not close this
 gap. Issue #50's reset/entity and large-arena measurements are verified here, but
 its broader containment requirements remain open.
 
-The production candidate's suite passed 626 Java tests. The separate validation
-checkout retained 591 passing Java test results, and its current Python suite
-passes 15 tests. These separate counts are not a combined integration-suite run.
+The production candidate's suite passed 626 Java tests. A fresh combined
+integration build then passed 630 Java tests with zero failures, errors or skips,
+including the production changes and validation regressions together. Its
+production JAR SHA-256 exactly matched the runtime-tested candidate shown above.
+The build and probe compilation passed, as did all 15 Python tests, both client
+Node syntax checks and the standards checker. Tracked soak files use LF endings.
+
 The harness also derives its OVERRUN limit from duration plus warmup so the
 supported 1800-second duration does not expire early; that boundary is checked by
-source arithmetic, not a claimed 30-minute runtime. Both client scripts pass Node syntax checks and the standards checker reports no
-violations. Combined integration validation is pending.
+source arithmetic, not a claimed 30-minute runtime.
 
 ## Reproduction and retained evidence
 
