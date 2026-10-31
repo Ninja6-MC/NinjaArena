@@ -50,6 +50,7 @@ public final class HostingService implements HostingCommands, Listener {
     private final PortalEntry entry;
     private final ArenaAdmission admission;
     private final Supplier<World> world;
+    private final Supplier<Runnable> acquireWorld;
     private final Predicate<UUID> inMatch;
     private final Map<UUID, Open> hosted = new HashMap<>();
     private final Map<String, Open> reserved = new HashMap<>();
@@ -58,12 +59,18 @@ public final class HostingService implements HostingCommands, Listener {
 
     public HostingService(Plugin plugin, ArenaRegistry arenas, WaitingRoomService rooms, PortalEntry entry,
             ArenaAdmission admission, Supplier<World> world, Predicate<UUID> inMatch) {
+        this(plugin, arenas, rooms, entry, admission, world, inMatch, () -> () -> { });
+    }
+
+    public HostingService(Plugin plugin, ArenaRegistry arenas, WaitingRoomService rooms, PortalEntry entry,
+            ArenaAdmission admission, Supplier<World> world, Predicate<UUID> inMatch, Supplier<Runnable> acquireWorld) {
         this.plugin = plugin;
         this.arenas = arenas;
         this.rooms = rooms;
         this.entry = entry;
         this.admission = admission;
         this.world = world;
+        this.acquireWorld = acquireWorld;
         this.inMatch = inMatch;
         rooms.setParty(this::party);
         rooms.onDeparture(this::departed);
@@ -166,14 +173,36 @@ public final class HostingService implements HostingCommands, Listener {
         Pending pending = new Pending(open);
         entering.put(id, pending);
         var point = entry.waitingRoom(open.arena).orElseThrow();
+        Runnable releaseWorld;
+        try {
+            releaseWorld = acquireWorld.get();
+        } catch (RuntimeException e) {
+            entering.remove(id, pending);
+            tell(player, "The Arena could not load. Your invitation is still open; try accepting again.");
+            return;
+        }
         try {
             world.get().getChunkAtAsync(Math.floorDiv(point.blockX(), 16), Math.floorDiv(point.blockZ(), 16))
                     .whenComplete((chunk, error) -> {
                         if (!closed && plugin.isEnabled()) {
-                            plugin.getServer().getScheduler().runTask(plugin, () -> finish(id, pending, error));
+                            try {
+                                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                                    try {
+                                        finish(id, pending, error);
+                                    } finally {
+                                        releaseWorld.run();
+                                    }
+                                });
+                            } catch (RuntimeException failure) {
+                                releaseWorld.run();
+                                throw failure;
+                            }
+                        } else {
+                            releaseWorld.run();
                         }
                     });
         } catch (RuntimeException e) {
+            releaseWorld.run();
             entering.remove(id, pending);
             tell(player, "The Arena could not load. Your invitation is still open; try accepting again.");
         }

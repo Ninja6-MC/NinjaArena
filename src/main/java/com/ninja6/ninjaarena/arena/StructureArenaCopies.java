@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -50,10 +51,14 @@ public final class StructureArenaCopies implements ArenaCopies {
     private static final Pattern FILE = Pattern.compile("(-?\\d+)_(-?\\d+)_(-?\\d+)\\.nbt");
 
     private final Path dir;
-    private final World world;
+    private final Supplier<World> world;
     private final StructureManager structures;
 
     public StructureArenaCopies(Path dir, World world, StructureManager structures) {
+        this(dir, () -> world, structures);
+    }
+
+    public StructureArenaCopies(Path dir, Supplier<World> world, StructureManager structures) {
         this.dir = Objects.requireNonNull(dir, "dir");
         this.world = Objects.requireNonNull(world, "world");
         this.structures = Objects.requireNonNull(structures, "structures");
@@ -61,6 +66,7 @@ public final class StructureArenaCopies implements ArenaCopies {
 
     @Override
     public void save(String name, ArenaBounds bounds) throws IOException {
+        World world = this.world.get();
         Path target = dir.resolve(name);
         Path fresh = dir.resolve(name + ".new");
         deleteTree(fresh);
@@ -80,6 +86,7 @@ public final class StructureArenaCopies implements ArenaCopies {
 
     @Override
     public void restore(String name) throws IOException {
+        World world = this.world.get();
         Path source = dir.resolve(name);
         if (!Files.isDirectory(source)) {
             throw new IOException("there is no saved copy of " + name);

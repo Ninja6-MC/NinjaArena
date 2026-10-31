@@ -57,6 +57,7 @@ class HostingServiceTest extends MatchFixture {
     private SnapshotService snapshots;
     private boolean captureFails;
     private boolean emptyFails;
+    private int operations;
 
     @Override
     protected World world(String name) {
@@ -132,7 +133,16 @@ class HostingServiceTest extends MatchFixture {
         });
         hosting = new HostingService(plugin, arenas, rooms, entry,
                 new ArenaAdmission(plugin, entry, () -> arenaWorld, snapshots, rooms::join), () -> arenaWorld,
-                matches::isInMatch);
+                matches::isInMatch, () -> {
+                    operations++;
+                    boolean[] released = {false};
+                    return () -> {
+                        if (!released[0]) {
+                            released[0] = true;
+                            operations--;
+                        }
+                    };
+                });
     }
 
     private PlayerSnapshot snapshot(Player player) {
@@ -157,6 +167,36 @@ class HostingServiceTest extends MatchFixture {
     private void inviteBob() {
         hosting.host(player(ALICE), "dojo");
         hosting.invite(player(ALICE), "Bob");
+    }
+
+    @Test
+    void cancelledInvitationLoadRetainsItsLeaseUntilItsOwnCallbackAndCannotConsumeANewerRequest() {
+        inviteBob();
+        hosting.accept(player(BOB), "Alice");
+        assertEquals(1, operations);
+        hosting.leave(player(BOB));
+        assertEquals(1, operations, "cancellation cannot unload a world still generating a chunk");
+        hosting.accept(player(BOB), "Alice");
+        assertEquals(2, operations);
+        loads.getFirst().complete(null);
+        assertEquals(2, operations, "the scheduled callback still owns its operation");
+        runNextTick();
+        assertEquals(1, operations);
+        assertTrue(captured.isEmpty());
+        finish();
+        assertEquals(0, operations);
+        assertEquals(List.of(BOB), captured);
+    }
+
+    @Test
+    void failedInvitationLoadReleasesItsLeaseOnTheServerCallback() {
+        inviteBob();
+        hosting.accept(player(BOB), "Alice");
+        loads.getFirst().completeExceptionally(new IllegalStateException("chunk failure"));
+        assertEquals(1, operations);
+        runNextTick();
+        assertEquals(0, operations);
+        assertTrue(captured.isEmpty());
     }
 
     @Test
