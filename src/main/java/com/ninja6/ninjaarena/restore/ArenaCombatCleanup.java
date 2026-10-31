@@ -13,6 +13,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.event.entity.EntityDamageByBlockEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 
 /** Drops completed arena combat references without changing health or unrelated combat. */
@@ -42,6 +43,7 @@ public final class ArenaCombatCleanup implements Consumer<Player> {
             EntityDamageEvent event = player.getLastDamageCause();
             if (event != null && (arena(event.getDamageSource().getCausingEntity())
                     || arena(event.getDamageSource().getDirectEntity())
+                    || event instanceof EntityDamageByEntityEvent entity && arena(entity.getDamager())
                     || event instanceof EntityDamageByBlockEvent block
                     && (arenaBlock(block.getDamager()) || arenaBlock(block.getDamagerBlockState())))) {
                 player.setLastDamageCause(null);

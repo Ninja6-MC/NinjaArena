@@ -17,6 +17,7 @@ import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -127,6 +128,27 @@ class ArenaCombatCleanupTest {
             new ArenaCombatCleanup(Logger.getAnonymousLogger(), p -> internal.incrementAndGet()).accept(player[0]);
             assertEquals(sourceWorld.equals(ArenaWorld.NAME) ? 1 : 0, clears.get());
             assertEquals(1, internal.get());
+        }
+    }
+
+    @Test
+    void clearsArenaEventDamagerWhenNativeSourceGettersAreNullButPreservesOutsideDamager() {
+        DamageSource damage = proxy(DamageSource.class, (p, m, a) -> switch (m.getName()) {
+            case "getCausingEntity", "getDirectEntity" -> null;
+            default -> throw new UnsupportedOperationException(m.getName());
+        });
+        for (String sourceWorld : new String[] {ArenaWorld.NAME, "world"}) {
+            EntityDamageEvent[] event = new EntityDamageEvent[1];
+            AtomicInteger clears = new AtomicInteger();
+            Player player = proxy(Player.class, (p, m, a) -> switch (m.getName()) {
+                case "getLastDamageCause" -> event[0];
+                case "setLastDamageCause" -> { assertNull(a[0]); clears.incrementAndGet(); yield null; }
+                default -> throw new UnsupportedOperationException(m.getName());
+            });
+            event[0] = new EntityDamageByEntityEvent(entity(sourceWorld), player,
+                    EntityDamageEvent.DamageCause.LIGHTNING, damage, 1);
+            new ArenaCombatCleanup(Logger.getAnonymousLogger(), p -> { }).accept(player);
+            assertEquals(sourceWorld.equals(ArenaWorld.NAME) ? 1 : 0, clears.get());
         }
     }
 
