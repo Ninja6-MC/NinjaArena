@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.entity.Player;
@@ -75,13 +76,19 @@ public final class RestoreService {
     private final SnapshotService snapshots;
     private final Applier applier;
     private final Logger logger;
+    private final Consumer<Player> combatCleanup;
     private final Set<UUID> awaitingJoin = new HashSet<>();
     private final Set<UUID> awaitingRespawn = new HashSet<>();
 
     public RestoreService(SnapshotService snapshots, Applier applier, Logger logger) {
+        this(snapshots, applier, logger, player -> { });
+    }
+
+    public RestoreService(SnapshotService snapshots, Applier applier, Logger logger, Consumer<Player> combatCleanup) {
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
         this.applier = Objects.requireNonNull(applier, "applier");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.combatCleanup = Objects.requireNonNull(combatCleanup, "combatCleanup");
     }
 
     /**
@@ -135,6 +142,7 @@ public final class RestoreService {
 
     /** Restores the player from their pending snapshot, if they have one. */
     public RestoreResult restore(Player player) {
+        combatCleanup.accept(player);
         UUID playerId = player.getUniqueId();
         Optional<PlayerSnapshot> snapshot;
         try {

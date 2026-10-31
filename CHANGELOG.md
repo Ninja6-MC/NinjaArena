@@ -18,6 +18,9 @@ Java 25, and does not run on Folia.
   and restores authoritative arena copies before admission. Pending entry and teleport
   operations, players, tickets, edits, held arenas and failed resets prevent retirement.
   This does not bound partial holders in a world that remains continuously busy.
+- Leaving an arena clears arena-sourced player combat references before restoration,
+  including deferred and failed restores, so removed enemies do not retain retired
+  worlds through Paper's last damage source. Other-world damage records are preserved.
 - Director enemies remain protected from daylight ignition when Paper ignores their
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 

@@ -34,6 +34,14 @@ world that is in use. External plugins and player respawn metadata can retain wo
 references independently of this plugin; integrations should resolve by world name or
 UID and avoid caching retired world, chunk, entity or location objects.
 
+Restoration first clears combat records whose source belongs to the arena world,
+including dead-player deferrals and failed restores. Paper's last-damage-source expiry
+getter does not clear its backing reference, so a narrowly validated Paper adapter clears
+that field when its entity or block source belongs to the arena. The public damage-event
+setter clears arena-owned events. Other-world combat records, health and damage are
+unchanged. An unsupported native layout logs a warning once; successful Bukkit unload
+alone must not then be treated as proof of world collection.
+
 This is an idle-release mitigation for #50, not a continuous-use memory bound. Full
 chunks are still swept while busy, but partial holders can accumulate if a sequence
 of matches, visitors or waiting players never lets the world become idle. A bounded

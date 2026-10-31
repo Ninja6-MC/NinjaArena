@@ -74,6 +74,22 @@ class RestoreServiceTest {
     }
 
     @Test
+    void combatCleanupRunsBeforeDeadDeferralAndBeforeFailedApply() throws Exception {
+        snapshots.persist(snapshot(ALICE));
+        List<String> order = new ArrayList<>();
+        RestoreService service = new RestoreService(snapshots, (player, snapshot) -> {
+            order.add("apply");
+            throw new RestoreException("cancelled");
+        }, logger, player -> order.add("cleanup"));
+        assertEquals(RestoreResult.AWAITING_RESPAWN, service.restore(player(ALICE, true)));
+        assertEquals(List.of("cleanup"), order);
+        order.clear();
+        assertEquals(RestoreResult.FAILED, service.restore(player(ALICE)));
+        assertEquals(List.of("cleanup", "apply"), order);
+        assertTrue(snapshots.hasPending(ALICE));
+    }
+
+    @Test
     void aSuccessfulRestoreAppliesThenDeletesTheSnapshot() throws Exception {
         snapshots.persist(snapshot(ALICE));
         RestoreService service = service((player, snapshot) -> {
