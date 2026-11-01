@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.ExplosionResult;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -25,6 +26,10 @@ import org.bukkit.event.block.BlockFromToEvent;
 import org.bukkit.event.block.BlockGrowEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockSpreadEvent;
+import org.bukkit.event.block.BlockPhysicsEvent;
+import org.bukkit.event.block.BlockRedstoneEvent;
+import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.LeavesDecayEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
@@ -41,10 +46,17 @@ class ArenaProtectionTest extends MatchFixture {
     }
 
     private Block block(World world) {
+        return block(world, Material.STONE);
+    }
+
+    private Block block(World world, Material material) {
         return (Block) Proxy.newProxyInstance(Block.class.getClassLoader(), new Class<?>[] {Block.class},
                 (p, m, a) -> {
                     if (m.getName().equals("getWorld")) {
                         return world;
+                    }
+                    if (m.getName().equals("getType")) {
+                        return material;
                     }
                     throw new UnsupportedOperationException(m.getName());
                 });
@@ -86,6 +98,24 @@ class ArenaProtectionTest extends MatchFixture {
         listener.onLeavesDecay((LeavesDecayEvent) blockChanges.get(7));
         for (Cancellable event : blockChanges) {
             assertEquals(protectedWorld, event.isCancelled(), event.getClass().getSimpleName());
+        }
+
+        var extend = new BlockPistonExtendEvent(block, List.of(), BlockFace.EAST);
+        listener.onPistonExtend(extend);
+        assertEquals(protectedWorld, extend.isCancelled());
+        var retract = new BlockPistonRetractEvent(block, List.of(), BlockFace.WEST);
+        listener.onPistonRetract(retract);
+        assertEquals(protectedWorld, retract.isCancelled());
+        for (Material material : List.of(Material.PISTON, Material.STICKY_PISTON,
+                Material.PISTON_HEAD, Material.MOVING_PISTON, Material.STONE)) {
+            var physics = new BlockPhysicsEvent(block(world, material), inert(BlockData.class));
+            listener.onPistonPhysics(physics);
+            assertEquals(protectedWorld && material != Material.STONE, physics.isCancelled(), material.toString());
+        }
+        for (int[] currents : List.of(new int[] {0, 15}, new int[] {15, 0}, new int[] {15, 7})) {
+            var redstone = new BlockRedstoneEvent(block, currents[0], currents[1]);
+            listener.onRedstone(redstone);
+            assertEquals(protectedWorld ? currents[0] : currents[1], redstone.getNewCurrent());
         }
     }
 

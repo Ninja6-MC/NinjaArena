@@ -39,6 +39,8 @@ class PortalCommandTest {
     Path dir;
 
     private final List<String> messages = new ArrayList<>();
+    // Location owns only a weak reference; this fixture owns each test world's lifetime.
+    private final List<World> worlds = new ArrayList<>();
     private ArenaRegistry arenas;
     private PortalRegistry portals;
     private PortalCommand portalCommand;
@@ -71,8 +73,8 @@ class PortalCommandTest {
         standing = new Location(world("world"), 10.5, 64, 10.5);
     }
 
-    private static World world(String name) {
-        return (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[] {World.class},
+    private World world(String name) {
+        World world = (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[] {World.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "getName" -> name;
                     case "hashCode" -> name.hashCode();
@@ -80,6 +82,8 @@ class PortalCommandTest {
                     case "toString" -> name;
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
+        worlds.add(world);
+        return world;
     }
 
     private Object record(Object message) {
@@ -177,6 +181,7 @@ class PortalCommandTest {
     @Test
     void cornersAcceptCoordinatesAndOffsets() {
         CommandSender sender = player(true);
+        System.gc();
         run(sender, "portal setcorner 1 ~ ~-1 ~2");
         run(sender, "portal setcorner 2 20 70 12");
         assertEquals("Corner 1 set to 10, 63, 12 in world.", messages.get(0));

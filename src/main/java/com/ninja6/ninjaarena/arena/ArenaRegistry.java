@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.arena;
 
 import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PaperBlockEvents;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -70,6 +71,7 @@ public final class ArenaRegistry {
     /** Set when the file could not be read, so a later write cannot replace what is in it. */
     private boolean unreadable;
     private BooleanSupplier worldAcceptingOperations = () -> true;
+    private Runnable beforeFinishEdit = () -> { };
 
     private final List<Consumer<String>> editOrDeleteListeners = new ArrayList<>();
 
@@ -145,9 +147,10 @@ public final class ArenaRegistry {
         };
         ArenaStore store = new ArenaStore(plugin.getDataFolder().toPath().resolve("arenas.yml"));
         ArenaCopies copies = new StructureArenaCopies(plugin.getDataFolder().toPath().resolve("arena-copies"),
-                arenaWorld::copyWorld, plugin.getServer().getStructureManager());
+                arenaWorld::copyWorld, plugin.getServer().getStructureManager()).afterRestore(PaperBlockEvents::clear);
         ArenaRegistry registry = new ArenaRegistry(store, grid, arenaWorld::setSavingEnabled, tickets, copies);
         registry.worldAcceptingOperations = arenaWorld::acceptingOperations;
+        registry.beforeFinishEdit = () -> PaperBlockEvents.finishEdit(arenaWorld.world());
         try {
             registry.load();
             plugin.getLogger().info("Loaded " + registry.all().size() + " arena(s) on a " + grid.cellSize()
@@ -237,6 +240,9 @@ public final class ArenaRegistry {
         if (held.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is in use by a match.");
         }
+        if (editing.contains(arena.name()) && editing.size() == 1) {
+            settleEdit();
+        }
         Map<String, Arena> next = new TreeMap<>(arenas);
         next.remove(arena.name());
         write(next);
@@ -319,6 +325,7 @@ public final class ArenaRegistry {
         if (!editing.contains(arena.name())) {
             throw new ArenaException("Arena " + arena.name() + " is not in edit mode.");
         }
+        settleEdit();
         if (arena.bounds() != null) {
             try {
                 copies.save(arena.name(), arena.bounds());
@@ -571,9 +578,17 @@ public final class ArenaRegistry {
     }
 
     private void leaveEdit(String key) {
-        editing.remove(key);
-        if (editing.isEmpty()) {
+        if (editing.contains(key) && editing.size() == 1) {
             worldSaving.accept(false);
+        }
+        editing.remove(key);
+    }
+
+    private void settleEdit() throws ArenaException {
+        try {
+            beforeFinishEdit.run();
+        } catch (IllegalStateException failure) {
+            throw new ArenaException(failure.getMessage(), failure);
         }
     }
 

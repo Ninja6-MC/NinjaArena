@@ -101,7 +101,7 @@ public final class ReloadFiles {
 
     private static double[] range(String path) {
         return switch (path) {
-            case "arena-world.border-size" -> new double[] {16, 59_999_968};
+            case "arena-world.border-size" -> new double[] {16, 2048};
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};
             case "arena-grid.cell-size" -> new double[] {32, 4096};
             case "waiting-room.min-players" -> new double[] {1, 64};

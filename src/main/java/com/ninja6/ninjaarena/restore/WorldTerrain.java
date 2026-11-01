@@ -1,7 +1,10 @@
 package com.ninja6.ninjaarena.restore;
 
 import com.ninja6.ninjaarena.restore.SafeLanding.Cell;
+import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.util.Objects;
+import java.util.function.BiPredicate;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.World;
@@ -16,9 +19,17 @@ import org.bukkit.util.BoundingBox;
 final class WorldTerrain implements SafeLanding.Terrain {
 
     private final World world;
+    private final BiPredicate<Double, Double> arenaLocation;
+    private final boolean arena;
 
     WorldTerrain(World world) {
+        this(world, (x, z) -> true);
+    }
+
+    WorldTerrain(World world, BiPredicate<Double, Double> arenaLocation) {
         this.world = Objects.requireNonNull(world, "world");
+        this.arenaLocation = arenaLocation;
+        this.arena = ArenaWorld.NAME.equals(world.getName());
     }
 
     @Override
@@ -33,6 +44,9 @@ final class WorldTerrain implements SafeLanding.Terrain {
 
     @Override
     public Cell at(int x, int y, int z) {
+        if (outside(x, z)) {
+            return Cell.LAVA;
+        }
         return classify(world.getBlockAt(x, y, z));
     }
 
@@ -49,10 +63,17 @@ final class WorldTerrain implements SafeLanding.Terrain {
 
     @Override
     public double height(int x, int y, int z) {
+        if (outside(x, z)) {
+            return 1;
+        }
         double top = 0;
         for (BoundingBox box : world.getBlockAt(x, y, z).getCollisionShape().getBoundingBoxes()) {
             top = Math.max(top, box.getMaxY());
         }
         return top;
+    }
+
+    private boolean outside(int x, int z) {
+        return arena && (!ArenaExtent.contains(x, z) || !arenaLocation.test((double) x, (double) z));
     }
 }

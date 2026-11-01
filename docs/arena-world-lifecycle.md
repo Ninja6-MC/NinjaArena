@@ -42,10 +42,53 @@ setter clears arena-owned events. Other-world combat records, health and damage 
 unchanged. An unsupported native layout logs a warning once; successful Bukkit unload
 alone must not then be treated as proof of world collection.
 
-This is an idle-release mitigation for #50, not a continuous-use memory bound. Full
-chunks are still swept while busy, but partial holders can accumulate if a sequence
-of matches, visitors or waiting players never lets the world become idle. A bounded
-continuous-use policy needs a separate admission and draining design. No active
-match is interrupted or forcibly recycled by this change. Startup and reopen copy
-restoration run synchronously before availability; large-arena latency must still
-be measured on the target server.
+## Continuous-use spatial bound
+
+The arena world's diameter is now limited to 16 through 2048 blocks. Its default
+remains 2048. Player movement, teleports, portals, login and respawn destinations
+enforce the configured extent, including administrators and spectators. Admin
+arena teleports validate their target before asynchronous chunk work. Saved-copy
+coordinates and sizes are checked before chunk access; saved snapshot destinations
+outside the current extent use the existing safe fallback before any arena terrain
+search. Terrain searches cannot read outside the hard extent. Ordinary entity
+teleports and portals are checked too. These restrictions also apply while editing.
+
+There are at most 128 by 128 source chunk coordinates inside the hard extent.
+Paper's configured view and simulation distances are at most 32. Startup validates
+that its native full-chunk dependency radius is at most 16; an unsupported layout
+or radius fails closed. A conservative 64-chunk halo on each side covers those
+distances, ticking propagation and generation dependencies. Consequently plugin
+operations and vanilla player traversal use at most 256 by 256, or 65536, holder
+coordinates in a continuously busy generation. This is a coordinate bound, not a
+heap allocation budget or a promise that the largest supported layout fits any
+particular server. Smaller borders and distances reduce the working set.
+
+No active match is interrupted or forcibly recycled. Existing counted operation
+leases and idle retirement remain in place. Integrations that directly request
+arbitrary chunks, add arbitrary tickets, change native server state or load worlds
+outside this lifecycle are outside this guarantee and must enforce the same extent
+before their own requests. A cancelled teleport is not a substitute for validating
+an integration's earlier asynchronous chunk request.
+
+Existing configurations above 2048 are clamped at startup and rejected on reload.
+Saved data is preserved. Arenas outside the supported extent are unavailable; move
+their definitions and authoritative copies into the supported area before use.
+Startup and reopen restoration remain synchronous before availability.
+
+## Piston containment
+
+Adventure mode permits empty-hand lever use. Cancelling piston retraction alone
+does not protect outside blocks: Paper can already have changed a sticky piston
+base and removed its head before dispatching the retract event, and an immovable
+payload can take a path with no retract event. Gameplay therefore freezes piston
+base/head/moving-block physics and redstone-current changes before motion is
+queued. Extend and retract events are cancelled as an additional guard.
+
+Before an edit finishes, loaded moving pistons must settle. Both immediate and
+deferred native block-event queues are then cleared before copying the arena and
+entering gameplay. This also handles an unexecuted sticky retract queued during
+editing. Queued actions are cleared after authoritative copy placement and during
+world preparation. The adapter only changes this arena world's block-action
+queues; it never runs native chunk unloading or serialization. Unsupported native
+layouts refuse the transition. Other worlds and active editing retain ordinary
+piston and redstone behavior.

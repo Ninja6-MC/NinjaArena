@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.command;
 
+import com.ninja6.ninjaarena.world.ArenaExtent;
+
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
@@ -198,6 +200,9 @@ public final class ArenaCommand {
                 target = new Location(arenaWorld, (cell.minX() + cell.maxX() + 1) / 2.0, 64,
                         (cell.minZ() + cell.maxZ() + 1) / 2.0);
             }
+            if (!ArenaExtent.contains(target.getX(), target.getZ(), registry.grid().borderSize())) {
+                throw new ArenaException("The arena teleport target is outside the supported world border.");
+            }
             success(sender, "Teleporting to arena " + arena.name() + " in cell " + arena.cell().describe() + " ("
                     + cell.describe() + "). Bounds: " + (arena.bounds() == null ? "not set" : arena.bounds().describe())
                     + ".");
@@ -219,7 +224,7 @@ public final class ArenaCommand {
                     throw failure;
                 }
             });
-        } catch (RuntimeException | Error failure) {
+        } catch (ArenaException | RuntimeException | Error failure) {
             releaseWorld.run();
             throw failure;
         }
