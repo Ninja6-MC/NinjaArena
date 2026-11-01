@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.arena;
 
+import com.ninja6.ninjaarena.world.ArenaExtent;
+
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -11,6 +13,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Random;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -53,6 +56,7 @@ public final class StructureArenaCopies implements ArenaCopies {
     private final Path dir;
     private final Supplier<World> world;
     private final StructureManager structures;
+    private Consumer<World> restored = ignored -> { };
 
     public StructureArenaCopies(Path dir, World world, StructureManager structures) {
         this(dir, () -> world, structures);
@@ -64,8 +68,17 @@ public final class StructureArenaCopies implements ArenaCopies {
         this.structures = Objects.requireNonNull(structures, "structures");
     }
 
+    /** Runs before a restored copy can be used by another match or edit. */
+    public StructureArenaCopies afterRestore(Consumer<World> restored) {
+        this.restored = Objects.requireNonNull(restored, "restored");
+        return this;
+    }
+
     @Override
     public void save(String name, ArenaBounds bounds) throws IOException {
+        if (!ArenaExtent.contains(bounds)) {
+            throw new IOException("Arena bounds exceed the supported arena-world extent");
+        }
         World world = this.world.get();
         Path target = dir.resolve(name);
         Path fresh = dir.resolve(name + ".new");
@@ -92,6 +105,7 @@ public final class StructureArenaCopies implements ArenaCopies {
             throw new IOException("there is no saved copy of " + name);
         }
         List<Path> files = new ArrayList<>();
+        List<Runnable> cleanup = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(source, "*" + EXTENSION)) {
             stream.forEach(files::add);
         }
@@ -105,6 +119,13 @@ public final class StructureArenaCopies implements ArenaCopies {
             int z = Integer.parseInt(origin.group(3));
             Structure structure = structures.loadStructure(file.toFile());
             BlockVector size = structure.getSize();
+            if (size.getBlockX() < 1 || size.getBlockX() > 16 || size.getBlockZ() < 1 || size.getBlockZ() > 16
+                    || size.getBlockY() < 1
+                    || !ArenaExtent.contains(x, z)
+                    || !ArenaExtent.contains((long) x + size.getBlockX() - 1, (long) z + size.getBlockZ() - 1)
+                    || y < world.getMinHeight() || (long) y + size.getBlockY() > world.getMaxHeight()) {
+                throw new IOException("Saved arena column exceeds the supported world extent: " + file.getFileName());
+            }
             // Each file is one chunk column. Entities load separately from blocks, after the
             // chunk does; Chunk#getEntities loads them first, so what the last save wrote there
             // (mobs, items, arrows left mid-match) is seen and cleared.
@@ -113,7 +134,13 @@ public final class StructureArenaCopies implements ArenaCopies {
                     z + size.getBlockZ()));
             structure.place(new Location(world, x, y, z), false, StructureRotation.NONE, Mirror.NONE, 0, 1f,
                     new Random());
+            // A later neighboring column can also drop an item into this one.
+            BoundingBox box = new BoundingBox(x, y, z, x + size.getBlockX(), y + size.getBlockY(),
+                    z + size.getBlockZ());
+            cleanup.add(() -> clearEntities(chunk, box));
         }
+        cleanup.forEach(Runnable::run);
+        restored.accept(world);
     }
 
     @Override

@@ -29,7 +29,8 @@ import org.bukkit.WorldCreator;
  * instead ({@code ArenaRegistry#resetAll}). {@link ArenaChunkUnloader} retires the entire
  * world without saving when nothing uses it, including the partial chunks Bukkit cannot
  * enumerate. The next use reopens it and restores the copies before publishing it.
- * Continuously busy worlds are not retired.
+ * Continuously busy worlds are not retired; their source coordinates are bounded by
+ * the enforced arena-world extent instead.
  */
 public final class ArenaWorld {
 
@@ -45,11 +46,12 @@ public final class ArenaWorld {
     private final Supplier<World> loader;
     private final Predicate<World> unloader;
     private final AtomicInteger operations = new AtomicInteger();
-    private ArenaWorldSettings settings = ArenaWorldSettings.DEFAULTS;
+    private volatile ArenaWorldSettings settings = ArenaWorldSettings.DEFAULTS;
     private Runnable restoreCopies = () -> { };
     private State state = State.READY;
     private final UUID identity;
     private boolean savingEnabled;
+    private boolean freezeBlockEvents;
 
     ArenaWorld(World world) {
         this(world, () -> { throw new IllegalStateException("No world loader configured"); }, ignored -> false);
@@ -77,7 +79,9 @@ public final class ArenaWorld {
         ArenaWorld arenaWorld = new ArenaWorld(world, ArenaWorld::open, current -> Bukkit.unloadWorld(current, false),
                 world.getUID());
         arenaWorld.settings = settings;
+        arenaWorld.freezeBlockEvents = true;
         configure(arenaWorld.world, settings);
+        PaperBlockEvents.clear(world);
         logger.info("Arena world " + NAME + " loaded with saving off.");
         return arenaWorld;
     }
@@ -144,6 +148,10 @@ public final class ArenaWorld {
         currentWorld().ifPresent(current -> current.getWorldBorder().setSize(settings.borderSize()));
     }
 
+    public double borderSize() {
+        return settings.borderSize();
+    }
+
     /** Reopens lazily and restores authoritative copies before publishing the new world. */
     public World world() {
         if (state == State.UNLOADED) {
@@ -161,6 +169,9 @@ public final class ArenaWorld {
                 preparing.setAutoSave(false);
                 configure(preparing, settings);
                 restoreCopies.run();
+                if (freezeBlockEvents) {
+                    PaperBlockEvents.clear(preparing);
+                }
                 if (state != State.LOADING) {
                     throw new IllegalStateException("Arena world was closed during restoration");
                 }
@@ -266,6 +277,9 @@ public final class ArenaWorld {
             return;
         }
         if (!enabled) {
+            if (freezeBlockEvents) {
+                PaperBlockEvents.clear(world());
+            }
             world().save();
         }
         world().setAutoSave(enabled);

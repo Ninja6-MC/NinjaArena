@@ -167,7 +167,10 @@ handled by the match as described below.
 
 When fully idle, the arena world unloads without saving. Its next use reopens it and
 restores the saved arena copies before entry; active edits, players, matches, tickets
-and pending teleports keep it loaded. See [arena world retirement](docs/arena-world-lifecycle.md)
+and pending teleports keep it loaded. Its hard diameter limit is 2048 blocks, and
+visits and chunk-producing operations enforce that extent even while continuously
+busy. Gameplay freezes redstone and piston physics; editing restores their normal
+behavior. See [arena world retirement](docs/arena-world-lifecycle.md)
 for save behavior, failure handling and the remaining continuous-use limitation.
 
 ## Round kits and inventory

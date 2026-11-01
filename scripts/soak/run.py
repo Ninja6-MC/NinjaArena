@@ -85,6 +85,8 @@ def lifecycle(args, server, results, launch, wait_for, owned, flags, candidate):
     if not baseline:
         raise RuntimeError("No settled lifecycle save baseline")
     settled_nbt = inspect(world, marker_positions)
+    startup_settled_nbt = settled_nbt
+    startup_settled_hashes = baseline
     copy_save(world, results / "settled-baseline-save")
     (results / "settled-baseline-nbt.json").write_text(json.dumps(settled_nbt, indent=2), encoding="utf-8")
     (results / "settled-baseline-hashes.json").write_text(json.dumps(baseline, indent=2), encoding="utf-8")
@@ -94,7 +96,15 @@ def lifecycle(args, server, results, launch, wait_for, owned, flags, candidate):
                              str(args.modules.resolve()), str(args.port)], cwd=server,
                             stdout=botlog, stderr=subprocess.STDOUT, creationflags=flags)
     owned.append(bots)
-    comparison_save = results / "settled-baseline-save"
+    # Boundary controls deliberately enter and finish editing before the persistence test.
+    # Preserve the earlier settled baseline, then explicitly start a new gameplay baseline.
+    wait_for(results / "containment-baseline-ready", verify, 180)
+    baseline = hashes(world)
+    settled_nbt = inspect(world, marker_positions)
+    copy_save(world, results / "post-containment-baseline-save")
+    (results / "post-containment-baseline-hashes.json").write_text(json.dumps(baseline, indent=2), encoding="utf-8")
+    (results / "post-containment-baseline-nbt.json").write_text(json.dumps(settled_nbt, indent=2), encoding="utf-8")
+    comparison_save = results / "post-containment-baseline-save"
     comparison_hashes, comparison_nbt = baseline, settled_nbt
     dirty_reopen_evidence = None
     if args.dirty_reopen:
@@ -142,8 +152,10 @@ def lifecycle(args, server, results, launch, wait_for, owned, flags, candidate):
     summary = {"fixture": fixture, "setup": setup_evidence, "dirty_entity_counts": entities,
                "plugin_sha256": hashlib.sha256(candidate.read_bytes()).hexdigest(),
                "dirty_setup_hashes": dirty_hashes, "settled_baseline_hashes": baseline, "shutdown_hashes": after,
-               "startup_save_changed": dirty_hashes != baseline,
-               "startup_nbt_changes": differences(dirty, settled_nbt),
+               "startup_save_changed": dirty_hashes != startup_settled_hashes,
+               "startup_settled_baseline_hashes": startup_settled_hashes,
+               "startup_nbt_changes": differences(dirty, startup_settled_nbt),
+               "boundary_edit_controls_saved_before_gameplay_baseline": True,
                "disk_unchanged_through_match_recycle_rejoin_shutdown": baseline == after,
                "intentional_dirty_reopen": args.dirty_reopen, "dirty_reopen_proof": dirty_reopen_evidence,
                "shutdown_comparison_baseline_hashes": comparison_hashes,

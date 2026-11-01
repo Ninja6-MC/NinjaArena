@@ -2,8 +2,10 @@ package com.ninja6.ninjaarena.arena;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.lang.reflect.Proxy;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -40,6 +42,8 @@ class StructureArenaCopiesTest {
         return entities.toArray(Entity[]::new);
     });
     private final World world = proxy(World.class, (object, method, args) -> {
+        if (method.getName().equals("getMinHeight")) return -64;
+        if (method.getName().equals("getMaxHeight")) return 320;
         assertEquals("getChunkAt", method.getName());
         assertEquals(List.of(-1, 0), List.of(args));
         calls.add("chunk loaded");
@@ -53,7 +57,7 @@ class StructureArenaCopiesTest {
     private Entity entity(Class<? extends Entity> type, double x) {
         Entity entity = proxy(type, (object, method, args) -> switch (method.getName()) {
             case "getLocation" -> new Location(world, x, 1, 1);
-            case "remove" -> { removed.add((Entity) object); calls.add("removed"); yield null; }
+            case "remove" -> { removed.add((Entity) object); entities.remove(object); calls.add("removed"); yield null; }
             case "equals" -> object == args[0];
             case "hashCode" -> System.identityHashCode(object);
             default -> throw new UnsupportedOperationException(method.getName());
@@ -75,12 +79,14 @@ class StructureArenaCopiesTest {
             entity(type, -1);
         }
         entity(Mob.class, 0); // The next column starts here, outside the restored half-open bounds.
+        Entity[] placementDrop = new Entity[1];
         Structure structure = proxy(Structure.class, (object, method, args) -> switch (method.getName()) {
             case "getSize" -> new BlockVector(16, 64, 16);
             case "place" -> {
                 assertEquals(transientEntities, removed);
                 assertEquals(-16, ((Location) args[0]).getBlockX());
                 calls.add("placed");
+                placementDrop[0] = entity(Item.class, -1);
                 yield null;
             }
             default -> throw new UnsupportedOperationException(method.getName());
@@ -90,9 +96,25 @@ class StructureArenaCopiesTest {
             return structure;
         });
         new StructureArenaCopies(dir, world, manager).restore("dojo");
-        assertEquals(transientEntities, removed);
+        var expectedRemoved = new ArrayList<>(transientEntities);
+        expectedRemoved.add(placementDrop[0]);
+        assertEquals(expectedRemoved, removed);
         assertEquals(List.of("chunk loaded", "entities loaded"), calls.subList(0, 2));
-        assertEquals("placed", calls.getLast());
+        assertEquals("removed", calls.getLast());
+        assertEquals(2, calls.stream().filter("entities loaded"::equals).count());
         assertTrue(Files.exists(copy.resolve("-16_0_0.nbt")));
+    }
+
+    @Test
+    void rejectsOutOfExtentCopyBeforeAnyWorldOrChunkRequest() throws Exception {
+        World forbidden = proxy(World.class, (o, m, a) -> { throw new AssertionError(m.getName()); });
+        StructureManager manager = proxy(StructureManager.class, (o, m, a) ->
+                proxy(Structure.class, (s, method, args) -> new BlockVector(16, 16, 16)));
+        var copies = new StructureArenaCopies(dir, forbidden, manager);
+        assertThrows(IOException.class,
+                () -> copies.save("dojo", new ArenaBounds(1024, 0, 0, 1039, 15, 15)));
+        Path copy = Files.createDirectories(dir.resolve("dojo"));
+        Files.createFile(copy.resolve("1024_0_0.nbt"));
+        assertThrows(IOException.class, () -> copies.restore("dojo"));
     }
 }

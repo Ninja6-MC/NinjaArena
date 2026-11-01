@@ -80,6 +80,24 @@ class NinjaArenaCommandTest {
         }
     }
 
+    @Test
+    void refusedOutsideAdminTargetReleasesItsOperationBeforeAnyAsyncTeleport() throws Exception {
+        registry.create("dojo", new GridCell(1, 0));
+        registry.update("dojo", arena -> arena.withWaitingRoom(new ArenaPoint(50000, 64, 50000, 0, 0)));
+        int[] operations = {0};
+        Player admin = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
+                (object, method, args) -> {
+                    if (method.getName().equals("sendMessage")) return null;
+                    throw new AssertionError("Refused target requested player work: " + method.getName());
+                });
+        var route = new ArenaCommand(registry, () -> null, () -> {
+            operations[0]++;
+            return () -> operations[0]--;
+        }, completion -> { throw new AssertionError("Refused target scheduled a completion"); });
+        route.execute(admin, "narena", new String[] {"tp", "dojo"});
+        assertEquals(0, operations[0]);
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         ChunkTickets noTickets = new ChunkTickets() {

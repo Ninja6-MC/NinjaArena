@@ -53,4 +53,34 @@ class PlayerRestorerWorldTest {
         });
         assertNull(restorer.savedWorld(saved));
     }
+
+    @Test
+    void outOfExtentArenaSnapshotDoesNotLoadOrSearchItsOldChunk() {
+        var saved = new SnapshotLocation(new UUID(0, 77), ArenaWorld.NAME, 50000, 64, 50000, 0, 0);
+        var restorer = new PlayerRestorer(Logger.getAnonymousLogger(), () -> {
+            throw new AssertionError("outside snapshot must use the safe fallback before opening the world");
+        });
+        assertNull(restorer.savedWorld(saved));
+    }
+
+    @Test
+    void configuredBorderShrinkUsesFallbackBeforeAnyArenaLandingSearch() {
+        var saved = new SnapshotLocation(new UUID(0, 77), ArenaWorld.NAME, 500, 64, 500, 0, 0);
+        var restorer = new PlayerRestorer(Logger.getAnonymousLogger(), () -> {
+            throw new AssertionError("a refused configured destination must not request its terrain");
+        }, (x, z) -> com.ninja6.ninjaarena.world.ArenaExtent.contains(x, z, 128));
+        assertNull(restorer.savedWorld(saved));
+    }
+
+    @Test
+    void nearbySearchTreatsOutsideColumnsAsUnsafeBeforeReadingThem() {
+        World world = (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[] {World.class},
+                (object, method, args) -> {
+                    if (method.getName().equals("getName")) return ArenaWorld.NAME;
+                    throw new AssertionError("Outside search read terrain: " + method.getName());
+                });
+        var terrain = new WorldTerrain(world, (x, z) -> com.ninja6.ninjaarena.world.ArenaExtent.contains(x, z, 128));
+        assertEquals(SafeLanding.Cell.LAVA, terrain.at(64, 319, 0));
+        assertEquals(1, terrain.height(64, 319, 0));
+    }
 }

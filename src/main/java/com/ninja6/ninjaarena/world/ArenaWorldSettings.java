@@ -17,8 +17,8 @@ public record ArenaWorldSettings(double borderSize, int viewDistance, int simula
     public static final int DEFAULT_SIMULATION_DISTANCE = 4;
 
     static final double MIN_BORDER_SIZE = 16;
-    /** Vanilla's largest border diameter. */
-    static final double MAX_BORDER_SIZE = 59_999_968;
+    /** A finite gameplay footprint bounds partial holders even without an idle interval. */
+    public static final double MAX_BORDER_SIZE = 2048;
     /** Range {@code World#setViewDistance} and {@code World#setSimulationDistance} accept. */
     static final int MIN_DISTANCE = 2;
     static final int MAX_DISTANCE = 32;
@@ -27,6 +27,9 @@ public record ArenaWorldSettings(double borderSize, int viewDistance, int simula
             new ArenaWorldSettings(DEFAULT_BORDER_SIZE, DEFAULT_VIEW_DISTANCE, DEFAULT_SIMULATION_DISTANCE);
 
     public ArenaWorldSettings {
+        if (!Double.isFinite(borderSize)) {
+            borderSize = DEFAULT_BORDER_SIZE;
+        }
         borderSize = Math.clamp(borderSize, MIN_BORDER_SIZE, MAX_BORDER_SIZE);
         viewDistance = Math.clamp(viewDistance, MIN_DISTANCE, MAX_DISTANCE);
         simulationDistance = Math.clamp(simulationDistance, MIN_DISTANCE, MAX_DISTANCE);

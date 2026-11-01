@@ -161,7 +161,7 @@ class ConfigReloadTest {
     @Test
     void gridAndBorderAreRefusedWhenOccupiedButDistancesApplyAndCanResizeWhenEmpty() throws Exception {
         target.empty = false;
-        write("arena-grid:\n  cell-size: 512\narena-world:\n  border-size: 4096\n  view-distance: 12\n", EMPTY_KIT);
+        write("arena-grid:\n  cell-size: 512\narena-world:\n  border-size: 1024\n  view-distance: 12\n", EMPTY_KIT);
         var report = reload.reload();
         assertTrue(report.get(3).contains("arena-grid.cell-size"));
         assertTrue(report.get(3).contains("arena-world.border-size"));
@@ -176,7 +176,7 @@ class ConfigReloadTest {
         report = reload.reload();
         assertEquals(List.of("grid"), target.calls);
         assertEquals(512, target.cellSize);
-        assertEquals(4096, target.world.borderSize());
+        assertEquals(1024, target.world.borderSize());
         assertEquals("Refused: none.", report.get(3));
     }
 
@@ -185,6 +185,13 @@ class ConfigReloadTest {
         target.empty = false;
         write("arena-grid:\n  cell-size: 513\nwaiting-room:\n  radius: 10\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("config.yml: line 2"));
+        assertTrue(target.calls.isEmpty());
+    }
+
+    @Test
+    void reloadCannotEnlargeTheHardArenaExtent() throws Exception {
+        write("arena-world:\n  border-size: 4096\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("2048"));
         assertTrue(target.calls.isEmpty());
     }
 

@@ -56,6 +56,8 @@ import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaChunkUnloader;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
+import com.ninja6.ninjaarena.world.ArenaExtentListener;
+import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.io.IOException;
 import java.util.List;
 import java.util.SplittableRandom;
@@ -70,7 +72,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class NinjaArenaPlugin extends JavaPlugin {
 
     private SnapshotService snapshots;
-    private ArenaWorld arenaWorld;
+    private volatile ArenaWorld arenaWorld;
     private ArenaChunkUnloader chunkUnloader;
     private RestoreService restores;
     private ArenaRegistry arenas;
@@ -98,16 +100,21 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        restores = new RestoreService(snapshots, new PlayerRestorer(getLogger(), () -> arenaWorld.world()), getLogger(),
+        restores = new RestoreService(snapshots, new PlayerRestorer(getLogger(), () -> arenaWorld.world(),
+                (x, z) -> arenaWorld != null && ArenaExtent.contains(x, z, arenaWorld.borderSize())), getLogger(),
                 new ArenaCombatCleanup(getLogger()));
         restores.markPendingOnStartup();
         getServer().getPluginManager().registerEvents(new RestoreListener(this, restores), this);
+        getServer().getPluginManager().registerEvents(new ArenaExtentListener(() -> arenaWorld == null
+                ? ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")).borderSize()
+                : arenaWorld.borderSize(), getServer().getWorlds().getFirst().getSpawnLocation()), this);
+        getServer().getPluginManager().registerEvents(new ArenaProtectionListener(
+                () -> arenas == null || arenas.editing().isEmpty()), this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         arenas = ArenaRegistry.open(this, arenaWorld);
         chunkUnloader = new ArenaChunkUnloader(arenaWorld::currentWorld, arenaWorld::isSavingEnabled,
                 () -> arenaWorld.releaseIfIdle(arenas::canReleaseWorld), getLogger());
         chunkUnloader.start(this);
-        getServer().getPluginManager().registerEvents(new ArenaProtectionListener(arenas), this);
         portals = PortalRegistry.open(this);
         matches = new MatchService(this, arenas, arenaWorld::world,
                 MatchSettings.from(getConfig().getConfigurationSection("match")), restores::restore,

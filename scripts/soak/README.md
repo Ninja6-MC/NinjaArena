@@ -132,6 +132,28 @@ recorded separately and governs subsequent reconnect and shutdown comparisons.
 The intentional save is reported explicitly.
 
 The next server start must expose canonical blocks and no temporary entities.
+Before match testing, the clients send actual empty-hand adventure-mode lever uses
+against piston fixtures crossing the copied bounds. Pre-extended sticky pistons
+are also challenged by directly removing their power source. Native edit-mode and
+other-world controls must move normally. A queued immovable-payload retract must
+not survive the edit-to-gameplay transition.
+
+Those controls deliberately open and finish an edit. The fixture retires and
+reopens that explicit edit cycle before establishing its gameplay save baseline,
+so handle-close sector padding is settled separately. One real client then visits
+all 64 source chunks of a 128-block envelope four times while keeping the same
+world generation busy. It attempts 256 distant Bukkit teleports and 32 native
+`execute in ... run teleport` destinations, none of which may admit the player;
+the first two passes warm up asynchronous chunk work, then holder counts must
+plateau in both measured passes. Saving must stay off, and gameplay save hashes must
+remain identical from before traversal. This is a spatial-bound regression, not a
+maximum-2048-diameter heap-capacity measurement.
+
+An additional snapshot control captures an arena origin before shrinking the
+configured border, then requires restoration of the player's state at a safe
+fallback and deletion of the pending snapshot. Ordinary in-bounds arena origins
+still use the exact-location reconnect checks below.
+
 Real clients exercise ordinary match start/end, snapshot restoration, and an
 outside player's preservation. A real Paper ignition event is dispatched to the
 installed protection listener; this is event-level integration evidence, not a
@@ -140,7 +162,7 @@ the production public API, requires unregistering and eventual weak collection,
 then reopens it. The same UUID and canonical arena must be available immediately
 when public world access returns. Region, entity and POI hashes must remain equal
 across match teardown, unload, reopen, reconnect and shutdown against a settled
-post-startup baseline. Paper can force a bootstrap save after startup restoration;
+post-control gameplay baseline. Paper can force a bootstrap save after startup restoration;
 the dirty setup NBT and hashes are retained separately, and the summary reports
 startup hash and NBT changes explicitly. All players return to the default world
 before the final guarded retirement, so shutdown observes an absent arena world.

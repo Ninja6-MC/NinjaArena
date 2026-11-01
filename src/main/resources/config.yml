@@ -1,5 +1,6 @@
 arena-world:
-  # World border diameter in blocks, centred on 0, 0. Every arena must fit inside it.
+  # Hard gameplay diameter in blocks (16..2048), centred on 0, 0. Bounds and visits
+  # must fit inside it, so a continuously busy non-saving world has a finite footprint.
   border-size: 2048
   # Chunk radius sent to players in the arena world (2 to 32).
   view-distance: 6

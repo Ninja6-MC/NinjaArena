@@ -98,13 +98,13 @@ class ArenaWorldLifecycleTest {
         });
         assertTrue(manager.releaseIfIdle(() -> true));
         manager.setDistances(12, 9);
-        manager.setBorderSize(4096);
+        manager.setBorderSize(1024);
         assertTrue(manager.currentWorld().isEmpty(), "reload settings do not reopen the world");
         assertSame(second.world, manager.world());
         assertFalse(second.dirtyDiskBlocks);
         assertEquals(12, second.view);
         assertEquals(9, second.simulation);
-        assertEquals(4096, second.border);
+        assertEquals(1024, second.border);
         assertEquals(List.of("autosave false"), second.calls);
     }
 

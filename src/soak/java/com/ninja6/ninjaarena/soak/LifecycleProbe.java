@@ -54,6 +54,8 @@ final class LifecycleProbe {
     private long rejoinStarted;
     private boolean failed;
     private boolean dirtyReopenWaiting;
+    private boolean containmentStarted;
+    private boolean containmentDone;
     private long dirtyReopenStarted;
 
     LifecycleProbe(JavaPlugin owner, NinjaArenaPlugin plugin, String stage, Path output) {
@@ -183,6 +185,28 @@ final class LifecycleProbe {
             }
             if (Bukkit.getPlayerExact("Soak0") == null || Bukkit.getPlayerExact("Soak1") == null
                     || Bukkit.getPlayerExact("Soak2") == null) {
+                return;
+            }
+            if (!containmentDone) {
+                if (!containmentStarted) {
+                    containmentStarted = true;
+                    new ContainmentProbe(owner, plugin, Bukkit.getPlayerExact("Soak2"), this::prepareBusy, result -> {
+                        evidence.put("containment", result);
+                        try {
+                            if (!before.equals(hashes())) {
+                                throw new IllegalStateException("Continuous busy traversal changed the settled save baseline");
+                            }
+                            evidence.put("busy_save_hashes_unchanged", true);
+                            evidence.put("settled_baseline_hashes", before);
+                            writeEvidence("containment-result.json");
+                            checkpoint("containment-baseline-ready");
+                        } catch (Exception error) {
+                            fail(error);
+                            return;
+                        }
+                        containmentDone = true;
+                    }, this::fail).start();
+                }
                 return;
             }
             // getEntities() must load persisted entity chunks before claiming reset success.
@@ -438,6 +462,28 @@ final class LifecycleProbe {
         }
     }
 
+    private World prepareBusy() {
+        try {
+            World edited = plugin.arenaWorld().world();
+            for (Player player : List.copyOf(edited.getPlayers())) {
+                player.teleport(Bukkit.getWorlds().getFirst().getSpawnLocation());
+            }
+            release();
+            if (!plugin.arenaWorld().releaseIfIdle(this::registryIdle)) {
+                throw new IllegalStateException("Boundary edits could not settle before the gameplay baseline");
+            }
+            World current = plugin.arenaWorld().world();
+            lease = plugin.arenaWorld().acquire();
+            // Closing edit-created region handles may add sector padding. Establish the
+            // baseline after that explicit edit cycle, before continuous gameplay begins.
+            before = hashes();
+            evidence.put("busy_baseline_hashes", before);
+            return current;
+        } catch (Exception error) {
+            throw new IllegalStateException("Could not prepare the continuous-use baseline", error);
+        }
+    }
+
     private void assertCanonical(World world) {
         if (world.getBlockAt(36, 64, 36).getType() != Material.AIR
                 || world.getBlockAt(28, 64, 40).getType() != Material.DIAMOND_BLOCK) {
@@ -526,6 +572,11 @@ final class LifecycleProbe {
         if (value instanceof Map<?, ?> map) {
             return "{" + map.entrySet().stream().map(e -> json(e.getKey()) + ":" + json(e.getValue()))
                     .collect(java.util.stream.Collectors.joining(",")) + "}";
+        }
+        if (value instanceof Iterable<?> values) {
+            var entries = new java.util.ArrayList<String>();
+            values.forEach(entry -> entries.add(json(entry)));
+            return "[" + String.join(",", entries) + "]";
         }
         return "\"" + String.valueOf(value).replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"";
     }
