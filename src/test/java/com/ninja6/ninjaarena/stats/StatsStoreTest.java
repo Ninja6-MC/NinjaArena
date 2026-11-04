@@ -102,6 +102,24 @@ class StatsStoreTest {
     }
 
     @Test
+    void milestonesUseAllTimeStatsAndKeepTheOriginalAwardOnRetry() throws Exception {
+        StatsStore store = store(faults());
+        var rule = new com.ninja6.ninjaarena.reward.RewardSettings.Rule("veteran", Stat.WINS, 2,
+                "Veteran", "[V]", "");
+        assertTrue(store.evaluateMilestones(ALICE, List.of(rule)).get().isEmpty());
+        store.record(match(player(ALICE, "Alice", 1, 0, 0, 0, 0, 0)));
+        store.startSeason("Next").get();
+        assertTrue(store.evaluateMilestones(ALICE, List.of(rule)).get().isEmpty());
+        store.record(match(player(ALICE, "Alice", 1, 0, 0, 0, 0, 0)));
+        var awards = store.evaluateMilestones(ALICE, List.of(rule)).get();
+        assertEquals(1, awards.size());
+        assertEquals("Veteran", awards.getFirst().title());
+        var edited = new com.ninja6.ninjaarena.reward.RewardSettings.Rule("veteran", Stat.WINS, 2,
+                "Changed", "", "");
+        assertEquals(awards, store.evaluateMilestones(ALICE, List.of(edited)).get());
+    }
+
+    @Test
     void recordedMatchesAreReadableAfterwardsAndTheSeasonIsCreatedOnConnect() throws Exception {
         StatsStore store = store(faults());
         store.record(match(player(ALICE, "Alice", 1, 2, 3, 4, 5, 6)));

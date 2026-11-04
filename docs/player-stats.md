@@ -115,3 +115,62 @@ stats are off. Every method returns at once and is safe from any thread:
 after every match recorded before the call; return to the server thread before using
 them in the game. They fail with `StatsUnavailableException` while the database is down.
 Placeholders and scoreboards should cache results instead of reading per request.
+
+## Cosmetic rewards and Vault payouts
+
+Rewards use the configured stats database. Add rules to `config.yml` and run
+`/narena reload` to apply them. An invalid rule or payout setting rejects the reload.
+
+```yaml
+rewards:
+  milestones:
+    - id: veteran
+      stat: wins
+      threshold: 25
+      title: 'Arena Veteran'
+      tag: '[Veteran]'
+  placings:
+    - id: wins-champion
+      stat: wins
+      rank: 1
+      title: 'Season Champion'
+      tag: '[Champion]'
+      trophy: 'Arena Champion Trophy'
+  vault:
+    enabled: false
+    amount-per-match: 10.0
+    daily-cap: 100.0
+```
+
+- `milestones` use all-time totals. The threshold is a positive integer. They are
+  evaluated after matches and for online players, including when they join.
+- `placings` use the exact rank (1–1000) on each archived season's leaderboard.
+  Players with zero for the stat are excluded and ties use the leaderboard's UUID
+  order. Rules also apply to previously archived seasons. Use the same rules on all
+  servers sharing the database.
+- Use the stat names listed above. Each list supports up to 100 rules. IDs must
+  be unique within their list and contain 1–48 lowercase letters, digits, hyphens
+  or underscores. Supply at least one reward label of 1–80 characters. Only placings
+  support `trophy`. Keep rule IDs stable because the first grant is permanent.
+- In a PlaceholderAPI-enabled chat format, use `%ninjaarena_title%` and
+  `%ninjaarena_chat_tag%`, for example
+  `%ninjaarena_chat_tag% %player_name%: {message}` if the chat plugin uses
+  `{message}`. Each placeholder chooses its first non-empty label from the newest
+  awarded season, then by descending rule ID, with milestones last. An empty
+  result means there is no cached label. Refreshes use `placeholders.cache-seconds`.
+- Trophies are display items. Delivery waits for the recipient to be online with an
+  empty inventory slot, outside the arena world and clear of pending snapshot
+  restoration. The server checks on join and every 30 seconds. A process crash
+  between recording the delivery claim and saving the player's inventory can lose
+  that trophy.
+- Vault payouts default to disabled. When enabled, online players still in a
+  completed or forfeited match receive up to `amount-per-match` if they have
+  `ninjaarena.rewards.payout`. The last payout can be reduced to fit `daily-cap`.
+  Amounts support up to two decimal places and the cap resets at midnight UTC.
+  The balance and match claims are shared by servers using the same stats database.
+  An unavailable database or economy provider skips the payout. An attempt
+  reserved in the database counts toward the cap even if the provider fails,
+  because Vault has no way to identify a retried deposit.
+
+Stats schema version 2 adds award, season placing and payout tables through the
+existing migration. Upgrade every server that shares the database.

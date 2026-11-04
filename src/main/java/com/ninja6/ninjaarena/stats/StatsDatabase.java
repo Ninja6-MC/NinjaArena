@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.stats;
 
+import com.ninja6.ninjaarena.reward.Award;
+import com.ninja6.ninjaarena.reward.RewardSettings;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -25,7 +27,7 @@ import java.util.UUID;
 final class StatsDatabase implements AutoCloseable {
 
     /** The schema version this build writes. Each version's statements live in {@link Dialect}. */
-    static final int SCHEMA_VERSION = 1;
+    static final int SCHEMA_VERSION = 2;
     static final int ALL_TIME = 0;
     /** Longest stored player name; longer names, such as some proxy-prefixed ones, are cut. */
     static final int NAME_LENGTH = 32;
@@ -166,7 +168,12 @@ final class StatsDatabase implements AutoCloseable {
     }
 
     Optional<Season> currentSeason() throws SQLException {
-        List<Season> open = seasons("WHERE ended_at IS NULL ORDER BY id DESC");
+        return currentSeason(false);
+    }
+
+    private Optional<Season> currentSeason(boolean lock) throws SQLException {
+        String suffix = lock && dialect == Dialect.MYSQL ? " FOR UPDATE" : "";
+        List<Season> open = seasons("WHERE ended_at IS NULL ORDER BY id DESC" + suffix);
         return open.isEmpty() ? Optional.empty() : Optional.of(open.getFirst());
     }
 
@@ -224,7 +231,8 @@ final class StatsDatabase implements AutoCloseable {
             return;
         }
         transaction(() -> {
-            Optional<Season> season = currentSeason();
+            // Finish writes to the old season before a concurrent server can archive it.
+            Optional<Season> season = currentSeason(true);
             try (PreparedStatement upsert = connection.prepareStatement(dialect.upsertStats(prefix))) {
                 for (PlayerStats delta : merged.values()) {
                     add(upsert, delta, ALL_TIME);
@@ -317,6 +325,110 @@ final class StatsDatabase implements AutoCloseable {
             case StatsScope.CurrentSeason current -> currentSeason().map(Season::id);
             case StatsScope.OneSeason one -> Optional.of(one.id());
         };
+    }
+
+    void grant(UUID player, int season, RewardSettings.Rule rule) throws SQLException {
+        update("INSERT INTO " + prefix + "awards (player, season, rule_id, title, tag, trophy)"
+                + " VALUES (?, ?, ?, ?, ?, ?)" + dialect.keepExisting("player, season, rule_id", "player"),
+                player.toString(), season, rule.id(), rule.title(), rule.tag(), rule.trophy());
+    }
+
+    List<Award> awards(UUID player) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement("SELECT season, rule_id, title, tag, trophy, claim_id"
+                + " FROM " + prefix + "awards WHERE player = ? ORDER BY season DESC, rule_id DESC")) {
+            query.setString(1, player.toString());
+            List<Award> awards = new ArrayList<>();
+            try (ResultSet rows = query.executeQuery()) {
+                while (rows.next()) {
+                    awards.add(new Award(rows.getInt(1), rows.getString(2), rows.getString(3), rows.getString(4),
+                            rows.getString(5), !rows.getString(5).isEmpty() && rows.getString(6) == null));
+                }
+            }
+            return List.copyOf(awards);
+        }
+    }
+
+    boolean trophyClaim(UUID player, Award award, UUID claim, boolean release) throws SQLException {
+        String row = " WHERE player = ? AND season = ? AND rule_id = ? AND trophy <> ''";
+        if (release) {
+            return update("UPDATE " + prefix + "awards SET claim_id = NULL" + row + " AND claim_id = ?",
+                    player.toString(), award.season(), award.id(), claim.toString()) == 1;
+        }
+        return update("UPDATE " + prefix + "awards SET claim_id = ?" + row + " AND claim_id IS NULL",
+                claim.toString(), player.toString(), award.season(), award.id()) == 1;
+    }
+
+    void awardPlacing(int season, RewardSettings.Rule rule) throws SQLException {
+        String slot = prefix + "placing_slots";
+        if (placingPlayer(slot, season, rule.id()) != null) {
+            return;
+        }
+        List<LeaderboardEntry> board = top(rule.stat(), StatsScope.season(season), rule.target());
+        if (board.size() < rule.target()) {
+            return;
+        }
+        UUID player = board.getLast().player();
+        transaction(() -> {
+            update("INSERT INTO " + slot + " (season, rule_id, player) VALUES (?, ?, ?)"
+                    + dialect.keepExisting("season, rule_id", "season"), season, rule.id(), player.toString());
+            if (player.toString().equals(placingPlayer(slot, season, rule.id()))) {
+                grant(player, season, rule);
+            }
+            return null;
+        });
+    }
+
+    private String placingPlayer(String slot, int season, String rule) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement(
+                "SELECT player FROM " + slot + " WHERE season = ? AND rule_id = ?")) {
+            query.setInt(1, season);
+            query.setString(2, rule);
+            try (ResultSet rows = query.executeQuery()) {
+                return rows.next() ? rows.getString(1) : null;
+            }
+        }
+    }
+
+    long reservePayout(UUID player, UUID match, long day, RewardSettings.Payout payout) throws SQLException {
+        if (!payout.enabled()) {
+            return 0;
+        }
+        return transaction(() -> {
+            String id = player.toString();
+            // The upsert locks this player's day before the ledger and balance reads.
+            update("INSERT INTO " + prefix + "payout_days (player, day_id, spent) VALUES (?, ?, 0)"
+                    + dialect.keepExisting("player, day_id", "player"), id, day);
+            if (payoutValue("SELECT 1 FROM " + prefix + "payout_matches WHERE player = ? AND match_id = ?",
+                    id, match.toString()) != 0) {
+                return 0L;
+            }
+            long spent = payoutValue("SELECT spent FROM " + prefix + "payout_days WHERE player = ? AND day_id = ?",
+                    id, day);
+            long amount = Math.max(0, Math.min(payout.amount(), payout.dailyCap() - spent));
+            update("INSERT INTO " + prefix + "payout_matches (player, match_id) VALUES (?, ?)", id, match.toString());
+            update("UPDATE " + prefix + "payout_days SET spent = spent + ? WHERE player = ? AND day_id = ?",
+                    amount, id, day);
+            return amount;
+        });
+    }
+
+    private long payoutValue(String sql, String player, Object key) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, player);
+            statement.setObject(2, key);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? rows.getLong(1) : 0;
+            }
+        }
+    }
+
+    private int update(String sql, Object... values) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int index = 0; index < values.length; index++) {
+                statement.setObject(index + 1, values[index]);
+            }
+            return statement.executeUpdate();
+        }
     }
 
     private static String statColumns(String alias) {

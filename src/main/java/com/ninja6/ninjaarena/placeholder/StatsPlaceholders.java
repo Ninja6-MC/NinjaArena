@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.placeholder;
 
+import com.ninja6.ninjaarena.reward.Award;
 import com.ninja6.ninjaarena.stats.LeaderboardEntry;
 import com.ninja6.ninjaarena.stats.Leaderboards;
 import com.ninja6.ninjaarena.stats.PlayerStats;
@@ -41,6 +42,8 @@ public final class StatsPlaceholders {
     private final Supplier<CompletableFuture<Season>> seasonRead;
     private final BiFunction<UUID, StatsScope, CompletableFuture<PlayerStats>> playerRead;
     private final BiFunction<Stat, StatsScope, CompletableFuture<List<LeaderboardEntry>>> topRead;
+    private final SnapshotCache<UUID, List<Award>> awards;
+    private final Function<UUID, CompletableFuture<List<Award>>> awardRead;
     private volatile long lifetime;
 
     public StatsPlaceholders(StatsStore store, int seconds) {
@@ -50,13 +53,20 @@ public final class StatsPlaceholders {
                                 .thenApply(stats -> stats.orElseGet(() -> PlayerStats.empty(player))),
                 store == null ? (stat, scope) -> missing()
                         : (stat, scope) -> store.top(stat, scope, Leaderboards.LIMIT).thenApply(List::copyOf),
-                System::nanoTime, seconds);
+                store == null ? player -> missing() : store::awards, System::nanoTime, seconds);
     }
 
     StatsPlaceholders(Supplier<CompletableFuture<Season>> seasonRead,
             BiFunction<UUID, StatsScope, CompletableFuture<PlayerStats>> playerRead,
             BiFunction<Stat, StatsScope, CompletableFuture<List<LeaderboardEntry>>> topRead,
             LongSupplier clock, int seconds) {
+        this(seasonRead, playerRead, topRead, player -> missing(), clock, seconds);
+    }
+
+    StatsPlaceholders(Supplier<CompletableFuture<Season>> seasonRead,
+            BiFunction<UUID, StatsScope, CompletableFuture<PlayerStats>> playerRead,
+            BiFunction<Stat, StatsScope, CompletableFuture<List<LeaderboardEntry>>> topRead,
+            Function<UUID, CompletableFuture<List<Award>>> awardRead, LongSupplier clock, int seconds) {
         this.seasonRead = seasonRead;
         this.playerRead = playerRead;
         this.topRead = topRead;
@@ -64,6 +74,8 @@ public final class StatsPlaceholders {
         seasons = new SnapshotCache<>(1, clock, reads);
         players = new SnapshotCache<>(512, clock, reads);
         boards = new SnapshotCache<>(2 * Stat.values().length, clock, reads);
+        awards = new SnapshotCache<>(512, clock, reads);
+        this.awardRead = awardRead;
         setCacheSeconds(seconds);
     }
 
@@ -81,6 +93,9 @@ public final class StatsPlaceholders {
 
     public String resolve(UUID player, String params) {
         String key = params.toLowerCase(Locale.ROOT);
+        if (key.equals("title") || key.equals("chat_tag")) {
+            return player == null ? "" : awardLabel(player, key.equals("title") ? Award::title : Award::tag);
+        }
         if (key.equals("season_name")) {
             return seasonal(Season::name);
         }
@@ -98,6 +113,12 @@ public final class StatsPlaceholders {
                     : scoped(top.group(1), scope -> topValue(stat, scope, rank, top.group(4).equals("name")));
         }
         return MISSING;
+    }
+
+    private String awardLabel(UUID player, Function<Award, String> label) {
+        List<Award> earned = awards.get(player, lifetime, () -> awardRead.apply(player));
+        return earned == null ? "" : earned.stream().map(label).filter(value -> !value.isEmpty())
+                .findFirst().orElse("");
     }
 
     private String ownValue(UUID player, StatsScope scope, Stat stat) {

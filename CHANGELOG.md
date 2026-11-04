@@ -25,6 +25,8 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Configurable milestone and season placing rewards with cached title and chat tag
+  placeholders, pending cosmetic trophies, and opt-in Vault payouts with a daily cap.
 - Player-built portals. A crying obsidian frame shaped like a nether portal (opening 2x3
   up to 21x21, either axis, corners optional) and lit with flint and steel opens a portal
   with a coloured particle curtain that needs no resource pack. It follows

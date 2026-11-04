@@ -59,6 +59,8 @@ import com.ninja6.ninjaarena.spectate.Spectators;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
 import com.ninja6.ninjaarena.placeholder.NinjaArenaExpansion;
 import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
+import com.ninja6.ninjaarena.reward.RewardSettings;
+import com.ninja6.ninjaarena.reward.Rewards;
 import com.ninja6.ninjaarena.stats.StatsSettings;
 import com.ninja6.ninjaarena.stats.StatsStore;
 import com.ninja6.ninjaarena.stats.StatsTracker;
@@ -108,6 +110,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
     private StatsStore stats;
+    private Rewards rewards;
     private StatsPlaceholders placeholders;
     private Runnable unregisterPlaceholders;
 
@@ -340,6 +343,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         if (placeholders != null) {
                             placeholders.setCacheSeconds(settings.getInt(StatsPlaceholders.CACHE_SECONDS));
                         }
+                        if (rewards != null) {
+                            rewards.settings(RewardSettings.from(settings));
+                        }
                         for (String path : settings.getKeys(true)) {
                             if (!settings.isConfigurationSection(path)) {
                                 getConfig().set(path, settings.get(path));
@@ -378,9 +384,22 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             return;
         }
         stats = StatsStore.open(settings, getDataFolder().toPath(), getLogger());
-        StatsTracker tracker = new StatsTracker(stats::record, getServer()::getPlayer, Instant::now);
+        StatsTracker tracker = new StatsTracker(record -> {
+            stats.record(record);
+            if (rewards != null) {
+                rewards.onRecorded(record);
+            }
+        }, getServer()::getPlayer, Instant::now);
         getServer().getPluginManager().registerEvents(tracker, this);
         enemies.setKills(tracker::enemyKilled);
+        RewardSettings rewardSettings;
+        try {
+            rewardSettings = RewardSettings.from(getConfig());
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Reward configuration ignored: " + e.getMessage());
+            rewardSettings = RewardSettings.OFF;
+        }
+        rewards = new Rewards(this, arenaWorld::world, rewardSettings);
     }
 
     private void startPlaceholders() {
@@ -402,6 +421,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (rewards != null) {
+            rewards.close();
+            rewards = null;
+        }
         if (unregisterPlaceholders != null) {
             unregisterPlaceholders.run();
             unregisterPlaceholders = null;

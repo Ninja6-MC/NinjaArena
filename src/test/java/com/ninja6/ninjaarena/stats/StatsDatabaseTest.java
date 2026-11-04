@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.ninja6.ninjaarena.reward.RewardSettings;
 import com.ninja6.ninjaarena.stats.StatsDatabase.SeasonChange;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -21,6 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -72,6 +76,75 @@ class StatsDatabaseTest {
         assertEquals(StatsDatabase.SCHEMA_VERSION, second.schemaVersion());
         assertEquals(3, second.stats(ALICE, StatsScope.ALL_TIME).orElseThrow().playerKills());
         assertEquals(1, second.seasons().size());
+    }
+
+    @ParameterizedTest
+    @EnumSource(Dialect.class)
+    void archivedPlacingAndTrophyClaimsAreUniqueAcrossConnections(Dialect dialect) throws Exception {
+        ConnectionSource source = source(dialect);
+        StatsDatabase first = open(dialect, source);
+        first.useSeason("Season 1", T0);
+        first.write(List.of(match(player(BOB, "Bob", 1, 0, 0, 0, 0, 0),
+                player(ALICE, "Alice", 1, 0, 0, 0, 0, 0))));
+        first.startSeason("Season 2", T0.plusSeconds(1));
+        var rule = new RewardSettings.Rule("champion", Stat.WINS, 1, "Champion", "", "Cup");
+        first.awardPlacing(1, rule);
+        StatsDatabase second = open(dialect, source);
+        second.awardPlacing(1, new RewardSettings.Rule("champion", Stat.WINS, 2, "Changed", "", "Changed"));
+        assertTrue(second.awards(BOB).isEmpty());
+        var award = second.awards(ALICE).getFirst();
+        assertEquals("Champion", award.title());
+        assertTrue(award.pending());
+        UUID claim = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        assertTrue(first.trophyClaim(ALICE, award, claim, false));
+        assertFalse(second.trophyClaim(ALICE, award, other, false));
+        assertFalse(second.trophyClaim(ALICE, award, other, true));
+        assertTrue(first.trophyClaim(ALICE, award, claim, true));
+        assertTrue(second.trophyClaim(ALICE, award, other, false));
+        assertFalse(first.trophyClaim(ALICE, award, claim, true));
+        assertFalse(first.awards(ALICE).getFirst().pending());
+    }
+
+    @ParameterizedTest
+    @EnumSource(Dialect.class)
+    void payoutCapAndMatchLedgerSurviveReopening(Dialect dialect) throws Exception {
+        ConnectionSource source = source(dialect);
+        StatsDatabase first = open(dialect, source);
+        var payout = new RewardSettings.Payout(true, 700, 1000);
+        UUID match = UUID.randomUUID();
+        assertEquals(0, first.reservePayout(ALICE, match, 10, RewardSettings.OFF.payout()));
+        assertEquals(700, first.reservePayout(ALICE, match, 10, payout));
+        first.close();
+        StatsDatabase second = open(dialect, source);
+        assertEquals(0, second.reservePayout(ALICE, match, 10, payout));
+        assertEquals(0, second.reservePayout(ALICE, match, 11, payout));
+        assertEquals(300, second.reservePayout(ALICE, UUID.randomUUID(), 10, payout));
+        assertEquals(0, second.reservePayout(ALICE, UUID.randomUUID(), 10, payout));
+        assertEquals(700, second.reservePayout(BOB, match, 10, payout));
+        assertEquals(700, second.reservePayout(ALICE, UUID.randomUUID(), 11, payout));
+    }
+
+    @ParameterizedTest
+    @EnumSource(Dialect.class)
+    void concurrentPayoutsShareOneDailyCap(Dialect dialect) throws Exception {
+        ConnectionSource source = source(dialect);
+        StatsDatabase first = open(dialect, source);
+        StatsDatabase second = open(dialect, source);
+        var payout = new RewardSettings.Payout(true, 700, 1000);
+        CountDownLatch start = new CountDownLatch(1);
+        try (var workers = Executors.newFixedThreadPool(2)) {
+            var left = workers.submit(() -> {
+                start.await();
+                return first.reservePayout(ALICE, UUID.randomUUID(), 10, payout);
+            });
+            var right = workers.submit(() -> {
+                start.await();
+                return second.reservePayout(ALICE, UUID.randomUUID(), 10, payout);
+            });
+            start.countDown();
+            assertEquals(1000, left.get(10, TimeUnit.SECONDS) + right.get(10, TimeUnit.SECONDS));
+        }
     }
 
     @ParameterizedTest

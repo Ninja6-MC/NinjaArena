@@ -20,6 +20,7 @@ enum Dialect {
     List<String> migration(int version, String prefix) {
         return switch (version) {
             case 1 -> this == SQLITE ? sqliteV1(prefix) : mysqlV1(prefix);
+            case 2 -> rewards(prefix);
             default -> throw new IllegalArgumentException("unknown schema version " + version);
         };
     }
@@ -51,6 +52,26 @@ enum Dialect {
                         + statColumns() + ", PRIMARY KEY (player, season), " + indexes + ")" + table,
                 "CREATE TABLE IF NOT EXISTS " + p + "players (player CHAR(36) NOT NULL PRIMARY KEY,"
                         + " name VARCHAR(" + StatsDatabase.NAME_LENGTH + ") NOT NULL, last_seen BIGINT NOT NULL)" + table);
+    }
+
+    private List<String> rewards(String p) {
+        String suffix = this == MYSQL ? " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4" : "";
+        return List.of(
+                "CREATE TABLE IF NOT EXISTS " + p + "awards (player CHAR(36) NOT NULL, season INT NOT NULL,"
+                        + " rule_id VARCHAR(48) NOT NULL, title VARCHAR(80) NOT NULL, tag VARCHAR(80) NOT NULL,"
+                        + " trophy VARCHAR(80) NOT NULL, claim_id CHAR(36),"
+                        + " PRIMARY KEY (player, season, rule_id))" + suffix,
+                "CREATE TABLE IF NOT EXISTS " + p + "placing_slots (season INT NOT NULL, rule_id VARCHAR(48)"
+                        + " NOT NULL, player CHAR(36) NOT NULL, PRIMARY KEY (season, rule_id))" + suffix,
+                "CREATE TABLE IF NOT EXISTS " + p + "payout_days (player CHAR(36) NOT NULL, day_id BIGINT NOT NULL,"
+                        + " spent BIGINT NOT NULL, PRIMARY KEY (player, day_id))" + suffix,
+                "CREATE TABLE IF NOT EXISTS " + p + "payout_matches (player CHAR(36) NOT NULL, match_id CHAR(36)"
+                        + " NOT NULL, PRIMARY KEY (player, match_id))" + suffix);
+    }
+
+    String keepExisting(String keys, String firstKey) {
+        return this == SQLITE ? " ON CONFLICT (" + keys + ") DO NOTHING"
+                : " ON DUPLICATE KEY UPDATE " + firstKey + " = " + firstKey;
     }
 
     private static String statColumns() {
@@ -100,8 +121,8 @@ enum Dialect {
     String upsertSchemaVersion(String p) {
         String insert = "INSERT INTO " + p + "schema_version (id, version) VALUES (1, ?)";
         return switch (this) {
-            case SQLITE -> insert + " ON CONFLICT (id) DO UPDATE SET version = excluded.version";
-            case MYSQL -> insert + " ON DUPLICATE KEY UPDATE version = VALUES(version)";
+            case SQLITE -> insert + " ON CONFLICT (id) DO UPDATE SET version = MAX(version, excluded.version)";
+            case MYSQL -> insert + " ON DUPLICATE KEY UPDATE version = GREATEST(version, VALUES(version))";
         };
     }
 }

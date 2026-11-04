@@ -6,6 +6,7 @@ import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
 import com.ninja6.ninjaarena.stats.StatsSettings;
+import com.ninja6.ninjaarena.reward.RewardSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -48,6 +49,9 @@ public final class ReloadFiles {
         YamlConfiguration result = new YamlConfiguration();
         for (var entry : document.nodes().entrySet()) {
             String path = entry.getKey();
+            if (path.startsWith("rewards.milestones.") || path.startsWith("rewards.placings.")) {
+                continue; // RewardSettings validates the contents of these lists.
+            }
             int dot = path.lastIndexOf('.');
             if (dot > 0 && defaults.isList(path.substring(0, dot))) {
                 // An item of a list setting, validated with the list below.
@@ -89,6 +93,8 @@ public final class ReloadFiles {
             } else if (fallback instanceof List<?>) {
                 String problem = switch (path) {
                     case PlayerPortalSettings.SECTION + ".worlds" -> PlayerPortalSettings.worldsProblem(value);
+                    case "rewards.milestones", "rewards.placings" ->
+                            value instanceof List<?> ? null : "expected a list"; // RewardSettings validates the entries.
                     default -> throw new IllegalStateException("No validation for list " + path);
                 };
                 if (problem != null) {
@@ -119,6 +125,11 @@ public final class ReloadFiles {
                 }
             }
             result.set(path, value);
+        }
+        try {
+            RewardSettings.from(result);
+        } catch (IllegalArgumentException e) {
+            throw document.invalid("rewards", e.getMessage());
         }
         int maxPlayers = result.getInt("waiting-room.max-players");
         if (maxPlayers != 0 && maxPlayers < result.getInt("waiting-room.min-players")) {
@@ -196,6 +207,7 @@ public final class ReloadFiles {
             case "tools.dash.lift" -> new double[] {0, 0.6};
             case StatsPlaceholders.CACHE_SECONDS ->
                     new double[] {StatsPlaceholders.MIN_SECONDS, StatsPlaceholders.MAX_SECONDS};
+            case "rewards.vault.amount-per-match", "rewards.vault.daily-cap" -> new double[] {0, 1_000_000};
             case "stats.mysql.port" -> new double[] {1, 65535};
             case PlayerPortalSettings.SECTION + ".max-per-player" -> new double[] {0, PlayerPortalSettings.MAX_PER_PLAYER};
             case PlayerPortalSettings.SECTION + ".min-distance" -> new double[] {0, PlayerPortalSettings.MAX_DISTANCE};

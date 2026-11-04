@@ -245,6 +245,15 @@ tools:
     # Upward speed in blocks per tick (0 to 0.6).
     lift: 0.3
 
+# Lists of milestone and season placing rewards. See docs/player-stats.md for examples.
+rewards:
+  milestones: []
+  placings: []
+  vault:
+    enabled: false
+    amount-per-match: 10.0
+    daily-cap: 100.0
+
 placeholders:
   # Seconds to keep each snapshot before refreshing it on demand (1 to 300).
   cache-seconds: 30
