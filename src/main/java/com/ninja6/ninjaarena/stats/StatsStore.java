@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.stats;
 
+import com.ninja6.ninjaarena.reward.Award;
+import com.ninja6.ninjaarena.reward.RewardSettings;
 import com.ninja6.ninjaarena.stats.StatsDatabase.SchemaTooNew;
 import com.ninja6.ninjaarena.stats.StatsDatabase.SeasonResult;
 import java.io.IOException;
@@ -189,6 +191,46 @@ public final class StatsStore {
             return CompletableFuture.failedFuture(new IllegalArgumentException("limit must be from 1 to 1000"));
         }
         return submit(database -> database.top(stat, scope, limit));
+    }
+
+    public CompletableFuture<List<Award>> awards(UUID player) {
+        return submit(database -> database.awards(player));
+    }
+
+    public CompletableFuture<List<Award>> evaluateMilestones(UUID player, List<RewardSettings.Rule> rules) {
+        return submit(database -> {
+            if (!rules.isEmpty()) {
+                PlayerStats totals = database.stats(player, StatsScope.ALL_TIME).orElseGet(() -> PlayerStats.empty(player));
+                for (RewardSettings.Rule rule : rules) {
+                    if (totals.value(rule.stat()) >= rule.target()) {
+                        database.grant(player, 0, rule);
+                    }
+                }
+            }
+            return database.awards(player);
+        });
+    }
+
+    public CompletableFuture<Void> awardPlacings(List<RewardSettings.Rule> rules) {
+        return submit(database -> {
+            for (Season archived : database.seasons()) {
+                if (archived.isCurrent()) {
+                    continue;
+                }
+                for (RewardSettings.Rule rule : rules) {
+                    database.awardPlacing(archived.id(), rule);
+                }
+            }
+            return null;
+        });
+    }
+
+    public CompletableFuture<Boolean> trophyClaim(UUID player, Award award, UUID claim, boolean release) {
+        return submit(database -> database.trophyClaim(player, award, claim, release));
+    }
+
+    public CompletableFuture<Long> reservePayout(UUID player, UUID match, long day, RewardSettings.Payout payout) {
+        return submit(database -> database.reservePayout(player, match, day, payout));
     }
 
     /** The current season; empty only before the first connection created one. */

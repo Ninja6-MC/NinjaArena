@@ -84,6 +84,28 @@ class ConfigReloadTest {
     }
 
     @Test
+    void rewardListsReloadAndAnInvalidRuleKeepsTheLastConfiguration() throws Exception {
+        String valid = """
+                rewards:
+                  milestones:
+                    - {id: veteran, stat: wins, threshold: 5, title: Veteran}
+                  placings:
+                    - {id: champion, stat: wins, rank: 1, trophy: Cup}
+                  vault: {enabled: true, amount-per-match: 2.5, daily-cap: 10}
+                """;
+        write(valid, EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        ConfigurationSection accepted = target.published;
+        assertEquals(1, accepted.getMapList("rewards.milestones").size());
+        write(valid.replace("rank: 1", "rank: 0"), EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("rejected"));
+        assertEquals(accepted, target.published);
+        write(valid.replace("2.5", "2.555"), EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("rejected"));
+        assertEquals(accepted, target.published);
+    }
+
+    @Test
     void invalidSpectatorLimitKeepsTheLastValidSettings() throws Exception {
         write("spectating: {enabled: false, max-per-match: 3}\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("complete"));

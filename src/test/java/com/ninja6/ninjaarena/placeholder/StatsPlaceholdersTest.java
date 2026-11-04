@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.placeholder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.ninja6.ninjaarena.reward.Award;
 import com.ninja6.ninjaarena.stats.LeaderboardEntry;
 import com.ninja6.ninjaarena.stats.PlayerStats;
 import com.ninja6.ninjaarena.stats.Season;
@@ -42,6 +43,27 @@ class StatsPlaceholdersTest {
         assertEquals("1", placeholders.resolve(ALICE, "STAT_ALL_TIME_WINS"));
         assertEquals("4", placeholders.resolve(ALICE, "stat_all_time_enemy_kills"));
         assertEquals("6", placeholders.resolve(ALICE, "stat_all_time_best_overrun_seconds"));
+        assertEquals(1, reads.get());
+    }
+
+    @Test
+    void titlesAndTagsShareAnAsyncAwardSnapshot() {
+        CompletableFuture<List<Award>> result = new CompletableFuture<>();
+        AtomicInteger reads = new AtomicInteger();
+        StatsPlaceholders placeholders = new StatsPlaceholders(() -> { throw new AssertionError(); },
+                (player, scope) -> { throw new AssertionError(); },
+                (stat, scope) -> { throw new AssertionError(); },
+                player -> {
+                    reads.incrementAndGet();
+                    return result;
+                }, () -> 0, 30);
+        assertEquals("", placeholders.resolve(null, "title"));
+        assertEquals("", placeholders.resolve(ALICE, "title"));
+        assertEquals("", placeholders.resolve(ALICE, "chat_tag"));
+        result.complete(List.of(new Award(2, "winner", "Champion", "", "", false),
+                new Award(0, "veteran", "Veteran", "[V]", "", false)));
+        assertEquals("Champion", placeholders.resolve(ALICE, "title"));
+        assertEquals("[V]", placeholders.resolve(ALICE, "chat_tag"));
         assertEquals(1, reads.get());
     }
 

@@ -60,9 +60,10 @@ class PluginDescriptionTest {
     }
 
     @Test
-    void placeholderApiIsOptional() throws Exception {
-        assertEquals(List.of("PlaceholderAPI"), description().getSoftDepend());
+    void integrationsAreOptional() throws Exception {
+        assertEquals(List.of("PlaceholderAPI", "Vault"), description().getSoftDepend());
         assertFalse(description().getDepend().contains("PlaceholderAPI"));
+        assertFalse(description().getDepend().contains("Vault"));
     }
 
     @Test
@@ -87,7 +88,10 @@ class PluginDescriptionTest {
         assertEquals(Map.of(), nodes.get("ninjaarena.spectate").getChildren());
         assertEquals(PermissionDefault.TRUE, nodes.get("ninjaarena.leaderboard").getDefault());
         assertEquals(Map.of(), nodes.get("ninjaarena.leaderboard").getChildren());
-        assertEquals(Map.of("ninjaarena.spectate", true, "ninjaarena.leaderboard", true),
+        assertEquals(PermissionDefault.TRUE, nodes.get("ninjaarena.rewards.payout").getDefault());
+        assertEquals(Map.of(), nodes.get("ninjaarena.rewards.payout").getChildren());
+        assertEquals(Map.of("ninjaarena.spectate", true, "ninjaarena.leaderboard", true,
+                "ninjaarena.rewards.payout", true),
                 nodes.get("ninjaarena.play").getChildren());
         assertEquals(Map.of("ninjaarena.play", true), nodes.get("ninjaarena.host").getChildren());
         assertEquals(Map.of("ninjaarena.host", true), nodes.get("ninjaarena.admin").getChildren());
@@ -98,7 +102,7 @@ class PluginDescriptionTest {
         try (InputStream stream = pluginYml()) {
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(stream, StandardCharsets.UTF_8));
-            for (String tier : List.of("spectate", "leaderboard", "play", "host", "admin")) {
+            for (String tier : List.of("spectate", "leaderboard", "rewards.payout", "play", "host", "admin")) {
                 assertTrue(yaml.isConfigurationSection("permissions.ninjaarena." + tier + ".children"), tier);
             }
             assertTrue(yaml.getBoolean("permissions.ninjaarena.admin.children.ninjaarena.host"));

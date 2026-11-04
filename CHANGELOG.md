@@ -25,6 +25,8 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Configurable milestone and season placing rewards with cached title and chat tag
+  placeholders, pending cosmetic trophies, and opt-in Vault payouts with a daily cap.
 - Shared or dedicated lobbies. A shared hub, set with `/narena portal sethub`, gathers
   players from every shared portal and sends the first arrivals to a free arena's teams
   once enough are there; the rest wait for the next free arena. Each portal chooses with

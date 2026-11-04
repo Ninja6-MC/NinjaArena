@@ -5,6 +5,7 @@ import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
 import com.ninja6.ninjaarena.stats.StatsSettings;
+import com.ninja6.ninjaarena.reward.RewardSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -47,6 +48,9 @@ public final class ReloadFiles {
         YamlConfiguration result = new YamlConfiguration();
         for (var entry : document.nodes().entrySet()) {
             String path = entry.getKey();
+            if (path.startsWith("rewards.milestones.") || path.startsWith("rewards.placings.")) {
+                continue; // RewardSettings validates the contents of these lists.
+            }
             if (!path.isEmpty() && !defaults.contains(path)) {
                 throw document.invalidKey(path, "unknown setting");
             }
@@ -99,6 +103,11 @@ public final class ReloadFiles {
                 }
             }
             result.set(path, value);
+        }
+        try {
+            RewardSettings.from(result);
+        } catch (IllegalArgumentException e) {
+            throw document.invalid("rewards", e.getMessage());
         }
         int maxPlayers = result.getInt("waiting-room.max-players");
         if (maxPlayers != 0 && maxPlayers < result.getInt("waiting-room.min-players")) {
@@ -176,6 +185,7 @@ public final class ReloadFiles {
             case "tools.dash.lift" -> new double[] {0, 0.6};
             case StatsPlaceholders.CACHE_SECONDS ->
                     new double[] {StatsPlaceholders.MIN_SECONDS, StatsPlaceholders.MAX_SECONDS};
+            case "rewards.vault.amount-per-match", "rewards.vault.daily-cap" -> new double[] {0, 1_000_000};
             case "stats.mysql.port" -> new double[] {1, 65535};
             default -> throw new IllegalStateException("No validation range for " + path);
         };
