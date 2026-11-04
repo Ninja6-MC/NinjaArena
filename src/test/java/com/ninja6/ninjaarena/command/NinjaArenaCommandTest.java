@@ -51,6 +51,31 @@ class NinjaArenaCommandTest {
     private boolean waiting;
 
     @Test
+    void eventPermissionAloneOpensTheRouteAndProtectsItsCompletions() {
+        var night = new com.ninja6.ninjaarena.event.EventSettings.Night("friday", java.time.DayOfWeek.FRIDAY,
+                java.time.LocalTime.NOON, "dojo", java.time.Duration.ofHours(1),
+                com.ninja6.ninjaarena.event.EventSettings.Bonus.NONE);
+        var settings = new com.ninja6.ninjaarena.event.EventSettings(java.time.ZoneOffset.UTC, List.of(), null,
+                List.of(night));
+        var events = new com.ninja6.ninjaarena.event.ArenaEvents(settings,
+                java.time.Clock.fixed(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC), (window, minutes, webhook) -> { });
+        command = new NinjaArenaCommand(new ArenaCommand(registry, () -> null), portalCommand, NO_DIRECTOR,
+                player -> false, null, null, null, null, new EventCommand(events));
+        Player manager = playerWithPermissions(EventCommand.PERMISSION);
+        Player player = playerWithPermissions(NinjaArenaCommand.PLAY);
+        assertEquals(List.of("help", "event"), command.onTabComplete(manager, null, "narena", new String[0]));
+        assertEquals(List.of("friday"), command.onTabComplete(manager, null, "narena",
+                new String[] {"event", "start", "fr"}));
+        assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"event", "start", ""}));
+        run(player, "event start friday");
+        assertTrue(events.active().isEmpty());
+        run(manager, "event start friday");
+        assertEquals("friday", events.active().orElseThrow().night().id());
+        run(manager, "event cancel friday");
+        assertTrue(events.active().isEmpty());
+    }
+
+    @Test
     void leaderboardPermissionAloneOpensTheRouteAndItsCompletions() {
         NinjaArenaCommand withLeaderboard = new NinjaArenaCommand(new ArenaCommand(registry, () -> null),
                 portalCommand, NO_DIRECTOR, player -> false, null, null, null,

@@ -771,6 +771,27 @@ class WaitingRoomServiceTest {
     }
 
     @Test
+    void eventArenaRestrictsAutomaticPortalsAndHubUntilTheWindowEnds() throws Exception {
+        arena("bay", 2, 2);
+        rooms.setEventArena(() -> Optional.of("dojo"));
+        assertEquals(Optional.of("dojo"), rooms.openArena());
+        arenas.hold("dojo");
+        assertEquals(Optional.empty(), rooms.openArena());
+        joinHub(ALICE);
+        joinHub(BOB);
+        for (int tick = 0; tick < 40; tick++) {
+            rooms.tick();
+        }
+        assertTrue(rooms.inHub(ALICE));
+        rooms.setEventArena(Optional::empty);
+        assertEquals(Optional.of("bay"), rooms.openArena());
+        for (int tick = 0; tick < 40; tick++) {
+            rooms.tick();
+        }
+        assertFalse(rooms.inHub(ALICE));
+    }
+
+    @Test
     void playerBuiltPortalsGoToTheFullestFillingRoomThenAFreeArenaThenNowhere() throws Exception {
         arena("cave", 1, 2);
         arena("bay", 2, 2);

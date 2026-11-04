@@ -102,6 +102,22 @@ class StatsStoreTest {
     }
 
     @Test
+    void eventCosmeticUsesTheExistingSeasonAwardAndClaim() throws Exception {
+        StatsStore store = store(faults());
+        var rule = new com.ninja6.ninjaarena.reward.RewardSettings.Rule("event-cup", Stat.WINS, 1,
+                "Champion", "", "Cup");
+        get(store.grantEventReward(ALICE, rule, true));
+        var award = get(store.awards(ALICE)).getFirst();
+        assertEquals("Cup", award.trophy());
+        assertTrue(award.pending());
+        assertTrue(get(store.trophyClaim(ALICE, award, UUID.randomUUID(), false)));
+        get(store.grantEventReward(ALICE, rule, true));
+        var awards = get(store.awards(ALICE));
+        assertEquals(1, awards.size());
+        assertFalse(awards.getFirst().pending());
+    }
+
+    @Test
     void milestonesUseAllTimeStatsAndKeepTheOriginalAwardOnRetry() throws Exception {
         StatsStore store = store(faults());
         var rule = new com.ninja6.ninjaarena.reward.RewardSettings.Rule("veteran", Stat.WINS, 2,

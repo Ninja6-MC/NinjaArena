@@ -25,6 +25,9 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Weekly arena events with configurable announcements, featured-arena matchmaking,
+  optional Discord delivery and capped bonus rewards. Admins can list, start or cancel
+  event occurrences with `/narena event`.
 - Configurable milestone and season placing rewards with cached title and chat tag
   placeholders, pending cosmetic trophies, and opt-in Vault payouts with a daily cap.
 - Player-built portals. A crying obsidian frame shaped like a nether portal (opening 2x3

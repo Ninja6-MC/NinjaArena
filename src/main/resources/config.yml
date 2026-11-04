@@ -288,3 +288,13 @@ stats:
 spectating:
   enabled: true
   max-per-match: 16
+
+# Weekly arena events are off until a schedule is configured. See docs/arena-events.md.
+events:
+  time-zone: UTC
+  announcement-lead-minutes: [30, 10, 1]
+  webhook-url: ''
+  schedule: []
+  messages:
+    upcoming: 'Arena event {id} starts in {minutes} minute(s) at {arena}.'
+    start: 'Arena event {id} has started at {arena}.'

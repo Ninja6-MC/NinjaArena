@@ -39,6 +39,9 @@ public final class ConfigReload {
         /** A new {@code stats.season}: archive the current season and start this one. */
         default void season(String name) {
         }
+        default boolean eventArenaExists(String arena) {
+            return true;
+        }
         default void configuration(ConfigurationSection settings) {
         }
     }
@@ -73,7 +76,7 @@ public final class ConfigReload {
     public List<String> reload() {
         ReloadFiles.Candidate candidate;
         try {
-            candidate = ReloadFiles.read(configFile, kitFile, items);
+            candidate = ReloadFiles.read(configFile, kitFile, items, target::eventArenaExists);
         } catch (ReloadYaml.Invalid e) {
             return List.of("The Arena reload was rejected: " + e.getMessage() + ". Nothing changed.");
         }

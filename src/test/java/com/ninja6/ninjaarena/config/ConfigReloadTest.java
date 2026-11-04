@@ -69,6 +69,7 @@ class ConfigReloadTest {
         }
         @Override public void kit(KitDefinition kit) { calls.add("kit"); this.kit = kit; }
         @Override public void season(String name) { calls.add("season"); season = name; }
+        @Override public boolean eventArenaExists(String arena) { return arena.equals("dojo"); }
         @Override public void configuration(ConfigurationSection settings) { published = settings; }
     }
 
@@ -86,6 +87,29 @@ class ConfigReloadTest {
 
     private ReloadFiles.Candidate candidate() throws Exception {
         return ReloadFiles.read(dir.resolve("config.yml"), dir.resolve("kits.yml"), items);
+    }
+
+    @Test
+    void invalidEventRejectsAllChangesAndDoesNotExposeWebhook() throws Exception {
+        String event = "{id: friday, day: FRIDAY, time: '19:30', arena: dojo, duration-minutes: 90}";
+        String good = "events:\n  time-zone: Europe/Paris\n  announcement-lead-minutes: [30, 1]\n  schedule:\n    - ";
+        write(good + event, EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        var accepted = target.published;
+        assertEquals(1, accepted.getMapList("events.schedule").size());
+        target.calls.clear();
+        for (String bad : List.of(event.replace("19:30", "25:00"), event.replace("FRIDAY", "FUNDAY"),
+                event.replace("dojo", "unknown"), event.replace("90", "0"),
+                event.replace("90}", "90, typo: true}"), event + "\n    - " + event,
+                event.replace("90}", "90, bonus: {reward-id: missing}}"), "null",
+                event + "\n  webhook-url: 'http://example.test/secret-token'")) {
+            write(good + bad + "\nwaiting-room: {min-players: 3}\n", EMPTY_KIT);
+            String message = reload.reload().getFirst();
+            assertTrue(message.contains("rejected") && message.contains("events"), message);
+            assertFalse(message.contains("secret-token"));
+            assertEquals(accepted, target.published);
+            assertTrue(target.calls.isEmpty());
+        }
     }
 
     @Test
