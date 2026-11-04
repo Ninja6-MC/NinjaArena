@@ -378,7 +378,7 @@ class NinjaArenaCommandTest {
         command.onCommand(player, null, "ninjaarena", new String[0]);
         assertEquals(List.of("The Arena commands:",
                 "/ninjaarena help - show the commands you can use",
-                "/ninjaarena leave - leave the waiting room or match you are in",
+                "/ninjaarena leave - leave the arena and return home",
                 "/ninjaarena accept <host> - accept an invitation to the Arena"), messages);
 
         messages.clear();

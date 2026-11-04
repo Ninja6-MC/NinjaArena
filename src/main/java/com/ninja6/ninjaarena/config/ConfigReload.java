@@ -4,6 +4,7 @@ import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
@@ -28,6 +29,8 @@ public final class ConfigReload {
         void waiting(WaitingRoomSettings settings);
         void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring);
         void tools(ToolSettings settings);
+        default void spectating(SpectatorSettings settings) {
+        }
         void kit(KitDefinition definition);
         default void configuration(ConfigurationSection settings) {
         }
@@ -135,6 +138,8 @@ public final class ConfigReload {
         if (differs("tools.", next)) {
             target.tools(ToolSettings.from(next.getConfigurationSection("tools")));
         }
+        // Apply validated admission settings even if startup fell back to disabling spectating.
+        target.spectating(SpectatorSettings.from(next.getConfigurationSection("spectating")));
         if (kitChanged) {
             target.kit(candidate.kit());
         }

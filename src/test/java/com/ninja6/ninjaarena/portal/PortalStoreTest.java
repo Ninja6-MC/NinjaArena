@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.portal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.ninja6.ninjaarena.arena.ArenaBounds;
@@ -37,10 +38,11 @@ class PortalStoreTest {
     @Test
     void portalsSurviveARoundTrip() throws Exception {
         List<Portal> portals = List.of(portal("lobby", 10),
-                new Portal("nether", "world_nether", new ArenaBounds(-5, 30, -5, -3, 33, -5), "pit"));
+                new Portal("nether", "world_nether", new ArenaBounds(-5, 30, -5, -3, 33, -5), "pit", true));
         new PortalStore(file()).save(portals);
 
         assertEquals(portals, new PortalStore(file()).load());
+        assertFalse(Files.readString(file()).contains("spectator: false"));
         assertEquals(Set.of("portals.yml"), fileNames());
     }
 

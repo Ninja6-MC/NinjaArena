@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.tool.NinjaTools;
+import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
@@ -41,6 +42,7 @@ class ConfigReloadTest {
         boolean friendlyFire;
         ScoringSettings scoring;
         ToolSettings tools;
+        SpectatorSettings spectating;
         KitDefinition kit;
         ConfigurationSection published;
         @Override public boolean canResize() { return empty; }
@@ -57,6 +59,7 @@ class ConfigReloadTest {
             calls.add("match"); match = settings; this.friendlyFire = friendlyFire; this.scoring = scoring;
         }
         @Override public void tools(ToolSettings settings) { calls.add("tools"); tools = settings; }
+        @Override public void spectating(SpectatorSettings settings) { spectating = settings; }
         @Override public void kit(KitDefinition kit) { calls.add("kit"); this.kit = kit; }
         @Override public void configuration(ConfigurationSection settings) { published = settings; }
     }
@@ -75,6 +78,17 @@ class ConfigReloadTest {
 
     private ReloadFiles.Candidate candidate() throws Exception {
         return ReloadFiles.read(dir.resolve("config.yml"), dir.resolve("kits.yml"), items);
+    }
+
+    @Test
+    void invalidSpectatorLimitKeepsTheLastValidSettings() throws Exception {
+        write("spectating: {enabled: false, max-per-match: 3}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertEquals(new SpectatorSettings(false, 3), target.spectating);
+
+        write("spectating: {enabled: true, max-per-match: 65}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("spectating.max-per-match"));
+        assertEquals(new SpectatorSettings(false, 3), target.spectating);
     }
 
     @Test

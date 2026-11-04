@@ -25,6 +25,9 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Waiting players and spectator portal entrants can watch live matches within the arena
+  bounds. Viewers use the existing snapshot and restore flow, with separate admission
+  limits and no effect on team rosters or enemy pressure.
 - The Shadow Stalker signature enemy: a wither skeleton changed only through attributes,
   equipment, particles and Paper Mob Goals, so Bedrock players see it without a resource
   pack. It ignores stealth by default (`ignores-stealth.shadow-stalker`), hunts the leading

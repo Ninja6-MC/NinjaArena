@@ -65,7 +65,8 @@ under the root.
 | Command | Permission | Behavior |
 | :--- | :--- | :--- |
 | `help` | Any tier below | List permitted commands |
-| `leave` | `ninjaarena.play` | Leave the waiting room or match and restore your snapshot |
+| `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Return home and restore your snapshot |
+| `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from a waiting room |
 | `accept <host>` | `ninjaarena.play` | Accept an invitation and enter the waiting room |
 | `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
 | `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |
@@ -78,12 +79,10 @@ The player and host commands require a player sender. Enter the Arena by walking
 through a portal or explicitly accepting an invitation. Admin reload also works from
 the console.
 
-`ninjaarena.play` defaults to everyone. `ninjaarena.host` and `ninjaarena.admin` default
-to operators. The declared permission children grant play from host, and host from admin;
-the play leaf has an explicit empty children block. The root accepts any of these tiers,
-and dispatch, help and tab completion check the route's own permission. Denying play
-explicitly therefore blocks player routes without blocking an otherwise granted admin
-or host route.
+`ninjaarena.play` and `ninjaarena.spectate` default to everyone. `ninjaarena.host` and
+`ninjaarena.admin` default to operators. The declared permission children grant spectate
+from play, play from host, and host from admin. The root accepts any of these permissions.
+Dispatch, help and tab completion check the permissions for each route.
 
 ## Hosting and invitations
 
@@ -112,6 +111,24 @@ unaccepted invitations. Losing the host permission also invalidates it at the ne
 operation or pending entry check. Players already in the waiting room remain there and
 can leave through the normal snapshot restore.
 
+## Watching live matches
+
+From any waiting room, run `/narena spectate <arena>` to watch an in-progress match.
+A successful transfer removes you from the queue and keeps your pre-entry snapshot.
+To offer access from another world, mark portal corners as usual and run
+`/narena portal create <name> <arena> spectator`. The portal admits viewers only while
+the named match is open to spectators. Ordinary portals still lead to the waiting room.
+
+Viewers can fly within the arena's three-dimensional bounds. Entity cameras, arena
+interactions, and teleports outside the bounds are blocked. Viewers are outside the
+team rosters, countdown minimum, scoring, and enemy director. Use `/narena leave` to
+return home, or wait for the match to end. Disconnecting frees the spectator slot
+immediately and restores your snapshot on the next join.
+
+Set `spectating.enabled` to control admission and `spectating.max-per-match` to set the
+number of viewers per match (1 to 64, default 16). Both options apply to new admissions
+on a successful reload. Current viewers can stay until they leave or the match ends.
+
 ## Safe configuration reload
 
 Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml` or `kits.yml`.
@@ -126,6 +143,7 @@ and never moves match players or restarts a match.
 | :--- | :--- |
 | Waiting-room minimum, countdown and radius | Apply immediately; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
 | Match timers, rounds, extra rounds, friendly fire and scoring | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
 | Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
 | Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |

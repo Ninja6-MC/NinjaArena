@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.portal;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -35,17 +36,29 @@ public final class ArenaAdmission {
 
     /** The destination chunk must already be loaded. A failure keeps the player's own inventory. */
     public boolean enter(Player player, String arena, Consumer<String> refusal) {
+        return enter(player, arena, () -> entry.admit(player, arena),
+                () -> entry.waitingRoom(arena).orElseThrow(), onEnter, refusal);
+    }
+
+    public boolean enter(Player player, Portal portal, BiConsumer<Player, String> onSpectate,
+            Consumer<String> refusal) {
+        return enter(player, portal.arena(), () -> entry.admit(player, portal),
+                () -> entry.destination(portal).orElseThrow(), portal.spectator() ? onSpectate : onEnter, refusal);
+    }
+
+    private boolean enter(Player player, String arena, Supplier<Optional<PortalEntry.Refusal>> admit,
+            Supplier<ArenaPoint> destination, BiConsumer<Player, String> arrived, Consumer<String> refusal) {
         if (holdsLooseItems(player)) {
             refusal.accept("Put away the items on your cursor or in your crafting grid, then try again.");
             return false;
         }
         player.closeInventory();
-        var denied = entry.admit(player, arena);
+        var denied = admit.get();
         if (denied.isPresent()) {
             refusal.accept(denied.get().message());
             return false;
         }
-        ArenaPoint room = entry.waitingRoom(arena).orElseThrow();
+        ArenaPoint room = destination.get();
         Location target = new Location(world.get(), room.x(), room.y(), room.z(), room.yaw(), room.pitch());
         boolean moved;
         try {
@@ -60,7 +73,7 @@ public final class ArenaAdmission {
             moved = false;
         }
         if (moved) {
-            onEnter.accept(player, arena);
+            arrived.accept(player, arena);
             return true;
         }
         try {
