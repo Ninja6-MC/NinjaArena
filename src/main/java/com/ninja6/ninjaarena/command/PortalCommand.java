@@ -258,6 +258,9 @@ public final class PortalCommand {
                 warn(sender, "No shared hub is set, so the portal turns players away until one is. Stand there and"
                         + " use sethub.");
             }
+        } else if (portal.arena() == null) {
+            // A player-built portal is routed per entry; status says whether any arena is open.
+            return;
         } else if (!arenas.isAvailable(portal.arena())) {
             warn(sender, "Arena " + portal.arena() + " is not available right now, so the portal turns players away"
                     + " until it is.");
@@ -360,7 +363,7 @@ public final class PortalCommand {
             };
             case "delete", "info" -> position == 0 ? ArenaCommand.matching(portalNames(), current) : List.of();
             case "lobby" -> switch (position) {
-                case 0 -> ArenaCommand.matching(portalNames(), current);
+                case 0 -> ArenaCommand.matching(adminPortalNames(), current);
                 case 1 -> ArenaCommand.matching(LOBBIES, current);
                 default -> List.of();
             };
@@ -373,6 +376,17 @@ public final class PortalCommand {
         List<String> names = new ArrayList<>();
         for (Portal portal : portals.all()) {
             names.add(portal.name());
+        }
+        return names;
+    }
+
+    /** Portals an admin marked out; a player-built one takes no lobby choice. */
+    private List<String> adminPortalNames() {
+        List<String> names = new ArrayList<>();
+        for (Portal portal : portals.all()) {
+            if (!portal.playerBuilt()) {
+                names.add(portal.name());
+            }
         }
         return names;
     }

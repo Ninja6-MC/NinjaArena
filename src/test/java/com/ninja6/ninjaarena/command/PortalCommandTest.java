@@ -268,11 +268,68 @@ class PortalCommandTest {
 
         messages.clear();
         run(sender, "portal lobby built-1 shared");
-        assertEquals(List.of("A player-built portal follows the server default lobby."), messages);
+        assertEquals(List.of("Portal built-1 is player-built and always follows waiting-room.lobby in config.yml."),
+                messages);
 
         messages.clear();
         run(sender, "portal delete built-1");
+        assertEquals(List.of("Portal built-1 removed. Blocks built around it are still in the world."), messages);
         assertTrue(portals.all().isEmpty());
+    }
+
+    @Test
+    void aPlayerBuiltPortalRefusesEveryLobbyChoiceUnderEitherDefault() throws Exception {
+        LobbyMode[] serverDefault = {LobbyMode.DEDICATED};
+        portalCommand = new PortalCommand(portals, arenas, world -> true, () -> serverDefault[0]);
+        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand,
+                new DirectorCommand(List::of, id -> Optional.empty(), match -> Optional.empty()), player -> false);
+        Portal built = portals.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8),
+                new Portal.Built(ADMIN, "crying_obsidian"));
+        CommandSender console = console();
+        String refusal = "Portal built-1 is player-built and always follows waiting-room.lobby in config.yml.";
+
+        // This one used to reach the arena check with no arena and throw.
+        run(console, "portal lobby built-1 default");
+        assertEquals(List.of(refusal), messages);
+        for (LobbyMode mode : LobbyMode.values()) {
+            serverDefault[0] = mode;
+            for (String choice : List.of("default", "dedicated", "shared")) {
+                messages.clear();
+                run(console, "portal lobby BUILT-1 " + choice);
+                assertEquals(List.of(refusal), messages, mode + " " + choice);
+            }
+        }
+        assertEquals(built, portals.get("built-1").orElseThrow());
+    }
+
+    @Test
+    void lobbyDoesNotSuggestPlayerBuiltPortals() throws Exception {
+        portals.create("lobby", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "dojo");
+        portals.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8), new Portal.Built(ADMIN, "crying_obsidian"));
+        CommandSender sender = player(true);
+        assertEquals(List.of("lobby"), complete(sender, "portal", "lobby", ""));
+        assertEquals(List.of("built-1", "lobby"), complete(sender, "portal", "info", ""));
+        assertEquals(List.of("built-1", "lobby"), complete(sender, "portal", "delete", ""));
+    }
+
+    @Test
+    void aPlayerBuiltPortalStatusFollowsASharedDefaultWithoutAnArena() throws Exception {
+        LobbyMode[] serverDefault = {LobbyMode.SHARED};
+        portalCommand = new PortalCommand(portals, arenas, world -> true, () -> serverDefault[0]);
+        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand,
+                new DirectorCommand(List::of, id -> Optional.empty(), match -> Optional.empty()), player -> false);
+        portals.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8), new Portal.Built(ADMIN, "crying_obsidian"));
+        CommandSender console = console();
+
+        run(console, "portal info built-1");
+        assertTrue(messages.contains("Portal built-1: closed, no shared hub is set"), messages.toString());
+        assertTrue(messages.contains("Leads to: the shared hub (server default)"), messages.toString());
+
+        messages.clear();
+        portals.setHub(new ArenaPoint(-300.5, 64, -300.5, 0, 0));
+        run(console, "portal list");
+        assertTrue(messages.contains("built-1 (world) to any arena, player-built: open, to the shared hub"),
+                messages.toString());
     }
 
     @Test

@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
@@ -475,8 +476,13 @@ class PortalListenerTest {
 
     /** Wires the lobby choice as the plugin does, with the given server default. */
     private void lobbies(LobbyMode serverDefault) {
+        lobbies(() -> serverDefault);
+    }
+
+    /** As above, with a default the test may change between steps, as a config reload does. */
+    private void lobbies(Supplier<LobbyMode> serverDefault) {
         rooms.setHub(portals::hub);
-        entry.setLobbies(() -> serverDefault, portals::hub, rooms::full);
+        entry.setLobbies(serverDefault, portals::hub, rooms::full);
         listener = new PortalListener(plugin, portals, entry, () -> arenaWorld,
                 new ArenaAdmission(plugin, entry, () -> arenaWorld, snapshots, (player, arena) -> {
                     entered.add(arena);
@@ -574,6 +580,46 @@ class PortalListenerTest {
         finishChunkLoads();
         assertEquals(hub.x(), location.getX());
         assertTrue(rooms.inHub(ALICE));
+    }
+
+    @Test
+    void aPlayerBuiltPortalIsRoutedAgainWhenTheDefaultLeavesTheHubDuringTheChunkLoad() throws Exception {
+        portals.setHub(new ArenaPoint(-300.5, 64, -300.5, 90, 0));
+        LobbyMode[] serverDefault = {LobbyMode.SHARED};
+        lobbies(() -> serverDefault[0]);
+        entry.setRouting(rooms::openArena);
+        portals.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8), new Portal.Built(ALICE, "crying_obsidian"));
+        location = new Location(overworld, 40.5, 64, 7.5);
+        move(40.5, 64, 8.5, 0);
+        assertEquals(1, chunkLoads.size());
+
+        // A reload switches the default to dedicated rooms before the hub chunk is ready.
+        serverDefault[0] = LobbyMode.DEDICATED;
+        finishChunkLoads();
+        assertEquals(1, captures);
+        assertEquals(ROOM.x(), location.getX());
+        assertEquals(List.of("dojo"), entered);
+        assertTrue(rooms.isWaiting(ALICE));
+        assertFalse(rooms.inHub(ALICE));
+    }
+
+    @Test
+    void aPlayerBuiltPortalIsTurnedAwayWhenTheDefaultLeavesTheHubAndEveryArenaIsBusy() throws Exception {
+        portals.setHub(new ArenaPoint(-300.5, 64, -300.5, 90, 0));
+        LobbyMode[] serverDefault = {LobbyMode.SHARED};
+        lobbies(() -> serverDefault[0]);
+        entry.setRouting(rooms::openArena);
+        portals.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8), new Portal.Built(ALICE, "crying_obsidian"));
+        location = new Location(overworld, 40.5, 64, 7.5);
+        move(40.5, 64, 8.5, 0);
+
+        serverDefault[0] = LobbyMode.DEDICATED;
+        arenas.hold("dojo");
+        finishChunkLoads();
+        assertEquals(0, captures);
+        assertEquals(overworld, location.getWorld());
+        assertTrue(entered.isEmpty());
+        assertTrue(messages.contains("All arenas are busy. Try again when a match ends."), messages.toString());
     }
 
     @Test

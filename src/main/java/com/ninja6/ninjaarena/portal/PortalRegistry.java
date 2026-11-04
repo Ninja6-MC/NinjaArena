@@ -107,14 +107,19 @@ public final class PortalRegistry {
     /**
      * Changes a portal's own lobby choice; {@code null} makes it use the server default.
      *
-     * @throws ArenaException if there is no such portal, it is a spectator portal, or the
-     *                        write fails
+     * @throws ArenaException if there is no such portal, it is a spectator or player-built
+     *                        portal, or the write fails
      */
     public Portal setLobby(String name, LobbyMode lobby) throws ArenaException {
         String key = Portal.normalizeName(name);
         Portal portal = portals.get(key);
         if (portal == null) {
             throw new ArenaException("No portal called " + name + ".");
+        }
+        if (portal.playerBuilt()) {
+            // Even "default" is refused: it would change nothing, and the admin may think it did.
+            throw new ArenaException("Portal " + portal.name() + " is player-built and always follows"
+                    + " waiting-room.lobby in config.yml.");
         }
         Portal changed;
         try {

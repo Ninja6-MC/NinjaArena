@@ -79,7 +79,8 @@ Stand where players should gather in the arena world, outside every arena's boun
 run `/narena portal sethub`, or give coordinates as for `setwaitingroom`. Later
 `arena setbounds` that would enclose the hub is refused; move the hub first.
 `/narena portal lobby <portal> <dedicated|shared|default>` sets a portal's choice;
-`default` returns it to the config value. `portal create <name> <arena> shared` sets it at
+`default` returns it to the config value. Player-built portals have no choice of their own
+and refuse it. `portal create <name> <arena> shared` sets it at
 creation. `portal list` and `portal info` show the hub and where each portal leads.
 Moving or removing the hub sends anyone waiting there home.
 

@@ -170,6 +170,21 @@ class PortalRegistryTest {
     }
 
     @Test
+    void aPlayerBuiltPortalTakesNoLobbyChoiceNotEvenTheDefault() throws Exception {
+        PortalRegistry registry = open();
+        Portal built = registry.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8),
+                new Portal.Built(new UUID(0, 1), "crying_obsidian"));
+        Path file = dir.resolve("portals.yml");
+        String before = Files.readString(file);
+        for (LobbyMode lobby : new LobbyMode[] {null, LobbyMode.DEDICATED, LobbyMode.SHARED}) {
+            assertEquals("Portal built-1 is player-built and always follows waiting-room.lobby in config.yml.",
+                    assertThrows(ArenaException.class, () -> registry.setLobby("built-1", lobby)).getMessage());
+        }
+        assertEquals(built, registry.get("built-1").orElseThrow());
+        assertEquals(before, Files.readString(file));
+    }
+
+    @Test
     void nearHandsOverThePortalsInTheChunksAround() throws Exception {
         PortalRegistry registry = open();
         Portal home = registry.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8),
