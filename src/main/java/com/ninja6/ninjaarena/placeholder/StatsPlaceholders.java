@@ -60,9 +60,10 @@ public final class StatsPlaceholders {
         this.seasonRead = seasonRead;
         this.playerRead = playerRead;
         this.topRead = topRead;
-        seasons = new SnapshotCache<>(1, clock);
-        players = new SnapshotCache<>(512, clock);
-        boards = new SnapshotCache<>(2 * Stat.values().length, clock);
+        SnapshotReads reads = new SnapshotReads(clock);
+        seasons = new SnapshotCache<>(1, clock, reads);
+        players = new SnapshotCache<>(512, clock, reads);
+        boards = new SnapshotCache<>(2 * Stat.values().length, clock, reads);
         setCacheSeconds(seconds);
     }
 

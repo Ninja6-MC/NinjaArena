@@ -15,9 +15,12 @@ final class SnapshotCache<K, V> {
     private final int capacity;
     private final LongSupplier clock;
 
-    SnapshotCache(int capacity, LongSupplier clock) {
+    private final SnapshotReads reads;
+
+    SnapshotCache(int capacity, LongSupplier clock, SnapshotReads reads) {
         this.capacity = capacity;
         this.clock = clock;
+        this.reads = reads;
     }
 
     synchronized V get(K key, long lifetime, Supplier<CompletableFuture<V>> read) {
@@ -25,21 +28,16 @@ final class SnapshotCache<K, V> {
         if (entry != null && (entry.pending() || clock.getAsLong() - entry.completedAt() < lifetime)) {
             return entry.value();
         }
+        CompletableFuture<V> result = reads.start(read);
+        if (result == null) {
+            return null;
+        }
         if (entry == null && entries.size() == capacity) {
-            var iterator = entries.values().iterator();
-            while (iterator.hasNext()) {
-                if (!iterator.next().pending()) {
-                    iterator.remove();
-                    break;
-                }
-            }
-            if (entries.size() == capacity) {
-                return null;
-            }
+            entries.pollFirstEntry();
         }
         Entry<V> pending = new Entry<>(null, 0, true);
         entries.put(key, pending);
-        read.get().whenComplete((value, error) -> complete(key, pending, error == null ? value : null));
+        result.whenComplete((value, error) -> complete(key, pending, error == null ? value : null));
         return null;
     }
 

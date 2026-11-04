@@ -132,14 +132,44 @@ class StatsPlaceholdersTest {
     }
 
     @Test
+    void differentKeysShareOneInFlightReadAndAConnectionFailureCooldown() {
+        AtomicLong clock = new AtomicLong();
+        AtomicInteger playerReads = new AtomicInteger();
+        CompletableFuture<PlayerStats> failed = new CompletableFuture<>();
+        StatsPlaceholders placeholders = new StatsPlaceholders(() -> { throw new AssertionError(); },
+                (player, scope) -> {
+                    if (playerReads.incrementAndGet() == 1) {
+                        return failed;
+                    }
+                    return CompletableFuture.completedFuture(PlayerStats.empty(player));
+                }, (stat, scope) -> { throw new AssertionError(); }, clock::get, 30);
+        String wins = "stat_all_time_wins";
+
+        assertEquals("N/A", placeholders.resolve(ALICE, wins));
+        assertEquals("N/A", placeholders.resolve(BOB, wins));
+        assertEquals("N/A", placeholders.resolve(null, "top_all_time_wins_1_name"));
+        assertEquals("N/A", placeholders.resolve(null, "season_name"));
+        failed.completeExceptionally(new IllegalStateException("database down"));
+        assertEquals("N/A", placeholders.resolve(BOB, wins));
+        assertEquals("N/A", placeholders.resolve(null, "season_name"));
+        assertEquals(1, playerReads.get());
+
+        clock.set(TimeUnit.SECONDS.toNanos(5));
+        assertEquals("N/A", placeholders.resolve(BOB, wins));
+        assertEquals("0", placeholders.resolve(BOB, wins));
+        assertEquals(2, playerReads.get());
+    }
+
+    @Test
     void boundedCacheKeepsInFlightReadsAndDiscardsInvalidatedCompletions() {
-        SnapshotCache<String, String> cache = new SnapshotCache<>(1, () -> 0);
+        SnapshotCache<String, String> cache = new SnapshotCache<>(1, () -> 0, new SnapshotReads(() -> 0));
         CompletableFuture<String> pending = new CompletableFuture<>();
         assertNull(cache.get("old", 10, () -> pending));
         assertNull(cache.get("new", 10, () -> { throw new AssertionError(); }));
         cache.invalidate();
-        assertNull(cache.get("old", 10, () -> CompletableFuture.completedFuture("fresh")));
+        assertNull(cache.get("old", 10, () -> { throw new AssertionError(); }));
         pending.complete("stale");
+        assertNull(cache.get("old", 10, () -> CompletableFuture.completedFuture("fresh")));
         assertEquals("fresh", cache.get("old", 10, () -> { throw new AssertionError(); }));
         assertNull(cache.get("new", 10, () -> CompletableFuture.completedFuture("new")));
         assertEquals("new", cache.get("new", 10, () -> { throw new AssertionError(); }));

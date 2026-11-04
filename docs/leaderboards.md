@@ -62,6 +62,7 @@ All-time player kills: %ninjaarena_stat_all_time_player_kills%
 
 Use `placeholders.cache-seconds` in `config.yml` to set the snapshot lifetime.
 It defaults to 30 seconds and accepts integers from 1 through 300. Apply
-changes with `/narena admin reload`. The first request after a cache miss or
-expiry queues an asynchronous read. A display can show `N/A` while that read
-is pending and picks up the result on a subsequent request.
+changes with `/narena admin reload`. Requests for missing or expired data
+trigger asynchronous reads, one at a time across the expansion. A display
+can show `N/A` until a read completes and picks up the result on a subsequent
+request. A failed read pauses new placeholder reads for at least five seconds.
