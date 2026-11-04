@@ -31,6 +31,16 @@ Java 25, and does not run on Folia.
   servers share one set of tables. Changing `stats.season` archives the current season
   without deleting it. Unreachable databases are retried, and the queue is flushed on
   shutdown. `plugin.stats()` reads a player's stats, top lists and seasons.
+- Waiting players and spectator portal entrants can watch live matches within the arena
+  bounds. Viewers use the existing snapshot and restore flow, with separate admission
+  limits and no effect on team rosters or enemy pressure.
+- The Shadow Stalker signature enemy: a wither skeleton changed only through attributes,
+  equipment, particles and Paper Mob Goals, so Bedrock players see it without a resource
+  pack. It ignores stealth by default (`ignores-stealth.shadow-stalker`), hunts the leading
+  team, and when its target is out of reach blinks behind them after a particle tell and
+  makes them glow for 3 seconds. The director spends its threat cost, caps it at one per
+  match by default, and removes it with the other enemies. Health, damage, speed, size,
+  blink timing and range and the glow are under `director.shadow-stalker`.
 - Unit coverage for composed director pressure, repeated binary snapshots and safe-landing
   search boundaries. A separate local Paper stability probe records tick durations, decoded
   save comparisons and pending chunkholders. The short diagnostic reproduces retained

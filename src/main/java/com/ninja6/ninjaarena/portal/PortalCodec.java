@@ -40,6 +40,9 @@ public final class PortalCodec {
             ConfigurationSection section = root.createSection(portal.name());
             section.set("world", portal.world());
             section.set("arena", portal.arena());
+            if (portal.spectator()) {
+                section.set("spectator", true);
+            }
             ArenaBounds region = portal.region();
             section.set("region.min-x", region.minX());
             section.set("region.min-y", region.minY());
@@ -105,7 +108,11 @@ public final class PortalCodec {
                 requireInt(section, "region.max-x"),
                 requireInt(section, "region.max-y"),
                 requireInt(section, "region.max-z"));
-        return new Portal(name, requireString(section, "world"), region, requireString(section, "arena"));
+        if (section.contains("spectator") && !section.isBoolean("spectator")) {
+            throw new PortalFormatException("spectator must be a boolean");
+        }
+        return new Portal(name, requireString(section, "world"), region, requireString(section, "arena"),
+                section.getBoolean("spectator"));
     }
 
     private static int requireInt(ConfigurationSection section, String path) throws PortalFormatException {

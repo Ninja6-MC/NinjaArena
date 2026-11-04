@@ -68,9 +68,13 @@ class PortalEntryTest {
     }
 
     private static Player player(boolean canPlay) {
+        return player(canPlay ? PortalEntry.PLAY : "");
+    }
+
+    private static Player player(String permission) {
         return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
-                    case "hasPermission" -> canPlay && PortalEntry.PLAY.equals(args[0]);
+                    case "hasPermission" -> permission.equals(args[0]);
                     case "getUniqueId" -> ALICE;
                     case "getName" -> "Alice";
                     default -> throw new UnsupportedOperationException(method.getName());
@@ -128,6 +132,29 @@ class PortalEntryTest {
         pending.clear();
         captureResult = CaptureResult.ALREADY_PENDING;
         assertEquals(Reason.SNAPSHOT_PENDING, reason(entry.admit(player(true), LOBBY)));
+    }
+
+    @Test
+    void spectatorPortalUsesSeparatePermissionAndTheSameSnapshotGate() throws Exception {
+        var spectator = new Portal("watch", "world", LOBBY.region(), "dojo", true);
+        var viewer = player(PortalEntry.SPECTATE);
+        assertEquals(Reason.UNAVAILABLE, reason(entry.check(viewer, spectator)));
+
+        arenas.hold("dojo");
+        var viewPoint = new ArenaPoint(20.5, 64, 20.5, 0, 0);
+        entry = new PortalEntry(arenas, pending::contains, ignored -> {
+            captures++;
+            return captureResult;
+        }, arena -> Optional.of(viewPoint));
+        assertEquals(Optional.of(viewPoint), entry.destination(spectator));
+        assertEquals(Reason.NO_PERMISSION, reason(entry.admit(player(true), spectator)));
+
+        pending.add(ALICE);
+        assertEquals(Reason.SNAPSHOT_PENDING, reason(entry.admit(viewer, spectator)));
+        assertEquals(0, captures);
+        pending.clear();
+        assertEquals(Optional.empty(), entry.admit(viewer, spectator));
+        assertEquals(1, captures);
     }
 
     @Test

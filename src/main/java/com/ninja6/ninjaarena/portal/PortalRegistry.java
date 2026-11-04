@@ -107,6 +107,11 @@ public final class PortalRegistry {
      *                        overlaps another portal, or the write fails
      */
     public Portal create(String name, String world, ArenaBounds region, String arena) throws ArenaException {
+        return create(name, world, region, arena, false);
+    }
+
+    public Portal create(String name, String world, ArenaBounds region, String arena, boolean spectator)
+            throws ArenaException {
         String key = Portal.normalizeName(name);
         if (!Portal.isValidName(key)) {
             throw new ArenaException("Portal names are 1 to 32 letters, digits, _ or -.");
@@ -116,7 +121,7 @@ public final class PortalRegistry {
         }
         Portal portal;
         try {
-            portal = new Portal(key, world, region, Arena.normalizeName(arena));
+            portal = new Portal(key, world, region, Arena.normalizeName(arena), spectator);
         } catch (IllegalArgumentException e) {
             throw new ArenaException(capitalize(e.getMessage()) + ".", e);
         }

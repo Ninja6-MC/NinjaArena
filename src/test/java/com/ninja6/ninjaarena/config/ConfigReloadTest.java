@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.tool.NinjaTools;
+import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
@@ -41,6 +42,7 @@ class ConfigReloadTest {
         boolean friendlyFire;
         ScoringSettings scoring;
         ToolSettings tools;
+        SpectatorSettings spectating;
         KitDefinition kit;
         ConfigurationSection published;
         String season;
@@ -58,6 +60,7 @@ class ConfigReloadTest {
             calls.add("match"); match = settings; this.friendlyFire = friendlyFire; this.scoring = scoring;
         }
         @Override public void tools(ToolSettings settings) { calls.add("tools"); tools = settings; }
+        @Override public void spectating(SpectatorSettings settings) { spectating = settings; }
         @Override public void kit(KitDefinition kit) { calls.add("kit"); this.kit = kit; }
         @Override public void season(String name) { calls.add("season"); season = name; }
         @Override public void configuration(ConfigurationSection settings) { published = settings; }
@@ -77,6 +80,17 @@ class ConfigReloadTest {
 
     private ReloadFiles.Candidate candidate() throws Exception {
         return ReloadFiles.read(dir.resolve("config.yml"), dir.resolve("kits.yml"), items);
+    }
+
+    @Test
+    void invalidSpectatorLimitKeepsTheLastValidSettings() throws Exception {
+        write("spectating: {enabled: false, max-per-match: 3}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertEquals(new SpectatorSettings(false, 3), target.spectating);
+
+        write("spectating: {enabled: true, max-per-match: 65}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("spectating.max-per-match"));
+        assertEquals(new SpectatorSettings(false, 3), target.spectating);
     }
 
     @Test
@@ -210,6 +224,22 @@ class ConfigReloadTest {
         target.calls.clear();
         assertTrue(reload.reload().get(1).contains("arena-world.view-distance"));
         assertEquals(List.of("world", "waiting"), target.calls);
+    }
+
+    @Test
+    void shadowStalkerSettingsAreValidatedAndNeedARestart() throws Exception {
+        write("director:\n  shadow-stalker:\n    blink:\n      distance: 30.0\n", EMPTY_KIT);
+        var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate);
+        assertTrue(failure.getMessage().contains("director.shadow-stalker.blink.distance"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("blink range must not be below blink distance"));
+        write("director:\n  shadow-stalker:\n    blink:\n      distance: 30.0\n      range: 20.0\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("director.shadow-stalker.blink.range"));
+        write("director:\n  shadow-stalker:\n    max-alive: 6\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage().contains("must be from 0.0 to 5.0"));
+        write("director:\n  shadow-stalker:\n    health: 80.0\n", EMPTY_KIT);
+        assertTrue(reload.reload().get(3).contains("director.shadow-stalker.health (restart required)"));
+        assertEquals(40.0, target.published.getDouble("director.shadow-stalker.health"));
     }
 
     @Test

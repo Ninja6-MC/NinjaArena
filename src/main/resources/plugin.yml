@@ -16,13 +16,18 @@ commands:
     description: The Arena commands
     usage: /<command>
     aliases: [narena]
-    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin
+    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.spectate
 
 permissions:
   # Each tier is a declared child of the one above it. Bukkit gives the dots in a node name
   # no meaning, so the inheritance exists only where it is written out.
   ninjaarena.play:
     description: Join and play arena matches
+    default: true
+    children:
+      ninjaarena.spectate: true
+  ninjaarena.spectate:
+    description: Watch live arena matches
     default: true
     children: {}
   ninjaarena.host:

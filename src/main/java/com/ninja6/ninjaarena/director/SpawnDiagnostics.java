@@ -92,6 +92,6 @@ public final class SpawnDiagnostics {
     }
 
     private static String name(EnemyKind kind) {
-        return kind.name().toLowerCase(Locale.ROOT);
+        return kind.label();
     }
 }

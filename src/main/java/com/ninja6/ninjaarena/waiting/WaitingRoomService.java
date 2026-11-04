@@ -25,6 +25,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -65,6 +66,8 @@ public final class WaitingRoomService {
         TELEPORTED,
         /** Died; restored on the next tick, or on respawn if they are still dead. */
         DIED,
+        /** Moved to a live match as a spectator, retaining the existing snapshot. */
+        SPECTATE,
         /** Disconnected; restored on their next join. */
         QUIT
     }
@@ -78,6 +81,7 @@ public final class WaitingRoomService {
     private final ArenaRegistry arenas;
     private WaitingRoomSettings settings;
     private final Function<Player, RestoreResult> restore;
+    private UUID transferring;
     private final Consumer<Player> empty;
     private final MatchStart matchStart;
 
@@ -228,6 +232,27 @@ public final class WaitingRoomService {
         return arena == null ? 0 : rooms.get(arena).state().teamOf(playerId);
     }
 
+    /** Suppresses the room's teleport exit while a spectator transfer is attempted. */
+    public boolean transferToSpectate(Player player, Location destination) {
+        UUID id = player.getUniqueId();
+        if (!isWaiting(id) || transferring != null) {
+            return false;
+        }
+        transferring = id;
+        try {
+            if (!player.teleport(destination, TeleportCause.PLUGIN)) {
+                return false;
+            }
+            return leave(player, Exit.SPECTATE);
+        } finally {
+            transferring = null;
+        }
+    }
+
+    public boolean isTransferring(UUID playerId) {
+        return playerId.equals(transferring);
+    }
+
     /** Whether a waiting player at this location is still in their room. */
     public boolean inRoom(UUID playerId, Location location) {
         String arena = arenaOf.get(playerId);
@@ -269,6 +294,9 @@ public final class WaitingRoomService {
             showStatus(room);
         }
         switch (exit) {
+            case SPECTATE -> {
+                player.sendActionBar(Component.empty());
+            }
             case QUIT -> {
                 // The restore listener marks the snapshot; it is restored on the next join.
             }

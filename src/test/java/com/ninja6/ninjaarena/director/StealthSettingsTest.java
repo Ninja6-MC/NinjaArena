@@ -20,7 +20,7 @@ class StealthSettingsTest {
             var config = YamlConfiguration.loadConfiguration(new InputStreamReader(stream, StandardCharsets.UTF_8));
             var section = config.getConfigurationSection("director.stealth");
             assertNotNull(section);
-            assertEquals(new StealthSettings(0.25, 7, 3, 2, false, false, false, false), StealthSettings.DEFAULTS);
+            assertEquals(new StealthSettings(0.25, 7, 3, 2, false, false, false, true), StealthSettings.DEFAULTS);
             assertEquals(StealthSettings.DEFAULTS, StealthSettings.from(section));
             for (String key : section.getKeys(true)) {
                 var without = new YamlConfiguration();
@@ -57,14 +57,17 @@ class StealthSettingsTest {
         assertTrue(settings.ignoresStealth(EnemyKind.ZOMBIE));
         assertFalse(settings.ignoresStealth(EnemyKind.SKELETON));
         assertTrue(settings.ignoresStealth(EnemyKind.SPIDER));
+        assertTrue(settings.ignoresStealth(EnemyKind.SHADOW_STALKER));
     }
 
     @Test
-    void noKindIgnoresStealthByDefault() {
+    void onlyTheShadowStalkerIgnoresStealthByDefault() {
         for (EnemyKind kind : EnemyKind.values()) {
-            assertFalse(StealthSettings.DEFAULTS.ignoresStealth(kind), kind.name());
+            assertEquals(kind == EnemyKind.SHADOW_STALKER, StealthSettings.DEFAULTS.ignoresStealth(kind), kind.name());
         }
-        assertFalse(StealthSettings.DEFAULTS.shadowStalkerIgnores());
+        var config = new YamlConfiguration();
+        config.set("ignores-stealth.shadow-stalker", false);
+        assertFalse(StealthSettings.from(config).ignoresStealth(EnemyKind.SHADOW_STALKER), "it can be turned off");
     }
 
     @Test
@@ -77,7 +80,7 @@ class StealthSettingsTest {
 
     @Test
     void nonFiniteWeightsUseTheDefaults() {
-        var settings = new StealthSettings(Double.NaN, 7, 3, Double.POSITIVE_INFINITY, false, false, false, false);
+        var settings = new StealthSettings(Double.NaN, 7, 3, Double.POSITIVE_INFINITY, false, false, false, true);
         assertEquals(StealthSettings.DEFAULTS, settings);
         var config = new YamlConfiguration();
         config.set("hidden-weight", Double.NaN);

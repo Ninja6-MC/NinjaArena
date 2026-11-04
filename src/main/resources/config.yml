@@ -111,12 +111,41 @@ director:
     # The hidden cut, the mark and the leader bias all multiply together. Enemies inside a
     # smoke bomb cloud drop their target and take no other while inside.
     marked-weight: 2.0
-    # Enemy types that skip the hidden cut and the lose-track timer.
+    # Enemy types that skip the hidden cut and the lose-track timer. The Shadow Stalker is
+    # the one enemy stealth does not fool.
     ignores-stealth:
       zombie: false
       skeleton: false
       spider: false
-      shadow-stalker: false
+      shadow-stalker: true
+  shadow-stalker:
+    # The signature enemy: a wither skeleton, resized and armed through attributes and
+    # equipment only, so Java and Bedrock players see it without a resource pack. Its cost is
+    # director.enemy-costs.shadow-stalker; killing one scores that many points.
+    # Stalkers alive at once in one match (0 to 5); 0 turns the Shadow Stalker off.
+    max-alive: 1
+    # Health in half hearts (1 to 1024).
+    health: 40.0
+    # Melee damage per hit in half hearts, before armour (0 to 100). Its sword adds nothing
+    # and its hits do not wither.
+    damage: 6.0
+    # Movement speed attribute (0.1 to 0.5); vanilla wither skeletons use 0.25.
+    speed: 0.3
+    # Size multiplier (0.5 to 2). Spawn points need room for the larger body.
+    scale: 1.1
+    blink:
+      # A target is out of reach at distance blocks or more (2 to 32), or nearer when no
+      # walking path gets there. Within range blocks (4 to 64, at least distance) the
+      # Stalker stands still for tell-ticks server ticks (5 to 100; 20 a second) with a
+      # particle tell, then lands behind blocks behind the target (1 to 6), inside the arena.
+      distance: 8.0
+      range: 24.0
+      tell-ticks: 20
+      behind: 2.0
+      # Seconds between blinks, and before the first one after spawning (1 to 120).
+      cooldown-seconds: 8
+    # How long the target glows after a blink (1 to 60).
+    glow-seconds: 3
   intensity:
     # Once a second during a fight the director works out a target intensity from 0 to 1 and
     # spawns enemies until the cost of those alive reaches intensity x the round budget.
@@ -203,3 +232,8 @@ stats:
     database: ninjaarena
     username: ninjaarena
     password: ''
+
+# Viewing a live match. Reloaded limits apply to new spectators.
+spectating:
+  enabled: true
+  max-per-match: 16

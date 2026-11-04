@@ -16,9 +16,11 @@ import com.ninja6.ninjaarena.director.EnemyLifecycle;
 import com.ninja6.ninjaarena.director.IntensitySettings;
 import com.ninja6.ninjaarena.director.MatchDirector;
 import com.ninja6.ninjaarena.director.MobSpawner;
+import com.ninja6.ninjaarena.director.ShadowStalker;
 import com.ninja6.ninjaarena.director.SpawnSettings;
 import com.ninja6.ninjaarena.director.StabilityGate;
 import com.ninja6.ninjaarena.director.StabilitySettings;
+import com.ninja6.ninjaarena.director.StalkerSettings;
 import com.ninja6.ninjaarena.director.StealthSettings;
 import com.ninja6.ninjaarena.director.ThreatBudget;
 import com.ninja6.ninjaarena.director.WorldSenses;
@@ -45,6 +47,8 @@ import com.ninja6.ninjaarena.restore.ArenaCombatCleanup;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
+import com.ninja6.ninjaarena.spectate.SpectatorSettings;
+import com.ninja6.ninjaarena.spectate.Spectators;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
 import com.ninja6.ninjaarena.stats.StatsSettings;
 import com.ninja6.ninjaarena.stats.StatsStore;
@@ -79,6 +83,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private volatile ArenaWorld arenaWorld;
     private ArenaChunkUnloader chunkUnloader;
     private RestoreService restores;
+    private Spectators spectators;
     private ArenaRegistry arenas;
     private PortalRegistry portals;
     private MatchService matches;
@@ -136,13 +141,15 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer);
         getServer().getPluginManager().registerEvents(scoring, this);
         // Starts and stops each match's spawn loop with its fights; closed before the matches.
+        StalkerSettings stalker = StalkerSettings.from(getConfig().getConfigurationSection("director.shadow-stalker"));
         directors = new DirectorService(this,
                 IntensitySettings.from(getConfig().getConfigurationSection("director.intensity")),
                 ThreatBudget.from(getConfig().getConfigurationSection("director.threat-budget")),
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")),
                 scores, matches::matchOf, MobSpawner.factory(arenas, arenaWorld::world, getServer()::getPlayer,
-                        SpawnSettings.from(getConfig().getConfigurationSection("director")), getLogger()),
-                new SplittableRandom()::nextDouble);
+                        SpawnSettings.from(getConfig().getConfigurationSection("director")),
+                        new ShadowStalker(stalker, getServer().getMobGoals(), Bukkit::getCurrentTick), getLogger()),
+                new SplittableRandom()::nextDouble, stalker);
         getServer().getPluginManager().registerEvents(directors, this);
         enemyLifecycle = new EnemyLifecycle(matches::matches, directors::director,
                 name -> arenas.get(name).map(Arena::bounds), arenaWorld::world, scores,
@@ -176,11 +183,25 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         waitingRooms = new WaitingRoomService(this, arenas,
                 WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
                 KitInventory::emptyForWaiting, matches);
+        SpectatorSettings spectating;
+        try {
+            if (!getConfig().isConfigurationSection("spectating")) {
+                throw new IllegalArgumentException("spectating must be a section");
+            }
+            spectating = SpectatorSettings.from(getConfig().getConfigurationSection("spectating"));
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Spectating disabled: " + e.getMessage());
+            spectating = new SpectatorSettings(false, 16);
+        }
+        spectators = new Spectators(this, arenas, matches, waitingRooms, restores, arenaWorld::world, spectating);
+        Spectators watching = spectators;
+        getServer().getPluginManager().registerEvents(watching, this);
+        arenas.onEditOrDelete(watching::closeArena);
         // Waiting players are locked like match players; the fields are cleared on disable.
         MatchService inMatch = matches;
         WaitingRoomService waiting = waitingRooms;
         getServer().getPluginManager().registerEvents(new InventoryLockdownListener(
-                id -> inMatch.isInMatch(id) || waiting.isWaiting(id)), this);
+                id -> inMatch.isInMatch(id) || waiting.isWaiting(id) || watching.contains(id)), this);
         getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
         arenas.onEditOrDelete(waitingRooms::closeRoom);
         // Match slots, enemy caps, the spawn rate and the tick-time guard; enemies are counted
@@ -198,13 +219,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         waitingRooms.setStartAllowed(() -> inMatch.matches().size() < stability.maxMatches());
         waitingRooms.start();
         PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
-        PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);
+        PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist, watching::destination);
         ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots, waitingRooms::join);
         hosting = new HostingService(this, arenas, waitingRooms, entry, admission, arenaWorld::world,
                 inMatch::isInMatch, arenaWorld::acquire);
         getServer().getPluginManager().registerEvents(hosting, this);
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
-                snapshots, portalCommand::forget, waitingRooms::join, arenaWorld::acquire), this);
+                admission, portalCommand::forget, arenaWorld::acquire, watching::arrived), this);
         ConfigReload reloader = new ConfigReload(getDataFolder().toPath(), getConfig(), kit, kitItems,
                 new ConfigReload.Target() {
                     @Override
@@ -241,6 +262,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void spectating(SpectatorSettings settings) {
+                        watching.setSettings(settings);
+                    }
+
+                    @Override
                     public void tools(ToolSettings settings) {
                         tools.setSettings(settings);
                     }
@@ -271,9 +297,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 player -> {
                     boolean cancelled = hosting.leave(player);
-                    return waitingRooms.leave(player, Exit.COMMAND)
+                    return watching.leave(player) || waitingRooms.leave(player, Exit.COMMAND)
                             || matches.leave(player, MatchService.Exit.COMMAND) || cancelled;
-                }, hosting, reloader::execute);
+                }, hosting, reloader::execute, watching::fromWaitingRoom);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -302,6 +328,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (spectators != null) {
+            spectators.close();
+            spectators = null;
+        }
         if (hosting != null) {
             hosting.close();
             hosting = null;

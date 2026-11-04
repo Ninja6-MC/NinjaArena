@@ -73,6 +73,7 @@ abstract class MatchFixture {
         Location location;
         boolean online = true;
         boolean dead;
+        boolean canSpectate;
         GameMode gameMode = GameMode.SURVIVAL;
         Entity spectatorTarget;
         Player killer;
@@ -260,6 +261,7 @@ abstract class MatchFixture {
                     case "isOnline" -> fake.online;
                     case "isDead" -> fake.dead;
                     case "getKiller" -> fake.killer;
+                    case "hasPermission" -> fake.canSpectate && "ninjaarena.spectate".equals(args[0]);
                     case "getGameMode" -> fake.gameMode;
                     case "getSpectatorTarget" -> fake.spectatorTarget;
                     case "setSpectatorTarget" -> {

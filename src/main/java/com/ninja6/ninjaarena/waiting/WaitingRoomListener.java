@@ -48,7 +48,7 @@ public final class WaitingRoomListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         Player player = event.getPlayer();
-        if (leftRoom(player, event.getFrom(), event.getTo())) {
+        if (!rooms.isTransferring(player.getUniqueId()) && leftRoom(player, event.getFrom(), event.getTo())) {
             rooms.leave(player, Exit.TELEPORTED);
         }
     }

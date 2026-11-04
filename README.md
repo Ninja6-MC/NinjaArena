@@ -65,7 +65,8 @@ under the root.
 | Command | Permission | Behavior |
 | :--- | :--- | :--- |
 | `help` | Any tier below | List permitted commands |
-| `leave` | `ninjaarena.play` | Leave the waiting room or match and restore your snapshot |
+| `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Return home and restore your snapshot |
+| `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from a waiting room |
 | `accept <host>` | `ninjaarena.play` | Accept an invitation and enter the waiting room |
 | `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
 | `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |
@@ -78,12 +79,10 @@ The player and host commands require a player sender. Enter the Arena by walking
 through a portal or explicitly accepting an invitation. Admin reload also works from
 the console.
 
-`ninjaarena.play` defaults to everyone. `ninjaarena.host` and `ninjaarena.admin` default
-to operators. The declared permission children grant play from host, and host from admin;
-the play leaf has an explicit empty children block. The root accepts any of these tiers,
-and dispatch, help and tab completion check the route's own permission. Denying play
-explicitly therefore blocks player routes without blocking an otherwise granted admin
-or host route.
+`ninjaarena.play` and `ninjaarena.spectate` default to everyone. `ninjaarena.host` and
+`ninjaarena.admin` default to operators. The declared permission children grant spectate
+from play, play from host, and host from admin. The root accepts any of these permissions.
+Dispatch, help and tab completion check the permissions for each route.
 
 ## Hosting and invitations
 
@@ -112,6 +111,24 @@ unaccepted invitations. Losing the host permission also invalidates it at the ne
 operation or pending entry check. Players already in the waiting room remain there and
 can leave through the normal snapshot restore.
 
+## Watching live matches
+
+From any waiting room, run `/narena spectate <arena>` to watch an in-progress match.
+A successful transfer removes you from the queue and keeps your pre-entry snapshot.
+To offer access from another world, mark portal corners as usual and run
+`/narena portal create <name> <arena> spectator`. The portal admits viewers only while
+the named match is open to spectators. Ordinary portals still lead to the waiting room.
+
+Viewers can fly within the arena's three-dimensional bounds. Entity cameras, arena
+interactions, and teleports outside the bounds are blocked. Viewers are outside the
+team rosters, countdown minimum, scoring, and enemy director. Use `/narena leave` to
+return home, or wait for the match to end. Disconnecting frees the spectator slot
+immediately and restores your snapshot on the next join.
+
+Set `spectating.enabled` to control admission and `spectating.max-per-match` to set the
+number of viewers per match (1 to 64, default 16). Both options apply to new admissions
+on a successful reload. Current viewers can stay until they leave or the match ends.
+
 ## Safe configuration reload
 
 Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml` or `kits.yml`.
@@ -126,6 +143,7 @@ and never moves match players or restarts a match.
 | :--- | :--- |
 | Waiting-room minimum, countdown and radius | Apply immediately; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
 | Match timers, rounds, extra rounds, friendly fire and scoring | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
 | Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
 | Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |
@@ -279,9 +297,52 @@ Enemies pick their targets by weight, and stealth and the tools steer that weigh
   goes for another player.
 - An enemy inside a smoke cloud drops its target and takes no other while inside.
 
-Each enemy type has an `ignores-stealth` setting, off by default, that skips the hidden cut
-and the lose-track timer; smoke and marks still apply. Every weight and timing is under
-`director.stealth` in `config.yml`.
+Each enemy type has an `ignores-stealth` setting that skips the hidden cut and the
+lose-track timer; smoke and marks still apply. It is off by default for every type except
+the Shadow Stalker. Every weight and timing is under `director.stealth` in `config.yml`.
+
+### Shadow Stalker
+
+The Shadow Stalker is the signature enemy and the one stealth does not fool. It is a
+vanilla wither skeleton changed only through attributes (size, health, damage, speed),
+equipment (a netherite sword that adds no damage) and particles, so Bedrock players
+through Geyser see it as Java players do, without a resource pack.
+
+- **Hunts the leader.** While one team has the most points, a Stalker targets only that
+  team's players, and switches when the lead changes hands. With level teams, or nobody
+  left on the leading team, it goes for anyone. Its vanilla target goals are removed, so
+  only the director picks whom it hunts.
+- **Blinks.** When its target is out of reach (8 blocks or more away, or nearer with no
+  walking path) but within 24 blocks, it stands still for a second with a purple particle
+  tell, then lands 2 blocks behind the target, facing their back, in a puff of smoke. The
+  landing must be inside the arena, with room for its body and floor beneath it; it tries
+  wider angles round the target, closer spots and a block up or down before giving up for a
+  second. Blinks are 8 seconds apart, and a new Stalker waits that long before its first.
+- **Marks.** The target of a blink glows for 3 seconds.
+- **Counterplay.** Smoke still blinds it and shuriken marks still draw it. Its hits do not
+  wither. Killing one scores its threat cost, 8 points by default.
+
+The director spends its cost (`director.enemy-costs.shadow-stalker`, default 8) from the
+threat budget like any other enemy, counts it towards the mob caps and the tick-time
+guard, places it at the enemy spawn points with room for its larger body, and removes it
+with the other enemies at match end. At most one is alive per match by default.
+
+All settings are under `director.shadow-stalker` and, like every `director` setting, need
+a restart:
+
+| Key | Default | Range | Meaning |
+| :--- | :--- | :--- | :--- |
+| `max-alive` | 1 | 0 to 5 | Stalkers alive at once in one match; 0 turns it off |
+| `health` | 40.0 | 1 to 1024 | Health in half hearts |
+| `damage` | 6.0 | 0 to 100 | Melee damage per hit in half hearts, before armour |
+| `speed` | 0.3 | 0.1 to 0.5 | Movement speed attribute (vanilla wither skeleton: 0.25) |
+| `scale` | 1.1 | 0.5 to 2 | Size multiplier |
+| `blink.distance` | 8.0 | 2 to 32 | Distance at which a target is out of reach |
+| `blink.range` | 24.0 | 4 to 64 | Farthest blink; never below `blink.distance` |
+| `blink.tell-ticks` | 20 | 5 to 100 | Length of the particle tell, in ticks (20 a second) |
+| `blink.behind` | 2.0 | 1 to 6 | How far behind the target it lands |
+| `blink.cooldown-seconds` | 8 | 1 to 120 | Time between blinks |
+| `glow-seconds` | 3 | 1 to 60 | How long the target glows after a blink |
 
 ### Enemy spawns
 
