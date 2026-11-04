@@ -30,6 +30,8 @@ public final class NinjaArenaCommand implements TabExecutor {
     private static final List<Route> ROUTES = List.of(
             new Route(LEAVE, PLAY, LEAVE, "leave the arena and return home"),
             new Route("spectate", PortalEntry.SPECTATE, "spectate <arena>", "watch a live match from a waiting room"),
+            new Route(LeaderboardCommand.NAME, LeaderboardCommand.PERMISSION, LeaderboardCommand.USAGE,
+                    "show the top 10 for an Arena stat"),
             new Route("accept", PLAY, "accept <host>", "accept an invitation to the Arena"),
             new Route("host", HOST, "host <arena>", "open a match in the Arena"),
             new Route("invite", HOST, "invite <player>", "invite a player to the Arena"),
@@ -47,6 +49,7 @@ public final class NinjaArenaCommand implements TabExecutor {
     private final HostingCommands hosting;
     private final Consumer<CommandSender> reload;
     private final BiConsumer<Player, String> spectate;
+    private final LeaderboardCommand leaderboard;
 
     /**
      * @param leave takes the player out of their waiting room or match and sends them home;
@@ -75,6 +78,12 @@ public final class NinjaArenaCommand implements TabExecutor {
     public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
             Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload,
             BiConsumer<Player, String> spectate) {
+        this(arena, portal, director, leave, hosting, reload, spectate, null);
+    }
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload,
+            BiConsumer<Player, String> spectate, LeaderboardCommand leaderboard) {
         this.arena = Objects.requireNonNull(arena, "arena");
         this.portal = Objects.requireNonNull(portal, "portal");
         this.director = Objects.requireNonNull(director, "director");
@@ -82,6 +91,7 @@ public final class NinjaArenaCommand implements TabExecutor {
         this.hosting = hosting;
         this.reload = reload;
         this.spectate = spectate;
+        this.leaderboard = leaderboard;
     }
 
     @Override
@@ -115,6 +125,13 @@ public final class NinjaArenaCommand implements TabExecutor {
                         leave(sender);
                     } else {
                         usage(sender, label, route.usage());
+                    }
+                }
+                case LeaderboardCommand.NAME -> {
+                    if (leaderboard == null) {
+                        unavailable(sender, group);
+                    } else {
+                        leaderboard.execute(sender, label, tail(args));
                     }
                 }
                 case "spectate" -> {
@@ -165,7 +182,7 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     private static boolean canUseRoot(CommandSender sender) {
         return sender.hasPermission(PLAY) || sender.hasPermission(HOST) || sender.hasPermission(ADMIN)
-                || sender.hasPermission(PortalEntry.SPECTATE);
+                || sender.hasPermission(PortalEntry.SPECTATE) || sender.hasPermission(LeaderboardCommand.PERMISSION);
     }
 
     private static boolean canUse(CommandSender sender, Route route) {
@@ -230,6 +247,10 @@ public final class NinjaArenaCommand implements TabExecutor {
                 }
             }
             return out;
+        }
+        if (args[0].equalsIgnoreCase(LeaderboardCommand.NAME)) {
+            return sender.hasPermission(LeaderboardCommand.PERMISSION)
+                    ? LeaderboardCommand.complete(tail(args)) : List.of();
         }
         if (!sender.hasPermission(ADMIN)) {
             return List.of();

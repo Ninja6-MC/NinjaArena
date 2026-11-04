@@ -51,6 +51,26 @@ class NinjaArenaCommandTest {
     private boolean waiting;
 
     @Test
+    void leaderboardPermissionAloneOpensTheRouteAndItsCompletions() {
+        NinjaArenaCommand withLeaderboard = new NinjaArenaCommand(new ArenaCommand(registry, () -> null),
+                portalCommand, NO_DIRECTOR, player -> false, null, null, null,
+                new LeaderboardCommand(null, () -> null));
+        Player viewer = playerWithPermissions("ninjaarena.leaderboard");
+        Player denied = playerWithPermissions(NinjaArenaCommand.PLAY);
+
+        assertEquals(List.of("help", "leaderboard"), withLeaderboard.onTabComplete(viewer, null, "narena", new String[0]));
+        assertEquals(List.of("player_kills"), withLeaderboard.onTabComplete(viewer, null, "narena",
+                new String[] {"leaderboard", "P"}));
+        assertEquals(List.of("season"), withLeaderboard.onTabComplete(viewer, null, "narena",
+                new String[] {"leaderboard", "wins", "s"}));
+        assertEquals(List.of(), withLeaderboard.onTabComplete(denied, null, "narena",
+                new String[] {"leaderboard", ""}));
+        withLeaderboard.onCommand(viewer, null, "narena", new String[] {"leaderboard", "wins", "season"});
+        withLeaderboard.onCommand(denied, null, "narena", new String[] {"leaderboard", "wins"});
+        assertEquals(List.of("Arena stats are disabled.", "You do not have permission to use this command."), messages);
+    }
+
+    @Test
     void adminTeleportRetainsItsWorldOperationUntilTheScheduledCompletionEvenOnFailure() throws Exception {
         registry.create("dojo", new GridCell(1, 0));
         for (boolean exceptional : List.of(false, true)) {

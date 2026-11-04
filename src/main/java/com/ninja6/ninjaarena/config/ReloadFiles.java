@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.config;
 
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
 import com.ninja6.ninjaarena.stats.StatsSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -163,6 +164,8 @@ public final class ReloadFiles {
             case "tools.shuriken.damage" -> new double[] {0, 20};
             case "tools.dash.strength" -> new double[] {0.1, 2};
             case "tools.dash.lift" -> new double[] {0, 0.6};
+            case StatsPlaceholders.CACHE_SECONDS ->
+                    new double[] {StatsPlaceholders.MIN_SECONDS, StatsPlaceholders.MAX_SECONDS};
             case "stats.mysql.port" -> new double[] {1, 65535};
             default -> throw new IllegalStateException("No validation range for " + path);
         };

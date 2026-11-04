@@ -25,6 +25,8 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- View all-time or current-season top tens with `/narena leaderboard`. PlaceholderAPI
+  can show personal stats, ranked scores and names, and the current season.
 - Player stats and seasons: wins, rounds won, player kills, enemy kills, deaths, best
   Overrun survival and matches played, all-time and per season, written in batches off
   the server thread when a match ends. SQLite by default; MySQL or MariaDB lets several
