@@ -46,6 +46,9 @@ import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
+import com.ninja6.ninjaarena.stats.StatsSettings;
+import com.ninja6.ninjaarena.stats.StatsStore;
+import com.ninja6.ninjaarena.stats.StatsTracker;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.HostingService;
@@ -59,6 +62,7 @@ import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import com.ninja6.ninjaarena.world.ArenaExtentListener;
 import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.SplittableRandom;
 import java.util.logging.Level;
@@ -87,6 +91,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private NinjaTools tools;
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
+    private StatsStore stats;
 
     @Override
     public void onEnable() {
@@ -144,6 +149,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")), System::nanoTime);
         getServer().getPluginManager().registerEvents(enemyLifecycle, this);
         enemyLifecycle.start(this);
+        startStats(enemyLifecycle);
         kitItems = new KitItems();
         NinjaTools.registerItems(kitItems);
         tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
@@ -245,6 +251,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void season(String name) {
+                        if (stats != null) {
+                            stats.useSeason(name);
+                        }
+                    }
+
+                    @Override
                     public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
                         for (String path : settings.getKeys(true)) {
                             if (!settings.isConfigurationSection(path)) {
@@ -264,6 +277,27 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
+    }
+
+    /**
+     * Records player stats from the match events. A bad stats setting or an unreachable
+     * database turns stats off or delays the writes; it never stops the plugin.
+     */
+    private void startStats(EnemyLifecycle enemies) {
+        StatsSettings settings;
+        try {
+            settings = StatsSettings.from(getConfig().getConfigurationSection("stats"));
+        } catch (IllegalArgumentException e) {
+            getLogger().severe("Stats are off: " + e.getMessage() + ". Fix config.yml and restart to record stats.");
+            return;
+        }
+        if (!settings.enabled()) {
+            return;
+        }
+        stats = StatsStore.open(settings, getDataFolder().toPath(), getLogger());
+        StatsTracker tracker = new StatsTracker(stats::record, getServer()::getPlayer, Instant::now);
+        getServer().getPluginManager().registerEvents(tracker, this);
+        enemies.setKills(tracker::enemyKilled);
     }
 
     @Override
@@ -291,6 +325,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (matches != null) {
             matches.close();
             matches = null;
+        }
+        // After the matches: stopping them records what they had so far.
+        if (stats != null) {
+            stats.close();
+            stats = null;
         }
         if (tools != null) {
             tools.close();
@@ -376,6 +415,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** The ninja kit tools and the shuriken mark query; {@code null} while disabled. */
     public NinjaTools tools() {
         return tools;
+    }
+
+    /**
+     * Player stats and seasons: reads for leaderboards and rewards, and season changes.
+     * {@code null} while the plugin is disabled or stats are off in {@code config.yml}.
+     */
+    public StatsStore stats() {
+        return stats;
     }
 
     /** Registered portals; {@code null} while the plugin is disabled. */
