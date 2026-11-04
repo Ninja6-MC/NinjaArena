@@ -122,11 +122,11 @@ class StatsPlaceholdersTest {
         clock.set(TimeUnit.SECONDS.toNanos(5));
         assertEquals("First", placeholders.resolve(null, "season_name"));
         placeholders.setCacheSeconds(5);
-        assertEquals("N/A", placeholders.resolve(null, "season_name"));
-        assertEquals("N/A", placeholders.resolve(null, "season_name"));
+        assertEquals("First", placeholders.resolve(null, "season_name"));
+        assertEquals("First", placeholders.resolve(null, "season_name"));
         assertEquals(2, reads.get());
         clock.set(TimeUnit.SECONDS.toNanos(10));
-        assertEquals("N/A", placeholders.resolve(null, "season_name"));
+        assertEquals("First", placeholders.resolve(null, "season_name"));
         assertEquals("First", placeholders.resolve(null, "season_name"));
         assertEquals(3, reads.get());
     }
@@ -173,5 +173,75 @@ class StatsPlaceholdersTest {
         assertEquals("fresh", cache.get("old", 10, () -> { throw new AssertionError(); }));
         assertNull(cache.get("new", 10, () -> CompletableFuture.completedFuture("new")));
         assertEquals("new", cache.get("new", 10, () -> { throw new AssertionError(); }));
+    }
+
+    @Test
+    void expiredValueIsServedWhileItsRefreshIsPending() {
+        AtomicLong clock = new AtomicLong();
+        AtomicInteger reads = new AtomicInteger();
+        CompletableFuture<PlayerStats> refresh = new CompletableFuture<>();
+        StatsPlaceholders placeholders = new StatsPlaceholders(() -> { throw new AssertionError(); },
+                (player, scope) -> reads.incrementAndGet() == 1
+                        ? CompletableFuture.completedFuture(new PlayerStats(player, "Alice", 1, 0, 0, 0, 0, 0, 0))
+                        : refresh, (stat, scope) -> { throw new AssertionError(); }, clock::get, 30);
+        String wins = "stat_all_time_wins";
+
+        assertEquals("N/A", placeholders.resolve(ALICE, wins));
+        assertEquals("1", placeholders.resolve(ALICE, wins));
+        clock.set(TimeUnit.SECONDS.toNanos(31));
+        assertEquals("1", placeholders.resolve(ALICE, wins));
+        assertEquals("1", placeholders.resolve(ALICE, wins));
+        assertEquals(2, reads.get());
+        refresh.complete(new PlayerStats(ALICE, "Alice", 2, 0, 0, 0, 0, 0, 0));
+        assertEquals("2", placeholders.resolve(ALICE, wins));
+    }
+
+    @Test
+    void expiredValueSurvivesOtherReadsAndCooldownsUntilTheStaleBound() {
+        AtomicLong clock = new AtomicLong();
+        long lifetime = TimeUnit.SECONDS.toNanos(30);
+        SnapshotReads reads = new SnapshotReads(clock::get);
+        SnapshotCache<String, String> cache = new SnapshotCache<>(4, clock::get, reads);
+        CompletableFuture<String> elsewhere = new CompletableFuture<>();
+        assertNull(cache.get("held", lifetime, () -> CompletableFuture.completedFuture("one")));
+        assertNull(cache.get("other", lifetime, () -> elsewhere));
+
+        clock.set(lifetime);
+        assertEquals("one", cache.get("held", lifetime, () -> { throw new AssertionError(); }));
+        elsewhere.completeExceptionally(new IllegalStateException("database down"));
+        assertEquals("one", cache.get("held", lifetime, () -> { throw new AssertionError(); }));
+
+        clock.addAndGet(TimeUnit.SECONDS.toNanos(5));
+        assertEquals("one", cache.get("held", lifetime,
+                () -> CompletableFuture.failedFuture(new IllegalStateException("database down"))));
+        assertEquals("one", cache.get("held", lifetime, () -> { throw new AssertionError(); }));
+
+        clock.set(lifetime + SnapshotCache.MAX_STALE);
+        CompletableFuture<String> last = new CompletableFuture<>();
+        assertEquals("one", cache.get("held", lifetime, () -> last));
+        last.completeExceptionally(new IllegalStateException("database down"));
+        assertNull(cache.get("held", lifetime, () -> { throw new AssertionError(); }));
+    }
+
+    @Test
+    void readThatThrowsReleasesTheGateAndStartsTheCooldown() {
+        AtomicLong clock = new AtomicLong();
+        AtomicInteger reads = new AtomicInteger();
+        StatsPlaceholders placeholders = new StatsPlaceholders(() -> { throw new AssertionError(); },
+                (player, scope) -> {
+                    if (reads.incrementAndGet() == 1) {
+                        throw new IllegalStateException("executor rejected");
+                    }
+                    return CompletableFuture.completedFuture(new PlayerStats(player, "Alice", 3, 0, 0, 0, 0, 0, 0));
+                }, (stat, scope) -> { throw new AssertionError(); }, clock::get, 30);
+        String wins = "stat_all_time_wins";
+
+        assertEquals("N/A", placeholders.resolve(ALICE, wins));
+        assertEquals("N/A", placeholders.resolve(BOB, wins));
+        assertEquals(1, reads.get());
+        clock.set(TimeUnit.SECONDS.toNanos(5));
+        assertEquals("N/A", placeholders.resolve(BOB, wins));
+        assertEquals("3", placeholders.resolve(BOB, wins));
+        assertEquals(2, reads.get());
     }
 }

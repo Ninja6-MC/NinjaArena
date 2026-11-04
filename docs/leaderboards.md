@@ -64,5 +64,8 @@ Use `placeholders.cache-seconds` in `config.yml` to set the snapshot lifetime.
 It defaults to 30 seconds and accepts integers from 1 through 300. Apply
 changes with `/narena admin reload`. Requests for missing or expired data
 trigger asynchronous reads, one at a time across the expansion. A display
-can show `N/A` until a read completes and picks up the result on a subsequent
-request. A failed read pauses new placeholder reads for at least five seconds.
+can show `N/A` until the first read completes and picks up the result on a
+subsequent request. An expired value stays on display while its refresh is
+pending. A failed read pauses new placeholder reads for at least five seconds;
+if refreshes keep failing, a value is dropped to `N/A` once it is five minutes
+past its lifetime.

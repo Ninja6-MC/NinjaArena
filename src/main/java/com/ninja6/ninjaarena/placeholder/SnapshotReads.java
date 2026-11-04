@@ -24,7 +24,13 @@ final class SnapshotReads {
             return null;
         }
         pending = true;
-        return read.get().whenComplete((value, error) -> complete(error));
+        CompletableFuture<V> result;
+        try {
+            result = read.get();
+        } catch (RuntimeException error) {
+            result = CompletableFuture.failedFuture(error);
+        }
+        return result.whenComplete((value, error) -> complete(error));
     }
 
     private synchronized void complete(Throwable error) {
