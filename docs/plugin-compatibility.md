@@ -83,9 +83,11 @@ player reaches the arena backend.
 
 **Code review.** The connection listener tracks join and quit by UUID. The
 activity listener observes movement and other inputs. Neither path teleports
-players, writes inventory or blocks a restore. Arena activity can contribute
-to session activity. No NinjaArena-specific exclusion is needed for restore
-ordering. Session accounting with both plugins installed was not measured.
+players or writes inventory. Arena activity can contribute to session
+activity. With enforcement enabled, a SessionPulse cooldown can deny login
+before NinjaArena's join listener runs. The snapshot stays pending until
+the player can join again. Leave the cooldown in force and verify session
+accounting and reconnect recovery on a test backend.
 
 ## Inventory and block history
 
