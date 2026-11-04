@@ -97,10 +97,16 @@ public final class Rewards implements Listener {
         if (result.reason() != MatchResult.Reason.COMPLETED && result.reason() != MatchResult.Reason.FORFEIT) {
             return;
         }
-        RewardSettings.Payout payout = settings.payout();
+        var bonus = event.match().eventBonus();
+        RewardSettings.Payout base = settings.payout();
+        RewardSettings.Payout payout = new RewardSettings.Payout(base.enabled(), base.amount() + bonus.cents(),
+                base.dailyCap());
         boolean pay = payout.enabled() && VaultPayout.available(plugin.getServer());
         long day = Instant.now().atOffset(ZoneOffset.UTC).toLocalDate().toEpochDay();
         for (UUID id : event.match().players()) {
+            if (bonus.cosmetic() != null) {
+                plugin.stats().grantEventReward(id, bonus.cosmetic(), bonus.seasonal());
+            }
             Player player = plugin.getServer().getPlayer(id);
             if (pay && player != null && player.hasPermission("ninjaarena.rewards.payout")) {
                 plugin.stats().reservePayout(id, result.id(), day, payout).thenAccept(amount -> {

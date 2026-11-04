@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.config;
 
+import com.ninja6.ninjaarena.event.EventSettings;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.portal.LobbyMode;
@@ -17,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.bukkit.Material;
+import java.util.Objects;
+import java.util.function.Predicate;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.yaml.snakeyaml.nodes.MappingNode;
 
@@ -28,9 +31,14 @@ public final class ReloadFiles {
     private ReloadFiles() { }
 
     public static Candidate read(Path config, Path kits, KitItems items) throws ReloadYaml.Invalid {
+        return read(config, kits, items, arena -> true);
+    }
+
+    static Candidate read(Path config, Path kits, KitItems items, Predicate<String> arenaExists)
+            throws ReloadYaml.Invalid {
         ReloadYaml settings = ReloadYaml.read(config);
         ReloadYaml kit = ReloadYaml.read(kits);
-        return new Candidate(config(settings), kit(kit, items));
+        return new Candidate(config(settings, arenaExists), kit(kit, items));
     }
 
     public static YamlConfiguration defaults() {
@@ -44,12 +52,12 @@ public final class ReloadFiles {
         }
     }
 
-    private static YamlConfiguration config(ReloadYaml document) throws ReloadYaml.Invalid {
+    private static YamlConfiguration config(ReloadYaml document, Predicate<String> arenaExists) throws ReloadYaml.Invalid {
         YamlConfiguration defaults = defaults();
         YamlConfiguration result = new YamlConfiguration();
         for (var entry : document.nodes().entrySet()) {
             String path = entry.getKey();
-            if (path.startsWith("rewards.milestones.") || path.startsWith("rewards.placings.")) {
+            if (path.startsWith("events.schedule.") || path.startsWith("rewards.milestones.") || path.startsWith("rewards.placings.")) {
                 continue; // RewardSettings validates the contents of these lists.
             }
             int dot = path.lastIndexOf('.');
@@ -84,6 +92,10 @@ public final class ReloadFiles {
                     problem = LobbyMode.parse(text).isPresent() ? null : "expected dedicated or shared";
                 } else if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
                     problem = PlayerPortalSettings.problem(path, text);
+                } else if (path.startsWith("events.messages.")) {
+                    problem = text.isBlank() || text.length() > 1000 ? "expected 1 to 1000 characters" : null;
+                } else if (path.startsWith("events.")) {
+                    problem = null; // EventSettings validates the time zone and HTTPS endpoint.
                 } else {
                     problem = StatsSettings.problem(path, text);
                 }
@@ -93,8 +105,9 @@ public final class ReloadFiles {
             } else if (fallback instanceof List<?>) {
                 String problem = switch (path) {
                     case PlayerPortalSettings.SECTION + ".worlds" -> PlayerPortalSettings.worldsProblem(value);
-                    case "rewards.milestones", "rewards.placings" ->
-                            value instanceof List<?> ? null : "expected a list"; // RewardSettings validates the entries.
+                    case "events.schedule", "events.announcement-lead-minutes", "rewards.milestones", "rewards.placings" ->
+                            value instanceof List<?> entries && entries.stream().noneMatch(Objects::isNull)
+                                    ? null : "expected a list without null entries";
                     default -> throw new IllegalStateException("No validation for list " + path);
                 };
                 if (problem != null) {
@@ -126,10 +139,21 @@ public final class ReloadFiles {
             }
             result.set(path, value);
         }
+        RewardSettings rewards;
         try {
-            RewardSettings.from(result);
+            rewards = RewardSettings.from(result);
         } catch (IllegalArgumentException e) {
             throw document.invalid("rewards", e.getMessage());
+        }
+        try {
+            EventSettings events = EventSettings.from(result, rewards);
+            for (EventSettings.Night night : events.schedule()) {
+                if (!arenaExists.test(night.arena())) {
+                    throw new IllegalArgumentException("unknown arena " + night.arena() + " for event " + night.id());
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw document.invalid("events", e.getMessage());
         }
         int maxPlayers = result.getInt("waiting-room.max-players");
         if (maxPlayers != 0 && maxPlayers < result.getInt("waiting-room.min-players")) {

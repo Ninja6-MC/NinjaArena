@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.match;
 
+import com.ninja6.ninjaarena.event.EventSettings.Bonus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +20,10 @@ public interface MatchView {
 
     /** The arena's name. */
     String arena();
+
+    default Bonus eventBonus() {
+        return Bonus.NONE;
+    }
 
     MatchPhase phase();
 

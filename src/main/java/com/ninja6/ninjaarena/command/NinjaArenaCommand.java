@@ -40,6 +40,7 @@ public final class NinjaArenaCommand implements TabExecutor {
                     "mark out portals that lead to arenas"),
             new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]",
                     "show the enemy director of a running match"),
+            new Route(EventCommand.NAME, EventCommand.PERMISSION, EventCommand.USAGE, "manage scheduled arena events"),
             new Route("admin", ADMIN, "admin reload", "safely reload the Arena configuration"));
 
     private final ArenaCommand arena;
@@ -50,6 +51,7 @@ public final class NinjaArenaCommand implements TabExecutor {
     private final Consumer<CommandSender> reload;
     private final BiConsumer<Player, String> spectate;
     private final LeaderboardCommand leaderboard;
+    private final EventCommand event;
 
     /**
      * @param leave takes the player out of their waiting room or match and sends them home;
@@ -84,6 +86,12 @@ public final class NinjaArenaCommand implements TabExecutor {
     public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
             Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload,
             BiConsumer<Player, String> spectate, LeaderboardCommand leaderboard) {
+        this(arena, portal, director, leave, hosting, reload, spectate, leaderboard, null);
+    }
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload,
+            BiConsumer<Player, String> spectate, LeaderboardCommand leaderboard, EventCommand event) {
         this.arena = Objects.requireNonNull(arena, "arena");
         this.portal = Objects.requireNonNull(portal, "portal");
         this.director = Objects.requireNonNull(director, "director");
@@ -92,6 +100,7 @@ public final class NinjaArenaCommand implements TabExecutor {
         this.reload = reload;
         this.spectate = spectate;
         this.leaderboard = leaderboard;
+        this.event = event;
     }
 
     @Override
@@ -132,6 +141,13 @@ public final class NinjaArenaCommand implements TabExecutor {
                         unavailable(sender, group);
                     } else {
                         leaderboard.execute(sender, label, tail(args));
+                    }
+                }
+                case EventCommand.NAME -> {
+                    if (event == null) {
+                        unavailable(sender, group);
+                    } else {
+                        event.execute(sender, label, tail(args));
                     }
                 }
                 case "spectate" -> {
@@ -182,7 +198,8 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     private static boolean canUseRoot(CommandSender sender) {
         return sender.hasPermission(PLAY) || sender.hasPermission(HOST) || sender.hasPermission(ADMIN)
-                || sender.hasPermission(PortalEntry.SPECTATE) || sender.hasPermission(LeaderboardCommand.PERMISSION);
+                || sender.hasPermission(PortalEntry.SPECTATE) || sender.hasPermission(LeaderboardCommand.PERMISSION)
+                || sender.hasPermission(EventCommand.PERMISSION);
     }
 
     private static boolean canUse(CommandSender sender, Route route) {
@@ -251,6 +268,9 @@ public final class NinjaArenaCommand implements TabExecutor {
         if (args[0].equalsIgnoreCase(LeaderboardCommand.NAME)) {
             return sender.hasPermission(LeaderboardCommand.PERMISSION)
                     ? LeaderboardCommand.complete(tail(args)) : List.of();
+        }
+        if (args[0].equalsIgnoreCase(EventCommand.NAME)) {
+            return event != null && sender.hasPermission(EventCommand.PERMISSION) ? event.complete(tail(args)) : List.of();
         }
         if (!sender.hasPermission(ADMIN)) {
             return List.of();

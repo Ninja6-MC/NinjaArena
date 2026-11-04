@@ -162,10 +162,11 @@ under the root.
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
 | `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals, their lobby and the shared hub |
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
+| `event <subcommand>` | `ninjaarena.event.manage` | List, inspect, start or cancel scheduled arena events |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration and kits |
 
 Enter the Arena by walking through a portal or explicitly accepting an invitation.
-Leaderboard and admin reload also work from the console.
+Leaderboard, event management and admin reload also work from the console.
 
 `ninjaarena.play`, `ninjaarena.spectate` and `ninjaarena.leaderboard` default to everyone.
 `ninjaarena.host` and `ninjaarena.admin` default to operators. Play grants spectate and
@@ -507,6 +508,7 @@ that several servers share. Changing `stats.season` archives the current season;
 stats are kept. A missing driver or an unreachable database never stops a match:
 finished matches stay queued and are retried. Configuration, the schema and the read
 API for leaderboards and rewards are in [`docs/player-stats.md`](docs/player-stats.md).
+For weekly events and admin commands, see [Scheduled arena events](docs/arena-events.md).
 
 ## Licence
 

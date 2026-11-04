@@ -197,6 +197,14 @@ public final class StatsStore {
         return submit(database -> database.awards(player));
     }
 
+    public CompletableFuture<Void> grantEventReward(UUID player, RewardSettings.Rule rule, boolean seasonal) {
+        return submit(database -> {
+            int season = seasonal ? database.currentSeason().orElseThrow().id() : 0;
+            database.grant(player, season, rule);
+            return null;
+        });
+    }
+
     public CompletableFuture<List<Award>> evaluateMilestones(UUID player, List<RewardSettings.Rule> rules) {
         return submit(database -> {
             if (!rules.isEmpty()) {

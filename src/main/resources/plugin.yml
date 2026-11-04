@@ -17,7 +17,7 @@ commands:
     description: The Arena commands
     usage: /<command>
     aliases: [narena]
-    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.spectate;ninjaarena.leaderboard
+    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.spectate;ninjaarena.leaderboard;ninjaarena.event.manage
 
 permissions:
   # Each tier is a declared child of the one above it. Bukkit gives the dots in a node name
@@ -46,8 +46,13 @@ permissions:
     default: op
     children:
       ninjaarena.play: true
+  ninjaarena.event.manage:
+    description: Manage scheduled Arena events
+    default: op
+    children: {}
   ninjaarena.admin:
     description: Administer the Arena
     default: op
     children:
       ninjaarena.host: true
+      ninjaarena.event.manage: true

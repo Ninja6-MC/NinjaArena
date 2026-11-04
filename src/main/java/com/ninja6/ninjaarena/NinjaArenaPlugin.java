@@ -6,6 +6,10 @@ import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.DirectorCommand;
+import com.ninja6.ninjaarena.command.EventCommand;
+import com.ninja6.ninjaarena.event.ArenaEvents;
+import com.ninja6.ninjaarena.event.EventSettings;
+import com.ninja6.ninjaarena.event.EventWebhook;
 import com.ninja6.ninjaarena.command.LeaderboardCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
@@ -77,7 +81,10 @@ import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import com.ninja6.ninjaarena.world.ArenaExtentListener;
 import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Instant;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import java.util.List;
 import java.util.Optional;
 import java.util.SplittableRandom;
@@ -239,6 +246,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
                 Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger())));
         waitingRooms.setStartAllowed(() -> inMatch.matches().size() < stability.maxMatches());
+        ArenaEvents arenaEvents = startEvents();
+        waitingRooms.setEventArena(arenaEvents::arena);
+        matches.setEventBonus(arenaEvents::bonus);
         waitingRooms.start();
         // Each portal leads to its arena's waiting room or the shared hub; the default is read
         // from the current settings, so a reload changes it for the next entry.
@@ -339,6 +349,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public boolean eventArenaExists(String arena) {
+                        return arenas.get(arena).isPresent();
+                    }
+
+                    @Override
                     public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
                         if (placeholders != null) {
                             placeholders.setCacheSeconds(settings.getInt(StatsPlaceholders.CACHE_SECONDS));
@@ -346,6 +361,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         if (rewards != null) {
                             rewards.settings(RewardSettings.from(settings));
                         }
+                        arenaEvents.settings(EventSettings.from(settings, RewardSettings.from(settings)));
                         for (String path : settings.getKeys(true)) {
                             if (!settings.isConfigurationSection(path)) {
                                 getConfig().set(path, settings.get(path));
@@ -362,10 +378,38 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     boolean cancelled = hosting.leave(player);
                     return watching.leave(player) || waitingRooms.leave(player, Exit.COMMAND)
                             || matches.leave(player, MatchService.Exit.COMMAND) || cancelled;
-                }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats));
+                }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats),
+                new EventCommand(arenaEvents));
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
+    }
+
+    private ArenaEvents startEvents() {
+        EventSettings settings;
+        try {
+            settings = EventSettings.from(getConfig(), RewardSettings.from(getConfig()));
+            for (EventSettings.Night night : settings.schedule()) {
+                if (arenas.get(night.arena()).isEmpty()) {
+                    throw new IllegalArgumentException("unknown arena " + night.arena() + " for event " + night.id());
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Arena events disabled: " + e.getMessage());
+            settings = EventSettings.OFF;
+        }
+        EventWebhook webhook = EventWebhook.create(getLogger()::warning);
+        ArenaEvents events = new ArenaEvents(settings, Clock.systemUTC(), (window, minutes, url) -> {
+            String path = minutes == 0 ? "events.messages.start" : "events.messages.upcoming";
+            String message = getConfig().getString(path, "")
+                    .replace("{id}", window.night().id())
+                    .replace("{arena}", window.night().arena())
+                    .replace("{minutes}", Integer.toString(minutes));
+            getServer().broadcast(Component.text(message, NamedTextColor.GOLD));
+            webhook.post(url, message);
+        });
+        getServer().getScheduler().runTaskTimer(this, events::tick, 20, 20);
+        return events;
     }
 
     /**

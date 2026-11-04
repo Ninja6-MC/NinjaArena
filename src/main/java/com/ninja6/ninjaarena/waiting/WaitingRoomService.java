@@ -238,6 +238,12 @@ public final class WaitingRoomService {
                 + (size == 1 ? " player" : " players") + "). Try another arena, or come back after its match.");
     }
 
+    private Supplier<Optional<String>> eventArena = Optional::empty;
+
+    public void setEventArena(Supplier<Optional<String>> eventArena) {
+        this.eventArena = Objects.requireNonNull(eventArena, "eventArena");
+    }
+
     /**
      * The arena a player-built portal sends its next player to under the dedicated lobby: the
      * waiting room with the most players that still takes more, so it starts sooner, else a
@@ -245,6 +251,11 @@ public final class WaitingRoomService {
      * available, are skipped. Ties go to the first by name. Empty when every arena is busy.
      */
     public Optional<String> openArena() {
+        Optional<String> featured = eventArena.get();
+        if (featured.isPresent()) {
+            return featured.filter(name -> !claimed.test(name) && arenas.isAvailable(name) && full(name).isEmpty())
+                    .filter(name -> arenas.get(name).filter(arena -> arena.waitingRoom() != null).isPresent());
+        }
         Room filling = null;
         for (Room room : rooms.values()) {
             if (room.state().isFull() || claimed.test(room.arena()) || !arenas.isAvailable(room.arena())) {
@@ -646,7 +657,7 @@ public final class WaitingRoomService {
      */
     private int hubMinimum() {
         int minimum = settings.minPlayers();
-        for (Arena arena : arenas.all()) {
+        for (Arena arena : matchmakingArenas()) {
             if (isFree(arena)) {
                 minimum = Math.min(minimum, settings.capacity(teamCount(arena)));
             }
@@ -669,7 +680,7 @@ public final class WaitingRoomService {
     private Optional<Arena> freeArena(int waiting) {
         Arena best = null;
         int bestCapacity = 0;
-        for (Arena arena : arenas.all()) {
+        for (Arena arena : matchmakingArenas()) {
             if (!isFree(arena)) {
                 continue;
             }
@@ -686,6 +697,11 @@ public final class WaitingRoomService {
             }
         }
         return Optional.ofNullable(best);
+    }
+
+    private Iterable<Arena> matchmakingArenas() {
+        Optional<String> featured = eventArena.get();
+        return featured.isPresent() ? arenas.get(featured.get()).stream().toList() : arenas.all();
     }
 
     private static int teamCount(Arena arena) {
