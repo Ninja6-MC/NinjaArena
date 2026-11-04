@@ -770,4 +770,34 @@ class WaitingRoomServiceTest {
         assertEquals(Optional.of("dojo"), rooms.arenaOf(ALICE));
     }
 
+    @Test
+    void playerBuiltPortalsGoToTheFullestFillingRoomThenAFreeArenaThenNowhere() throws Exception {
+        arena("cave", 1, 2);
+        arena("bay", 2, 2);
+        boolean[] reserved = {false};
+        rooms.setClaimed(name -> reserved[0] && name.equals("bay"));
+        rooms.setSettings(caps(3, 2 + 1, 0));
+        // No room is open: the first free arena by name.
+        assertEquals(Optional.of("bay"), rooms.openArena());
+        reserved[0] = true;
+        assertEquals(Optional.of("cave"), rooms.openArena(), "a reserved arena is left to its host");
+
+        rooms.join(player(ALICE), "dojo");
+        assertEquals(Optional.of("dojo"), rooms.openArena(), "a filling room beats a free arena");
+        rooms.join(player(BOB), "cave");
+        rooms.join(player(CAROL), "cave");
+        assertEquals(Optional.of("cave"), rooms.openArena(), "the room with the most players starts sooner");
+
+        UUID dave = new UUID(0, 4);
+        add(dave, "Dave");
+        rooms.join(player(dave), "cave");
+        assertEquals(Optional.of("dojo"), rooms.openArena(), "a full room takes no one");
+
+        arenas.hold("dojo");
+        // dojo's room is no longer available and cave's is full; bay is reserved.
+        assertEquals(Optional.empty(), rooms.openArena());
+        reserved[0] = false;
+        assertEquals(Optional.of("bay"), rooms.openArena());
+    }
+
 }

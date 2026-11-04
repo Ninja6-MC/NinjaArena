@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.portal;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -56,13 +57,25 @@ public final class ArenaAdmission {
     public boolean enter(Player player, Portal portal, BiConsumer<Player, String> onSpectate,
             Consumer<String> refusal) {
         BiConsumer<Player, String> arrived;
+        Portal target = portal;
         if (entry.leadsToHub(portal)) {
             arrived = (entered, arena) -> onHub.accept(entered);
         } else {
             arrived = portal.spectator() ? onSpectate : onEnter;
+            // A player-built portal routed to the hub when the player walked in is still unbound
+            // if the default lobby changed since. Bind it once here, so the checks, the
+            // destination and the waiting room joined all name the same arena.
+            Optional<Portal> routed = entry.route(portal);
+            if (routed.isEmpty()) {
+                refusal.accept("All arenas are busy. Try again when a match ends.");
+                return false;
+            }
+            target = routed.get();
         }
-        return enter(player, portal.arena(), () -> entry.admit(player, portal),
-                () -> entry.destination(portal).orElseThrow(), arrived, refusal);
+        Portal admitted = target;
+        // A player-built portal that leads to the hub is bound to no arena; the name is only logged.
+        return enter(player, Objects.requireNonNullElse(admitted.arena(), "hub"), () -> entry.admit(player, admitted),
+                () -> entry.destination(admitted).orElseThrow(), arrived, refusal);
     }
 
     private boolean enter(Player player, String arena, Supplier<Optional<PortalEntry.Refusal>> admit,

@@ -15,7 +15,7 @@ arena-grid:
 
 waiting-room:
   # Where portals send players before their match, for every portal that does not choose
-  # for itself with /narena portal lobby (player-built portals never do):
+  # for itself with /narena portal lobby (player-built portals never do; see player-portals):
   #   dedicated - the waiting room of the portal's own arena. The match there starts once
   #               enough players have arrived; when it is full, more are turned away.
   #   shared    - one hub for every portal, set with /narena portal sethub. Once enough
@@ -38,6 +38,29 @@ waiting-room:
   # How far a player may move from the waiting-room or hub point, in blocks along any axis
   # (2 to 64). Going further, or being teleported further, sends them home.
   radius: 16
+
+player-portals:
+  # Players with ninjaarena.play build their own way in: a frame of frame-material shaped
+  # like a nether portal (an opening 2 to 21 wide and 3 to 21 tall, corners optional), lit
+  # with flint and steel. It leads where waiting-room.lobby says: the shared hub, or a
+  # waiting room that is filling, else a free arena, else the player is told every arena is
+  # busy. Changes apply to the next portal lit; portals already built stay until a frame
+  # block breaks or an admin deletes them with /narena portal delete.
+  # Worlds players may build in, by name. An empty list turns building off. The arena world
+  # is never allowed.
+  worlds:
+    - world
+  # The frame block: any solid block except obsidian, which belongs to nether portals.
+  # Each portal keeps the block it was built from.
+  frame-material: crying_obsidian
+  # Portals one player may own at once (0 for no limit, otherwise 1 to 1000).
+  max-per-player: 2
+  # Least distance between the centre of a new portal and that of any other portal in the
+  # same world, in blocks (0 to 1024; 0 turns the check off).
+  min-distance: 32
+  # Colour of the particle curtain in the opening, as #RRGGBB. Java and Bedrock players see
+  # it without a resource pack.
+  color: '#40E0D0'
 
 match:
   # Allow damage and harmful splash/cloud effects between teammates in the same match.

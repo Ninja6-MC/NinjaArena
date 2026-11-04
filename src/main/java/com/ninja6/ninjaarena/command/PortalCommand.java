@@ -246,6 +246,9 @@ public final class PortalCommand {
         if (portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
             return "the shared hub" + choice;
         }
+        if (portal.arena() == null) {
+            return "a waiting room that is filling, else a free arena" + choice;
+        }
         return "arena " + portal.arena() + choice;
     }
 
@@ -255,6 +258,9 @@ public final class PortalCommand {
                 warn(sender, "No shared hub is set, so the portal turns players away until one is. Stand there and"
                         + " use sethub.");
             }
+        } else if (portal.arena() == null) {
+            // A player-built portal is routed per entry; status says whether any arena is open.
+            return;
         } else if (!arenas.isAvailable(portal.arena())) {
             warn(sender, "Arena " + portal.arena() + " is not available right now, so the portal turns players away"
                     + " until it is.");
@@ -280,7 +286,8 @@ public final class PortalCommand {
             return;
         }
         for (Portal portal : portals.all()) {
-            info(sender, portal.name() + " (" + portal.world() + ") to " + portal.arena() + ": " + status(portal));
+            info(sender, portal.name() + " (" + portal.world() + ") to "
+                    + (portal.playerBuilt() ? "any arena, player-built" : portal.arena()) + ": " + status(portal));
         }
     }
 
@@ -294,7 +301,12 @@ public final class PortalCommand {
         info(sender, "Portal " + portal.name() + ": " + status(portal));
         info(sender, "World: " + portal.world() + (worldLoaded.test(portal.world()) ? "" : " (not loaded)"));
         info(sender, "Region: " + portal.region().describe());
-        info(sender, "Arena: " + portal.arena() + (portal.spectator() ? " (spectator portal)" : ""));
+        if (portal.playerBuilt()) {
+            info(sender, "Built by player " + portal.built().owner() + " from " + portal.built().frame()
+                    + ". Breaking a frame block removes it.");
+        } else {
+            info(sender, "Arena: " + portal.arena() + (portal.spectator() ? " (spectator portal)" : ""));
+        }
         if (!portal.spectator()) {
             info(sender, "Leads to: " + destination(portal));
         }
@@ -307,6 +319,9 @@ public final class PortalCommand {
         }
         if (!portal.spectator() && portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
             return portals.hub().isPresent() ? "open, to the shared hub" : "closed, no shared hub is set";
+        }
+        if (portal.arena() == null) {
+            return "open, to whichever arena takes players when someone walks in";
         }
         Arena arena = arenas.get(portal.arena()).orElse(null);
         if (arena == null) {
@@ -348,7 +363,7 @@ public final class PortalCommand {
             };
             case "delete", "info" -> position == 0 ? ArenaCommand.matching(portalNames(), current) : List.of();
             case "lobby" -> switch (position) {
-                case 0 -> ArenaCommand.matching(portalNames(), current);
+                case 0 -> ArenaCommand.matching(adminPortalNames(), current);
                 case 1 -> ArenaCommand.matching(LOBBIES, current);
                 default -> List.of();
             };
@@ -361,6 +376,17 @@ public final class PortalCommand {
         List<String> names = new ArrayList<>();
         for (Portal portal : portals.all()) {
             names.add(portal.name());
+        }
+        return names;
+    }
+
+    /** Portals an admin marked out; a player-built one takes no lobby choice. */
+    private List<String> adminPortalNames() {
+        List<String> names = new ArrayList<>();
+        for (Portal portal : portals.all()) {
+            if (!portal.playerBuilt()) {
+                names.add(portal.name());
+            }
         }
         return names;
     }

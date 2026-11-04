@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -22,10 +23,20 @@ import org.bukkit.configuration.file.YamlConfiguration;
  *     arena: dojo
  *     lobby: shared
  *     region: {min-x: 10, min-y: 64, min-z: 10, max-x: 12, max-y: 67, max-z: 10}
+ *   built-1:
+ *     world: world
+ *     built-by: 7a3c1d2e-0000-4000-8000-000000000001
+ *     frame: crying_obsidian
+ *     region: {min-x: 40, min-y: 64, min-z: 8, max-x: 41, max-y: 66, max-z: 8}
  * </pre>
  *
  * <p>{@code hub} is the shared hub point in the arena world and {@code lobby} a portal's own
  * lobby choice; both are left out while unset, and a file without them reads as before.
+ *
+ * <p>A player-built portal has {@code built-by} and {@code frame} and no {@code arena},
+ * {@code spectator} or {@code lobby}; its region is the opening of its frame. Versions from
+ * before player-built portals refuse a file that holds one, as they refuse any portal they
+ * cannot read, rather than drop it.
  *
  * <p>Reading is strict: anything that does not decode fails the whole load with the name
  * of the portal, so no portal is ever dropped without the admin seeing why.
@@ -69,7 +80,12 @@ public final class PortalCodec {
         for (Portal portal : portals) {
             ConfigurationSection section = root.createSection(portal.name());
             section.set("world", portal.world());
-            section.set("arena", portal.arena());
+            if (portal.playerBuilt()) {
+                section.set("built-by", portal.built().owner().toString());
+                section.set("frame", portal.built().frame());
+            } else {
+                section.set("arena", portal.arena());
+            }
             if (portal.spectator()) {
                 section.set("spectator", true);
             }
@@ -165,6 +181,19 @@ public final class PortalCodec {
         if (section.contains("lobby")) {
             lobby = LobbyMode.parse(section.getString("lobby"))
                     .orElseThrow(() -> new PortalFormatException("lobby must be dedicated or shared"));
+        }
+        if (section.contains("built-by")) {
+            if (section.contains("arena") || section.contains("spectator") || section.contains("lobby")) {
+                throw new PortalFormatException("a player-built portal has no arena, spectator or lobby");
+            }
+            UUID owner;
+            try {
+                owner = UUID.fromString(requireString(section, "built-by"));
+            } catch (IllegalArgumentException e) {
+                throw new PortalFormatException("built-by is not a player id", e);
+            }
+            return Portal.built(name, requireString(section, "world"), region,
+                    new Portal.Built(owner, requireString(section, "frame")));
         }
         return new Portal(name, requireString(section, "world"), region, requireString(section, "arena"),
                 section.getBoolean("spectator"), lobby);
