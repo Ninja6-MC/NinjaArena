@@ -207,6 +207,32 @@ tools:
     # Upward speed in blocks per tick (0 to 0.6).
     lift: 0.3
 
+stats:
+  # Record each player's wins, rounds won, player kills, enemy kills, deaths, best Overrun
+  # survival and matches played, all-time and per season. Written in the background once a
+  # match ends; matches run the same when stats are off or the database is down. Restart to
+  # change anything here except season.
+  enabled: true
+  # sqlite keeps a file in the plugin folder. mysql shares one MySQL or MariaDB database
+  # between servers; give every server the same settings below.
+  storage: sqlite
+  # The current season, 1 to 64 characters. Changing it, here or by reload, archives the
+  # current season and starts a new one; archived seasons keep their stats. A name an
+  # archived season already has is refused and the current season stays.
+  season: Season 1
+  # Prepended to every table name: up to 24 lower-case letters, digits or underscores.
+  table-prefix: ninjaarena_
+  sqlite:
+    # A plain file name inside the plugin folder.
+    file: stats.db
+  mysql:
+    host: localhost
+    # 1 to 65535.
+    port: 3306
+    database: ninjaarena
+    username: ninjaarena
+    password: ''
+
 # Viewing a live match. Reloaded limits apply to new spectators.
 spectating:
   enabled: true

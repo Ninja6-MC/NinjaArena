@@ -148,6 +148,7 @@ and never moves match players or restarts a match.
 | Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
 | Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |
 | Grid cell size and world border | Apply only before any arena exists and while no match runs. Otherwise refuse the change and require a restart. |
+| Stats season | A new `stats.season` archives the current season and starts it. Other stats settings require a restart. |
 
 The reply separates changed settings, postponed changes (next match or round), and refused
 changes. Refused settings remain unchanged in memory; the files are not rewritten. Director
@@ -405,6 +406,16 @@ Other features can award team points on the server thread through
 `plugin.matches()`. Awards are accepted from PREP through ROUND_END for teams that started
 with players. Totals stop at `Integer.MAX_VALUE`. Once the match ends its result keeps the
 final scores, further awards are refused, and a new match starts at zero.
+
+## Player stats
+
+Each player's wins, rounds won, player kills, enemy kills, deaths, best Overrun survival
+and matches played are recorded all-time and per season. They are written in the
+background when a match ends, to SQLite by default or to a MySQL or MariaDB database
+that several servers share. Changing `stats.season` archives the current season; its
+stats are kept. A missing driver or an unreachable database never stops a match:
+finished matches stay queued and are retried. Configuration, the schema and the read
+API for leaderboards and rewards are in [`docs/player-stats.md`](docs/player-stats.md).
 
 ## Licence
 

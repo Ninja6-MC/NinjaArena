@@ -45,6 +45,7 @@ class ConfigReloadTest {
         SpectatorSettings spectating;
         KitDefinition kit;
         ConfigurationSection published;
+        String season;
         @Override public boolean canResize() { return empty; }
         @Override public void world(ArenaWorldSettings settings) {
             calls.add("world"); world = new ArenaWorldSettings(world.borderSize(), settings.viewDistance(), settings.simulationDistance());
@@ -61,6 +62,7 @@ class ConfigReloadTest {
         @Override public void tools(ToolSettings settings) { calls.add("tools"); tools = settings; }
         @Override public void spectating(SpectatorSettings settings) { spectating = settings; }
         @Override public void kit(KitDefinition kit) { calls.add("kit"); this.kit = kit; }
+        @Override public void season(String name) { calls.add("season"); season = name; }
         @Override public void configuration(ConfigurationSection settings) { published = settings; }
     }
 
@@ -105,7 +107,8 @@ class ConfigReloadTest {
         for (String key : defaults.getKeys(true)) {
             if (defaults.isConfigurationSection(key)) continue;
             var invalid = ReloadFiles.defaults();
-            invalid.set(key, defaults.get(key) instanceof Boolean ? "false" : "bad-number");
+            invalid.set(key, defaults.get(key) instanceof Boolean ? "false"
+                    : defaults.get(key) instanceof String ? List.of("not", "text") : "bad-number");
             write(invalid.saveToString(), EMPTY_KIT);
             var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate, key);
             assertTrue(failure.getMessage().contains(key), failure.getMessage());
@@ -246,6 +249,36 @@ class ConfigReloadTest {
         assertTrue(reload.reload().get(3).contains("stability.max-concurrent-matches (restart required)"));
         assertTrue(target.calls.isEmpty());
         assertFalse(target.published.getBoolean("director.debug"));
+    }
+
+    @Test
+    void aNewSeasonAppliesOnReloadWhileStatsStorageStaysRestartOnly() throws Exception {
+        write("stats:\n  season: Season 2\n  storage: mysql\n  mysql:\n    password: changed\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertEquals(List.of("season"), target.calls);
+        assertEquals("Season 2", target.season);
+        assertEquals("Changed: stats.season.", report.get(1));
+        assertTrue(report.get(3).contains("stats.storage (restart required)"), report.get(3));
+        assertTrue(report.get(3).contains("stats.mysql.password (restart required)"), report.get(3));
+        assertFalse(String.join(" ", report).contains("changed"), report.toString());
+        assertEquals("sqlite", target.published.getString("stats.storage"));
+        target.calls.clear();
+        reload.reload();
+        assertTrue(target.calls.isEmpty());
+    }
+
+    @Test
+    void statsTextSettingsAreValidatedOnReload() throws Exception {
+        for (String config : List.of("stats:\n  storage: postgres\n", "stats:\n  season: 2026\n",
+                "stats:\n  season: ''\n", "stats:\n  table-prefix: Bad-Prefix\n",
+                "stats:\n  sqlite:\n    file: ../stats.db\n", "stats:\n  mysql:\n    port: 70000\n")) {
+            write(config, EMPTY_KIT);
+            var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate, config);
+            assertTrue(failure.getMessage().contains("stats."), failure.getMessage());
+        }
+        write("stats:\n  season: 2026\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("config.yml: line 2: stats.season: expected text"));
+        assertTrue(target.calls.isEmpty());
     }
 
     @Test

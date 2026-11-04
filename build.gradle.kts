@@ -29,6 +29,13 @@ dependencies {
     // Test scope only, so the tests parse plugin.yml with the classes the server uses.
     // src/main still compiles against paper-api as compileOnly.
     testImplementation(paperApi)
+
+    // Paper 26.3 bundles these two JDBC drivers, so the plugin looks them up at runtime and
+    // ships neither; the tests pin the bundled versions.
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.49.1.0")
+    testRuntimeOnly("com.mysql:mysql-connector-j:9.2.0")
+    // Runs the MySQL statements in H2's MySQL mode; no MySQL server is needed for the suite.
+    testRuntimeOnly("com.h2database:h2:2.3.232")
 }
 
 tasks {
@@ -46,6 +53,8 @@ tasks {
     }
     test {
         useJUnitPlatform()
+        // The SQLite driver loads its native library; Paper grants this on the server.
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
     }
 }
 

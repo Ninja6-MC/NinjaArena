@@ -25,6 +25,12 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Player stats and seasons: wins, rounds won, player kills, enemy kills, deaths, best
+  Overrun survival and matches played, all-time and per season, written in batches off
+  the server thread when a match ends. SQLite by default; MySQL or MariaDB lets several
+  servers share one set of tables. Changing `stats.season` archives the current season
+  without deleting it. Unreachable databases are retried, and the queue is flushed on
+  shutdown. `plugin.stats()` reads a player's stats, top lists and seasons.
 - Waiting players and spectator portal entrants can watch live matches within the arena
   bounds. Viewers use the existing snapshot and restore flow, with separate admission
   limits and no effect on team rosters or enemy pressure.

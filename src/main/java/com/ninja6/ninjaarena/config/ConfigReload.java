@@ -32,6 +32,9 @@ public final class ConfigReload {
         default void spectating(SpectatorSettings settings) {
         }
         void kit(KitDefinition definition);
+        /** A new {@code stats.season}: archive the current season and start this one. */
+        default void season(String name) {
+        }
         default void configuration(ConfigurationSection settings) {
         }
     }
@@ -79,7 +82,8 @@ public final class ConfigReload {
             if (effective.isConfigurationSection(path) || same(effective.get(path), next.get(path))) {
                 continue;
             }
-            if (path.startsWith("director.") || path.startsWith("stability.")) {
+            if (path.startsWith("director.") || path.startsWith("stability.")
+                    || path.startsWith("stats.") && !path.equals("stats.season")) {
                 refused.add(path + " (restart required)");
                 next.set(path, effective.get(path));
             } else if (path.equals("arena-grid.cell-size") || path.equals("arena-world.border-size")) {
@@ -142,6 +146,9 @@ public final class ConfigReload {
         target.spectating(SpectatorSettings.from(next.getConfigurationSection("spectating")));
         if (kitChanged) {
             target.kit(candidate.kit());
+        }
+        if (!same(effective.get("stats.season"), next.get("stats.season"))) {
+            target.season(next.getString("stats.season"));
         }
         target.configuration(next);
         effective = next;
