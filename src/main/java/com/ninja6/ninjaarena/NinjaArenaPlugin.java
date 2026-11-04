@@ -385,10 +385,6 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getLogger().info("NinjaArena enabled.");
     }
 
-    /**
-     * Records player stats from the match events. A bad stats setting or an unreachable
-     * database turns stats off or delays the writes; it never stops the plugin.
-     */
     private ArenaEvents startEvents() {
         EventSettings settings;
         try {
@@ -416,6 +412,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         return events;
     }
 
+    /**
+     * Records player stats from the match events. A bad stats setting or an unreachable
+     * database turns stats off or delays the writes; it never stops the plugin.
+     */
     private void startStats(EnemyLifecycle enemies) {
         StatsSettings settings;
         try {

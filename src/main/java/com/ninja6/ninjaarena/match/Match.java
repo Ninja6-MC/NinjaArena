@@ -77,6 +77,7 @@ public final class Match implements MatchView {
     private boolean reachedOverrun;
     private MatchResult result;
     private boolean closed;
+    private final Bonus eventBonus;
 
     /**
      * @param arena     the arena's name
@@ -84,8 +85,6 @@ public final class Match implements MatchView {
      *                  every team, and no player may appear twice
      * @param standings ranks the teams after the last round
      */
-    private final Bonus eventBonus;
-
     public Match(String arena, List<List<UUID>> teams, MatchSettings settings, MatchStandings standings) {
         this(arena, teams, settings, standings, Bonus.NONE);
     }
