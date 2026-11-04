@@ -22,15 +22,15 @@ waiting-room:
   #               players are there, the first to arrive go together to a free arena's
   #               teams; the rest wait in the hub for the next free arena.
   lobby: dedicated
-  # Players needed in a waiting room or the hub before the start countdown begins (1 to 64).
-  # Arriving players are put on the smallest team.
+  # Players needed in a waiting room or the hub before the start countdown begins (1 to 64),
+  # or fewer for an arena that holds fewer. Arriving players are put on the smallest team.
   min-players: 2
   # The most players one match takes (0 for no limit, otherwise min-players to 256). A full
   # waiting room turns arrivals away; the hub keeps them for the next arena.
   max-players: 0
   # The most players on one team (0 for no limit, otherwise 1 to 64). An arena then takes at
   # most this many times its team count. An arena that holds fewer than min-players starts
-  # once it is full.
+  # once it is full, whether its players wait in its room or in the hub.
   team-size: 0
   # Length of the start countdown in seconds (1 to 600). It stops if the count drops below
   # min-players and starts again from the full length when it is reached again.

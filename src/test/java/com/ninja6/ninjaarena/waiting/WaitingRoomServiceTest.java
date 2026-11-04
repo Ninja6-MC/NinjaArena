@@ -642,6 +642,46 @@ class WaitingRoomServiceTest {
     }
 
     @Test
+    void theHubStartsAnArenaHoldingFewerThanTheMinimumOnceItCanFillIt() throws Exception {
+        rooms.setSettings(caps(4, 0, 1));
+        arena("big", 1, 4);
+        joinHub(ALICE);
+        joinHub(BOB);
+        assertTrue(players.get(ALICE).messages.contains("The match starts in 3 seconds."),
+                "dojo holds two, so two players start its countdown though min-players is four");
+        joinHub(CAROL);
+        for (int i = 0; i < 3; i++) {
+            rooms.tick();
+        }
+        assertEquals(List.of("dojo"), startedIn, "three players cannot start big, which needs four");
+        assertEquals(List.of(List.of(ALICE), List.of(BOB)), started.getFirst());
+        assertTrue(rooms.inHub(CAROL));
+    }
+
+    @Test
+    void theHubCountdownStopsWhenTheOnlyArenaItCouldFillIsTaken() throws Exception {
+        rooms.setSettings(caps(4, 0, 1));
+        arena("big", 1, 4);
+        joinHub(ALICE);
+        joinHub(BOB);
+        arenas.startEdit("dojo");
+        rooms.tick();
+        assertTrue(players.get(ALICE).messages.contains("Not enough players. The countdown stopped."));
+        for (int i = 0; i < 5; i++) {
+            rooms.tick();
+        }
+        assertTrue(started.isEmpty(), "big needs four players");
+
+        arenas.finishEdit("dojo");
+        rooms.tick();
+        assertTrue(players.get(ALICE).messages.stream().filter("The match starts in 3 seconds."::equals).count() >= 2);
+        for (int i = 0; i < 2; i++) {
+            rooms.tick();
+        }
+        assertEquals(List.of("dojo"), startedIn);
+    }
+
+    @Test
     void aFinishedHubCountdownHoldsWhileNoMatchSlotIsFree() {
         boolean[] free = {false};
         rooms.setStartAllowed(() -> free[0]);

@@ -65,13 +65,15 @@ uses `waiting-room.lobby` in `config.yml` (`dedicated` by default).
   smallest team, and the countdown starts once `min-players` are there. When the room
   already holds as many players as one match takes, the portal turns more away with a
   message before their snapshot is saved.
-- **Shared:** every shared portal leads to the hub. Once `min-players` are there, the
-  countdown runs; when it ends, the players who arrived first go together to a free
-  arena's teams, up to that arena's cap, and the match starts. The rest stay in the hub
-  for the next free arena. A free arena is ready, has no match, no open waiting room and
-  no host reservation; the hub picks the smallest that takes everyone waiting, or the
+- **Shared:** every shared portal leads to the hub. Once `min-players` are there, or
+  enough to fill a free arena that holds fewer, the countdown runs; when it ends, the
+  players who arrived first go together to a free arena's teams, up to that arena's cap,
+  and the match starts. The rest stay in the hub for the next free arena. A free arena is
+  ready, has no match, no open waiting room and no host reservation; of those the players
+  waiting can start, the hub picks the smallest that takes everyone waiting, or the
   largest if none does. While arenas are in edit mode, or every arena or match slot is in
-  use, the countdown holds at its last second and the hub keeps waiting.
+  use, the countdown holds at its last second and the hub keeps waiting; if the only free
+  arena it could fill is taken, the countdown stops.
 
 Stand where players should gather in the arena world, outside every arena's bounds, and
 run `/narena portal sethub`, or give coordinates as for `setwaitingroom`.
@@ -89,7 +91,7 @@ matches always use the host's dedicated room.
 `waiting-room.max-players` caps the players in one match and `waiting-room.team-size` the
 players on one team; 0 turns either off. Both apply in both modes, and an arena takes
 the lower of the two (team size times its team count). An arena that holds fewer than
-`min-players` starts once it is full. Spectators are outside the teams and never count
+`min-players` starts once it is full, from its waiting room or from the hub. Spectators are outside the teams and never count
 toward either cap.
 
 ## Commands and permissions

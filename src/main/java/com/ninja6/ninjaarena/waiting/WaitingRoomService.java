@@ -47,7 +47,9 @@ import org.bukkit.scheduler.BukkitTask;
  *
  * <p><b>Player caps.</b> A match takes at most {@link WaitingRoomSettings#capacity(int)}
  * players. A dedicated room that is full turns arrivals away ({@link #full(String)}); the
- * hub never does, since overflow waits there for the next arena.
+ * hub never does, since overflow waits there for the next arena. An arena that holds fewer
+ * than {@code min-players} starts once full, from its room or from the hub: the hub's
+ * countdown needs only as many players as the smallest free arena holds, if that is fewer.
  *
  * <p><b>Leaving.</b> A player leaves a waiting room or the hub by walking or falling more
  * than {@link WaitingRoomSettings#radius()} blocks from it, by being teleported out of it for
@@ -201,7 +203,7 @@ public final class WaitingRoomService {
             }
         }
         if (hub != null) {
-            hub.state().setSettings(settings.minPlayers(), settings.countdownSeconds());
+            hub.state().setSettings(hubMinimum(), settings.countdownSeconds());
             for (UUID id : hub.state().players()) {
                 Player player = plugin.getServer().getPlayer(id);
                 if (player != null && !inRoom(id, player.getLocation())) {
@@ -313,7 +315,7 @@ public final class WaitingRoomService {
             return;
         }
         if (hub == null) {
-            hub = new Hub(point.get(), new SharedHub(settings.minPlayers(), settings.countdownSeconds()));
+            hub = new Hub(point.get(), new SharedHub(hubMinimum(), settings.countdownSeconds()));
         }
         boolean started = hub.state().join(playerId);
         player.sendMessage(Component.text("You joined the hub. You go to the next free arena once enough players"
@@ -579,6 +581,18 @@ public final class WaitingRoomService {
 
     private void tickHub(Hub current) {
         SharedHub state = current.state();
+        boolean wasCounting = state.isCounting();
+        state.setSettings(hubMinimum(), settings.countdownSeconds());
+        if (wasCounting && !state.isCounting()) {
+            broadcast(state.players(), null, Component.text("Not enough players. The countdown stopped.",
+                    NamedTextColor.RED));
+            showHubStatus(current);
+            return;
+        }
+        if (!wasCounting && state.isCounting()) {
+            broadcast(state.players(), null, Component.text("The match starts in " + state.secondsLeft()
+                    + " seconds.", NamedTextColor.GOLD));
+        }
         if (state.secondsLeft() == 1) {
             boolean slot = startAllowed.getAsBoolean();
             Optional<Arena> arena = slot ? freeArena(state.size()) : Optional.empty();
@@ -599,19 +613,43 @@ public final class WaitingRoomService {
     }
 
     /**
-     * The arena the hub sends its next group to: of the arenas available for a match with no
-     * waiting room open and no reservation, the smallest that takes every waiting player, or
-     * the largest if none does. Ties go to the first by name.
+     * Players the hub needs before its countdown starts: {@code min-players}, or the capacity
+     * of the smallest free arena if that is lower, so an arena that holds fewer than
+     * {@code min-players} starts once the hub can fill it, as its dedicated room would.
+     */
+    private int hubMinimum() {
+        int minimum = settings.minPlayers();
+        for (Arena arena : arenas.all()) {
+            if (isFree(arena)) {
+                minimum = Math.min(minimum, settings.capacity(teamCount(arena)));
+            }
+        }
+        return minimum;
+    }
+
+    /** Whether the arena is available for a match, has no waiting room open and no reservation. */
+    private boolean isFree(Arena arena) {
+        String name = arena.name();
+        return !rooms.containsKey(name) && !claimed.test(name) && arenas.isAvailable(name);
+    }
+
+    /**
+     * The arena the hub sends its next group to. Of the free arenas the group can start, that
+     * is those needing no more than {@code waiting} players ({@code min-players}, or the
+     * capacity if lower), the smallest that takes every waiting player, or the largest if none
+     * does. Ties go to the first by name.
      */
     private Optional<Arena> freeArena(int waiting) {
         Arena best = null;
         int bestCapacity = 0;
         for (Arena arena : arenas.all()) {
-            String name = arena.name();
-            if (rooms.containsKey(name) || claimed.test(name) || !arenas.isAvailable(name)) {
+            if (!isFree(arena)) {
                 continue;
             }
             int capacity = settings.capacity(teamCount(arena));
+            if (Math.min(settings.minPlayers(), capacity) > waiting) {
+                continue;
+            }
             boolean fits = capacity >= waiting;
             boolean bestFits = best != null && bestCapacity >= waiting;
             if (best == null || (fits && (!bestFits || capacity < bestCapacity))

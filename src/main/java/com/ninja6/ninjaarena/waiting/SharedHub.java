@@ -21,7 +21,9 @@ import java.util.UUID;
  * {@code countdownSeconds} calls to {@link #tick()}. A departure that takes the count below
  * the minimum cancels it. When it reaches zero, {@link #tick()} reports {@link Phase#READY}
  * and the service {@linkplain #take takes} a group. If enough players are left over, the
- * countdown starts again from the full length for the next free arena.
+ * countdown starts again from the full length for the next free arena. The service sets
+ * {@code minPlayers} to the smallest free arena's capacity when that is below
+ * {@code min-players}, and back again when that arena is taken.
  *
  * <p>Not thread-safe: call it from the server thread.
  */
