@@ -55,6 +55,25 @@ public final class Targeting {
         return weights(match, standings, leaderBias, (player, base) -> weigher.weigh(match, player, base, kind));
     }
 
+    /**
+     * The weights cut down to the players of the leading teams, for an enemy that hunts the
+     * leaders. Unchanged while no team leads, or when no leading player has any weight, so
+     * the hunter still has someone to go for.
+     */
+    public static Map<UUID, Double> hunt(MatchView match, MatchStandings standings, Map<UUID, Double> weights) {
+        List<Integer> leaders = leaders(match, standings);
+        if (leaders.isEmpty()) {
+            return weights;
+        }
+        Map<UUID, Double> hunted = new LinkedHashMap<>();
+        weights.forEach((player, weight) -> {
+            if (leaders.contains(match.teamOf(player))) {
+                hunted.put(player, weight);
+            }
+        });
+        return hunted.isEmpty() ? weights : hunted;
+    }
+
     private static Map<UUID, Double> weights(MatchView match, MatchStandings standings, double leaderBias,
             ToDoubleBiFunction<UUID, Double> weigh) {
         List<Integer> leaders = leaders(match, standings);

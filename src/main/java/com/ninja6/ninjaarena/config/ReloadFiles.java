@@ -96,6 +96,12 @@ public final class ReloadFiles {
             throw document.invalid(document.has("stability.drop-tier-above-mspt") ? "stability.drop-tier-above-mspt"
                     : "stability.pause-spawning-above-mspt", "drop-tier-above-mspt must not be below pause-spawning-above-mspt");
         }
+        if (result.getDouble("director.shadow-stalker.blink.range")
+                < result.getDouble("director.shadow-stalker.blink.distance")) {
+            throw document.invalid(document.has("director.shadow-stalker.blink.range")
+                    ? "director.shadow-stalker.blink.range" : "director.shadow-stalker.blink.distance",
+                    "blink range must not be below blink distance");
+        }
         return result;
     }
 
@@ -133,6 +139,17 @@ public final class ReloadFiles {
                     "director.intensity.relax-seconds" -> new double[] {1, 600};
             case "director.intensity.damage-full-stress" -> new double[] {1, 1000};
             case "director.intensity.budget-round-step", "director.intensity.budget-per-player" -> new double[] {0, 10};
+            case "director.shadow-stalker.max-alive" -> new double[] {0, 5};
+            case "director.shadow-stalker.health" -> new double[] {1, 1024};
+            case "director.shadow-stalker.damage" -> new double[] {0, 100};
+            case "director.shadow-stalker.speed" -> new double[] {0.1, 0.5};
+            case "director.shadow-stalker.scale" -> new double[] {0.5, 2};
+            case "director.shadow-stalker.blink.distance" -> new double[] {2, 32};
+            case "director.shadow-stalker.blink.range" -> new double[] {4, 64};
+            case "director.shadow-stalker.blink.tell-ticks" -> new double[] {5, 100};
+            case "director.shadow-stalker.blink.behind" -> new double[] {1, 6};
+            case "director.shadow-stalker.blink.cooldown-seconds" -> new double[] {1, 120};
+            case "director.shadow-stalker.glow-seconds" -> new double[] {1, 60};
             case "tools.smoke-bomb.radius" -> new double[] {1, 8};
             case "tools.shuriken.damage" -> new double[] {0, 20};
             case "tools.dash.strength" -> new double[] {0.1, 2};

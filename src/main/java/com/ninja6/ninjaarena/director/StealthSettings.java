@@ -19,7 +19,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param zombieIgnores        whether zombies skip the stealth cut and the lose-track timer
  * @param skeletonIgnores      the same for skeletons
  * @param spiderIgnores        the same for spiders
- * @param shadowStalkerIgnores the same for the Shadow Stalker, once it is spawned
+ * @param shadowStalkerIgnores the same for the Shadow Stalker; the only kind on by default
  */
 public record StealthSettings(double hiddenWeight, int lowLight, int loseTrackSeconds, double markedWeight,
         boolean zombieIgnores, boolean skeletonIgnores, boolean spiderIgnores, boolean shadowStalkerIgnores) {
@@ -32,7 +32,7 @@ public record StealthSettings(double hiddenWeight, int lowLight, int loseTrackSe
     private static final double DEFAULT_MARKED_WEIGHT = 2;
 
     public static final StealthSettings DEFAULTS = new StealthSettings(DEFAULT_HIDDEN_WEIGHT, 7, 3,
-            DEFAULT_MARKED_WEIGHT, false, false, false, false);
+            DEFAULT_MARKED_WEIGHT, false, false, false, true);
 
     public StealthSettings {
         hiddenWeight = clamp(hiddenWeight, 0, 1, DEFAULT_HIDDEN_WEIGHT);
@@ -65,6 +65,7 @@ public record StealthSettings(double hiddenWeight, int lowLight, int loseTrackSe
             case ZOMBIE -> zombieIgnores;
             case SKELETON -> skeletonIgnores;
             case SPIDER -> spiderIgnores;
+            case SHADOW_STALKER -> shadowStalkerIgnores;
         };
     }
 

@@ -23,7 +23,9 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
 /** Enemy maintenance, kill scoring and arena teardown. Call only on the server thread. */
@@ -81,6 +83,27 @@ public final class EnemyLifecycle implements Listener {
         for (MatchView match : matches.get()) {
             for (MobSpawner.MobEnemy enemy : enemies(match)) {
                 if (enemy.mob().equals(event.getEntity())) {
+                    event.setCancelled(true);
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * A wither skeleton's hit withers its victim; the Shadow Stalker's does not, so its damage
+     * setting is all a hit deals.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEffect(EntityPotionEffectEvent event) {
+        Entity source = event.getSource();
+        if (source == null || event.getCause() != EntityPotionEffectEvent.Cause.ATTACK
+                || !PotionEffectType.WITHER.equals(event.getModifiedType())) {
+            return;
+        }
+        for (MatchView match : matches.get()) {
+            for (MobSpawner.MobEnemy enemy : enemies(match)) {
+                if (enemy.kind() == EnemyKind.SHADOW_STALKER && enemy.mob().equals(source)) {
                     event.setCancelled(true);
                     return;
                 }
