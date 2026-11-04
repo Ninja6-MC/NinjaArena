@@ -169,7 +169,7 @@ the ignored `build/icon-tools/` directory on first use.
 
 Run `node --test scripts/export-icons.test.mjs` for the geometry and export tests,
 and `node scripts/export-icons.mjs --check` to verify the committed exports.
-The small cut covers 16â€“64 px, including a 20 px preview. Full-size, rounded,
+The small cut covers 16–64 px, including a 20 px preview. Full-size, rounded,
 transparent light and dark, and monochrome variants live beside the master.
 
 ## Building an arena
