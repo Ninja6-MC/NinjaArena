@@ -177,3 +177,8 @@ tools:
     strength: 1.0
     # Upward speed in blocks per tick (0 to 0.6).
     lift: 0.3
+
+# Viewing a live match. Reloaded limits apply to new spectators.
+spectating:
+  enabled: true
+  max-per-match: 16

@@ -38,7 +38,10 @@ public final class PortalEntry {
         SNAPSHOT_FAILED
     }
 
+    public static final String SPECTATE = "ninjaarena.spectate";
+
     private final ArenaRegistry arenas;
+    private final Function<String, Optional<ArenaPoint>> spectatorPoint;
     private final Predicate<UUID> pendingSnapshot;
     private final Function<Player, CaptureResult> capture;
 
@@ -47,14 +50,29 @@ public final class PortalEntry {
      * @param capture         {@code SnapshotService#captureAndPersist}
      */
     public PortalEntry(ArenaRegistry arenas, Predicate<UUID> pendingSnapshot, Function<Player, CaptureResult> capture) {
+        this(arenas, pendingSnapshot, capture, arena -> Optional.empty());
+    }
+
+    public PortalEntry(ArenaRegistry arenas, Predicate<UUID> pendingSnapshot, Function<Player, CaptureResult> capture,
+            Function<String, Optional<ArenaPoint>> spectatorPoint) {
         this.arenas = Objects.requireNonNull(arenas, "arenas");
+        this.spectatorPoint = Objects.requireNonNull(spectatorPoint, "spectatorPoint");
         this.pendingSnapshot = Objects.requireNonNull(pendingSnapshot, "pendingSnapshot");
         this.capture = Objects.requireNonNull(capture, "capture");
     }
 
     /** Everything except the snapshot write. Empty if the player may go on. */
     public Optional<Refusal> check(Player player, Portal portal) {
-        return check(player, portal.arena());
+        if (!portal.spectator()) {
+            return check(player, portal.arena());
+        }
+        if (!player.hasPermission(SPECTATE)) {
+            return refuse(Reason.NO_PERMISSION, "You do not have permission to spectate matches.");
+        }
+        if (destination(portal).isEmpty()) {
+            return refuse(Reason.UNAVAILABLE, "This portal does not lead to a match open to spectators.");
+        }
+        return pendingSnapshot.test(player.getUniqueId()) ? pending() : Optional.empty();
     }
 
     /** The same admission checks for an explicitly accepted invitation. */
@@ -88,11 +106,14 @@ public final class PortalEntry {
      * teleport fails, the caller deletes the snapshot again.
      */
     public Optional<Refusal> admit(Player player, Portal portal) {
-        return admit(player, portal.arena());
+        return capture(player, check(player, portal));
     }
 
     public Optional<Refusal> admit(Player player, String arenaName) {
-        Optional<Refusal> refusal = check(player, arenaName);
+        return capture(player, check(player, arenaName));
+    }
+
+    private Optional<Refusal> capture(Player player, Optional<Refusal> refusal) {
         if (refusal.isPresent()) {
             return refusal;
         }
@@ -104,9 +125,14 @@ public final class PortalEntry {
         };
     }
 
-    /** Where the portal sends players, or empty if its arena is gone or has no waiting room. */
+    /** The waiting-room point of the arena bound to this portal. */
     public Optional<ArenaPoint> waitingRoom(Portal portal) {
         return waitingRoom(portal.arena());
+    }
+
+    /** Where the portal sends players, if its destination is currently available. */
+    public Optional<ArenaPoint> destination(Portal portal) {
+        return portal.spectator() ? spectatorPoint.apply(portal.arena()) : waitingRoom(portal);
     }
 
     public Optional<ArenaPoint> waitingRoom(String arenaName) {

@@ -104,7 +104,7 @@ public final class ReloadFiles {
             case "arena-world.border-size" -> new double[] {16, 2048};
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};
             case "arena-grid.cell-size" -> new double[] {32, 4096};
-            case "waiting-room.min-players" -> new double[] {1, 64};
+            case "spectating.max-per-match", "waiting-room.min-players" -> new double[] {1, 64};
             case "waiting-room.countdown-seconds" -> new double[] {1, 600};
             case "waiting-room.radius" -> new double[] {2, 64};
             case "match.prep-seconds", "match.round-seconds", "match.round-end-seconds", "match.match-end-seconds"

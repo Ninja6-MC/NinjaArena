@@ -25,6 +25,9 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Waiting players and spectator portal entrants can watch live matches within the arena
+  bounds. Viewers use the existing snapshot and restore flow, with separate admission
+  limits and no effect on team rosters or enemy pressure.
 - Unit coverage for composed director pressure, repeated binary snapshots and safe-landing
   search boundaries. A separate local Paper stability probe records tick durations, decoded
   save comparisons and pending chunkholders. The short diagnostic reproduces retained

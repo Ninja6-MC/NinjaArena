@@ -8,7 +8,7 @@ import java.util.Objects;
 
 /**
  * A box of blocks in a world outside the arena world that sends a player who walks into it
- * to an arena's waiting room. Whatever is built around the box is decoration; only the box
+ * to an arena's waiting room or live match. Whatever is built around the box is decoration; only the box
  * counts. Instances are immutable.
  *
  * @param world  the world's name
@@ -16,7 +16,11 @@ import java.util.Objects;
  * @param arena  the arena's name; the arena may have been deleted since, which makes the
  *               portal refuse everyone until it is bound again
  */
-public record Portal(String name, String world, ArenaBounds region, String arena) {
+public record Portal(String name, String world, ArenaBounds region, String arena, boolean spectator) {
+
+    public Portal(String name, String world, ArenaBounds region, String arena) {
+        this(name, world, region, arena, false);
+    }
 
     /** The longest a portal may be along any axis, which keeps the chunk index small. */
     public static final int MAX_SPAN = 128;

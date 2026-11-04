@@ -143,8 +143,8 @@ public final class PortalCommand {
     }
 
     private void create(CommandSender sender, String[] args, String usage) throws ArenaException {
-        if (args.length != 2) {
-            error(sender, "Usage: " + usage + "create <name> <arena>");
+        if (args.length != 2 && (args.length != 3 || !args[2].equalsIgnoreCase("spectator"))) {
+            error(sender, "Usage: " + usage + "create <name> <arena> [spectator]");
             return;
         }
         if (!(sender instanceof Player player)) {
@@ -156,11 +156,12 @@ public final class PortalCommand {
             throw new ArenaException("Set both corners first with setcorner 1 and setcorner 2.");
         }
         Arena arena = arenas.get(args[1]).orElseThrow(() -> new ArenaException("No arena called " + args[1] + "."));
-        Portal portal = portals.create(args[0], selection.world(), selection.bounds(), arena.name());
+        Portal portal = portals.create(args[0], selection.world(), selection.bounds(), arena.name(), args.length == 3);
         selections.remove(player.getUniqueId());
         success(sender, "Portal " + portal.name() + " created in " + portal.world() + " ("
-                + portal.region().describe() + "), leading to arena " + arena.name() + ".");
-        if (!arenas.isAvailable(arena.name())) {
+                + portal.region().describe() + "), leading to arena " + arena.name()
+                + (portal.spectator() ? " for spectating." : "."));
+        if (!portal.spectator() && !arenas.isAvailable(arena.name())) {
             warn(sender, "Arena " + arena.name() + " is not available right now, so the portal turns players away"
                     + " until it is.");
         }
@@ -196,7 +197,7 @@ public final class PortalCommand {
         info(sender, "Portal " + portal.name() + ": " + status(portal));
         info(sender, "World: " + portal.world() + (worldLoaded.test(portal.world()) ? "" : " (not loaded)"));
         info(sender, "Region: " + portal.region().describe());
-        info(sender, "Arena: " + portal.arena());
+        info(sender, "Arena: " + portal.arena() + (portal.spectator() ? " (spectator portal)" : ""));
     }
 
     /** What a player walking in now would meet. */
@@ -207,6 +208,9 @@ public final class PortalCommand {
         Arena arena = arenas.get(portal.arena()).orElse(null);
         if (arena == null) {
             return "arena missing";
+        }
+        if (portal.spectator()) {
+            return "spectator portal, requires a live match with space";
         }
         if (arenas.isAvailable(arena.name())) {
             return "open";
@@ -234,7 +238,11 @@ public final class PortalCommand {
                 }
                 yield position <= 3 ? ArenaCommand.coordinate(sender, position - 1, current) : List.of();
             }
-            case "create" -> position == 1 ? ArenaCommand.matching(arenaNames(), current) : List.of();
+            case "create" -> switch (position) {
+                case 1 -> ArenaCommand.matching(arenaNames(), current);
+                case 2 -> ArenaCommand.matching(List.of("spectator"), current);
+                default -> List.of();
+            };
             case "delete", "info" -> position == 0 ? ArenaCommand.matching(portalNames(), current) : List.of();
             default -> List.of();
         };
