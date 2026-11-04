@@ -76,7 +76,8 @@ uses `waiting-room.lobby` in `config.yml` (`dedicated` by default).
   arena it could fill is taken, the countdown stops.
 
 Stand where players should gather in the arena world, outside every arena's bounds, and
-run `/narena portal sethub`, or give coordinates as for `setwaitingroom`.
+run `/narena portal sethub`, or give coordinates as for `setwaitingroom`. Later
+`arena setbounds` that would enclose the hub is refused; move the hub first.
 `/narena portal lobby <portal> <dedicated|shared|default>` sets a portal's choice;
 `default` returns it to the config value. `portal create <name> <arena> shared` sets it at
 creation. `portal list` and `portal info` show the hub and where each portal leads.

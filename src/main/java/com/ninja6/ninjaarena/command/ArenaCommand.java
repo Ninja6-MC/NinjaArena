@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -46,6 +47,7 @@ public final class ArenaCommand {
     private final Supplier<World> world;
     private final Supplier<Runnable> acquireWorld;
     private final Consumer<Runnable> completeOnServer;
+    private Supplier<Optional<ArenaPoint>> hub = Optional::empty;
 
     /**
      * @param world the arena world, for {@code tp}
@@ -64,6 +66,14 @@ public final class ArenaCommand {
         this.world = Objects.requireNonNull(world, "world");
         this.acquireWorld = Objects.requireNonNull(acquireWorld, "acquireWorld");
         this.completeOnServer = Objects.requireNonNull(completeOnServer, "completeOnServer");
+    }
+
+    /**
+     * Where the shared hub is, {@code PortalRegistry#hub} on a server, so {@code setbounds}
+     * never encloses it; by default there is none.
+     */
+    public void setHub(Supplier<Optional<ArenaPoint>> hub) {
+        this.hub = Objects.requireNonNull(hub, "hub");
     }
 
     void execute(CommandSender sender, String label, String[] args) {
@@ -271,6 +281,11 @@ public final class ArenaCommand {
         if (!cell.contains(bounds)) {
             throw new ArenaException("Bounds " + bounds.describe() + " leave the arena's cell (" + cell.describe()
                     + ").");
+        }
+        Optional<ArenaPoint> enclosed = hub.get().filter(bounds::contains);
+        if (enclosed.isPresent()) {
+            throw new ArenaException("Bounds " + bounds.describe() + " enclose the shared hub at "
+                    + enclosed.get().describe() + ". Move it first with portal sethub.");
         }
         Arena arena = registry.update(args[0], a -> a.withBounds(bounds));
         success(sender, "Bounds of " + arena.name() + " set to " + bounds.describe() + ".");

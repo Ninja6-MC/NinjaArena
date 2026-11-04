@@ -72,6 +72,7 @@ import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.SplittableRandom;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
@@ -317,8 +318,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         }
                     }
                 });
-        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world,
-                arenaWorld::acquire, task -> getServer().getScheduler().runTask(this, task)), portalCommand,
+        ArenaCommand arenaCommand = new ArenaCommand(arenas, arenaWorld::world, arenaWorld::acquire,
+                task -> getServer().getScheduler().runTask(this, task));
+        arenaCommand.setHub(() -> portals == null ? Optional.empty() : portals.hub());
+        NinjaArenaCommand command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 player -> {
                     boolean cancelled = hosting.leave(player);

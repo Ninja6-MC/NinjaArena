@@ -70,7 +70,9 @@ class PortalCommandTest {
         portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
         portalCommand = new PortalCommand(portals, arenas, world -> !world.equals("gone"));
-        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand,
+        ArenaCommand arenaCommand = new ArenaCommand(arenas, () -> null);
+        arenaCommand.setHub(portals::hub);
+        command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(List::of, id -> Optional.empty(), match -> Optional.empty()), player -> false);
         standing = new Location(world("world"), 10.5, 64, 10.5);
     }
@@ -277,6 +279,22 @@ class PortalCommandTest {
         assertEquals(Optional.empty(), portals.hub());
         assertEquals(List.of("Shared hub removed. Portals that lead there turn players away until a hub is set.",
                 "No shared hub is set."), messages);
+    }
+
+    @Test
+    void arenaBoundsCannotBeSetAroundTheHub() throws Exception {
+        CommandSender console = console();
+        run(console, "portal sethub 50.5 64 50.5");
+        arenas.startEdit("dojo");
+        messages.clear();
+        run(console, "arena setbounds dojo 10 60 10 90 100 90");
+        assertEquals(List.of("Bounds 10, 60, 10 to 90, 100, 90 enclose the shared hub at 50.5, 64.0, 50.5. Move it"
+                + " first with portal sethub."), messages);
+        assertEquals(null, arenas.get("dojo").orElseThrow().bounds());
+
+        messages.clear();
+        run(console, "arena setbounds dojo 10 60 10 40 100 40");
+        assertEquals(new ArenaBounds(10, 60, 10, 40, 100, 40), arenas.get("dojo").orElseThrow().bounds());
     }
 
     @Test
