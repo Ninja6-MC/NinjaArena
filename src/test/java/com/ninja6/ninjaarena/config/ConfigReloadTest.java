@@ -210,6 +210,22 @@ class ConfigReloadTest {
     }
 
     @Test
+    void shadowStalkerSettingsAreValidatedAndNeedARestart() throws Exception {
+        write("director:\n  shadow-stalker:\n    blink:\n      distance: 30.0\n", EMPTY_KIT);
+        var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate);
+        assertTrue(failure.getMessage().contains("director.shadow-stalker.blink.distance"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("blink range must not be below blink distance"));
+        write("director:\n  shadow-stalker:\n    blink:\n      distance: 30.0\n      range: 20.0\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("director.shadow-stalker.blink.range"));
+        write("director:\n  shadow-stalker:\n    max-alive: 6\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage().contains("must be from 0.0 to 5.0"));
+        write("director:\n  shadow-stalker:\n    health: 80.0\n", EMPTY_KIT);
+        assertTrue(reload.reload().get(3).contains("director.shadow-stalker.health (restart required)"));
+        assertEquals(40.0, target.published.getDouble("director.shadow-stalker.health"));
+    }
+
+    @Test
     void settingsOutsideTheReloadTableRemainRestartOnly() throws Exception {
         write("director:\n  debug: true\nstability:\n  max-concurrent-matches: 5\n", EMPTY_KIT);
         assertTrue(reload.reload().get(3).contains("director.debug (restart required)"));

@@ -42,6 +42,31 @@ class TargetingTest {
     }
 
     @Test
+    void aHuntKeepsOnlyTheLeadingTeamsPlayersWithTheirWeights() {
+        points.put(2, 5);
+        Map<UUID, Double> weights = Targeting.weights(match, standings, 2.5, TargetWeigher.NONE);
+        Map<UUID, Double> hunted = Targeting.hunt(match, standings, weights);
+        assertEquals(Map.of(B, 2.5, D, 2.5), hunted);
+        assertEquals(List.of(B, D), List.copyOf(hunted.keySet()));
+
+        points.put(3, 5);
+        assertEquals(List.of(B, D, E), List.copyOf(Targeting.hunt(match, standings, weights).keySet()),
+                "every team sharing the lead is hunted");
+    }
+
+    @Test
+    void aHuntWithoutALeaderOrWithTheLeadersOutGoesForEveryone() {
+        Map<UUID, Double> weights = Targeting.weights(match, standings, 2.5, TargetWeigher.NONE);
+        assertEquals(weights, Targeting.hunt(match, standings, weights), "level teams");
+
+        points.put(3, 5);
+        Map<UUID, Double> withoutE = new LinkedHashMap<>(weights);
+        withoutE.remove(E);
+        assertEquals(withoutE, Targeting.hunt(match, standings, withoutE),
+                "the leading team's only player has no weight, so the hunter takes anyone");
+    }
+
+    @Test
     void leadersWeighTheBiasAndOthersOne() {
         points.put(2, 5);
         Map<UUID, Double> weights = Targeting.weights(match, standings, 2.5, TargetWeigher.NONE);

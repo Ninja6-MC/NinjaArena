@@ -16,9 +16,11 @@ import com.ninja6.ninjaarena.director.EnemyLifecycle;
 import com.ninja6.ninjaarena.director.IntensitySettings;
 import com.ninja6.ninjaarena.director.MatchDirector;
 import com.ninja6.ninjaarena.director.MobSpawner;
+import com.ninja6.ninjaarena.director.ShadowStalker;
 import com.ninja6.ninjaarena.director.SpawnSettings;
 import com.ninja6.ninjaarena.director.StabilityGate;
 import com.ninja6.ninjaarena.director.StabilitySettings;
+import com.ninja6.ninjaarena.director.StalkerSettings;
 import com.ninja6.ninjaarena.director.StealthSettings;
 import com.ninja6.ninjaarena.director.ThreatBudget;
 import com.ninja6.ninjaarena.director.WorldSenses;
@@ -131,13 +133,15 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer);
         getServer().getPluginManager().registerEvents(scoring, this);
         // Starts and stops each match's spawn loop with its fights; closed before the matches.
+        StalkerSettings stalker = StalkerSettings.from(getConfig().getConfigurationSection("director.shadow-stalker"));
         directors = new DirectorService(this,
                 IntensitySettings.from(getConfig().getConfigurationSection("director.intensity")),
                 ThreatBudget.from(getConfig().getConfigurationSection("director.threat-budget")),
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")),
                 scores, matches::matchOf, MobSpawner.factory(arenas, arenaWorld::world, getServer()::getPlayer,
-                        SpawnSettings.from(getConfig().getConfigurationSection("director")), getLogger()),
-                new SplittableRandom()::nextDouble);
+                        SpawnSettings.from(getConfig().getConfigurationSection("director")),
+                        new ShadowStalker(stalker, getServer().getMobGoals(), Bukkit::getCurrentTick), getLogger()),
+                new SplittableRandom()::nextDouble, stalker);
         getServer().getPluginManager().registerEvents(directors, this);
         enemyLifecycle = new EnemyLifecycle(matches::matches, directors::director,
                 name -> arenas.get(name).map(Arena::bounds), arenaWorld::world, scores,

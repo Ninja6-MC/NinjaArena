@@ -77,6 +77,37 @@ class DirectorServiceTest {
                 }, () -> 0);
     }
 
+    private DirectorService stalkerService(StalkerSettings stalker) {
+        return new DirectorService(plugin(), IntensitySettings.DEFAULTS, new ThreatBudget(20), EnemyCosts.DEFAULTS,
+                (view, team) -> 0, id -> Optional.of(match), view -> (kind, target) -> {
+                    FakeEnemy enemy = new FakeEnemy(kind, target);
+                    spawned.add(enemy);
+                    return Optional.of(enemy);
+                }, () -> 0.99, stalker);
+    }
+
+    @Test
+    void directorsGetTheShadowStalkerLimitFromTheService() {
+        // Overrun spends the whole budget of 10; a roll of 0.99 draws the costliest kind allowed.
+        match.phase = MatchPhase.OVERRUN;
+        match.elapsed = 300;
+        service = stalkerService(StalkerSettings.DEFAULTS);
+        service.onPhaseChange(new MatchPhaseChangeEvent(match, MatchPhase.COMBAT, MatchPhase.OVERRUN));
+        second();
+        assertEquals(List.of(EnemyKind.SHADOW_STALKER, EnemyKind.SPIDER), spawned.stream().map(enemy -> enemy.kind).toList());
+
+        spawned.clear();
+        loops.clear();
+        match = new FakeMatch(List.of(List.of(A), List.of(B)));
+        match.phase = MatchPhase.OVERRUN;
+        match.elapsed = 300;
+        service = stalkerService(new StalkerSettings(0, 40, 6, 0.3, 1.1, 8, 20, 8, 24, 2, 3));
+        service.onPhaseChange(new MatchPhaseChangeEvent(match, MatchPhase.COMBAT, MatchPhase.OVERRUN));
+        second();
+        assertEquals(5, spawned.size());
+        assertTrue(spawned.stream().noneMatch(enemy -> enemy.kind == EnemyKind.SHADOW_STALKER), "turned off");
+    }
+
     private Plugin plugin() {
         Logger logger = Logger.getAnonymousLogger();
         logger.setLevel(Level.OFF);

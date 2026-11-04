@@ -67,6 +67,7 @@ public final class DirectorService implements Listener {
     private final Function<UUID, Optional<MatchView>> matchOf;
     private final Function<MatchView, MatchDirector.Spawner> spawners;
     private final DoubleSupplier random;
+    private final StalkerSettings stalker;
     private final Map<MatchView, Running> running = new IdentityHashMap<>();
     private SpawnGate gate = SpawnGate.OPEN;
     private TargetWeigher weigher = TargetWeigher.NONE;
@@ -81,6 +82,19 @@ public final class DirectorService implements Listener {
     public DirectorService(Plugin plugin, IntensitySettings settings, ThreatBudget budget, EnemyCosts costs,
             MatchStandings standings, Function<UUID, Optional<MatchView>> matchOf,
             Function<MatchView, MatchDirector.Spawner> spawners, DoubleSupplier random) {
+        this(plugin, settings, budget, costs, standings, matchOf, spawners, random, StalkerSettings.DEFAULTS);
+    }
+
+    /**
+     * @param standings how teams are scored, for the leading-team bias; {@code TeamScores}
+     * @param matchOf   the match a player is in; {@code MatchService#matchOf}
+     * @param spawners  makes the spawner for a match; {@link MobSpawner#factory} on a server
+     * @param random    a number from 0 (inclusive) to 1 (exclusive) on each call
+     * @param stalker   the Shadow Stalker settings, for how many may be alive in a match
+     */
+    public DirectorService(Plugin plugin, IntensitySettings settings, ThreatBudget budget, EnemyCosts costs,
+            MatchStandings standings, Function<UUID, Optional<MatchView>> matchOf,
+            Function<MatchView, MatchDirector.Spawner> spawners, DoubleSupplier random, StalkerSettings stalker) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.budget = Objects.requireNonNull(budget, "budget");
@@ -89,6 +103,7 @@ public final class DirectorService implements Listener {
         this.matchOf = Objects.requireNonNull(matchOf, "matchOf");
         this.spawners = Objects.requireNonNull(spawners, "spawners");
         this.random = Objects.requireNonNull(random, "random");
+        this.stalker = Objects.requireNonNull(stalker, "stalker");
     }
 
     /** Sets the spawn gate for directors created from now on. */
@@ -160,7 +175,7 @@ public final class DirectorService implements Listener {
             return;
         }
         Running entry = running.computeIfAbsent(match, view -> new Running(new MatchDirector(view, settings, budget,
-                costs, standings, spawners.apply(view), gate, weigher, random)));
+                costs, standings, spawners.apply(view), gate, weigher, random, stalker)));
         if (entry.loop == null && entry.failedRound != match.round()) {
             entry.loop = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> tick(match), TICKS_PER_SECOND,
                     TICKS_PER_SECOND);

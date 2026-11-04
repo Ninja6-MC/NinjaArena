@@ -112,6 +112,87 @@ class MatchDirectorTest {
                 standings, spawner, gate, weigher, () -> roll);
     }
 
+    /** The whole budget at once, so a Stalker (8 of 20) is affordable from the first second. */
+    private static final SpawnGate FULL = new SpawnGate() {
+        @Override
+        public double intensity(MatchView view, double target) {
+            return 1;
+        }
+    };
+
+    private MatchDirector stalkerDirector(int maxAlive) {
+        return new MatchDirector(match, IntensitySettings.DEFAULTS, new ThreatBudget(20), EnemyCosts.DEFAULTS,
+                standings, spawner, FULL, TargetWeigher.NONE, () -> roll,
+                new StalkerSettings(maxAlive, 40, 6, 0.3, 1.1, 8, 20, 8, 24, 2, 3));
+    }
+
+    private List<FakeEnemy> stalkers() {
+        return spawned.stream().filter(enemy -> enemy.kind == EnemyKind.SHADOW_STALKER).toList();
+    }
+
+    @Test
+    void theShadowStalkerCostsItsThreatAndIsCappedPerMatch() {
+        // A roll of 0.9 always draws the last affordable kind: the Stalker while one may spawn.
+        roll = 0.9;
+        var director = stalkerDirector(1);
+        director.tick();
+        assertEquals(1, stalkers().size());
+        assertEquals(EnemyKind.SHADOW_STALKER, spawned.getFirst().kind, "drawn first while affordable");
+        assertEquals(20, director.threatInPlay(), DELTA, "the rest of the budget goes to other kinds");
+        assertEquals(List.of(new MatchDirector.InPlay(EnemyKind.SPIDER, 6, 12),
+                new MatchDirector.InPlay(EnemyKind.SHADOW_STALKER, 1, 8)), director.inPlay());
+
+        stalkers().getFirst().alive = false;
+        director.tick();
+        assertEquals(2, stalkers().size(), "a dead Stalker frees its place and its cost");
+        assertEquals(1, director.inPlay().getLast().count());
+    }
+
+    @Test
+    void moreStalkersMayBeAllowedOrNone() {
+        roll = 0.9;
+        stalkerDirector(2).tick();
+        assertEquals(2, stalkers().size());
+
+        spawned.clear();
+        stalkerDirector(0).tick();
+        assertTrue(stalkers().isEmpty(), "0 turns the Stalker off");
+        assertEquals(10, spawned.size());
+    }
+
+    @Test
+    void theShadowStalkerHuntsOnlyTheLeadingTeam() {
+        roll = 0.9;
+        points.put(1, 5);
+        var director = stalkerDirector(1);
+        director.tick();
+        // Team 1 leads: everyone else weighs A 2, C 2, B 1, D 1 and draws Dave; the Stalker
+        // draws only from Alice and Carol.
+        assertEquals(C, stalkers().getFirst().target);
+        assertTrue(spawned.stream().filter(enemy -> enemy.kind != EnemyKind.SHADOW_STALKER)
+                .allMatch(enemy -> D.equals(enemy.target)));
+
+        points.put(2, 9);
+        director.tick();
+        assertEquals(D, stalkers().getFirst().target, "the lead changed hands, and so did its prey");
+        assertTrue(spawned.stream().filter(enemy -> enemy.kind != EnemyKind.SHADOW_STALKER)
+                .allMatch(enemy -> D.equals(enemy.target)), "the others keep the target they have");
+    }
+
+    @Test
+    void withNoLeaderOrNoLeaderLeftTheStalkerHuntsAnyone() {
+        roll = 0.9;
+        var director = stalkerDirector(1);
+        director.tick();
+        assertEquals(D, stalkers().getFirst().target, "level teams: everyone weighs the same");
+
+        points.put(1, 5);
+        match.alive.remove(A);
+        match.alive.remove(C);
+        director.tick();
+        assertEquals(D, stalkers().getFirst().target, "the leading team is out of the round");
+    }
+
     @Test
     void reportsBudgetOnlyWhenItHoldsBackAnOtherwiseIdleTick() {
         var director = director();
@@ -305,7 +386,7 @@ class MatchDirectorTest {
         attempts.clear();
         match.combat(45);
         director.tick();
-        assertEquals(3, attempts.size(), "each kind is tried once, then the second ends");
+        assertEquals(EnemyKind.values().length, attempts.size(), "each kind is tried once, then the second ends");
     }
 
     @Test
