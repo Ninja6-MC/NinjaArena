@@ -6,6 +6,7 @@ import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.DirectorCommand;
+import com.ninja6.ninjaarena.command.LeaderboardCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
 import com.ninja6.ninjaarena.config.ConfigReload;
@@ -51,6 +52,8 @@ import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.spectate.Spectators;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
+import com.ninja6.ninjaarena.placeholder.NinjaArenaExpansion;
+import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
 import com.ninja6.ninjaarena.stats.StatsSettings;
 import com.ninja6.ninjaarena.stats.StatsStore;
 import com.ninja6.ninjaarena.stats.StatsTracker;
@@ -98,6 +101,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
     private StatsStore stats;
+    private StatsPlaceholders placeholders;
+    private Runnable unregisterPlaceholders;
 
     @Override
     public void onEnable() {
@@ -158,6 +163,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(enemyLifecycle, this);
         enemyLifecycle.start(this);
         startStats(enemyLifecycle);
+        startPlaceholders();
         kitItems = new KitItems();
         NinjaTools.registerItems(kitItems);
         tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
@@ -294,10 +300,16 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         if (stats != null) {
                             stats.useSeason(name);
                         }
+                        if (placeholders != null) {
+                            placeholders.invalidateSeason();
+                        }
                     }
 
                     @Override
                     public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
+                        if (placeholders != null) {
+                            placeholders.setCacheSeconds(settings.getInt(StatsPlaceholders.CACHE_SECONDS));
+                        }
                         for (String path : settings.getKeys(true)) {
                             if (!settings.isConfigurationSection(path)) {
                                 getConfig().set(path, settings.get(path));
@@ -312,7 +324,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     boolean cancelled = hosting.leave(player);
                     return watching.leave(player) || waitingRooms.leave(player, Exit.COMMAND)
                             || matches.leave(player, MatchService.Exit.COMMAND) || cancelled;
-                }, hosting, reloader::execute, watching::fromWaitingRoom);
+                }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats));
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -339,8 +351,30 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         enemies.setKills(tracker::enemyKilled);
     }
 
+    private void startPlaceholders() {
+        if (!getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            return;
+        }
+        Object configured = getConfig().get(StatsPlaceholders.CACHE_SECONDS);
+        int seconds = StatsPlaceholders.DEFAULT_SECONDS;
+        if (configured instanceof Integer value
+                && value >= StatsPlaceholders.MIN_SECONDS && value <= StatsPlaceholders.MAX_SECONDS) {
+            seconds = value;
+        } else {
+            getLogger().warning(StatsPlaceholders.CACHE_SECONDS + " must be an integer from "
+                    + StatsPlaceholders.MIN_SECONDS + " to " + StatsPlaceholders.MAX_SECONDS + ". Using " + seconds + ".");
+        }
+        placeholders = new StatsPlaceholders(stats, seconds);
+        unregisterPlaceholders = NinjaArenaExpansion.install(this, placeholders);
+    }
+
     @Override
     public void onDisable() {
+        if (unregisterPlaceholders != null) {
+            unregisterPlaceholders.run();
+            unregisterPlaceholders = null;
+            placeholders = null;
+        }
         if (spectators != null) {
             spectators.close();
             spectators = null;

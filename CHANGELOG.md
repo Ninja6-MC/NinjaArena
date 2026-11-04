@@ -35,6 +35,8 @@ Java 25, and does not run on Folia.
 - Player caps: `waiting-room.max-players` and `waiting-room.team-size` limit one match in
   both modes. A full dedicated room turns arrivals away with a message before their
   snapshot is saved; spectators never count.
+- View all-time or current-season top tens with `/narena leaderboard`. PlaceholderAPI
+  can show personal stats, ranked scores and names, and the current season.
 - Player stats and seasons: wins, rounds won, player kills, enemy kills, deaths, best
   Overrun survival and matches played, all-time and per season, written in batches off
   the server thread when a match ends. SQLite by default; MySQL or MariaDB lets several

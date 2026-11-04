@@ -222,6 +222,10 @@ tools:
     # Upward speed in blocks per tick (0 to 0.6).
     lift: 0.3
 
+placeholders:
+  # Seconds to keep each snapshot before refreshing it on demand (1 to 300).
+  cache-seconds: 30
+
 stats:
   # Record each player's wins, rounds won, player kills, enemy kills, deaths, best Overrun
   # survival and matches played, all-time and per season. Written in the background once a

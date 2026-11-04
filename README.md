@@ -103,6 +103,7 @@ under the root.
 | :--- | :--- | :--- |
 | `help` | Any tier below | List permitted commands |
 | `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Return home and restore your snapshot |
+| `leaderboard <stat> [all_time\|season]` | `ninjaarena.leaderboard` | Show the [top ten for a stat](docs/leaderboards.md) |
 | `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from a waiting room |
 | `accept <host>` | `ninjaarena.play` | Accept an invitation and enter the waiting room |
 | `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
@@ -112,13 +113,12 @@ under the root.
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration and kits |
 
-The player and host commands require a player sender. Enter the Arena by walking
-through a portal or explicitly accepting an invitation. Admin reload also works from
-the console.
+Enter the Arena by walking through a portal or explicitly accepting an invitation.
+Leaderboard and admin reload also work from the console.
 
-`ninjaarena.play` and `ninjaarena.spectate` default to everyone. `ninjaarena.host` and
-`ninjaarena.admin` default to operators. The declared permission children grant spectate
-from play, play from host, and host from admin. The root accepts any of these permissions.
+`ninjaarena.play`, `ninjaarena.spectate` and `ninjaarena.leaderboard` default to everyone.
+`ninjaarena.host` and `ninjaarena.admin` default to operators. Play grants spectate and
+leaderboard. Host grants play, and admin grants host. The root accepts any of these permissions.
 Dispatch, help and tab completion check the permissions for each route.
 
 ## Hosting and invitations
@@ -186,6 +186,7 @@ and never moves match players or restarts a match.
 | Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
 | Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |
 | Grid cell size and world border | Apply only before any arena exists and while no match runs. Otherwise refuse the change and require a restart. |
+| Placeholder cache | `placeholders.cache-seconds` applies to cached stats immediately. |
 | Stats season | A new `stats.season` archives the current season and starts it. Other stats settings require a restart. |
 
 The reply separates changed settings, postponed changes (next match or round), and refused

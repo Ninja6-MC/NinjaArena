@@ -114,6 +114,19 @@ class ConfigReloadTest {
     }
 
     @Test
+    void placeholderLifetimeReloadsAndInvalidValuesKeepTheLastAcceptedValue() throws Exception {
+        write("placeholders: {cache-seconds: 12}\n", EMPTY_KIT);
+        assertTrue(reload.reload().get(1).contains("placeholders.cache-seconds"));
+        assertEquals(12, target.published.getInt("placeholders.cache-seconds"));
+
+        for (String invalid : List.of("0", "301", "1.5", "'20'")) {
+            write("placeholders: {cache-seconds: " + invalid + "}\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("placeholders.cache-seconds"), invalid);
+            assertEquals(12, target.published.getInt("placeholders.cache-seconds"));
+        }
+    }
+
+    @Test
     void bundledSchemaAndKitValidateWithoutCallingItemProviders() throws Exception {
         Files.writeString(dir.resolve("config.yml"), ReloadFiles.defaults().saveToString());
         Files.writeString(dir.resolve("kits.yml"), "format: 1\nitems:\n  - slot: 1\n    id: ninjaarena:shuriken\n    amount: 8\n");
