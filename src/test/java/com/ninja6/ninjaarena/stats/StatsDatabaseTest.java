@@ -102,6 +102,28 @@ class StatsDatabaseTest {
 
     @ParameterizedTest
     @EnumSource(Dialect.class)
+    void topTenCutsOffTiesByUuidAndCurrentSeasonHasItsOwnBoard(Dialect dialect) throws Exception {
+        StatsDatabase database = seasoned(dialect);
+        for (int id = 12; id >= 1; id--) {
+            database.write(List.of(match(player(new UUID(0, id), "Player" + id, 1, 0, 0, 0, 0, 0))));
+        }
+        database.startSeason("Season 2", T0.plusSeconds(1));
+        UUID winner = new UUID(0, 12);
+        database.write(List.of(match(T0.plusSeconds(2), player(winner, "Winner", 1, 0, 0, 0, 0, 0))));
+
+        List<LeaderboardEntry> allTime = database.top(Stat.WINS, StatsScope.ALL_TIME, Leaderboards.LIMIT);
+        assertEquals(10, allTime.size());
+        assertEquals(new LeaderboardEntry(1, winner, "Winner", 2), allTime.getFirst());
+        for (int index = 1; index < allTime.size(); index++) {
+            assertEquals(new LeaderboardEntry(index + 1, new UUID(0, index), "Player" + index, 1),
+                    allTime.get(index));
+        }
+        assertEquals(List.of(new LeaderboardEntry(1, winner, "Winner", 1)),
+                database.top(Stat.WINS, StatsScope.CURRENT_SEASON, Leaderboards.LIMIT));
+    }
+
+    @ParameterizedTest
+    @EnumSource(Dialect.class)
     void totalsStopAtTheIntegerLimitInsteadOfFailingTheBatch(Dialect dialect) throws Exception {
         StatsDatabase database = seasoned(dialect);
         int max = Integer.MAX_VALUE;

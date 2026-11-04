@@ -8,6 +8,7 @@ description: Team vs Team vs Enemies arena with ninja stealth mechanics.
 # Paper only. Folia refuses to enable a plugin that does not declare support, and this one
 # deliberately does not.
 folia-supported: false
+softdepend: [PlaceholderAPI]
 
 commands:
   # The long name is the registered root and the short one an alias, so a collision on the
@@ -16,7 +17,7 @@ commands:
     description: The Arena commands
     usage: /<command>
     aliases: [narena]
-    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.spectate
+    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.spectate;ninjaarena.leaderboard
 
 permissions:
   # Each tier is a declared child of the one above it. Bukkit gives the dots in a node name
@@ -26,6 +27,11 @@ permissions:
     default: true
     children:
       ninjaarena.spectate: true
+      ninjaarena.leaderboard: true
+  ninjaarena.leaderboard:
+    description: View Arena leaderboards
+    default: true
+    children: {}
   ninjaarena.spectate:
     description: Watch live arena matches
     default: true

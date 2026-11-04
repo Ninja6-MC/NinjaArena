@@ -15,6 +15,9 @@ java {
 
 repositories {
     mavenCentral()
+    maven("https://repo.helpch.at/releases/") {
+        content { includeGroup("me.clip") }
+    }
     maven("https://repo.papermc.io/repository/maven-public/")
 }
 
@@ -22,6 +25,7 @@ val paperApi = "io.papermc.paper:paper-api:26.3.build.223-stable"
 
 dependencies {
     compileOnly(paperApi)
+    compileOnly("me.clip:placeholderapi:2.11.6")
 
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
