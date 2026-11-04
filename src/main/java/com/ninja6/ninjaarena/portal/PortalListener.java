@@ -28,7 +28,9 @@ import org.bukkit.plugin.Plugin;
 
 /**
  * Sends players who walk into a portal to its waiting room, the shared hub or a live match.
- * {@link PortalEntry} decides which; everything below applies to each.
+ * {@link PortalEntry} decides which; everything below applies to each. A player-built portal
+ * is routed to an arena as the player walks in ({@link PortalEntry#route}) and the entry keeps
+ * that arena: a room that fills while the chunk loads refuses them as for any portal.
  *
  * <p><b>Detection.</b> Only a move that crosses into another block is looked at, and the
  * portal is found through the registry's chunk index. Entry fires when the new block is in
@@ -129,7 +131,10 @@ public final class PortalListener implements Listener {
             tell(player, refusal.get());
             return;
         }
-        ArenaPoint room = entry.destination(portal).orElseThrow();
+        // A player-built portal is bound to an arena for this entry; the checks above routed it
+        // the same way in this tick.
+        Portal target = entry.route(portal).orElseThrow();
+        ArenaPoint room = entry.destination(target).orElseThrow();
         Object request = new Object();
         Runnable releaseWorld;
         try {
@@ -145,7 +150,7 @@ public final class PortalListener implements Listener {
                         try {
                             if (!later(() -> {
                                 try {
-                                    enter(playerId, request, portal, outside, error);
+                                    enter(playerId, request, portal, target, outside, error);
                                 } finally {
                                     releaseWorld.run();
                                 }
@@ -180,7 +185,9 @@ public final class PortalListener implements Listener {
         onQuit.accept(playerId);
     }
 
-    private void enter(UUID playerId, Object request, Portal portal, Location outside, Throwable error) {
+    /** @param target the portal as routed when the player walked in, which the admission uses */
+    private void enter(UUID playerId, Object request, Portal portal, Portal target, Location outside,
+            Throwable error) {
         if (!entering.remove(playerId, request)) {
             // The player left while the chunk loaded.
             return;
@@ -199,7 +206,7 @@ public final class PortalListener implements Listener {
                 || !isAt(portal, player.getLocation())) {
             return;
         }
-        admission.enter(player, portal, onSpectate, message -> {
+        admission.enter(player, target, onSpectate, message -> {
             if (portal.equals(portals.at(player.getLocation()))) {
                 player.teleport(outside, TeleportCause.PLUGIN);
             }

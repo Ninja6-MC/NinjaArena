@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.config;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.portal.LobbyMode;
+import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
 import com.ninja6.ninjaarena.stats.StatsSettings;
 import java.io.IOException;
@@ -47,6 +48,11 @@ public final class ReloadFiles {
         YamlConfiguration result = new YamlConfiguration();
         for (var entry : document.nodes().entrySet()) {
             String path = entry.getKey();
+            int dot = path.lastIndexOf('.');
+            if (dot > 0 && defaults.isList(path.substring(0, dot))) {
+                // An item of a list setting, validated with the list below.
+                continue;
+            }
             if (!path.isEmpty() && !defaults.contains(path)) {
                 throw document.invalidKey(path, "unknown setting");
             }
@@ -69,12 +75,26 @@ public final class ReloadFiles {
                 if (!(value instanceof String text)) {
                     throw document.invalid(path, "expected text; quote it if it looks like a number");
                 }
-                String problem = path.equals("waiting-room.lobby")
-                        ? LobbyMode.parse(text).isPresent() ? null : "expected dedicated or shared"
-                        : StatsSettings.problem(path, text);
+                String problem;
+                if (path.equals("waiting-room.lobby")) {
+                    problem = LobbyMode.parse(text).isPresent() ? null : "expected dedicated or shared";
+                } else if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
+                    problem = PlayerPortalSettings.problem(path, text);
+                } else {
+                    problem = StatsSettings.problem(path, text);
+                }
                 if (problem != null) {
                     throw document.invalid(path, problem);
                 }
+            } else if (fallback instanceof List<?>) {
+                String problem = switch (path) {
+                    case PlayerPortalSettings.SECTION + ".worlds" -> PlayerPortalSettings.worldsProblem(value);
+                    default -> throw new IllegalStateException("No validation for list " + path);
+                };
+                if (problem != null) {
+                    throw document.invalid(path, problem);
+                }
+                value = List.copyOf((List<?>) value);
             } else if (fallback instanceof Number) {
                 if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())) {
                     throw document.invalid(path, "expected a finite number");
@@ -177,6 +197,8 @@ public final class ReloadFiles {
             case StatsPlaceholders.CACHE_SECONDS ->
                     new double[] {StatsPlaceholders.MIN_SECONDS, StatsPlaceholders.MAX_SECONDS};
             case "stats.mysql.port" -> new double[] {1, 65535};
+            case PlayerPortalSettings.SECTION + ".max-per-player" -> new double[] {0, PlayerPortalSettings.MAX_PER_PLAYER};
+            case PlayerPortalSettings.SECTION + ".min-distance" -> new double[] {0, PlayerPortalSettings.MAX_DISTANCE};
             default -> throw new IllegalStateException("No validation range for " + path);
         };
     }

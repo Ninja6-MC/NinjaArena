@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import org.bukkit.Location;
 import org.bukkit.plugin.Plugin;
@@ -21,14 +23,21 @@ import org.bukkit.plugin.Plugin;
  * a failed write leaves the registry as it was. Portals never overlap, so a block belongs to
  * at most one.
  *
+ * <p>Player-built portals live here too, named {@value #BUILT_PREFIX} and a number, so the
+ * same lookup, entry and admin commands serve both kinds.
+ *
  * <p>Not thread-safe: call it from the server thread.
  */
 public final class PortalRegistry {
+
+    /** The start of every name the registry gives a player-built portal. */
+    public static final String BUILT_PREFIX = "built-";
 
     private final PortalStore store;
     private final Map<String, Portal> portals = new TreeMap<>();
     private PortalIndex index = PortalIndex.EMPTY;
     private ArenaPoint hub;
+    private Consumer<Portal> removed = portal -> { };
 
     /** Set when the file could not be read, so a later write cannot replace what is in it. */
     private boolean unreadable;
@@ -98,14 +107,19 @@ public final class PortalRegistry {
     /**
      * Changes a portal's own lobby choice; {@code null} makes it use the server default.
      *
-     * @throws ArenaException if there is no such portal, it is a spectator portal, or the
-     *                        write fails
+     * @throws ArenaException if there is no such portal, it is a spectator or player-built
+     *                        portal, or the write fails
      */
     public Portal setLobby(String name, LobbyMode lobby) throws ArenaException {
         String key = Portal.normalizeName(name);
         Portal portal = portals.get(key);
         if (portal == null) {
             throw new ArenaException("No portal called " + name + ".");
+        }
+        if (portal.playerBuilt()) {
+            // Even "default" is refused: it would change nothing, and the admin may think it did.
+            throw new ArenaException("Portal " + portal.name() + " is player-built and always follows"
+                    + " waiting-room.lobby in config.yml.");
         }
         Portal changed;
         try {
@@ -173,26 +187,82 @@ public final class PortalRegistry {
         } catch (IllegalArgumentException e) {
             throw new ArenaException(capitalize(e.getMessage()) + ".", e);
         }
+        return add(portal);
+    }
+
+    /**
+     * Registers a player-built portal under the first free name {@value #BUILT_PREFIX}1,
+     * {@value #BUILT_PREFIX}2 and so on. Limits and distances are the caller's to check.
+     *
+     * @throws ArenaException if the opening is refused or overlaps another portal, no name is
+     *                        free, or the write fails
+     */
+    public Portal createBuilt(String world, ArenaBounds opening, Portal.Built built) throws ArenaException {
+        String name = null;
+        for (int number = 1; name == null && number <= 99_999; number++) {
+            if (!portals.containsKey(BUILT_PREFIX + number)) {
+                name = BUILT_PREFIX + number;
+            }
+        }
+        if (name == null) {
+            throw new ArenaException("No portal name is free.");
+        }
+        Portal portal;
+        try {
+            portal = Portal.built(name, world, opening, built);
+        } catch (IllegalArgumentException e) {
+            throw new ArenaException(capitalize(e.getMessage()) + ".", e);
+        }
+        return add(portal);
+    }
+
+    private Portal add(Portal portal) throws ArenaException {
         for (Portal other : portals.values()) {
             if (other.overlaps(portal)) {
                 throw new ArenaException("That region overlaps portal " + other.name() + ".");
             }
         }
         Map<String, Portal> next = new TreeMap<>(portals);
-        next.put(key, portal);
+        next.put(portal.name(), portal);
         write(next);
         return portal;
+    }
+
+    /** How many player-built portals the player owns. */
+    public int ownedBy(UUID owner) {
+        int owned = 0;
+        for (Portal portal : portals.values()) {
+            if (portal.playerBuilt() && portal.built().owner().equals(owner)) {
+                owned++;
+            }
+        }
+        return owned;
+    }
+
+    /**
+     * Hands over each portal in a chunk within {@code radius} chunks of the given one, along
+     * each axis, through the chunk index. A portal across several chunks may come more than once.
+     */
+    public void near(String world, int chunkX, int chunkZ, int radius, Consumer<Portal> found) {
+        index.near(world, chunkX, chunkZ, radius, found);
+    }
+
+    /** Told each portal once it is removed, by an admin or because its frame broke. */
+    public void onRemoved(Consumer<Portal> removed) {
+        this.removed = Objects.requireNonNull(removed, "removed");
     }
 
     /** Removes a portal. Nothing in the world changes. */
     public void delete(String name) throws ArenaException {
         String key = Portal.normalizeName(name);
-        if (!portals.containsKey(key)) {
+        Portal portal = portals.get(key);
+        if (portal == null) {
             throw new ArenaException("No portal called " + name + ".");
         }
         Map<String, Portal> next = new TreeMap<>(portals);
         next.remove(key);
         write(next);
+        removed.accept(portal);
     }
 
     private void write(Map<String, Portal> next) throws ArenaException {
