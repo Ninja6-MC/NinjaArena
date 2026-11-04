@@ -3,10 +3,10 @@ package com.ninja6.ninjaarena.portal;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
+import com.ninja6.ninjaarena.arena.ArenaPoint;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -16,9 +16,10 @@ import org.bukkit.Location;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Every portal, kept in memory and in {@code portals.yml}, with a chunk index for the
- * per-move lookup. Each change is written to disk before it is accepted; a failed write
- * leaves the registry as it was. Portals never overlap, so a block belongs to at most one.
+ * Every portal and the shared hub point, kept in memory and in {@code portals.yml}, with a
+ * chunk index for the per-move lookup. Each change is written to disk before it is accepted;
+ * a failed write leaves the registry as it was. Portals never overlap, so a block belongs to
+ * at most one.
  *
  * <p>Not thread-safe: call it from the server thread.
  */
@@ -27,6 +28,7 @@ public final class PortalRegistry {
     private final PortalStore store;
     private final Map<String, Portal> portals = new TreeMap<>();
     private PortalIndex index = PortalIndex.EMPTY;
+    private ArenaPoint hub;
 
     /** Set when the file could not be read, so a later write cannot replace what is in it. */
     private boolean unreadable;
@@ -63,18 +65,58 @@ public final class PortalRegistry {
     public void load() throws IOException {
         portals.clear();
         index = PortalIndex.EMPTY;
-        List<Portal> loaded;
+        hub = null;
+        PortalCodec.Contents loaded;
         try {
-            loaded = store.load();
+            loaded = store.loadAll();
         } catch (IOException e) {
             unreadable = true;
             throw e;
         }
         unreadable = false;
-        for (Portal portal : loaded) {
+        for (Portal portal : loaded.portals()) {
             portals.put(portal.name(), portal);
         }
         index = new PortalIndex(portals.values());
+        hub = loaded.hub();
+    }
+
+    /** The shared hub point in the arena world, if an admin has set one. */
+    public Optional<ArenaPoint> hub() {
+        return Optional.ofNullable(hub);
+    }
+
+    /**
+     * Sets or, with {@code null}, removes the shared hub point.
+     *
+     * @throws ArenaException if the write fails; the hub is then unchanged
+     */
+    public void setHub(ArenaPoint point) throws ArenaException {
+        write(portals, point);
+    }
+
+    /**
+     * Changes a portal's own lobby choice; {@code null} makes it use the server default.
+     *
+     * @throws ArenaException if there is no such portal, it is a spectator portal, or the
+     *                        write fails
+     */
+    public Portal setLobby(String name, LobbyMode lobby) throws ArenaException {
+        String key = Portal.normalizeName(name);
+        Portal portal = portals.get(key);
+        if (portal == null) {
+            throw new ArenaException("No portal called " + name + ".");
+        }
+        Portal changed;
+        try {
+            changed = portal.withLobby(lobby);
+        } catch (IllegalArgumentException e) {
+            throw new ArenaException(capitalize(e.getMessage()) + ".", e);
+        }
+        Map<String, Portal> next = new TreeMap<>(portals);
+        next.put(key, changed);
+        write(next);
+        return changed;
     }
 
     public Optional<Portal> get(String name) {
@@ -112,6 +154,12 @@ public final class PortalRegistry {
 
     public Portal create(String name, String world, ArenaBounds region, String arena, boolean spectator)
             throws ArenaException {
+        return create(name, world, region, arena, spectator, null);
+    }
+
+    /** @param lobby the portal's own lobby choice, or {@code null} for the server default */
+    public Portal create(String name, String world, ArenaBounds region, String arena, boolean spectator,
+            LobbyMode lobby) throws ArenaException {
         String key = Portal.normalizeName(name);
         if (!Portal.isValidName(key)) {
             throw new ArenaException("Portal names are 1 to 32 letters, digits, _ or -.");
@@ -121,7 +169,7 @@ public final class PortalRegistry {
         }
         Portal portal;
         try {
-            portal = new Portal(key, world, region, Arena.normalizeName(arena), spectator);
+            portal = new Portal(key, world, region, Arena.normalizeName(arena), spectator, lobby);
         } catch (IllegalArgumentException e) {
             throw new ArenaException(capitalize(e.getMessage()) + ".", e);
         }
@@ -148,18 +196,25 @@ public final class PortalRegistry {
     }
 
     private void write(Map<String, Portal> next) throws ArenaException {
+        write(next, hub);
+    }
+
+    private void write(Map<String, Portal> next, ArenaPoint nextHub) throws ArenaException {
         if (unreadable) {
             throw new ArenaException(store.file().getFileName() + " could not be read at startup. Fix or remove it"
                     + " and restart before changing portals.");
         }
         try {
-            store.save(next.values());
+            store.save(next.values(), nextHub);
         } catch (IOException e) {
             throw new ArenaException("Could not save " + store.file().getFileName() + ": " + e.getMessage(), e);
         }
-        portals.clear();
-        portals.putAll(next);
+        if (next != portals) {
+            portals.clear();
+            portals.putAll(next);
+        }
         index = new PortalIndex(portals.values());
+        hub = nextHub;
     }
 
     private static String capitalize(String text) {

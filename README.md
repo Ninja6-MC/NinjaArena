@@ -55,6 +55,43 @@ in the order you need it:
    so the portal is a doorway rather than a flat pad. Move sideways first for a wider
    door. `/narena portal create dojo-door dojo` binds it to the arena.
 
+## Lobbies and player caps
+
+Before a match, players wait either in a dedicated waiting room or in one shared hub. The
+admin chooses per portal; a portal that does not choose, including player-built portals,
+uses `waiting-room.lobby` in `config.yml` (`dedicated` by default).
+
+- **Dedicated:** each arena has its own waiting room. Arriving players are put on the
+  smallest team, and the countdown starts once `min-players` are there. When the room
+  already holds as many players as one match takes, the portal turns more away with a
+  message before their snapshot is saved.
+- **Shared:** every shared portal leads to the hub. Once `min-players` are there, the
+  countdown runs; when it ends, the players who arrived first go together to a free
+  arena's teams, up to that arena's cap, and the match starts. The rest stay in the hub
+  for the next free arena. A free arena is ready, has no match, no open waiting room and
+  no host reservation; the hub picks the smallest that takes everyone waiting, or the
+  largest if none does. While arenas are in edit mode, or every arena or match slot is in
+  use, the countdown holds at its last second and the hub keeps waiting.
+
+Stand where players should gather in the arena world, outside every arena's bounds, and
+run `/narena portal sethub`, or give coordinates as for `setwaitingroom`.
+`/narena portal lobby <portal> <dedicated|shared|default>` sets a portal's choice;
+`default` returns it to the config value. `portal create <name> <arena> shared` sets it at
+creation. `portal list` and `portal info` show the hub and where each portal leads.
+Moving or removing the hub sends anyone waiting there home.
+
+The hub follows the waiting-room rules: an empty inventory and adventure mode on arrival,
+the same inventory lockdown, no damage, the same `radius`, and leaving by walking out,
+teleporting away, dying, `/narena leave` or disconnecting restores the snapshot as
+leaving a waiting room does. Hub players can use `/narena spectate <arena>`. Hosted
+matches always use the host's dedicated room.
+
+`waiting-room.max-players` caps the players in one match and `waiting-room.team-size` the
+players on one team; 0 turns either off. Both apply in both modes, and an arena takes
+the lower of the two (team size times its team count). An arena that holds fewer than
+`min-players` starts once it is full. Spectators are outside the teams and never count
+toward either cap.
+
 ## Commands and permissions
 
 `/ninjaarena` is the registered root; `/narena` is its permanent short alias. Run either
@@ -71,7 +108,7 @@ under the root.
 | `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
 | `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
-| `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals |
+| `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals, their lobby and the shared hub |
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration and kits |
 
@@ -141,7 +178,8 @@ and never moves match players or restarts a match.
 
 | Settings | Reload behavior |
 | :--- | :--- |
-| Waiting-room minimum, countdown and radius | Apply immediately; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
+| Waiting-room minimum, countdown and radius | Apply immediately to waiting rooms and the hub; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
+| Default lobby and player caps | Apply immediately. The lobby applies to the next portal entry; players already waiting stay where they are. A lower cap turns away later arrivals but never removes waiting players. |
 | Match timers, rounds, extra rounds, friendly fire and scoring | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |

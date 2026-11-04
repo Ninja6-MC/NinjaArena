@@ -15,7 +15,8 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
 /**
- * Notices a player leaving their waiting room. Waiting players also take no damage, and one
+ * Notices a player leaving their waiting room or the shared hub, which follow the same rules.
+ * Waiting players also take no damage, and one
  * who dies anyway keeps their inventory and experience, since the restore puts back what
  * they had before they came in and a drop would duplicate it.
  *

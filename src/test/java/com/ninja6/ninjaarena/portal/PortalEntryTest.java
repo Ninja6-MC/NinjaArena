@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.portal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.arena.ArenaBounds;
@@ -155,6 +156,50 @@ class PortalEntryTest {
         pending.clear();
         assertEquals(Optional.empty(), entry.admit(viewer, spectator));
         assertEquals(1, captures);
+    }
+
+    @Test
+    void aSharedPortalLeadsToTheHubWhateverItsArenaIsDoing() throws Exception {
+        ArenaPoint hub = new ArenaPoint(-300.5, 64, -300.5, 0, 0);
+        ArenaPoint[] point = {null};
+        entry.setLobbies(() -> LobbyMode.DEDICATED, () -> Optional.ofNullable(point[0]), arena -> Optional.empty());
+        Portal shared = LOBBY.withLobby(LobbyMode.SHARED);
+        assertTrue(entry.leadsToHub(shared));
+        assertEquals(Reason.NO_HUB, reason(entry.admit(player(true), shared)));
+        assertEquals(0, captures);
+
+        point[0] = hub;
+        assertEquals(Optional.of(hub), entry.destination(shared));
+        assertEquals(Reason.NO_PERMISSION, reason(entry.check(player(false), shared)));
+        // Players wait in the hub while arenas are edited or in use.
+        arenas.startEdit("dojo");
+        assertEquals(Optional.empty(), entry.admit(player(true), shared));
+        assertEquals(1, captures);
+        pending.add(ALICE);
+        assertEquals(Reason.SNAPSHOT_PENDING, reason(entry.check(player(true), shared)));
+    }
+
+    @Test
+    void portalsWithNoChoiceFollowTheServerDefaultAndSpectatorPortalsIgnoreIt() {
+        LobbyMode[] serverDefault = {LobbyMode.SHARED};
+        entry.setLobbies(() -> serverDefault[0], Optional::empty, arena -> Optional.empty());
+        assertTrue(entry.leadsToHub(LOBBY));
+        assertFalse(entry.leadsToHub(LOBBY.withLobby(LobbyMode.DEDICATED)));
+        assertFalse(entry.leadsToHub(new Portal("watch", "world", LOBBY.region(), "dojo", true)));
+        serverDefault[0] = LobbyMode.DEDICATED;
+        assertFalse(entry.leadsToHub(LOBBY));
+        assertTrue(entry.leadsToHub(LOBBY.withLobby(LobbyMode.SHARED)));
+    }
+
+    @Test
+    void aFullWaitingRoomIsRefusedBeforeTheSnapshot() {
+        entry.setLobbies(() -> LobbyMode.DEDICATED, Optional::empty,
+                arena -> arena.equals("dojo") ? Optional.of("Full.") : Optional.empty());
+        Optional<Refusal> refusal = entry.admit(player(true), LOBBY);
+        assertEquals(Reason.FULL, reason(refusal));
+        assertEquals("Full.", refusal.get().message());
+        assertEquals(Reason.FULL, reason(entry.admit(player(true), "dojo")));
+        assertEquals(0, captures);
     }
 
     @Test

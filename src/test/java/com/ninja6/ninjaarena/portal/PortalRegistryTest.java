@@ -7,10 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
+import com.ninja6.ninjaarena.arena.ArenaPoint;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,6 +41,30 @@ class PortalRegistryTest {
         assertNull(reopened.at("world", 13, 65, 10));
         assertNull(reopened.at("world", 11, 68, 10));
         assertNull(reopened.at("world_nether", 11, 65, 10));
+    }
+
+    @Test
+    void theHubAndEachPortalsLobbySurviveARestartAndOtherChanges() throws Exception {
+        PortalRegistry registry = open();
+        ArenaPoint hub = new ArenaPoint(-300.5, 64, -300.5, 90, 10);
+        registry.setHub(hub);
+        registry.create("lobby", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "dojo");
+        Portal shared = registry.setLobby("lobby", LobbyMode.SHARED);
+        registry.create("watch", "world", new ArenaBounds(20, 64, 10, 22, 67, 10), "dojo", true);
+        assertThrows(ArenaException.class, () -> registry.setLobby("watch", LobbyMode.SHARED));
+        assertThrows(ArenaException.class, () -> registry.setLobby("nowhere", LobbyMode.SHARED));
+
+        PortalRegistry reopened = open();
+        assertEquals(Optional.of(hub), reopened.hub());
+        assertEquals(shared, reopened.get("lobby").orElseThrow());
+        assertEquals(LobbyMode.SHARED, shared.lobby());
+
+        reopened.setLobby("lobby", null);
+        reopened.setHub(null);
+        PortalRegistry cleared = open();
+        assertEquals(Optional.empty(), cleared.hub());
+        assertNull(cleared.get("lobby").orElseThrow().lobby());
+        assertEquals(LobbyMode.DEDICATED, cleared.get("lobby").orElseThrow().lobby(LobbyMode.DEDICATED));
     }
 
     @Test

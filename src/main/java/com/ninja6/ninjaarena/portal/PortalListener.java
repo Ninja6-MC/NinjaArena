@@ -27,7 +27,8 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Sends players who walk into a portal to its waiting room or live match.
+ * Sends players who walk into a portal to its waiting room, the shared hub or a live match.
+ * {@link PortalEntry} decides which; everything below applies to each.
  *
  * <p><b>Detection.</b> Only a move that crosses into another block is looked at, and the
  * portal is found through the registry's chunk index. Entry fires when the new block is in

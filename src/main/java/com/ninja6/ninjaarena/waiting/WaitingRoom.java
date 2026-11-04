@@ -29,6 +29,9 @@ import java.util.UUID;
  * {@link Phase#START} once and the room is emptied: from then on the players belong to the
  * match.
  *
+ * <p><b>Capacity.</b> A room takes at most {@link #capacity()} players; the service turns
+ * away anyone beyond it. A room that can never reach {@code minPlayers} starts once full.
+ *
  * <p>Not thread-safe: call it from the server thread.
  */
 public final class WaitingRoom {
@@ -109,12 +112,25 @@ public final class WaitingRoom {
     /** Seconds left while counting; 0 when no countdown runs. */
     private int secondsLeft;
 
+    /** The most players the room takes. */
+    private int capacity;
+
     /**
      * @param teamCount        how many teams the arena has; at least 1
      * @param minPlayers       players needed to start the countdown; at least 1
      * @param countdownSeconds length of the countdown; at least 1
      */
     public WaitingRoom(int teamCount, int minPlayers, int countdownSeconds) {
+        this(teamCount, minPlayers, countdownSeconds, Integer.MAX_VALUE);
+    }
+
+    /**
+     * @param capacity the most players the room takes, at least 1. At most a team size times
+     *                 the team count, it also keeps every team within that size, since the
+     *                 teams never differ by more than one. A room that holds fewer than
+     *                 {@code minPlayers} starts its countdown once it is full
+     */
+    public WaitingRoom(int teamCount, int minPlayers, int countdownSeconds, int capacity) {
         if (teamCount < 1) {
             throw new IllegalArgumentException("teamCount must be at least 1");
         }
@@ -124,21 +140,46 @@ public final class WaitingRoom {
         if (countdownSeconds < 1) {
             throw new IllegalArgumentException("countdownSeconds must be at least 1");
         }
+        if (capacity < 1) {
+            throw new IllegalArgumentException("capacity must be at least 1");
+        }
         this.minPlayers = minPlayers;
         this.countdownSeconds = countdownSeconds;
+        this.capacity = capacity;
         for (int i = 0; i < teamCount; i++) {
             teams.add(new LinkedHashSet<>());
         }
     }
 
+    /**
+     * Splits players into balanced teams in the order given, as a room they joined one at a
+     * time would. For a group the shared hub sends to an arena.
+     */
+    public static List<List<UUID>> balance(int teamCount, List<UUID> players) {
+        WaitingRoom room = new WaitingRoom(teamCount, 1, 1);
+        for (UUID player : players) {
+            room.join(player);
+        }
+        return room.teams();
+    }
+
     /** Keeps a viable countdown's remaining time while changing future countdowns. */
     public void setSettings(int minPlayers, int countdownSeconds) {
-        if (minPlayers < 1 || countdownSeconds < 1) {
+        setSettings(minPlayers, countdownSeconds, capacity);
+    }
+
+    /**
+     * Also changes the capacity. Players already waiting stay even if there are now more of
+     * them than the capacity; only arrivals are turned away.
+     */
+    public void setSettings(int minPlayers, int countdownSeconds, int capacity) {
+        if (minPlayers < 1 || countdownSeconds < 1 || capacity < 1) {
             throw new IllegalArgumentException("waiting settings must be positive");
         }
         this.minPlayers = minPlayers;
         this.countdownSeconds = countdownSeconds;
-        if (size() < minPlayers) {
+        this.capacity = capacity;
+        if (size() < minPlayers()) {
             secondsLeft = 0;
         } else if (secondsLeft == 0) {
             secondsLeft = countdownSeconds;
@@ -149,19 +190,22 @@ public final class WaitingRoom {
      * Puts a player on the smallest team and starts the countdown if they bring the count to
      * the minimum.
      *
-     * @throws IllegalStateException if the player is already waiting here
+     * @throws IllegalStateException if the player is already waiting here, or the room is full
      */
     public Joined join(UUID player) {
         Objects.requireNonNull(player, "player");
         if (contains(player)) {
             throw new IllegalStateException(player + " is already waiting");
         }
+        if (isFull()) {
+            throw new IllegalStateException("the waiting room is full");
+        }
         Map<UUID, Integer> before = assignments();
         int team = smallest();
         teams.get(team).add(player);
         balanceParty();
         boolean started = false;
-        if (secondsLeft == 0 && size() >= minPlayers) {
+        if (secondsLeft == 0 && size() >= minPlayers()) {
             secondsLeft = countdownSeconds;
             started = true;
         }
@@ -187,7 +231,7 @@ public final class WaitingRoom {
             balanceParty();
         }
         boolean cancelled = false;
-        if (secondsLeft > 0 && size() < minPlayers) {
+        if (secondsLeft > 0 && size() < minPlayers()) {
             secondsLeft = 0;
             cancelled = true;
         }
@@ -231,8 +275,19 @@ public final class WaitingRoom {
         return size() == 0;
     }
 
+    /** Players needed to start the countdown: the configured minimum, or the capacity if lower. */
     public int minPlayers() {
-        return minPlayers;
+        return Math.min(minPlayers, capacity);
+    }
+
+    /** The most players the room takes. */
+    public int capacity() {
+        return capacity;
+    }
+
+    /** Whether the room has no space for another player. */
+    public boolean isFull() {
+        return size() >= capacity;
     }
 
     public boolean isCounting() {

@@ -458,7 +458,7 @@ public final class ArenaCommand {
      * Reads a position from no arguments (where the player stands), three (x y z) or five
      * (x y z yaw pitch).
      */
-    private static ArenaPoint position(CommandSender sender, String[] args, String usage) throws ArenaException {
+    static ArenaPoint position(CommandSender sender, String[] args, String usage) throws ArenaException {
         Location base = baseLocation(sender);
         if (args.length == 0) {
             if (!(sender instanceof Player)) {
