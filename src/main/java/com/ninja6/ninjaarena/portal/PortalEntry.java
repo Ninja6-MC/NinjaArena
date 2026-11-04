@@ -21,6 +21,12 @@ import org.bukkit.entity.Player;
  * <p>A portal leads to its arena's waiting room or to the shared hub, by its own lobby choice
  * or the server default ({@link #setLobbies}). A full waiting room turns players away before
  * their snapshot is saved; the hub takes everyone.
+ *
+ * <p>A player-built portal has no arena of its own and always follows the server default.
+ * Under the shared lobby it leads to the hub like any other portal; under the dedicated one
+ * each entry is {@linkplain #route routed} to a waiting room that is filling, else to a free
+ * arena, and refused with {@link Reason#BUSY} when there is neither. From there the same
+ * checks and snapshot apply as for a portal bound to that arena.
  */
 public final class PortalEntry {
 
@@ -41,6 +47,8 @@ public final class PortalEntry {
         FULL,
         /** The portal leads to the shared hub, but no hub point is set. */
         NO_HUB,
+        /** A player-built portal found no waiting room that is filling and no free arena. */
+        BUSY,
         /** The player has a snapshot from an earlier visit that has not been restored. */
         SNAPSHOT_PENDING,
         /** The snapshot could not be written. */
@@ -56,6 +64,7 @@ public final class PortalEntry {
     private Supplier<LobbyMode> defaultLobby = () -> LobbyMode.DEDICATED;
     private Supplier<Optional<ArenaPoint>> hub = Optional::empty;
     private Function<String, Optional<String>> roomFull = arena -> Optional.empty();
+    private Supplier<Optional<String>> openArena = Optional::empty;
 
     /**
      * @param pendingSnapshot {@code SnapshotService#hasPending}
@@ -87,9 +96,31 @@ public final class PortalEntry {
         this.roomFull = Objects.requireNonNull(roomFull, "roomFull");
     }
 
+    /**
+     * Connects the routing of player-built portals. By default no arena is ever open to them.
+     *
+     * @param openArena the arena a player-built portal sends the next player to, if any,
+     *                  {@code WaitingRoomService#openArena} on a server
+     */
+    public void setRouting(Supplier<Optional<String>> openArena) {
+        this.openArena = Objects.requireNonNull(openArena, "openArena");
+    }
+
     /** Whether a player walking into the portal now goes to the shared hub. */
     public boolean leadsToHub(Portal portal) {
         return !portal.spectator() && portal.lobby(defaultLobby.get()) == LobbyMode.SHARED;
+    }
+
+    /**
+     * The portal one entry uses. A player-built portal that does not lead to the hub is bound
+     * to the arena it sends the player to now, or empty when every arena is busy; any other
+     * portal is returned as it is.
+     */
+    public Optional<Portal> route(Portal portal) {
+        if (!portal.playerBuilt() || portal.arena() != null || leadsToHub(portal)) {
+            return Optional.of(portal);
+        }
+        return openArena.get().map(portal::boundTo);
     }
 
     /** Everything except the snapshot write. Empty if the player may go on. */
@@ -98,6 +129,16 @@ public final class PortalEntry {
             return checkHub(player);
         }
         if (!portal.spectator()) {
+            if (portal.arena() == null) {
+                if (!player.hasPermission(PLAY)) {
+                    return refuse(Reason.NO_PERMISSION, "You do not have permission to enter arenas.");
+                }
+                Optional<Portal> routed = route(portal);
+                if (routed.isEmpty()) {
+                    return refuse(Reason.BUSY, "All arenas are busy. Try again when a match ends.");
+                }
+                return check(player, routed.get().arena());
+            }
             return check(player, portal.arena());
         }
         if (!player.hasPermission(SPECTATE)) {
@@ -179,7 +220,7 @@ public final class PortalEntry {
 
     /** The waiting-room point of the arena bound to this portal. */
     public Optional<ArenaPoint> waitingRoom(Portal portal) {
-        return waitingRoom(portal.arena());
+        return portal.arena() == null ? Optional.empty() : waitingRoom(portal.arena());
     }
 
     /** Where the portal sends players, if its destination is currently available. */
@@ -187,7 +228,10 @@ public final class PortalEntry {
         if (leadsToHub(portal)) {
             return hub.get();
         }
-        return portal.spectator() ? spectatorPoint.apply(portal.arena()) : waitingRoom(portal);
+        if (portal.spectator()) {
+            return spectatorPoint.apply(portal.arena());
+        }
+        return route(portal).flatMap(this::waitingRoom);
     }
 
     public Optional<ArenaPoint> waitingRoom(String arenaName) {

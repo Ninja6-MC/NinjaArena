@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Finds the portal at a block in a few map lookups: each portal is filed under every chunk
@@ -44,6 +45,25 @@ final class PortalIndex {
             }
         }
         return null;
+    }
+
+    /**
+     * Hands over every portal filed under a chunk within {@code radius} chunks of the given
+     * one, along each axis. A portal across several of them is handed over once per chunk.
+     */
+    void near(String world, int chunkX, int chunkZ, int radius, Consumer<Portal> found) {
+        Map<Long, List<Portal>> chunks = byWorld.get(world);
+        if (chunks == null) {
+            return;
+        }
+        for (int x = chunkX - radius; x <= chunkX + radius; x++) {
+            for (int z = chunkZ - radius; z <= chunkZ + radius; z++) {
+                List<Portal> candidates = chunks.get(key(x, z));
+                if (candidates != null) {
+                    candidates.forEach(found);
+                }
+            }
+        }
     }
 
     /** How many chunk entries the index holds, for tests. */

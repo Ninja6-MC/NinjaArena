@@ -538,6 +538,45 @@ class PortalListenerTest {
     }
 
     @Test
+    void aPlayerBuiltPortalSendsThePlayerToTheOpenArenaOrTurnsThemAwayWhenAllAreBusy() throws Exception {
+        lobbies(LobbyMode.DEDICATED);
+        entry.setRouting(rooms::openArena);
+        portals.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8), new Portal.Built(ALICE, "crying_obsidian"));
+
+        arenas.hold("dojo");
+        location = new Location(overworld, 40.5, 64, 7.5);
+        PlayerMoveEvent event = move(40.5, 64, 8.5, 0);
+        assertEquals(7, event.getTo().getBlockZ());
+        assertEquals(List.of("All arenas are busy. Try again when a match ends."), messages);
+        assertEquals(0, captures);
+        assertTrue(chunkLoads.isEmpty());
+
+        arenas.release("dojo");
+        move(40.5, 64, 8.5, 0);
+        finishChunkLoads();
+        assertEquals(1, captures);
+        assertEquals(arenaWorld, location.getWorld());
+        assertEquals(ROOM.x(), location.getX());
+        assertEquals(List.of("dojo"), entered);
+        assertTrue(rooms.isWaiting(ALICE));
+        // The registry keeps the portal unbound.
+        assertEquals(null, portals.get("built-1").orElseThrow().arena());
+    }
+
+    @Test
+    void aPlayerBuiltPortalFollowsASharedDefaultToTheHub() throws Exception {
+        ArenaPoint hub = new ArenaPoint(-300.5, 64, -300.5, 90, 0);
+        portals.setHub(hub);
+        lobbies(LobbyMode.SHARED);
+        portals.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8), new Portal.Built(ALICE, "crying_obsidian"));
+        location = new Location(overworld, 40.5, 64, 7.5);
+        move(40.5, 64, 8.5, 0);
+        finishChunkLoads();
+        assertEquals(hub.x(), location.getX());
+        assertTrue(rooms.inHub(ALICE));
+    }
+
+    @Test
     void aRefusedTeleportIsToldOnceInAWhile() {
         teleportRefused = true;
         move(11.5, 64, 10.5, 0);

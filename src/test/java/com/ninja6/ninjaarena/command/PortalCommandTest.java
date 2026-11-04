@@ -251,6 +251,31 @@ class PortalCommandTest {
     }
 
     @Test
+    void playerBuiltPortalsAreListedInspectedAndDeletedButChooseNoLobby() throws Exception {
+        UUID owner = UUID.fromString("a11ce000-0000-4000-8000-000000000001");
+        portals.createBuilt("world", new ArenaBounds(40, 64, 8, 41, 66, 8), new Portal.Built(owner, "crying_obsidian"));
+        CommandSender sender = console();
+        run(sender, "portal list");
+        assertEquals("built-1 (world) to any arena, player-built: open, to whichever arena takes players when someone"
+                + " walks in", messages.get(1));
+
+        messages.clear();
+        run(sender, "portal info built-1");
+        assertEquals(List.of("Portal built-1: open, to whichever arena takes players when someone walks in",
+                "World: world", "Region: 40, 64, 8 to 41, 66, 8",
+                "Built by player " + owner + " from crying_obsidian. Breaking a frame block removes it.",
+                "Leads to: a waiting room that is filling, else a free arena (server default)"), messages);
+
+        messages.clear();
+        run(sender, "portal lobby built-1 shared");
+        assertEquals(List.of("A player-built portal follows the server default lobby."), messages);
+
+        messages.clear();
+        run(sender, "portal delete built-1");
+        assertTrue(portals.all().isEmpty());
+    }
+
+    @Test
     void anAdminSetsAndRemovesTheHubLikeAWaitingRoomPoint() throws Exception {
         CommandSender console = console();
         run(console, "portal sethub");

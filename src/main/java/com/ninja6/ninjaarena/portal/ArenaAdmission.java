@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.portal;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -61,7 +62,8 @@ public final class ArenaAdmission {
         } else {
             arrived = portal.spectator() ? onSpectate : onEnter;
         }
-        return enter(player, portal.arena(), () -> entry.admit(player, portal),
+        // A player-built portal that leads to the hub is bound to no arena; the name is only logged.
+        return enter(player, Objects.requireNonNullElse(portal.arena(), "hub"), () -> entry.admit(player, portal),
                 () -> entry.destination(portal).orElseThrow(), arrived, refusal);
     }
 

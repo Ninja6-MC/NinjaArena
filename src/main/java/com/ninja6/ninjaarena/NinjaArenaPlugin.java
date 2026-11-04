@@ -41,6 +41,11 @@ import com.ninja6.ninjaarena.match.TeamScores;
 import com.ninja6.ninjaarena.match.TeamScoringListener;
 import com.ninja6.ninjaarena.portal.ArenaAdmission;
 import com.ninja6.ninjaarena.portal.LobbyMode;
+import com.ninja6.ninjaarena.portal.ParticleCurtain;
+import com.ninja6.ninjaarena.portal.PlayerPortalListener;
+import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
+import com.ninja6.ninjaarena.portal.PlayerPortals;
+import com.ninja6.ninjaarena.portal.PortalCurtains;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.portal.PortalListener;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
@@ -91,6 +96,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private Spectators spectators;
     private ArenaRegistry arenas;
     private PortalRegistry portals;
+    private PortalCurtains curtains;
     private MatchService matches;
     private MatchDeathListener deaths;
     private TeamScores scores;
@@ -246,6 +252,23 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(hosting, this);
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
                 admission, portalCommand::forget, arenaWorld::acquire, watching::arrived), this);
+        // Player-built portals share the registry and the entry above; under the dedicated lobby
+        // each entry is routed to a filling waiting room or a free arena.
+        entry.setRouting(waiting::openArena);
+        PlayerPortalSettings building;
+        try {
+            building = PlayerPortalSettings.from(getConfig().getConfigurationSection(PlayerPortalSettings.SECTION));
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Building portals is off: " + e.getMessage() + ". Portals already built still work;"
+                    + " fix config.yml and reload.");
+            building = PlayerPortalSettings.OFF;
+        }
+        ParticleCurtain curtain = new ParticleCurtain(building.color(), new SplittableRandom());
+        PlayerPortals playerPortals = new PlayerPortals(portals, building, getLogger());
+        getServer().getPluginManager().registerEvents(new PlayerPortalListener(playerPortals, portals), this);
+        curtains = new PortalCurtains(portals, playerPortals, getServer()::getOnlinePlayers, getServer()::getWorld,
+                curtain, Bukkit::getCurrentTick);
+        curtains.start(this);
         ConfigReload reloader = new ConfigReload(getDataFolder().toPath(), getConfig(), kit, kitItems,
                 new ConfigReload.Target() {
                     @Override
@@ -284,6 +307,12 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     @Override
                     public void spectating(SpectatorSettings settings) {
                         watching.setSettings(settings);
+                    }
+
+                    @Override
+                    public void playerPortals(PlayerPortalSettings settings) {
+                        playerPortals.setSettings(settings);
+                        curtain.setColor(settings.color());
                     }
 
                     @Override
@@ -377,6 +406,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             unregisterPlaceholders.run();
             unregisterPlaceholders = null;
             placeholders = null;
+        }
+        if (curtains != null) {
+            curtains.close();
+            curtains = null;
         }
         if (spectators != null) {
             spectators.close();

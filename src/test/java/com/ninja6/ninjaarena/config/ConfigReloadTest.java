@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.portal.LobbyMode;
+import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
@@ -44,6 +45,7 @@ class ConfigReloadTest {
         ScoringSettings scoring;
         ToolSettings tools;
         SpectatorSettings spectating;
+        PlayerPortalSettings playerPortals;
         KitDefinition kit;
         ConfigurationSection published;
         String season;
@@ -62,6 +64,9 @@ class ConfigReloadTest {
         }
         @Override public void tools(ToolSettings settings) { calls.add("tools"); tools = settings; }
         @Override public void spectating(SpectatorSettings settings) { spectating = settings; }
+        @Override public void playerPortals(PlayerPortalSettings settings) {
+            calls.add("player-portals"); playerPortals = settings;
+        }
         @Override public void kit(KitDefinition kit) { calls.add("kit"); this.kit = kit; }
         @Override public void season(String name) { calls.add("season"); season = name; }
         @Override public void configuration(ConfigurationSection settings) { published = settings; }
@@ -111,6 +116,32 @@ class ConfigReloadTest {
         write("waiting-room:\n  team-size: 65\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("waiting-room.team-size"));
         assertEquals(new WaitingRoomSettings(3, 8, 2, 30, 16, LobbyMode.SHARED), target.waiting);
+    }
+
+    @Test
+    void playerPortalSettingsReloadImmediatelyAndBadValuesAreRejected() throws Exception {
+        write("player-portals:\n  worlds:\n    - survival\n    - survival_nether\n  frame-material: gilded_blackstone\n"
+                + "  max-per-player: 3\n  min-distance: 64\n  color: '#FF8800'\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertTrue(report.getFirst().contains("complete"), report.toString());
+        assertTrue(report.get(1).contains("player-portals.worlds"), report.toString());
+        assertEquals(new PlayerPortalSettings(java.util.Set.of("survival", "survival_nether"),
+                org.bukkit.Material.GILDED_BLACKSTONE, 3, 64, 0xFF8800), target.playerPortals);
+        assertEquals(List.of("survival", "survival_nether"), target.published.getStringList("player-portals.worlds"));
+
+        target.calls.clear();
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertFalse(target.calls.contains("player-portals"), "unchanged settings are not applied again");
+
+        for (String bad : List.of("worlds: world", "worlds: [" + com.ninja6.ninjaarena.world.ArenaWorld.NAME + "]",
+                "worlds: [{a: b}]", "frame-material: obsidian", "frame-material: water", "color: teal",
+                "max-per-player: 1001", "min-distance: -1")) {
+            String key = "player-portals." + bad.substring(0, bad.indexOf(':'));
+            write("player-portals:\n  " + bad + "\n", EMPTY_KIT);
+            String message = reload.reload().getFirst();
+            assertTrue(message.contains("rejected") && message.contains(key), bad + ": " + message);
+        }
+        assertEquals(3, target.playerPortals.maxPerPlayer());
     }
 
     @Test

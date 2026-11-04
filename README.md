@@ -95,6 +95,53 @@ the lower of the two (team size times its team count). An arena that holds fewer
 `min-players` starts once it is full, from its waiting room or from the hub. Spectators are outside the teams and never count
 toward either cap.
 
+## Player-built portals
+
+Players with `ninjaarena.play` can build their own way into the Arena, as they would a
+nether portal, but from crying obsidian:
+
+1. Build an upright frame with an empty opening 2 to 21 blocks wide and 3 to 21 tall,
+   along either axis. The four corners are optional, so the smallest frame takes 10
+   crying obsidian, or 14 with corners.
+2. Use flint and steel on the inside of the frame. Instead of a fire, a curtain of
+   coloured particles fills the opening, and the player is told the portal is open.
+3. Walking through it takes the player in with the same checks, snapshot and empty
+   inventory as an admin portal.
+
+A player-built portal belongs to no arena and always follows `waiting-room.lobby`: under
+`shared` it leads to the hub; under `dedicated` it leads to the waiting room with the most
+players that still has room, else to a free arena, and otherwise turns the player away
+with "All arenas are busy". Arenas a host has reserved are skipped. Vanilla does nothing
+with crying obsidian, so these portals never clash with nether portals; obsidian cannot be
+chosen as the frame block.
+
+Breaking, burning, blowing up or pushing any block of the frame removes the portal; the
+corners, the opening and blocks around the frame do not count, so ordinary block updates
+nearby leave it alone. The curtain is drawn only while a player is within two chunks,
+for at most 16 portals at a time, and while a player is near, the frame is checked
+every five seconds, which also catches changes no event reports, such as a frame edited
+while the server was down. A frame block in an unloaded chunk is never judged missing.
+
+Portals are saved in `portals.yml` with the admin ones, named `built-1`, `built-2` and so
+on, so they survive restarts and appear in `/narena portal list` and `info` with their
+builder. An admin removes one with `/narena portal delete <name>`; the frame stays. A
+player-built portal cannot choose its own lobby. Versions from before player-built portals
+refuse a `portals.yml` that holds one rather than drop it.
+
+```yaml
+player-portals:
+  worlds:                     # where players may build; [] turns building off
+    - world
+  frame-material: crying_obsidian
+  max-per-player: 2           # 0 for no limit
+  min-distance: 32            # blocks between portal centres in a world; 0 turns it off
+  color: '#40E0D0'            # the particle curtain
+```
+
+The arena world is never allowed. Each portal keeps the frame block it was built from, so
+changing `frame-material` affects only new portals. The curtain is a vanilla dust
+particle, which needs no resource pack on Java or Bedrock.
+
 ## Commands and permissions
 
 `/ninjaarena` is the registered root; `/narena` is its permanent short alias. Run either
@@ -185,6 +232,7 @@ and never moves match players or restarts a match.
 | Default lobby and player caps | Apply immediately. The lobby applies to the next portal entry; players already waiting stay where they are. A lower cap turns away later arrivals but never removes waiting players. |
 | Match timers, rounds, extra rounds, friendly fire and scoring | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
+| Player-built portals | Apply to the next portal lit; the curtain colour changes immediately. Portals already built stay, with their own frame block. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
 | Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
 | Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |

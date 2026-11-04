@@ -239,6 +239,33 @@ public final class WaitingRoomService {
     }
 
     /**
+     * The arena a player-built portal sends its next player to under the dedicated lobby: the
+     * waiting room with the most players that still takes more, so it starts sooner, else a
+     * free arena with a waiting-room point. Arenas a host has reserved, and arenas that are not
+     * available, are skipped. Ties go to the first by name. Empty when every arena is busy.
+     */
+    public Optional<String> openArena() {
+        Room filling = null;
+        for (Room room : rooms.values()) {
+            if (room.state().isFull() || claimed.test(room.arena()) || !arenas.isAvailable(room.arena())) {
+                continue;
+            }
+            if (filling == null || room.state().size() > filling.state().size()) {
+                filling = room;
+            }
+        }
+        if (filling != null) {
+            return Optional.of(filling.arena());
+        }
+        for (Arena arena : arenas.all()) {
+            if (arena.waitingRoom() != null && isFree(arena)) {
+                return Optional.of(arena.name());
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Adds a player who has just been teleported to an arena's waiting room. For the portal,
      * once the player's snapshot is saved and the teleport has succeeded.
      *

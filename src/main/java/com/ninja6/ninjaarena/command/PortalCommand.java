@@ -246,6 +246,9 @@ public final class PortalCommand {
         if (portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
             return "the shared hub" + choice;
         }
+        if (portal.arena() == null) {
+            return "a waiting room that is filling, else a free arena" + choice;
+        }
         return "arena " + portal.arena() + choice;
     }
 
@@ -280,7 +283,8 @@ public final class PortalCommand {
             return;
         }
         for (Portal portal : portals.all()) {
-            info(sender, portal.name() + " (" + portal.world() + ") to " + portal.arena() + ": " + status(portal));
+            info(sender, portal.name() + " (" + portal.world() + ") to "
+                    + (portal.playerBuilt() ? "any arena, player-built" : portal.arena()) + ": " + status(portal));
         }
     }
 
@@ -294,7 +298,12 @@ public final class PortalCommand {
         info(sender, "Portal " + portal.name() + ": " + status(portal));
         info(sender, "World: " + portal.world() + (worldLoaded.test(portal.world()) ? "" : " (not loaded)"));
         info(sender, "Region: " + portal.region().describe());
-        info(sender, "Arena: " + portal.arena() + (portal.spectator() ? " (spectator portal)" : ""));
+        if (portal.playerBuilt()) {
+            info(sender, "Built by player " + portal.built().owner() + " from " + portal.built().frame()
+                    + ". Breaking a frame block removes it.");
+        } else {
+            info(sender, "Arena: " + portal.arena() + (portal.spectator() ? " (spectator portal)" : ""));
+        }
         if (!portal.spectator()) {
             info(sender, "Leads to: " + destination(portal));
         }
@@ -307,6 +316,9 @@ public final class PortalCommand {
         }
         if (!portal.spectator() && portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
             return portals.hub().isPresent() ? "open, to the shared hub" : "closed, no shared hub is set";
+        }
+        if (portal.arena() == null) {
+            return "open, to whichever arena takes players when someone walks in";
         }
         Arena arena = arenas.get(portal.arena()).orElse(null);
         if (arena == null) {

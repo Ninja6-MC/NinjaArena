@@ -202,6 +202,51 @@ class PortalEntryTest {
         assertEquals(0, captures);
     }
 
+    private static final Portal BUILT = Portal.built("built-1", "world", new ArenaBounds(40, 64, 8, 41, 66, 8),
+            new Portal.Built(ALICE, "crying_obsidian"));
+
+    @Test
+    void aPlayerBuiltPortalIsRoutedToTheOpenArenaAndUsesItsChecks() {
+        String[] open = {"dojo"};
+        entry.setRouting(() -> Optional.ofNullable(open[0]));
+        Portal routed = entry.route(BUILT).orElseThrow();
+        assertEquals("dojo", routed.arena());
+        assertEquals(BUILT.name(), routed.name());
+        assertEquals(Optional.empty(), entry.check(player(true), BUILT));
+        assertEquals(Optional.of(ROOM), entry.destination(BUILT));
+        assertEquals(Optional.empty(), entry.admit(player(true), routed));
+        assertEquals(1, captures);
+
+        // The routed arena's own checks still apply.
+        entry.setLobbies(() -> LobbyMode.DEDICATED, Optional::empty, arena -> Optional.of("Full."));
+        assertEquals(Reason.FULL, reason(entry.check(player(true), BUILT)));
+        assertEquals(Reason.NO_PERMISSION, reason(entry.check(player(false), BUILT)));
+
+        open[0] = null;
+        Optional<Refusal> busy = entry.check(player(true), BUILT);
+        assertEquals(Reason.BUSY, reason(busy));
+        assertTrue(busy.get().message().startsWith("All arenas are busy"), busy.get().message());
+        assertEquals(Optional.empty(), entry.route(BUILT));
+        assertEquals(Optional.empty(), entry.destination(BUILT));
+        // Without the play node the player hears that first.
+        assertEquals(Reason.NO_PERMISSION, reason(entry.check(player(false), BUILT)));
+        assertEquals(1, captures);
+    }
+
+    @Test
+    void aPlayerBuiltPortalFollowsASharedServerDefaultToTheHub() {
+        ArenaPoint hub = new ArenaPoint(-300.5, 64, -300.5, 0, 0);
+        entry.setLobbies(() -> LobbyMode.SHARED, () -> Optional.of(hub), arena -> Optional.empty());
+        entry.setRouting(Optional::empty);
+        assertTrue(entry.leadsToHub(BUILT));
+        assertEquals(Optional.of(BUILT), entry.route(BUILT));
+        assertEquals(Optional.empty(), entry.check(player(true), BUILT));
+        assertEquals(Optional.of(hub), entry.destination(BUILT));
+        // Admin portals are never rerouted.
+        entry.setLobbies(() -> LobbyMode.DEDICATED, Optional::empty, arena -> Optional.empty());
+        assertEquals(Optional.of(LOBBY), entry.route(LOBBY));
+    }
+
     @Test
     void aFailedSnapshotWriteStopsTheEntry() {
         captureResult = CaptureResult.WRITE_FAILED;
