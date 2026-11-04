@@ -25,6 +25,16 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Shared or dedicated lobbies. A shared hub, set with `/narena portal sethub`, gathers
+  players from every shared portal and sends the first arrivals to a free arena's teams
+  once enough are there; the rest wait for the next free arena. Each portal chooses with
+  `/narena portal lobby`, and portals that do not choose, player-built ones included, use
+  `waiting-room.lobby`. The hub keeps the waiting-room inventory, lockdown and restore
+  rules, holds while arenas are edited, and sends its players home when moved, removed or
+  on shutdown.
+- Player caps: `waiting-room.max-players` and `waiting-room.team-size` limit one match in
+  both modes. A full dedicated room turns arrivals away with a message before their
+  snapshot is saved; spectators never count.
 - View all-time or current-season top tens with `/narena leaderboard`. PlaceholderAPI
   can show personal stats, ranked scores and names, and the current season.
 - Player stats and seasons: wins, rounds won, player kills, enemy kills, deaths, best

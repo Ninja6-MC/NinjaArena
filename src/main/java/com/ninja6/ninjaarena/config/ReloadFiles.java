@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.config;
 
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
 import com.ninja6.ninjaarena.stats.StatsSettings;
 import java.io.IOException;
@@ -68,7 +69,9 @@ public final class ReloadFiles {
                 if (!(value instanceof String text)) {
                     throw document.invalid(path, "expected text; quote it if it looks like a number");
                 }
-                String problem = StatsSettings.problem(path, text);
+                String problem = path.equals("waiting-room.lobby")
+                        ? LobbyMode.parse(text).isPresent() ? null : "expected dedicated or shared"
+                        : StatsSettings.problem(path, text);
                 if (problem != null) {
                     throw document.invalid(path, problem);
                 }
@@ -97,6 +100,11 @@ public final class ReloadFiles {
             }
             result.set(path, value);
         }
+        int maxPlayers = result.getInt("waiting-room.max-players");
+        if (maxPlayers != 0 && maxPlayers < result.getInt("waiting-room.min-players")) {
+            throw document.invalid(document.has("waiting-room.max-players") ? "waiting-room.max-players"
+                    : "waiting-room.min-players", "max-players must be 0 or at least min-players");
+        }
         double pause = result.getDouble("stability.pause-spawning-above-mspt");
         if (result.getDouble("stability.resume-below-mspt") > pause) {
             throw document.invalid(document.has("stability.resume-below-mspt") ? "stability.resume-below-mspt"
@@ -123,6 +131,8 @@ public final class ReloadFiles {
             case "spectating.max-per-match", "waiting-room.min-players" -> new double[] {1, 64};
             case "waiting-room.countdown-seconds" -> new double[] {1, 600};
             case "waiting-room.radius" -> new double[] {2, 64};
+            case "waiting-room.max-players" -> new double[] {0, 256};
+            case "waiting-room.team-size" -> new double[] {0, 64};
             case "match.prep-seconds", "match.round-seconds", "match.round-end-seconds", "match.match-end-seconds"
                     -> new double[] {1, 3600};
             case "match.overrun-limit-seconds" -> new double[] {0, 3600};

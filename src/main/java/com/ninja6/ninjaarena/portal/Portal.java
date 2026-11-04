@@ -8,18 +8,36 @@ import java.util.Objects;
 
 /**
  * A box of blocks in a world outside the arena world that sends a player who walks into it
- * to an arena's waiting room or live match. Whatever is built around the box is decoration; only the box
+ * to an arena's waiting room, the shared hub or a live match. Whatever is built around the box is decoration; only the box
  * counts. Instances are immutable.
  *
  * @param world  the world's name
  * @param region both corners inclusive; at most {@link #MAX_SPAN} blocks along each axis
  * @param arena  the arena's name; the arena may have been deleted since, which makes the
- *               portal refuse everyone until it is bound again
+ *               portal refuse everyone until it is bound again. A portal that leads to the
+ *               shared hub only uses it while its lobby is dedicated
+ * @param lobby  the portal's own lobby choice, or {@code null} to use the server default;
+ *               always {@code null} for a spectator portal, which leads to a live match
  */
-public record Portal(String name, String world, ArenaBounds region, String arena, boolean spectator) {
+public record Portal(String name, String world, ArenaBounds region, String arena, boolean spectator,
+        LobbyMode lobby) {
 
     public Portal(String name, String world, ArenaBounds region, String arena) {
         this(name, world, region, arena, false);
+    }
+
+    public Portal(String name, String world, ArenaBounds region, String arena, boolean spectator) {
+        this(name, world, region, arena, spectator, null);
+    }
+
+    /** The same portal with another lobby choice; {@code null} uses the server default. */
+    public Portal withLobby(LobbyMode lobby) {
+        return new Portal(name, world, region, arena, spectator, lobby);
+    }
+
+    /** The lobby this portal leads to, given the server default. */
+    public LobbyMode lobby(LobbyMode serverDefault) {
+        return lobby == null ? serverDefault : lobby;
     }
 
     /** The longest a portal may be along any axis, which keeps the chunk index small. */
@@ -41,6 +59,9 @@ public record Portal(String name, String world, ArenaBounds region, String arena
         }
         if (!Arena.isValidName(arena)) {
             throw new IllegalArgumentException("invalid arena name " + arena);
+        }
+        if (spectator && lobby != null) {
+            throw new IllegalArgumentException("a spectator portal leads to a live match and has no lobby");
         }
         if (span(region.minX(), region.maxX()) > MAX_SPAN || span(region.minY(), region.maxY()) > MAX_SPAN
                 || span(region.minZ(), region.maxZ()) > MAX_SPAN) {

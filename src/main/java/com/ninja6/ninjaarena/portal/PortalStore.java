@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.portal;
 
+import com.ninja6.ninjaarena.arena.ArenaPoint;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -51,11 +52,16 @@ public final class PortalStore {
      * @throws IOException if the file exists but cannot be read or parsed
      */
     public List<Portal> load() throws IOException {
+        return loadAll().portals();
+    }
+
+    /** Reads every portal and the shared hub point. A missing file means neither. */
+    public PortalCodec.Contents loadAll() throws IOException {
         removeLeftoverTempFiles();
         if (!Files.exists(file)) {
-            return List.of();
+            return new PortalCodec.Contents(List.of(), null);
         }
-        return PortalCodec.decode(Files.readString(file, StandardCharsets.UTF_8));
+        return PortalCodec.decodeAll(Files.readString(file, StandardCharsets.UTF_8));
     }
 
     /**
@@ -64,8 +70,13 @@ public final class PortalStore {
      * @throws IOException if the new file is not on disk when this returns; the previous
      *                     file is then left untouched
      */
-    public synchronized void save(Collection<Portal> portals) throws IOException {
-        byte[] bytes = PortalCodec.encode(portals).getBytes(StandardCharsets.UTF_8);
+    public void save(Collection<Portal> portals) throws IOException {
+        save(portals, null);
+    }
+
+    /** Replaces the file with the given portals and shared hub point, which may be {@code null}. */
+    public synchronized void save(Collection<Portal> portals, ArenaPoint hub) throws IOException {
+        byte[] bytes = PortalCodec.encode(portals, hub).getBytes(StandardCharsets.UTF_8);
         Path directory = file.getParent();
         Files.createDirectories(directory);
         Path temp = Files.createTempFile(directory, file.getFileName() + "-", TEMP_SUFFIX);

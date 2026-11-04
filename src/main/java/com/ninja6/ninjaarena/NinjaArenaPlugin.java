@@ -40,6 +40,7 @@ import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.match.TeamScores;
 import com.ninja6.ninjaarena.match.TeamScoringListener;
 import com.ninja6.ninjaarena.portal.ArenaAdmission;
+import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.portal.PortalListener;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
@@ -71,6 +72,7 @@ import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.SplittableRandom;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
@@ -186,6 +188,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         matches.start();
         deaths.start();
         // A finished countdown hands its players to the match engine.
+        String lobby = getConfig().getString("waiting-room.lobby");
+        if (lobby != null && LobbyMode.parse(lobby).isEmpty()) {
+            getLogger().warning("waiting-room.lobby must be dedicated or shared, not " + lobby
+                    + "; portals use dedicated waiting rooms until it is fixed.");
+        }
         waitingRooms = new WaitingRoomService(this, arenas,
                 WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
                 KitInventory::emptyForWaiting, matches);
@@ -224,9 +231,16 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger())));
         waitingRooms.setStartAllowed(() -> inMatch.matches().size() < stability.maxMatches());
         waitingRooms.start();
-        PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
+        // Each portal leads to its arena's waiting room or the shared hub; the default is read
+        // from the current settings, so a reload changes it for the next entry.
+        PortalRegistry portalList = portals;
+        waitingRooms.setHub(portalList::hub);
+        PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null,
+                () -> waiting.settings().lobby());
         PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist, watching::destination);
-        ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots, waitingRooms::join);
+        entry.setLobbies(() -> waiting.settings().lobby(), portalList::hub, waiting::full);
+        ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots, waitingRooms::join,
+                waitingRooms::joinHub);
         hosting = new HostingService(this, arenas, waitingRooms, entry, admission, arenaWorld::world,
                 inMatch::isInMatch, arenaWorld::acquire);
         getServer().getPluginManager().registerEvents(hosting, this);
@@ -304,8 +318,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         }
                     }
                 });
-        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world,
-                arenaWorld::acquire, task -> getServer().getScheduler().runTask(this, task)), portalCommand,
+        ArenaCommand arenaCommand = new ArenaCommand(arenas, arenaWorld::world, arenaWorld::acquire,
+                task -> getServer().getScheduler().runTask(this, task));
+        arenaCommand.setHub(() -> portals == null ? Optional.empty() : portals.hub());
+        NinjaArenaCommand command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 player -> {
                     boolean cancelled = hosting.leave(player);
@@ -445,7 +461,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         return arenas;
     }
 
-    /** Waiting rooms and their start countdowns; {@code null} while the plugin is disabled. */
+    /**
+     * Waiting rooms, the shared hub and their start countdowns; {@code null} while the plugin
+     * is disabled.
+     */
     public WaitingRoomService waitingRooms() {
         return waitingRooms;
     }

@@ -10,6 +10,8 @@ import com.ninja6.ninjaarena.arena.ArenaStore;
 import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
 import com.ninja6.ninjaarena.arena.MemoryCopies;
+import com.ninja6.ninjaarena.arena.ArenaPoint;
+import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.Portal;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
 import com.ninja6.ninjaarena.portal.PortalStore;
@@ -68,7 +70,9 @@ class PortalCommandTest {
         portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
         portalCommand = new PortalCommand(portals, arenas, world -> !world.equals("gone"));
-        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand,
+        ArenaCommand arenaCommand = new ArenaCommand(arenas, () -> null);
+        arenaCommand.setHub(portals::hub);
+        command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(List::of, id -> Optional.empty(), match -> Optional.empty()), player -> false);
         standing = new Location(world("world"), 10.5, 64, 10.5);
     }
@@ -150,8 +154,8 @@ class PortalCommandTest {
 
         Portal lobby = portals.get("lobby").orElseThrow();
         assertEquals(new Portal("lobby", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "dojo"), lobby);
-        assertEquals("Portal lobby created in world (10, 64, 10 to 12, 67, 10), leading to arena dojo.",
-                messages.get(0));
+        assertEquals("Portal lobby created in world (10, 64, 10 to 12, 67, 10), leading to arena dojo (server"
+                + " default).", messages.get(0));
         assertEquals("Arena dojo is not available right now, so the portal turns players away until it is.",
                 messages.get(1));
 
@@ -229,13 +233,15 @@ class PortalCommandTest {
 
         messages.clear();
         run(sender, "portal list");
-        assertEquals(List.of("far (gone) to missing: world not loaded",
+        assertEquals(List.of("Shared hub: not set. Portals with no lobby of their own lead to their arena's"
+                + " waiting room.", "far (gone) to missing: world not loaded",
                 "lobby (world) to dojo: closed, arena not ready"), messages);
 
         messages.clear();
         run(sender, "portal info lobby");
         assertEquals(List.of("Portal lobby: closed, arena not ready", "World: world",
-                "Region: 10, 64, 10 to 12, 67, 10", "Arena: dojo"), messages);
+                "Region: 10, 64, 10 to 12, 67, 10", "Arena: dojo", "Leads to: arena dojo (server default)"),
+                messages);
 
         messages.clear();
         run(sender, "portal delete lobby");
@@ -245,11 +251,116 @@ class PortalCommandTest {
     }
 
     @Test
+    void anAdminSetsAndRemovesTheHubLikeAWaitingRoomPoint() throws Exception {
+        CommandSender console = console();
+        run(console, "portal sethub");
+        assertEquals(List.of("Give coordinates: /narena portal sethub [<x> <y> <z> [<yaw> <pitch>]]"), messages);
+
+        messages.clear();
+        run(console, "portal sethub -300.5 64 -300.5 90 0");
+        assertEquals(Optional.of(new ArenaPoint(-300.5, 64, -300.5, 90, 0)), portals.hub());
+        assertEquals("Shared hub set to -300.5, 64.0, -300.5 in " + ArenaWorld.NAME + ". Anyone waiting at the old"
+                + " point is sent home.", messages.get(0));
+        assertEquals("No portal leads there yet. Use lobby <portal> shared, or set waiting-room.lobby to shared in"
+                + " config.yml.", messages.get(1));
+
+        messages.clear();
+        run(console, "portal sethub 5000 64 0");
+        arenas.startEdit("dojo");
+        arenas.update("dojo", a -> a.withBounds(new ArenaBounds(10, 60, 10, 90, 100, 90)));
+        arenas.finishEdit("dojo");
+        run(console, "portal sethub 50 64 50");
+        assertEquals(List.of("The hub must be inside the arena world border.",
+                "The hub cannot be inside the bounds of arena dojo."), messages);
+
+        messages.clear();
+        run(console, "portal removehub");
+        run(console, "portal removehub");
+        assertEquals(Optional.empty(), portals.hub());
+        assertEquals(List.of("Shared hub removed. Portals that lead there turn players away until a hub is set.",
+                "No shared hub is set."), messages);
+    }
+
+    @Test
+    void arenaBoundsCannotBeSetAroundTheHub() throws Exception {
+        CommandSender console = console();
+        run(console, "portal sethub 50.5 64 50.5");
+        arenas.startEdit("dojo");
+        messages.clear();
+        run(console, "arena setbounds dojo 10 60 10 90 100 90");
+        assertEquals(List.of("Bounds 10, 60, 10 to 90, 100, 90 enclose the shared hub at 50.5, 64.0, 50.5. Move it"
+                + " first with portal sethub."), messages);
+        assertEquals(null, arenas.get("dojo").orElseThrow().bounds());
+
+        messages.clear();
+        run(console, "arena setbounds dojo 10 60 10 40 100 40");
+        assertEquals(new ArenaBounds(10, 60, 10, 40, 100, 40), arenas.get("dojo").orElseThrow().bounds());
+    }
+
+    @Test
+    void eachPortalChoosesItsLobbyOrFollowsTheServerDefault() throws Exception {
+        LobbyMode[] serverDefault = {LobbyMode.DEDICATED};
+        portalCommand = new PortalCommand(portals, arenas, world -> true, () -> serverDefault[0]);
+        command = new NinjaArenaCommand(new ArenaCommand(arenas, () -> null), portalCommand,
+                new DirectorCommand(List::of, id -> Optional.empty(), match -> Optional.empty()), player -> false);
+        portals.create("lobby", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "dojo");
+        portals.create("watch", "world", new ArenaBounds(20, 64, 10, 22, 67, 10), "dojo", true);
+        CommandSender console = console();
+
+        run(console, "portal lobby lobby shared");
+        assertEquals(LobbyMode.SHARED, portals.get("lobby").orElseThrow().lobby());
+        assertEquals(List.of("Portal lobby now leads to the shared hub.",
+                "No shared hub is set, so the portal turns players away until one is. Stand there and use sethub."),
+                messages);
+
+        messages.clear();
+        portals.setHub(new ArenaPoint(-300.5, 64, -300.5, 0, 0));
+        run(console, "portal info lobby");
+        assertTrue(messages.contains("Portal lobby: open, to the shared hub"), messages.toString());
+        assertTrue(messages.contains("Leads to: the shared hub"), messages.toString());
+
+        messages.clear();
+        run(console, "portal lobby lobby default");
+        serverDefault[0] = LobbyMode.SHARED;
+        run(console, "portal list");
+        assertEquals(null, portals.get("lobby").orElseThrow().lobby());
+        assertEquals("Portal lobby now leads to arena dojo (server default).", messages.get(0));
+        assertTrue(messages.contains("Shared hub: -300.5, 64.0, -300.5. Portals with no lobby of their own lead to"
+                + " the shared hub."), messages.toString());
+        assertTrue(messages.contains("lobby (world) to dojo: open, to the shared hub"), messages.toString());
+        assertTrue(messages.contains("watch (world) to dojo: spectator portal, requires a live match with space"),
+                messages.toString());
+
+        messages.clear();
+        run(console, "portal lobby watch shared");
+        run(console, "portal lobby lobby everywhere");
+        assertEquals(List.of("A spectator portal leads to a live match and has no lobby.",
+                "Usage: /narena portal lobby <name> <default|dedicated|shared>"), messages);
+        assertEquals(List.of("default", "dedicated", "shared"), complete(player(true), "portal", "lobby", "lobby",
+                ""));
+    }
+
+    @Test
+    void aPortalCanBeCreatedWithItsOwnLobby() {
+        CommandSender sender = player(true);
+        run(sender, "portal setcorner 1");
+        run(sender, "portal setcorner 2 ~ ~2 ~");
+        messages.clear();
+        run(sender, "portal create door dojo shared");
+        assertEquals(LobbyMode.SHARED, portals.get("door").orElseThrow().lobby());
+        assertEquals("Portal door created in world (10, 64, 10 to 10, 66, 10), leading to the shared hub.",
+                messages.get(0));
+        assertEquals(List.of("spectator", "dedicated", "shared"), complete(sender, "portal", "create", "x", "dojo",
+                ""));
+    }
+
+    @Test
     void tabCompletesSubcommandsCornersAndNames() throws Exception {
         portals.create("lobby", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "dojo");
         CommandSender sender = player(true);
         assertEquals(List.of("portal"), complete(sender, "p"));
-        assertEquals(List.of("setcorner", "create", "delete", "list", "info"), complete(sender, "portal", ""));
+        assertEquals(List.of("setcorner", "create", "delete", "list", "info", "lobby", "sethub", "removehub"),
+                complete(sender, "portal", ""));
         assertEquals(List.of("1", "2"), complete(sender, "portal", "setcorner", ""));
         assertEquals(List.of("~", "64"), complete(sender, "portal", "setcorner", "1", "10", ""));
         assertEquals(List.of("dojo"), complete(sender, "portal", "create", "lobby2", ""));

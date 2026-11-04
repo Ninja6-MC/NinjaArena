@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.bukkit.entity.Player;
 
 /**
@@ -16,6 +17,10 @@ import org.bukkit.entity.Player;
  * runs the cheap tests on the move itself, so a refused player can be stopped at the edge;
  * {@link #admit} repeats them just before the teleport and then saves the player's snapshot,
  * which must succeed before they leave. Server thread only.
+ *
+ * <p>A portal leads to its arena's waiting room or to the shared hub, by its own lobby choice
+ * or the server default ({@link #setLobbies}). A full waiting room turns players away before
+ * their snapshot is saved; the hub takes everyone.
  */
 public final class PortalEntry {
 
@@ -32,6 +37,10 @@ public final class PortalEntry {
         NO_ARENA,
         /** In edit mode, in use by a match, or not complete. */
         UNAVAILABLE,
+        /** The arena's waiting room already holds as many players as one match takes. */
+        FULL,
+        /** The portal leads to the shared hub, but no hub point is set. */
+        NO_HUB,
         /** The player has a snapshot from an earlier visit that has not been restored. */
         SNAPSHOT_PENDING,
         /** The snapshot could not be written. */
@@ -44,6 +53,9 @@ public final class PortalEntry {
     private final Function<String, Optional<ArenaPoint>> spectatorPoint;
     private final Predicate<UUID> pendingSnapshot;
     private final Function<Player, CaptureResult> capture;
+    private Supplier<LobbyMode> defaultLobby = () -> LobbyMode.DEDICATED;
+    private Supplier<Optional<ArenaPoint>> hub = Optional::empty;
+    private Function<String, Optional<String>> roomFull = arena -> Optional.empty();
 
     /**
      * @param pendingSnapshot {@code SnapshotService#hasPending}
@@ -61,8 +73,30 @@ public final class PortalEntry {
         this.capture = Objects.requireNonNull(capture, "capture");
     }
 
+    /**
+     * Connects the lobby choice. By default every portal is dedicated and no room is ever full.
+     *
+     * @param defaultLobby where portals with no choice of their own lead, read at each entry
+     * @param hub          the shared hub point, if one is set
+     * @param roomFull     why an arena's waiting room cannot take another player, if it is full
+     */
+    public void setLobbies(Supplier<LobbyMode> defaultLobby, Supplier<Optional<ArenaPoint>> hub,
+            Function<String, Optional<String>> roomFull) {
+        this.defaultLobby = Objects.requireNonNull(defaultLobby, "defaultLobby");
+        this.hub = Objects.requireNonNull(hub, "hub");
+        this.roomFull = Objects.requireNonNull(roomFull, "roomFull");
+    }
+
+    /** Whether a player walking into the portal now goes to the shared hub. */
+    public boolean leadsToHub(Portal portal) {
+        return !portal.spectator() && portal.lobby(defaultLobby.get()) == LobbyMode.SHARED;
+    }
+
     /** Everything except the snapshot write. Empty if the player may go on. */
     public Optional<Refusal> check(Player player, Portal portal) {
+        if (leadsToHub(portal)) {
+            return checkHub(player);
+        }
         if (!portal.spectator()) {
             return check(player, portal.arena());
         }
@@ -94,10 +128,28 @@ public final class PortalEntry {
             }
             return refuse(Reason.UNAVAILABLE, "Arena " + name + " is not ready yet.");
         }
+        Optional<String> full = roomFull.apply(name);
+        if (full.isPresent()) {
+            return refuse(Reason.FULL, full.get());
+        }
         if (pendingSnapshot.test(player.getUniqueId())) {
             return pending();
         }
         return Optional.empty();
+    }
+
+    /**
+     * The checks for the shared hub. No arena needs to be free: players wait in the hub, even
+     * while arenas are in use or being edited, until one is.
+     */
+    private Optional<Refusal> checkHub(Player player) {
+        if (!player.hasPermission(PLAY)) {
+            return refuse(Reason.NO_PERMISSION, "You do not have permission to enter arenas.");
+        }
+        if (hub.get().isEmpty()) {
+            return refuse(Reason.NO_HUB, "This portal leads to the shared hub, which is not set up yet.");
+        }
+        return pendingSnapshot.test(player.getUniqueId()) ? pending() : Optional.empty();
     }
 
     /**
@@ -132,6 +184,9 @@ public final class PortalEntry {
 
     /** Where the portal sends players, if its destination is currently available. */
     public Optional<ArenaPoint> destination(Portal portal) {
+        if (leadsToHub(portal)) {
+            return hub.get();
+        }
         return portal.spectator() ? spectatorPoint.apply(portal.arena()) : waitingRoom(portal);
     }
 

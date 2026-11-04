@@ -24,14 +24,27 @@ public final class ArenaAdmission {
     private final Supplier<World> world;
     private final SnapshotService snapshots;
     private final BiConsumer<Player, String> onEnter;
+    private final Consumer<Player> onHub;
 
     public ArenaAdmission(Plugin plugin, PortalEntry entry, Supplier<World> world, SnapshotService snapshots,
             BiConsumer<Player, String> onEnter) {
+        this(plugin, entry, world, snapshots, onEnter, player -> {
+            throw new IllegalStateException("No shared hub is connected");
+        });
+    }
+
+    /**
+     * @param onEnter told the player and the arena once they are in its waiting room
+     * @param onHub   told the player once they are in the shared hub
+     */
+    public ArenaAdmission(Plugin plugin, PortalEntry entry, Supplier<World> world, SnapshotService snapshots,
+            BiConsumer<Player, String> onEnter, Consumer<Player> onHub) {
         this.plugin = plugin;
         this.entry = entry;
         this.world = world;
         this.snapshots = snapshots;
         this.onEnter = onEnter;
+        this.onHub = onHub;
     }
 
     /** The destination chunk must already be loaded. A failure keeps the player's own inventory. */
@@ -42,8 +55,14 @@ public final class ArenaAdmission {
 
     public boolean enter(Player player, Portal portal, BiConsumer<Player, String> onSpectate,
             Consumer<String> refusal) {
+        BiConsumer<Player, String> arrived;
+        if (entry.leadsToHub(portal)) {
+            arrived = (entered, arena) -> onHub.accept(entered);
+        } else {
+            arrived = portal.spectator() ? onSpectate : onEnter;
+        }
         return enter(player, portal.arena(), () -> entry.admit(player, portal),
-                () -> entry.destination(portal).orElseThrow(), portal.spectator() ? onSpectate : onEnter, refusal);
+                () -> entry.destination(portal).orElseThrow(), arrived, refusal);
     }
 
     private boolean enter(Player player, String arena, Supplier<Optional<PortalEntry.Refusal>> admit,

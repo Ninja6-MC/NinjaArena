@@ -70,6 +70,10 @@ class PortalListenerTest {
     private World arenaWorld;
     private ArenaRegistry arenas;
     private PortalListener listener;
+    private PortalRegistry portals;
+    private PortalEntry entry;
+    private SnapshotService snapshots;
+    private Plugin plugin;
     private WaitingRoomService rooms;
     private WaitingRoomListener roomListener;
     private int captures;
@@ -114,21 +118,21 @@ class PortalListenerTest {
                 .withEnemySpawn(new ArenaPoint(50.5, 64, 20.5, 0, 0)));
         arenas.finishEdit("dojo");
 
-        PortalRegistry portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
+        portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
         portals.load();
         portals.create("lobby", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "dojo");
 
         Logger logger = Logger.getAnonymousLogger();
         logger.setLevel(Level.OFF);
-        SnapshotService snapshots = new SnapshotService(new SnapshotStore(dir.resolve("snapshots")), logger);
-        PortalEntry entry = new PortalEntry(arenas, new HashSet<UUID>()::contains, player -> {
+        snapshots = new SnapshotService(new SnapshotStore(dir.resolve("snapshots")), logger);
+        entry = new PortalEntry(arenas, new HashSet<UUID>()::contains, player -> {
             captures++;
             if (closed) {
                 capturesAfterClose++;
             }
             return CaptureResult.SAVED;
         });
-        Plugin plugin = plugin(logger);
+        plugin = plugin(logger);
         rooms = new WaitingRoomService(plugin, arenas, new WaitingRoomSettings(2, 3, 4), player -> {
             restored.add(player.getUniqueId());
             return RestoreResult.RESTORED;
@@ -467,6 +471,70 @@ class PortalListenerTest {
         assertTrue(rooms.isWaiting(ALICE));
         assertTrue(restored.isEmpty());
         assertFalse(messages.contains("You left the waiting room."));
+    }
+
+    /** Wires the lobby choice as the plugin does, with the given server default. */
+    private void lobbies(LobbyMode serverDefault) {
+        rooms.setHub(portals::hub);
+        entry.setLobbies(() -> serverDefault, portals::hub, rooms::full);
+        listener = new PortalListener(plugin, portals, entry, () -> arenaWorld,
+                new ArenaAdmission(plugin, entry, () -> arenaWorld, snapshots, (player, arena) -> {
+                    entered.add(arena);
+                    rooms.join(player, arena);
+                }, rooms::joinHub), id -> { }, () -> () -> { }, (player, arena) -> { });
+    }
+
+    @Test
+    void aSharedPortalSendsThePlayerToTheHub() throws Exception {
+        ArenaPoint hub = new ArenaPoint(-300.5, 64, -300.5, 90, 0);
+        portals.setHub(hub);
+        portals.setLobby("lobby", LobbyMode.SHARED);
+        lobbies(LobbyMode.DEDICATED);
+        move(11.5, 64, 10.5, 0);
+        finishChunkLoads();
+
+        assertEquals(1, captures);
+        assertEquals(arenaWorld, location.getWorld());
+        assertEquals(hub.x(), location.getX());
+        assertEquals(hub.z(), location.getZ());
+        assertTrue(rooms.inHub(ALICE));
+        assertTrue(entered.isEmpty());
+        assertTrue(messages.contains("You joined the hub. You go to the next free arena once enough players are"
+                + " here."));
+    }
+
+    @Test
+    void aPortalWithNoChoiceFollowsTheServerDefaultAndAMissingHubTurnsPlayersAway() {
+        lobbies(LobbyMode.SHARED);
+        PlayerMoveEvent event = move(11.5, 64, 10.5, 0);
+        assertEquals(9, event.getTo().getBlockZ());
+        assertEquals(List.of("This portal leads to the shared hub, which is not set up yet."), messages);
+        assertTrue(chunkLoads.isEmpty());
+        assertEquals(0, captures);
+    }
+
+    @Test
+    void aFullDedicatedRoomTurnsPlayersAwayBeforeTheirSnapshot() throws Exception {
+        rooms.setSettings(new WaitingRoomSettings(1, 1, 0, 3, 4, LobbyMode.DEDICATED));
+        lobbies(LobbyMode.DEDICATED);
+        UUID bobId = new UUID(0, 2);
+        Player bob = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getUniqueId" -> bobId;
+                    case "getName" -> "Bob";
+                    case "sendMessage", "sendActionBar" -> null;
+                    case "hashCode" -> 2;
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        rooms.join(bob, "dojo");
+
+        PlayerMoveEvent event = move(11.5, 64, 10.5, 0);
+        assertEquals(9, event.getTo().getBlockZ());
+        assertEquals(List.of("The waiting room of arena dojo is full (1 player). Try another arena, or come back"
+                + " after its match."), messages);
+        assertEquals(0, captures);
+        assertFalse(rooms.isWaiting(ALICE));
     }
 
     @Test

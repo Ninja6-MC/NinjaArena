@@ -9,6 +9,7 @@ import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
@@ -91,6 +92,25 @@ class ConfigReloadTest {
         write("spectating: {enabled: true, max-per-match: 65}\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("spectating.max-per-match"));
         assertEquals(new SpectatorSettings(false, 3), target.spectating);
+    }
+
+    @Test
+    void lobbyAndPlayerCapsReloadImmediatelyAndBadValuesAreRejected() throws Exception {
+        write("waiting-room:\n  lobby: shared\n  min-players: 3\n  max-players: 8\n  team-size: 2\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertTrue(report.getFirst().contains("complete"), report.toString());
+        assertEquals(new WaitingRoomSettings(3, 8, 2, 30, 16, LobbyMode.SHARED), target.waiting);
+        assertTrue(report.get(1).contains("waiting-room.lobby"), report.toString());
+
+        write("waiting-room:\n  min-players: 4\n  max-players: 3\n", EMPTY_KIT);
+        report = reload.reload();
+        assertTrue(report.getFirst().contains("waiting-room.max-players: max-players must be 0 or at least"
+                + " min-players"), report.toString());
+        write("waiting-room:\n  lobby: everywhere\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("waiting-room.lobby: expected dedicated or shared"));
+        write("waiting-room:\n  team-size: 65\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("waiting-room.team-size"));
+        assertEquals(new WaitingRoomSettings(3, 8, 2, 30, 16, LobbyMode.SHARED), target.waiting);
     }
 
     @Test

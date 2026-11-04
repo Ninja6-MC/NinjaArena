@@ -75,6 +75,8 @@ public final class HostingService implements HostingCommands, Listener {
         rooms.setParty(this::party);
         rooms.onDeparture(this::departed);
         rooms.onClose(this::cancelArena);
+        // A reserved arena waits for its host's party, so the shared hub must not take it.
+        rooms.setClaimed(reserved::containsKey);
         arenas.onEditOrDelete(this::cancelArena);
     }
 
@@ -247,7 +249,7 @@ public final class HostingService implements HostingCommands, Listener {
 
     private void acceptWaiting(Player player, Open open) {
         UUID id = player.getUniqueId();
-        if (!rooms.arenaOf(id).orElseThrow().equals(open.arena)) {
+        if (!rooms.arenaOf(id).filter(open.arena::equals).isPresent()) {
             tell(player, "Leave your current waiting room before accepting.");
             return;
         }
@@ -323,7 +325,7 @@ public final class HostingService implements HostingCommands, Listener {
         for (Open open : new ArrayList<>(hosted.values())) {
             Player host = plugin.getServer().getPlayer(open.host);
             if (host == null || !host.isOnline() || !host.hasPermission(NinjaArenaCommand.HOST)
-                    || !arenas.isAvailable(open.arena)
+                    || !arenas.isAvailable(open.arena) || rooms.inHub(open.host)
                     || rooms.arenaOf(open.host).filter(arena -> !arena.equals(open.arena)).isPresent()) {
                 cancelArena(open.arena);
             }
