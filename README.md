@@ -284,6 +284,9 @@ busy. Gameplay freezes redstone and piston physics; editing restores their norma
 behavior. See [arena world retirement](docs/arena-world-lifecycle.md)
 for save behavior, failure handling and the remaining continuous-use limitation.
 
+See the [plugin compatibility audit](docs/plugin-compatibility.md) for setup and
+exclusions when running NinjaArena alongside other server plugins.
+
 ## Round kits and inventory
 
 Players arrive in the waiting room with an empty inventory. Once their snapshot is saved
