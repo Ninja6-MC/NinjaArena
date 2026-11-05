@@ -4,6 +4,7 @@ import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.event.EventSettings.Bonus;
 import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.match.MatchResult.Reason;
 import com.ninja6.ninjaarena.match.MatchUpdate.Closed;
@@ -92,6 +93,12 @@ public final class MatchService implements MatchStart {
 
     /** A running match and the team spawns it places players at, team 1 first. */
     private record Running(Match match, List<ArenaPoint> spawns) {
+    }
+
+    private Function<String, Bonus> eventBonus = arena -> Bonus.NONE;
+
+    public void setEventBonus(Function<String, Bonus> eventBonus) {
+        this.eventBonus = Objects.requireNonNull(eventBonus, "eventBonus");
     }
 
     private final Plugin plugin;
@@ -218,7 +225,7 @@ public final class MatchService implements MatchStart {
         }
         Running running = null;
         try {
-            running = new Running(new Match(name, online, settings, standings), arena.get().teamSpawns());
+            running = new Running(new Match(name, online, settings, standings, eventBonus.apply(name)), arena.get().teamSpawns());
             matches.put(name, running);
             for (UUID playerId : everyone) {
                 matchOf.put(playerId, running);

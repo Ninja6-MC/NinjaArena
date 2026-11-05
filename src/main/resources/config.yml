@@ -14,15 +14,53 @@ arena-grid:
   cell-size: 256
 
 waiting-room:
-  # Players needed in an arena's waiting room before the start countdown begins (1 to 64).
-  # Arriving players are put on the smallest team.
+  # Where portals send players before their match, for every portal that does not choose
+  # for itself with /narena portal lobby (player-built portals never do; see player-portals):
+  #   dedicated - the waiting room of the portal's own arena. The match there starts once
+  #               enough players have arrived; when it is full, more are turned away.
+  #   shared    - one hub for every portal, set with /narena portal sethub. Once enough
+  #               players are there, the first to arrive go together to a free arena's
+  #               teams; the rest wait in the hub for the next free arena.
+  lobby: dedicated
+  # Players needed in a waiting room or the hub before the start countdown begins (1 to 64),
+  # or fewer for an arena that holds fewer. Arriving players are put on the smallest team.
   min-players: 2
+  # The most players one match takes (0 for no limit, otherwise min-players to 256). A full
+  # waiting room turns arrivals away; the hub keeps them for the next arena.
+  max-players: 0
+  # The most players on one team (0 for no limit, otherwise 1 to 64). An arena then takes at
+  # most this many times its team count. An arena that holds fewer than min-players starts
+  # once it is full, whether its players wait in its room or in the hub.
+  team-size: 0
   # Length of the start countdown in seconds (1 to 600). It stops if the count drops below
   # min-players and starts again from the full length when it is reached again.
   countdown-seconds: 30
-  # How far a player may move from the waiting-room point, in blocks along any axis (2 to
-  # 64). Going further, or being teleported further, sends them home.
+  # How far a player may move from the waiting-room or hub point, in blocks along any axis
+  # (2 to 64). Going further, or being teleported further, sends them home.
   radius: 16
+
+player-portals:
+  # Players with ninjaarena.play build their own way in: a frame of frame-material shaped
+  # like a nether portal (an opening 2 to 21 wide and 3 to 21 tall, corners optional), lit
+  # with flint and steel. It leads where waiting-room.lobby says: the shared hub, or a
+  # waiting room that is filling, else a free arena, else the player is told every arena is
+  # busy. Changes apply to the next portal lit; portals already built stay until a frame
+  # block breaks or an admin deletes them with /narena portal delete.
+  # Worlds players may build in, by name. An empty list turns building off. The arena world
+  # is never allowed.
+  worlds:
+    - world
+  # The frame block: any solid block except obsidian, which belongs to nether portals.
+  # Each portal keeps the block it was built from.
+  frame-material: crying_obsidian
+  # Portals one player may own at once (0 for no limit, otherwise 1 to 1000).
+  max-per-player: 2
+  # Least distance between the centre of a new portal and that of any other portal in the
+  # same world, in blocks (0 to 1024; 0 turns the check off).
+  min-distance: 32
+  # Colour of the particle curtain in the opening, as #RRGGBB. Java and Bedrock players see
+  # it without a resource pack.
+  color: '#40E0D0'
 
 match:
   # Allow damage and harmful splash/cloud effects between teammates in the same match.
@@ -111,12 +149,41 @@ director:
     # The hidden cut, the mark and the leader bias all multiply together. Enemies inside a
     # smoke bomb cloud drop their target and take no other while inside.
     marked-weight: 2.0
-    # Enemy types that skip the hidden cut and the lose-track timer.
+    # Enemy types that skip the hidden cut and the lose-track timer. The Shadow Stalker is
+    # the one enemy stealth does not fool.
     ignores-stealth:
       zombie: false
       skeleton: false
       spider: false
-      shadow-stalker: false
+      shadow-stalker: true
+  shadow-stalker:
+    # The signature enemy: a wither skeleton, resized and armed through attributes and
+    # equipment only, so Java and Bedrock players see it without a resource pack. Its cost is
+    # director.enemy-costs.shadow-stalker; killing one scores that many points.
+    # Stalkers alive at once in one match (0 to 5); 0 turns the Shadow Stalker off.
+    max-alive: 1
+    # Health in half hearts (1 to 1024).
+    health: 40.0
+    # Melee damage per hit in half hearts, before armour (0 to 100). Its sword adds nothing
+    # and its hits do not wither.
+    damage: 6.0
+    # Movement speed attribute (0.1 to 0.5); vanilla wither skeletons use 0.25.
+    speed: 0.3
+    # Size multiplier (0.5 to 2). Spawn points need room for the larger body.
+    scale: 1.1
+    blink:
+      # A target is out of reach at distance blocks or more (2 to 32), or nearer when no
+      # walking path gets there. Within range blocks (4 to 64, at least distance) the
+      # Stalker stands still for tell-ticks server ticks (5 to 100; 20 a second) with a
+      # particle tell, then lands behind blocks behind the target (1 to 6), inside the arena.
+      distance: 8.0
+      range: 24.0
+      tell-ticks: 20
+      behind: 2.0
+      # Seconds between blinks, and before the first one after spawning (1 to 120).
+      cooldown-seconds: 8
+    # How long the target glows after a blink (1 to 60).
+    glow-seconds: 3
   intensity:
     # Once a second during a fight the director works out a target intensity from 0 to 1 and
     # spawns enemies until the cost of those alive reaches intensity x the round budget.
@@ -177,3 +244,57 @@ tools:
     strength: 1.0
     # Upward speed in blocks per tick (0 to 0.6).
     lift: 0.3
+
+# Lists of milestone and season placing rewards. See docs/player-stats.md for examples.
+rewards:
+  milestones: []
+  placings: []
+  vault:
+    enabled: false
+    amount-per-match: 10.0
+    daily-cap: 100.0
+
+placeholders:
+  # Seconds to keep each snapshot before refreshing it on demand (1 to 300).
+  cache-seconds: 30
+
+stats:
+  # Record each player's wins, rounds won, player kills, enemy kills, deaths, best Overrun
+  # survival and matches played, all-time and per season. Written in the background once a
+  # match ends; matches run the same when stats are off or the database is down. Restart to
+  # change anything here except season.
+  enabled: true
+  # sqlite keeps a file in the plugin folder. mysql shares one MySQL or MariaDB database
+  # between servers; give every server the same settings below.
+  storage: sqlite
+  # The current season, 1 to 64 characters. Changing it, here or by reload, archives the
+  # current season and starts a new one; archived seasons keep their stats. A name an
+  # archived season already has is refused and the current season stays.
+  season: Season 1
+  # Prepended to every table name: up to 24 lower-case letters, digits or underscores.
+  table-prefix: ninjaarena_
+  sqlite:
+    # A plain file name inside the plugin folder.
+    file: stats.db
+  mysql:
+    host: localhost
+    # 1 to 65535.
+    port: 3306
+    database: ninjaarena
+    username: ninjaarena
+    password: ''
+
+# Viewing a live match. Reloaded limits apply to new spectators.
+spectating:
+  enabled: true
+  max-per-match: 16
+
+# Weekly arena events are off until a schedule is configured. See docs/arena-events.md.
+events:
+  time-zone: UTC
+  announcement-lead-minutes: [30, 10, 1]
+  webhook-url: ''
+  schedule: []
+  messages:
+    upcoming: 'Arena event {id} starts in {minutes} minute(s) at {arena}.'
+    start: 'Arena event {id} has started at {arena}.'

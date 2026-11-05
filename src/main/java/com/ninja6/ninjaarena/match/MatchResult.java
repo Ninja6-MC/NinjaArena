@@ -14,9 +14,15 @@ import java.util.UUID;
  * @param standings every team that started with players, best first: by score, then by
  *                  team number
  * @param rounds    each round's result, in order
+ * @param id        stable identity for this result
  */
 public record MatchResult(String arena, Reason reason, List<Integer> winners, List<Standing> standings,
-        List<RoundResult> rounds) {
+        List<RoundResult> rounds, UUID id) {
+
+    public MatchResult(String arena, Reason reason, List<Integer> winners, List<Standing> standings,
+            List<RoundResult> rounds) {
+        this(arena, reason, winners, standings, rounds, UUID.randomUUID());
+    }
 
     /** Why a match ended. */
     public enum Reason {

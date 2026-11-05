@@ -30,6 +30,41 @@ class WaitingRoomTest {
     }
 
     @Test
+    void aFullRoomRefusesArrivalsAndStartsOnceFullWhenItHoldsFewerThanTheMinimum() {
+        WaitingRoom room = new WaitingRoom(2, 5, 30, 3);
+        assertEquals(3, room.minPlayers());
+        room.join(player(1));
+        assertFalse(room.join(player(2)).countdownStarted());
+        assertTrue(room.join(player(3)).countdownStarted());
+        assertTrue(room.isFull());
+        assertThrows(IllegalStateException.class, () -> room.join(player(4)));
+        assertEquals(List.of(2, 1), sizes(room));
+
+        room.leave(player(1));
+        assertFalse(room.isFull());
+        assertFalse(room.isCounting());
+    }
+
+    @Test
+    void aSmallerCapacityKeepsThePlayersAlreadyWaiting() {
+        WaitingRoom room = new WaitingRoom(2, 2, 30);
+        for (int i = 1; i <= 4; i++) {
+            room.join(player(i));
+        }
+        room.setSettings(2, 30, 2);
+        assertEquals(4, room.size());
+        assertTrue(room.isFull());
+        assertTrue(room.isCounting());
+    }
+
+    @Test
+    void balanceSplitsAGroupAsArrivalsWould() {
+        assertEquals(List.of(List.of(player(1), player(4)), List.of(player(2)), List.of(player(3))),
+                WaitingRoom.balance(3, List.of(player(1), player(2), player(3), player(4))));
+        assertEquals(List.of(List.of(player(1)), List.of()), WaitingRoom.balance(2, List.of(player(1))));
+    }
+
+    @Test
     void arrivalsFillTheSmallestTeamLowestFirst() {
         WaitingRoom room = new WaitingRoom(3, 10, 30);
         List<Integer> teams = new ArrayList<>();

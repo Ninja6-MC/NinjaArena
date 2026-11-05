@@ -23,6 +23,7 @@ import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ExperienceOrb;
 import org.bukkit.entity.Item;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -32,8 +33,11 @@ import org.bukkit.event.entity.EntityCombustByBlockEvent;
 import org.bukkit.event.entity.EntityCombustByEntityEvent;
 import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.Test;
@@ -44,7 +48,8 @@ class EnemyLifecycleTest {
     private static final UUID B = new UUID(0, 2);
     private final FakeMatch match = new FakeMatch(List.of(List.of(A), List.of(B))).combat(0);
     private final TeamScores scores = new TeamScores();
-    private final EnemyCosts costs = new EnemyCosts(3, 5, 7, 11);
+    /** Distinct, and each within the opening threat of 7.5, so every kind can be drawn. */
+    private final EnemyCosts costs = new EnemyCosts(3, 5, 7, 6);
     private final List<Entity> entities = new ArrayList<>();
     private final List<Body> spawned = new ArrayList<>();
     private final World world = proxy(World.class, (object, method, args) -> switch (method.getName()) {
@@ -343,6 +348,34 @@ class EnemyLifecycleTest {
         assertTrue(item.removed);
     }
 
+    private EntityPotionEffectEvent effect(Entity source, PotionEffectType type, EntityPotionEffectEvent.Cause cause) {
+        LivingEntity victim = proxy(Player.class, (object, method, args) -> {
+            throw new UnsupportedOperationException(method.getName());
+        });
+        return new EntityPotionEffectEvent(victim, null, new PotionEffect(type, 200, 0), source, cause,
+                EntityPotionEffectEvent.Action.ADDED, false);
+    }
+
+    @Test
+    void onlyAShadowStalkersHitIsKeptFromWithering() {
+        roll = (EnemyKind.SHADOW_STALKER.ordinal() + 0.1) / EnemyKind.values().length;
+        director.tick();
+        assertEquals(EnemyKind.SHADOW_STALKER, director.enemies().getFirst().kind());
+        Entity stalker = spawned.getFirst().entity;
+
+        var hit = effect(stalker, PotionEffectType.WITHER, EntityPotionEffectEvent.Cause.ATTACK);
+        lifecycle.onEffect(hit);
+        assertTrue(hit.isCancelled());
+
+        for (var other : List.of(effect(stalker, PotionEffectType.SLOWNESS, EntityPotionEffectEvent.Cause.ATTACK),
+                effect(stalker, PotionEffectType.WITHER, EntityPotionEffectEvent.Cause.PLUGIN),
+                effect(body(Mob.class, 5, 5).entity, PotionEffectType.WITHER, EntityPotionEffectEvent.Cause.ATTACK),
+                effect(null, PotionEffectType.WITHER, EntityPotionEffectEvent.Cause.ATTACK))) {
+            lifecycle.onEffect(other);
+            assertFalse(other.isCancelled(), "other effects, causes and wither skeletons keep their wither");
+        }
+    }
+
     @Test
     void handlersRunBeforeRegistryDisposalAndSkipCancelledDeaths() throws Exception {
         EventHandler combust = EnemyLifecycle.class.getMethod("onCombust", EntityCombustEvent.class)
@@ -353,6 +386,10 @@ class EnemyLifecycleTest {
                 .getAnnotation(EventHandler.class);
         assertEquals(EventPriority.HIGHEST, death.priority());
         assertTrue(death.ignoreCancelled());
+        EventHandler effect = EnemyLifecycle.class.getMethod("onEffect", EntityPotionEffectEvent.class)
+                .getAnnotation(EventHandler.class);
+        assertEquals(EventPriority.HIGHEST, effect.priority());
+        assertTrue(effect.ignoreCancelled());
         EventHandler end = EnemyLifecycle.class.getMethod("onMatchEnd", MatchEndEvent.class)
                 .getAnnotation(EventHandler.class);
         assertTrue(end.priority().ordinal() < EventPriority.MONITOR.ordinal());

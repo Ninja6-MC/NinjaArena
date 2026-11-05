@@ -55,6 +55,94 @@ in the order you need it:
    so the portal is a doorway rather than a flat pad. Move sideways first for a wider
    door. `/narena portal create dojo-door dojo` binds it to the arena.
 
+## Lobbies and player caps
+
+Before a match, players wait either in a dedicated waiting room or in one shared hub. The
+admin chooses per portal; a portal that does not choose, including player-built portals,
+uses `waiting-room.lobby` in `config.yml` (`dedicated` by default).
+
+- **Dedicated:** each arena has its own waiting room. Arriving players are put on the
+  smallest team, and the countdown starts once `min-players` are there. When the room
+  already holds as many players as one match takes, the portal turns more away with a
+  message before their snapshot is saved.
+- **Shared:** every shared portal leads to the hub. Once `min-players` are there, or
+  enough to fill a free arena that holds fewer, the countdown runs; when it ends, the
+  players who arrived first go together to a free arena's teams, up to that arena's cap,
+  and the match starts. The rest stay in the hub for the next free arena. A free arena is
+  ready, has no match, no open waiting room and no host reservation; of those the players
+  waiting can start, the hub picks the smallest that takes everyone waiting, or the
+  largest if none does. While arenas are in edit mode, or every arena or match slot is in
+  use, the countdown holds at its last second and the hub keeps waiting; if the only free
+  arena it could fill is taken, the countdown stops.
+
+Stand where players should gather in the arena world, outside every arena's bounds, and
+run `/narena portal sethub`, or give coordinates as for `setwaitingroom`. Later
+`arena setbounds` that would enclose the hub is refused; move the hub first.
+`/narena portal lobby <portal> <dedicated|shared|default>` sets a portal's choice;
+`default` returns it to the config value. Player-built portals have no choice of their own
+and refuse it. `portal create <name> <arena> shared` sets it at
+creation. `portal list` and `portal info` show the hub and where each portal leads.
+Moving or removing the hub sends anyone waiting there home.
+
+The hub follows the waiting-room rules: an empty inventory and adventure mode on arrival,
+the same inventory lockdown, no damage, the same `radius`, and leaving by walking out,
+teleporting away, dying, `/narena leave` or disconnecting restores the snapshot as
+leaving a waiting room does. Hub players can use `/narena spectate <arena>`. Hosted
+matches always use the host's dedicated room.
+
+`waiting-room.max-players` caps the players in one match and `waiting-room.team-size` the
+players on one team; 0 turns either off. Both apply in both modes, and an arena takes
+the lower of the two (team size times its team count). An arena that holds fewer than
+`min-players` starts once it is full, from its waiting room or from the hub. Spectators are outside the teams and never count
+toward either cap.
+
+## Player-built portals
+
+Players with `ninjaarena.play` can build their own way into the Arena, as they would a
+nether portal, but from crying obsidian:
+
+1. Build an upright frame with an empty opening 2 to 21 blocks wide and 3 to 21 tall,
+   along either axis. The four corners are optional, so the smallest frame takes 10
+   crying obsidian, or 14 with corners.
+2. Use flint and steel on the inside of the frame. Instead of a fire, a curtain of
+   coloured particles fills the opening, and the player is told the portal is open.
+3. Walking through it takes the player in with the same checks, snapshot and empty
+   inventory as an admin portal.
+
+A player-built portal belongs to no arena and always follows `waiting-room.lobby`: under
+`shared` it leads to the hub; under `dedicated` it leads to the waiting room with the most
+players that still has room, else to a free arena, and otherwise turns the player away
+with "All arenas are busy". Arenas a host has reserved are skipped. Vanilla does nothing
+with crying obsidian, so these portals never clash with nether portals; obsidian cannot be
+chosen as the frame block.
+
+Breaking, burning, blowing up or pushing any block of the frame removes the portal; the
+corners, the opening and blocks around the frame do not count, so ordinary block updates
+nearby leave it alone. The curtain is drawn only while a player is within two chunks,
+for at most 16 portals at a time, and while a player is near, the frame is checked
+every five seconds, which also catches changes no event reports, such as a frame edited
+while the server was down. A frame block in an unloaded chunk is never judged missing.
+
+Portals are saved in `portals.yml` with the admin ones, named `built-1`, `built-2` and so
+on, so they survive restarts and appear in `/narena portal list` and `info` with their
+builder. An admin removes one with `/narena portal delete <name>`; the frame stays. A
+player-built portal cannot choose its own lobby. Versions from before player-built portals
+refuse a `portals.yml` that holds one rather than drop it.
+
+```yaml
+player-portals:
+  worlds:                     # where players may build; [] turns building off
+    - world
+  frame-material: crying_obsidian
+  max-per-player: 2           # 0 for no limit
+  min-distance: 32            # blocks between portal centres in a world; 0 turns it off
+  color: '#40E0D0'            # the particle curtain
+```
+
+The arena world is never allowed. Each portal keeps the frame block it was built from, so
+changing `frame-material` affects only new portals. The curtain is a vanilla dust
+particle, which needs no resource pack on Java or Bedrock.
+
 ## Commands and permissions
 
 `/ninjaarena` is the registered root; `/narena` is its permanent short alias. Run either
@@ -65,25 +153,25 @@ under the root.
 | Command | Permission | Behavior |
 | :--- | :--- | :--- |
 | `help` | Any tier below | List permitted commands |
-| `leave` | `ninjaarena.play` | Leave the waiting room or match and restore your snapshot |
+| `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Return home and restore your snapshot |
+| `leaderboard <stat> [all_time\|season]` | `ninjaarena.leaderboard` | Show the [top ten for a stat](docs/leaderboards.md) |
+| `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from a waiting room |
 | `accept <host>` | `ninjaarena.play` | Accept an invitation and enter the waiting room |
 | `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
 | `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
-| `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals |
+| `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals, their lobby and the shared hub |
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
+| `event <subcommand>` | `ninjaarena.event.manage` | List, inspect, start or cancel scheduled arena events |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration and kits |
 
-The player and host commands require a player sender. Enter the Arena by walking
-through a portal or explicitly accepting an invitation. Admin reload also works from
-the console.
+Enter the Arena by walking through a portal or explicitly accepting an invitation.
+Leaderboard, event management and admin reload also work from the console.
 
-`ninjaarena.play` defaults to everyone. `ninjaarena.host` and `ninjaarena.admin` default
-to operators. The declared permission children grant play from host, and host from admin;
-the play leaf has an explicit empty children block. The root accepts any of these tiers,
-and dispatch, help and tab completion check the route's own permission. Denying play
-explicitly therefore blocks player routes without blocking an otherwise granted admin
-or host route.
+`ninjaarena.play`, `ninjaarena.spectate` and `ninjaarena.leaderboard` default to everyone.
+`ninjaarena.host` and `ninjaarena.admin` default to operators. Play grants spectate and
+leaderboard. Host grants play, and admin grants host. The root accepts any of these permissions.
+Dispatch, help and tab completion check the permissions for each route.
 
 ## Hosting and invitations
 
@@ -112,6 +200,24 @@ unaccepted invitations. Losing the host permission also invalidates it at the ne
 operation or pending entry check. Players already in the waiting room remain there and
 can leave through the normal snapshot restore.
 
+## Watching live matches
+
+From any waiting room, run `/narena spectate <arena>` to watch an in-progress match.
+A successful transfer removes you from the queue and keeps your pre-entry snapshot.
+To offer access from another world, mark portal corners as usual and run
+`/narena portal create <name> <arena> spectator`. The portal admits viewers only while
+the named match is open to spectators. Ordinary portals still lead to the waiting room.
+
+Viewers can fly within the arena's three-dimensional bounds. Entity cameras, arena
+interactions, and teleports outside the bounds are blocked. Viewers are outside the
+team rosters, countdown minimum, scoring, and enemy director. Use `/narena leave` to
+return home, or wait for the match to end. Disconnecting frees the spectator slot
+immediately and restores your snapshot on the next join.
+
+Set `spectating.enabled` to control admission and `spectating.max-per-match` to set the
+number of viewers per match (1 to 64, default 16). Both options apply to new admissions
+on a successful reload. Current viewers can stay until they leave or the match ends.
+
 ## Safe configuration reload
 
 Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml` or `kits.yml`.
@@ -124,12 +230,17 @@ and never moves match players or restarts a match.
 
 | Settings | Reload behavior |
 | :--- | :--- |
-| Waiting-room minimum, countdown and radius | Apply immediately; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
+| Waiting-room minimum, countdown and radius | Apply immediately to waiting rooms and the hub; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
+| Default lobby and player caps | Apply immediately. The lobby applies to the next portal entry; players already waiting stay where they are. A lower cap turns away later arrivals but never removes waiting players. |
 | Match timers, rounds, extra rounds, friendly fire and scoring | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
+| Player-built portals | Apply to the next portal lit; the curtain colour changes immediately. Portals already built stay, with their own frame block. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
 | Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
 | Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |
 | Grid cell size and world border | Apply only before any arena exists and while no match runs. Otherwise refuse the change and require a restart. |
+| Placeholder cache | `placeholders.cache-seconds` applies to cached stats immediately. |
+| Stats season | A new `stats.season` archives the current season and starts it. Other stats settings require a restart. |
 
 The reply separates changed settings, postponed changes (next match or round), and refused
 changes. Refused settings remain unchanged in memory; the files are not rewritten. Director
@@ -281,9 +392,52 @@ Enemies pick their targets by weight, and stealth and the tools steer that weigh
   goes for another player.
 - An enemy inside a smoke cloud drops its target and takes no other while inside.
 
-Each enemy type has an `ignores-stealth` setting, off by default, that skips the hidden cut
-and the lose-track timer; smoke and marks still apply. Every weight and timing is under
-`director.stealth` in `config.yml`.
+Each enemy type has an `ignores-stealth` setting that skips the hidden cut and the
+lose-track timer; smoke and marks still apply. It is off by default for every type except
+the Shadow Stalker. Every weight and timing is under `director.stealth` in `config.yml`.
+
+### Shadow Stalker
+
+The Shadow Stalker is the signature enemy and the one stealth does not fool. It is a
+vanilla wither skeleton changed only through attributes (size, health, damage, speed),
+equipment (a netherite sword that adds no damage) and particles, so Bedrock players
+through Geyser see it as Java players do, without a resource pack.
+
+- **Hunts the leader.** While one team has the most points, a Stalker targets only that
+  team's players, and switches when the lead changes hands. With level teams, or nobody
+  left on the leading team, it goes for anyone. Its vanilla target goals are removed, so
+  only the director picks whom it hunts.
+- **Blinks.** When its target is out of reach (8 blocks or more away, or nearer with no
+  walking path) but within 24 blocks, it stands still for a second with a purple particle
+  tell, then lands 2 blocks behind the target, facing their back, in a puff of smoke. The
+  landing must be inside the arena, with room for its body and floor beneath it; it tries
+  wider angles round the target, closer spots and a block up or down before giving up for a
+  second. Blinks are 8 seconds apart, and a new Stalker waits that long before its first.
+- **Marks.** The target of a blink glows for 3 seconds.
+- **Counterplay.** Smoke still blinds it and shuriken marks still draw it. Its hits do not
+  wither. Killing one scores its threat cost, 8 points by default.
+
+The director spends its cost (`director.enemy-costs.shadow-stalker`, default 8) from the
+threat budget like any other enemy, counts it towards the mob caps and the tick-time
+guard, places it at the enemy spawn points with room for its larger body, and removes it
+with the other enemies at match end. At most one is alive per match by default.
+
+All settings are under `director.shadow-stalker` and, like every `director` setting, need
+a restart:
+
+| Key | Default | Range | Meaning |
+| :--- | :--- | :--- | :--- |
+| `max-alive` | 1 | 0 to 5 | Stalkers alive at once in one match; 0 turns it off |
+| `health` | 40.0 | 1 to 1024 | Health in half hearts |
+| `damage` | 6.0 | 0 to 100 | Melee damage per hit in half hearts, before armour |
+| `speed` | 0.3 | 0.1 to 0.5 | Movement speed attribute (vanilla wither skeleton: 0.25) |
+| `scale` | 1.1 | 0.5 to 2 | Size multiplier |
+| `blink.distance` | 8.0 | 2 to 32 | Distance at which a target is out of reach |
+| `blink.range` | 24.0 | 4 to 64 | Farthest blink; never below `blink.distance` |
+| `blink.tell-ticks` | 20 | 5 to 100 | Length of the particle tell, in ticks (20 a second) |
+| `blink.behind` | 2.0 | 1 to 6 | How far behind the target it lands |
+| `blink.cooldown-seconds` | 8 | 1 to 120 | Time between blinks |
+| `glow-seconds` | 3 | 1 to 60 | How long the target glows after a blink |
 
 ### Enemy spawns
 
@@ -347,6 +501,17 @@ Other features can award team points on the server thread through
 `plugin.matches()`. Awards are accepted from PREP through ROUND_END for teams that started
 with players. Totals stop at `Integer.MAX_VALUE`. Once the match ends its result keeps the
 final scores, further awards are refused, and a new match starts at zero.
+
+## Player stats
+
+Each player's wins, rounds won, player kills, enemy kills, deaths, best Overrun survival
+and matches played are recorded all-time and per season. They are written in the
+background when a match ends, to SQLite by default or to a MySQL or MariaDB database
+that several servers share. Changing `stats.season` archives the current season; its
+stats are kept. A missing driver or an unreachable database never stops a match:
+finished matches stay queued and are retried. Configuration, the schema and the read
+API for leaderboards and rewards are in [`docs/player-stats.md`](docs/player-stats.md).
+For weekly events and admin commands, see [Scheduled arena events](docs/arena-events.md).
 
 ## Licence
 

@@ -1,9 +1,11 @@
 package com.ninja6.ninjaarena.portal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.ninja6.ninjaarena.arena.ArenaBounds;
+import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.portal.PortalCodec.PortalFormatException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -37,11 +39,36 @@ class PortalStoreTest {
     @Test
     void portalsSurviveARoundTrip() throws Exception {
         List<Portal> portals = List.of(portal("lobby", 10),
-                new Portal("nether", "world_nether", new ArenaBounds(-5, 30, -5, -3, 33, -5), "pit"));
+                new Portal("nether", "world_nether", new ArenaBounds(-5, 30, -5, -3, 33, -5), "pit", true));
         new PortalStore(file()).save(portals);
 
         assertEquals(portals, new PortalStore(file()).load());
+        assertFalse(Files.readString(file()).contains("spectator: false"));
         assertEquals(Set.of("portals.yml"), fileNames());
+    }
+
+    @Test
+    void theHubAndLobbyChoicesSurviveARoundTripAndOlderFilesStillRead() throws Exception {
+        ArenaPoint hub = new ArenaPoint(-300.5, 64, -300.5, 90, 10);
+        List<Portal> portals = List.of(portal("lobby", 10).withLobby(LobbyMode.SHARED),
+                portal("door", 20).withLobby(LobbyMode.DEDICATED), portal("plain", 30));
+        new PortalStore(file()).save(portals, hub);
+        PortalCodec.Contents read = new PortalStore(file()).loadAll();
+        assertEquals(portals, read.portals());
+        assertEquals(hub, read.hub());
+        assertFalse(Files.readString(file()).contains("lobby: null"));
+
+        Files.writeString(file(), """
+                format: 1
+                portals:
+                  lobby:
+                    world: world
+                    arena: dojo
+                    region: {min-x: 10, min-y: 64, min-z: 10, max-x: 12, max-y: 67, max-z: 10}
+                """);
+        PortalCodec.Contents old = new PortalStore(file()).loadAll();
+        assertEquals(null, old.hub());
+        assertEquals(null, old.portals().getFirst().lobby());
     }
 
     @Test
@@ -114,6 +141,29 @@ class PortalStoreTest {
                     arena: dojo
                     region: {min-x: 0, min-y: 64, min-z: 0, max-x: 500, max-y: 67, max-z: 0}
                 """, "portal lobby: a portal can be at most 128 blocks along each axis");
+        assertRejected("""
+                format: 1
+                portals:
+                  lobby:
+                    world: world
+                    arena: dojo
+                    lobby: everywhere
+                    region: {min-x: 10, min-y: 64, min-z: 10, max-x: 12, max-y: 67, max-z: 10}
+                """, "portal lobby: lobby must be dedicated or shared");
+        assertRejected("""
+                format: 1
+                portals:
+                  lobby:
+                    world: world
+                    arena: dojo
+                    spectator: true
+                    lobby: shared
+                    region: {min-x: 10, min-y: 64, min-z: 10, max-x: 12, max-y: 67, max-z: 10}
+                """, "portal lobby: a spectator portal leads to a live match and has no lobby");
+        assertRejected("""
+                format: 1
+                hub: {x: 1.5, y: 64, z: 2.5, yaw: 0}
+                """, "hub: missing pitch");
         assertRejected("""
                 format: 1
                 portals:

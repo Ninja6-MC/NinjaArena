@@ -61,7 +61,7 @@ Finish first placement before allowing arena admission. Avoid clearing or
 reassigning plots for players with pending arena restores. If deployment
 requires both operations for the same login, verify their order on a test
 backend or use separate backends until there is an explicit handoff. The race
-has no live reproduction in the issue notes.
+has no live reproduction in the issue notes. Tracked in #106.
 
 ### Login and spawn plugins
 
@@ -71,7 +71,7 @@ one-tick restore teleport, NinjaArena keeps the snapshot and leaves the saved
 state unapplied. The join path does not retry when authentication finishes on
 that connection. A later forced spawn can also override the landing after a
 successful restore. A subsequent join can retry a pending snapshot once the
-login flow allows the teleport. See [AuthMe's settings][authme].
+login flow allows the teleport. Tracked in #105. See [AuthMe's settings][authme].
 
 Keep arena entry behind authentication. Keep arena worlds out of forced-spawn
 rules and verify that the login flow leaves the restored destination alone,

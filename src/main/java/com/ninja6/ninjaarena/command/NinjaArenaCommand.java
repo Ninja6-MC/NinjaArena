@@ -1,9 +1,11 @@
 package com.ninja6.ninjaarena.command;
 
+import com.ninja6.ninjaarena.portal.PortalEntry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
@@ -26,7 +28,10 @@ public final class NinjaArenaCommand implements TabExecutor {
     }
 
     private static final List<Route> ROUTES = List.of(
-            new Route(LEAVE, PLAY, LEAVE, "leave the waiting room or match you are in"),
+            new Route(LEAVE, PLAY, LEAVE, "leave the arena and return home"),
+            new Route("spectate", PortalEntry.SPECTATE, "spectate <arena>", "watch a live match from a waiting room"),
+            new Route(LeaderboardCommand.NAME, LeaderboardCommand.PERMISSION, LeaderboardCommand.USAGE,
+                    "show the top 10 for an Arena stat"),
             new Route("accept", PLAY, "accept <host>", "accept an invitation to the Arena"),
             new Route("host", HOST, "host <arena>", "open a match in the Arena"),
             new Route("invite", HOST, "invite <player>", "invite a player to the Arena"),
@@ -35,6 +40,7 @@ public final class NinjaArenaCommand implements TabExecutor {
                     "mark out portals that lead to arenas"),
             new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]",
                     "show the enemy director of a running match"),
+            new Route(EventCommand.NAME, EventCommand.PERMISSION, EventCommand.USAGE, "manage scheduled arena events"),
             new Route("admin", ADMIN, "admin reload", "safely reload the Arena configuration"));
 
     private final ArenaCommand arena;
@@ -43,6 +49,9 @@ public final class NinjaArenaCommand implements TabExecutor {
     private final Predicate<Player> leave;
     private final HostingCommands hosting;
     private final Consumer<CommandSender> reload;
+    private final BiConsumer<Player, String> spectate;
+    private final LeaderboardCommand leaderboard;
+    private final EventCommand event;
 
     /**
      * @param leave takes the player out of their waiting room or match and sends them home;
@@ -65,12 +74,33 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
             Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload) {
+        this(arena, portal, director, leave, hosting, reload, null);
+    }
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload,
+            BiConsumer<Player, String> spectate) {
+        this(arena, portal, director, leave, hosting, reload, spectate, null);
+    }
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload,
+            BiConsumer<Player, String> spectate, LeaderboardCommand leaderboard) {
+        this(arena, portal, director, leave, hosting, reload, spectate, leaderboard, null);
+    }
+
+    public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
+            Predicate<Player> leave, HostingCommands hosting, Consumer<CommandSender> reload,
+            BiConsumer<Player, String> spectate, LeaderboardCommand leaderboard, EventCommand event) {
         this.arena = Objects.requireNonNull(arena, "arena");
         this.portal = Objects.requireNonNull(portal, "portal");
         this.director = Objects.requireNonNull(director, "director");
         this.leave = Objects.requireNonNull(leave, "leave");
         this.hosting = hosting;
         this.reload = reload;
+        this.spectate = spectate;
+        this.leaderboard = leaderboard;
+        this.event = event;
     }
 
     @Override
@@ -95,7 +125,7 @@ public final class NinjaArenaCommand implements TabExecutor {
         Route route = ROUTES.stream().filter(candidate -> candidate.name().equals(group)).findFirst().orElse(null);
         if (route == null) {
             help(sender, label, args[0]);
-        } else if (!sender.hasPermission(route.permission())) {
+        } else if (!canUse(sender, route)) {
             denied(sender);
         } else {
             switch (group) {
@@ -104,6 +134,31 @@ public final class NinjaArenaCommand implements TabExecutor {
                         leave(sender);
                     } else {
                         usage(sender, label, route.usage());
+                    }
+                }
+                case LeaderboardCommand.NAME -> {
+                    if (leaderboard == null) {
+                        unavailable(sender, group);
+                    } else {
+                        leaderboard.execute(sender, label, tail(args));
+                    }
+                }
+                case EventCommand.NAME -> {
+                    if (event == null) {
+                        unavailable(sender, group);
+                    } else {
+                        event.execute(sender, label, tail(args));
+                    }
+                }
+                case "spectate" -> {
+                    if (args.length != 2) {
+                        usage(sender, label, route.usage());
+                    } else if (!(sender instanceof Player player)) {
+                        sender.sendMessage(Component.text("Only players can use this Arena command.", NamedTextColor.RED));
+                    } else if (spectate == null) {
+                        unavailable(sender, group);
+                    } else {
+                        spectate.accept(player, args[1]);
                     }
                 }
                 case "accept", "host", "invite" -> {
@@ -142,7 +197,14 @@ public final class NinjaArenaCommand implements TabExecutor {
     }
 
     private static boolean canUseRoot(CommandSender sender) {
-        return sender.hasPermission(PLAY) || sender.hasPermission(HOST) || sender.hasPermission(ADMIN);
+        return sender.hasPermission(PLAY) || sender.hasPermission(HOST) || sender.hasPermission(ADMIN)
+                || sender.hasPermission(PortalEntry.SPECTATE) || sender.hasPermission(LeaderboardCommand.PERMISSION)
+                || sender.hasPermission(EventCommand.PERMISSION);
+    }
+
+    private static boolean canUse(CommandSender sender, Route route) {
+        return sender.hasPermission(route.permission())
+                || (route.name().equals(LEAVE) && sender.hasPermission(PortalEntry.SPECTATE));
     }
 
     private static void denied(CommandSender sender) {
@@ -166,7 +228,7 @@ public final class NinjaArenaCommand implements TabExecutor {
         }
         line(sender, label, "help", "show the commands you can use");
         for (Route route : ROUTES) {
-            if (sender.hasPermission(route.permission())) {
+            if (canUse(sender, route)) {
                 line(sender, label, route.usage(), route.description());
             }
         }
@@ -197,11 +259,18 @@ public final class NinjaArenaCommand implements TabExecutor {
                 out.add("help");
             }
             for (Route route : ROUTES) {
-                if (sender.hasPermission(route.permission()) && route.name().startsWith(prefix)) {
+                if (canUse(sender, route) && route.name().startsWith(prefix)) {
                     out.add(route.name());
                 }
             }
             return out;
+        }
+        if (args[0].equalsIgnoreCase(LeaderboardCommand.NAME)) {
+            return sender.hasPermission(LeaderboardCommand.PERMISSION)
+                    ? LeaderboardCommand.complete(tail(args)) : List.of();
+        }
+        if (args[0].equalsIgnoreCase(EventCommand.NAME)) {
+            return event != null && sender.hasPermission(EventCommand.PERMISSION) ? event.complete(tail(args)) : List.of();
         }
         if (!sender.hasPermission(ADMIN)) {
             return List.of();

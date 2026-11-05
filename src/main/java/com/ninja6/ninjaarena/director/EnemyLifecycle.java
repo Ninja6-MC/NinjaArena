@@ -7,6 +7,8 @@ import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -23,10 +25,12 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
-/** Enemy maintenance, kill scoring and arena teardown. Call only on the server thread. */
+/** Enemy maintenance, kill scoring and stats, and arena teardown. Call only on the server thread. */
 public final class EnemyLifecycle implements Listener {
 
     private final Supplier<List<MatchView>> matches;
@@ -36,6 +40,7 @@ public final class EnemyLifecycle implements Listener {
     private final TeamScores scores;
     private final EnemyCosts costs;
     private final LongSupplier clock;
+    private BiConsumer<MatchView, UUID> kills = (match, killer) -> { };
     private BukkitTask loop;
 
     public EnemyLifecycle(Supplier<List<MatchView>> matches,
@@ -49,6 +54,14 @@ public final class EnemyLifecycle implements Listener {
         this.scores = Objects.requireNonNull(scores, "scores");
         this.costs = Objects.requireNonNull(costs, "costs");
         this.clock = Objects.requireNonNull(clock, "clock");
+    }
+
+    /**
+     * Told of every enemy kill that earns points: the killer was alive in the match during a
+     * fight. Called on the server thread, after the points are awarded.
+     */
+    public void setKills(BiConsumer<MatchView, UUID> kills) {
+        this.kills = Objects.requireNonNull(kills, "kills");
     }
 
     /** Runs between rounds too, and independently of a failed spawn loop. */
@@ -88,6 +101,27 @@ public final class EnemyLifecycle implements Listener {
         }
     }
 
+    /**
+     * A wither skeleton's hit withers its victim; the Shadow Stalker's does not, so its damage
+     * setting is all a hit deals.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEffect(EntityPotionEffectEvent event) {
+        Entity source = event.getSource();
+        if (source == null || event.getCause() != EntityPotionEffectEvent.Cause.ATTACK
+                || !PotionEffectType.WITHER.equals(event.getModifiedType())) {
+            return;
+        }
+        for (MatchView match : matches.get()) {
+            for (MobSpawner.MobEnemy enemy : enemies(match)) {
+                if (enemy.kind() == EnemyKind.SHADOW_STALKER && enemy.mob().equals(source)) {
+                    event.setCancelled(true);
+                    return;
+                }
+            }
+        }
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDeath(EntityDeathEvent event) {
         for (MatchView match : matches.get()) {
@@ -101,6 +135,7 @@ public final class EnemyLifecycle implements Listener {
                     Player killer = event.getEntity().getKiller();
                     if (killer != null && match.phase().isFighting() && match.isAlive(killer.getUniqueId())) {
                         scores.addPoints(match, match.teamOf(killer.getUniqueId()), enemy.kind().cost(costs));
+                        kills.accept(match, killer.getUniqueId());
                     }
                 }
                 return;

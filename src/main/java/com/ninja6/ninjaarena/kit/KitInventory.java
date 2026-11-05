@@ -29,12 +29,17 @@ public final class KitInventory {
      * only once their snapshot is saved, since the restore gives all of it back from there.
      */
     public static void emptyForWaiting(Player player) {
+        clearForEntry(player);
+        player.setGameMode(GameMode.ADVENTURE);
+    }
+
+    /** Removes inventory and effects after a snapshot has been saved. */
+    public static void clearForEntry(Player player) {
         clear(player);
         for (PotionEffect effect : List.copyOf(player.getActivePotionEffects())) {
             player.removePotionEffect(effect.getType());
         }
         player.setFireTicks(0);
-        player.setGameMode(GameMode.ADVENTURE);
     }
 
     private static void clearCrafting(Player player) {

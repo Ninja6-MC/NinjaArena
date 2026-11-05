@@ -146,8 +146,11 @@ public final class SpawnPlacement {
         return length == 0 || eye.getDirection().dot(to) / length >= viewCosine;
     }
 
-    /** Null when the mob's box is in loaded chunks, inside the world height and collision free. */
-    private static Refusal fits(World world, Location location, double width, double height) {
+    /**
+     * Null when the mob's box is in loaded chunks, inside the world height and collision free;
+     * also used for the Shadow Stalker's blink landing.
+     */
+    static Refusal fits(World world, Location location, double width, double height) {
         double half = width / 2;
         BoundingBox body = new BoundingBox(location.getX() - half, location.getY(), location.getZ() - half,
                 location.getX() + half, location.getY() + height, location.getZ() + half);

@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.portal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.arena.ArenaBounds;
@@ -68,9 +69,13 @@ class PortalEntryTest {
     }
 
     private static Player player(boolean canPlay) {
+        return player(canPlay ? PortalEntry.PLAY : "");
+    }
+
+    private static Player player(String permission) {
         return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
-                    case "hasPermission" -> canPlay && PortalEntry.PLAY.equals(args[0]);
+                    case "hasPermission" -> permission.equals(args[0]);
                     case "getUniqueId" -> ALICE;
                     case "getName" -> "Alice";
                     default -> throw new UnsupportedOperationException(method.getName());
@@ -128,6 +133,118 @@ class PortalEntryTest {
         pending.clear();
         captureResult = CaptureResult.ALREADY_PENDING;
         assertEquals(Reason.SNAPSHOT_PENDING, reason(entry.admit(player(true), LOBBY)));
+    }
+
+    @Test
+    void spectatorPortalUsesSeparatePermissionAndTheSameSnapshotGate() throws Exception {
+        var spectator = new Portal("watch", "world", LOBBY.region(), "dojo", true);
+        var viewer = player(PortalEntry.SPECTATE);
+        assertEquals(Reason.UNAVAILABLE, reason(entry.check(viewer, spectator)));
+
+        arenas.hold("dojo");
+        var viewPoint = new ArenaPoint(20.5, 64, 20.5, 0, 0);
+        entry = new PortalEntry(arenas, pending::contains, ignored -> {
+            captures++;
+            return captureResult;
+        }, arena -> Optional.of(viewPoint));
+        assertEquals(Optional.of(viewPoint), entry.destination(spectator));
+        assertEquals(Reason.NO_PERMISSION, reason(entry.admit(player(true), spectator)));
+
+        pending.add(ALICE);
+        assertEquals(Reason.SNAPSHOT_PENDING, reason(entry.admit(viewer, spectator)));
+        assertEquals(0, captures);
+        pending.clear();
+        assertEquals(Optional.empty(), entry.admit(viewer, spectator));
+        assertEquals(1, captures);
+    }
+
+    @Test
+    void aSharedPortalLeadsToTheHubWhateverItsArenaIsDoing() throws Exception {
+        ArenaPoint hub = new ArenaPoint(-300.5, 64, -300.5, 0, 0);
+        ArenaPoint[] point = {null};
+        entry.setLobbies(() -> LobbyMode.DEDICATED, () -> Optional.ofNullable(point[0]), arena -> Optional.empty());
+        Portal shared = LOBBY.withLobby(LobbyMode.SHARED);
+        assertTrue(entry.leadsToHub(shared));
+        assertEquals(Reason.NO_HUB, reason(entry.admit(player(true), shared)));
+        assertEquals(0, captures);
+
+        point[0] = hub;
+        assertEquals(Optional.of(hub), entry.destination(shared));
+        assertEquals(Reason.NO_PERMISSION, reason(entry.check(player(false), shared)));
+        // Players wait in the hub while arenas are edited or in use.
+        arenas.startEdit("dojo");
+        assertEquals(Optional.empty(), entry.admit(player(true), shared));
+        assertEquals(1, captures);
+        pending.add(ALICE);
+        assertEquals(Reason.SNAPSHOT_PENDING, reason(entry.check(player(true), shared)));
+    }
+
+    @Test
+    void portalsWithNoChoiceFollowTheServerDefaultAndSpectatorPortalsIgnoreIt() {
+        LobbyMode[] serverDefault = {LobbyMode.SHARED};
+        entry.setLobbies(() -> serverDefault[0], Optional::empty, arena -> Optional.empty());
+        assertTrue(entry.leadsToHub(LOBBY));
+        assertFalse(entry.leadsToHub(LOBBY.withLobby(LobbyMode.DEDICATED)));
+        assertFalse(entry.leadsToHub(new Portal("watch", "world", LOBBY.region(), "dojo", true)));
+        serverDefault[0] = LobbyMode.DEDICATED;
+        assertFalse(entry.leadsToHub(LOBBY));
+        assertTrue(entry.leadsToHub(LOBBY.withLobby(LobbyMode.SHARED)));
+    }
+
+    @Test
+    void aFullWaitingRoomIsRefusedBeforeTheSnapshot() {
+        entry.setLobbies(() -> LobbyMode.DEDICATED, Optional::empty,
+                arena -> arena.equals("dojo") ? Optional.of("Full.") : Optional.empty());
+        Optional<Refusal> refusal = entry.admit(player(true), LOBBY);
+        assertEquals(Reason.FULL, reason(refusal));
+        assertEquals("Full.", refusal.get().message());
+        assertEquals(Reason.FULL, reason(entry.admit(player(true), "dojo")));
+        assertEquals(0, captures);
+    }
+
+    private static final Portal BUILT = Portal.built("built-1", "world", new ArenaBounds(40, 64, 8, 41, 66, 8),
+            new Portal.Built(ALICE, "crying_obsidian"));
+
+    @Test
+    void aPlayerBuiltPortalIsRoutedToTheOpenArenaAndUsesItsChecks() {
+        String[] open = {"dojo"};
+        entry.setRouting(() -> Optional.ofNullable(open[0]));
+        Portal routed = entry.route(BUILT).orElseThrow();
+        assertEquals("dojo", routed.arena());
+        assertEquals(BUILT.name(), routed.name());
+        assertEquals(Optional.empty(), entry.check(player(true), BUILT));
+        assertEquals(Optional.of(ROOM), entry.destination(BUILT));
+        assertEquals(Optional.empty(), entry.admit(player(true), routed));
+        assertEquals(1, captures);
+
+        // The routed arena's own checks still apply.
+        entry.setLobbies(() -> LobbyMode.DEDICATED, Optional::empty, arena -> Optional.of("Full."));
+        assertEquals(Reason.FULL, reason(entry.check(player(true), BUILT)));
+        assertEquals(Reason.NO_PERMISSION, reason(entry.check(player(false), BUILT)));
+
+        open[0] = null;
+        Optional<Refusal> busy = entry.check(player(true), BUILT);
+        assertEquals(Reason.BUSY, reason(busy));
+        assertTrue(busy.get().message().startsWith("All arenas are busy"), busy.get().message());
+        assertEquals(Optional.empty(), entry.route(BUILT));
+        assertEquals(Optional.empty(), entry.destination(BUILT));
+        // Without the play node the player hears that first.
+        assertEquals(Reason.NO_PERMISSION, reason(entry.check(player(false), BUILT)));
+        assertEquals(1, captures);
+    }
+
+    @Test
+    void aPlayerBuiltPortalFollowsASharedServerDefaultToTheHub() {
+        ArenaPoint hub = new ArenaPoint(-300.5, 64, -300.5, 0, 0);
+        entry.setLobbies(() -> LobbyMode.SHARED, () -> Optional.of(hub), arena -> Optional.empty());
+        entry.setRouting(Optional::empty);
+        assertTrue(entry.leadsToHub(BUILT));
+        assertEquals(Optional.of(BUILT), entry.route(BUILT));
+        assertEquals(Optional.empty(), entry.check(player(true), BUILT));
+        assertEquals(Optional.of(hub), entry.destination(BUILT));
+        // Admin portals are never rerouted.
+        entry.setLobbies(() -> LobbyMode.DEDICATED, Optional::empty, arena -> Optional.empty());
+        assertEquals(Optional.of(LOBBY), entry.route(LOBBY));
     }
 
     @Test

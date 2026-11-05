@@ -180,6 +180,24 @@ class AggroSteeringTest {
     }
 
     @Test
+    void theShadowStalkerIsNotFooledByStealthButStillBySmokeAndMarks() {
+        FakeEnemy stalker = enemy(EnemyKind.SHADOW_STALKER, A);
+        senses.crouching.add(A);
+        AggroSteering steering = steering();
+        assertEquals(1, steering.weigh(match, A, 1, EnemyKind.SHADOW_STALKER), DELTA, "no hidden cut");
+        assertEquals(0.25, steering.weigh(match, A, 1, EnemyKind.ZOMBIE), DELTA, "a zombie is fooled");
+        for (int second = 0; second < 10; second++) {
+            tick += AggroSteering.TICKS_PER_SECOND;
+            assertTrue(steering.keepsTarget(match, stalker, A), "never loses track, seen or not");
+        }
+        marked.add(A);
+        tick++;
+        assertEquals(2, steering.weigh(match, A, 1, EnemyKind.SHADOW_STALKER), DELTA, "the mark draws it");
+        senses.smoke.add(stalker);
+        assertFalse(steering.mayTarget(match, stalker), "smoke still blinds it");
+    }
+
+    @Test
     void hiddenIsWorkedOutOncePerTick() {
         enemy(EnemyKind.ZOMBIE, null);
         enemy(EnemyKind.SPIDER, null);

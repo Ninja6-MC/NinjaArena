@@ -1,7 +1,13 @@
 package com.ninja6.ninjaarena.config;
 
+import com.ninja6.ninjaarena.event.EventSettings;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.portal.LobbyMode;
+import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
+import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
+import com.ninja6.ninjaarena.stats.StatsSettings;
+import com.ninja6.ninjaarena.reward.RewardSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.bukkit.Material;
+import java.util.Objects;
+import java.util.function.Predicate;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.yaml.snakeyaml.nodes.MappingNode;
 
@@ -23,9 +31,14 @@ public final class ReloadFiles {
     private ReloadFiles() { }
 
     public static Candidate read(Path config, Path kits, KitItems items) throws ReloadYaml.Invalid {
+        return read(config, kits, items, arena -> true);
+    }
+
+    static Candidate read(Path config, Path kits, KitItems items, Predicate<String> arenaExists)
+            throws ReloadYaml.Invalid {
         ReloadYaml settings = ReloadYaml.read(config);
         ReloadYaml kit = ReloadYaml.read(kits);
-        return new Candidate(config(settings), kit(kit, items));
+        return new Candidate(config(settings, arenaExists), kit(kit, items));
     }
 
     public static YamlConfiguration defaults() {
@@ -39,11 +52,19 @@ public final class ReloadFiles {
         }
     }
 
-    private static YamlConfiguration config(ReloadYaml document) throws ReloadYaml.Invalid {
+    private static YamlConfiguration config(ReloadYaml document, Predicate<String> arenaExists) throws ReloadYaml.Invalid {
         YamlConfiguration defaults = defaults();
         YamlConfiguration result = new YamlConfiguration();
         for (var entry : document.nodes().entrySet()) {
             String path = entry.getKey();
+            if (path.startsWith("events.schedule.") || path.startsWith("rewards.milestones.") || path.startsWith("rewards.placings.")) {
+                continue; // RewardSettings validates the contents of these lists.
+            }
+            int dot = path.lastIndexOf('.');
+            if (dot > 0 && defaults.isList(path.substring(0, dot))) {
+                // An item of a list setting, validated with the list below.
+                continue;
+            }
             if (!path.isEmpty() && !defaults.contains(path)) {
                 throw document.invalidKey(path, "unknown setting");
             }
@@ -62,6 +83,37 @@ public final class ReloadFiles {
                 if (!(value instanceof Boolean)) {
                     throw document.invalid(path, "expected a boolean");
                 }
+            } else if (fallback instanceof String) {
+                if (!(value instanceof String text)) {
+                    throw document.invalid(path, "expected text; quote it if it looks like a number");
+                }
+                String problem;
+                if (path.equals("waiting-room.lobby")) {
+                    problem = LobbyMode.parse(text).isPresent() ? null : "expected dedicated or shared";
+                } else if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
+                    problem = PlayerPortalSettings.problem(path, text);
+                } else if (path.startsWith("events.messages.")) {
+                    problem = text.isBlank() || text.length() > 1000 ? "expected 1 to 1000 characters" : null;
+                } else if (path.startsWith("events.")) {
+                    problem = null; // EventSettings validates the time zone and HTTPS endpoint.
+                } else {
+                    problem = StatsSettings.problem(path, text);
+                }
+                if (problem != null) {
+                    throw document.invalid(path, problem);
+                }
+            } else if (fallback instanceof List<?>) {
+                String problem = switch (path) {
+                    case PlayerPortalSettings.SECTION + ".worlds" -> PlayerPortalSettings.worldsProblem(value);
+                    case "events.schedule", "events.announcement-lead-minutes", "rewards.milestones", "rewards.placings" ->
+                            value instanceof List<?> entries && entries.stream().noneMatch(Objects::isNull)
+                                    ? null : "expected a list without null entries";
+                    default -> throw new IllegalStateException("No validation for list " + path);
+                };
+                if (problem != null) {
+                    throw document.invalid(path, problem);
+                }
+                value = List.copyOf((List<?>) value);
             } else if (fallback instanceof Number) {
                 if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())) {
                     throw document.invalid(path, "expected a finite number");
@@ -87,6 +139,27 @@ public final class ReloadFiles {
             }
             result.set(path, value);
         }
+        RewardSettings rewards;
+        try {
+            rewards = RewardSettings.from(result);
+        } catch (IllegalArgumentException e) {
+            throw document.invalid("rewards", e.getMessage());
+        }
+        try {
+            EventSettings events = EventSettings.from(result, rewards);
+            for (EventSettings.Night night : events.schedule()) {
+                if (!arenaExists.test(night.arena())) {
+                    throw new IllegalArgumentException("unknown arena " + night.arena() + " for event " + night.id());
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw document.invalid("events", e.getMessage());
+        }
+        int maxPlayers = result.getInt("waiting-room.max-players");
+        if (maxPlayers != 0 && maxPlayers < result.getInt("waiting-room.min-players")) {
+            throw document.invalid(document.has("waiting-room.max-players") ? "waiting-room.max-players"
+                    : "waiting-room.min-players", "max-players must be 0 or at least min-players");
+        }
         double pause = result.getDouble("stability.pause-spawning-above-mspt");
         if (result.getDouble("stability.resume-below-mspt") > pause) {
             throw document.invalid(document.has("stability.resume-below-mspt") ? "stability.resume-below-mspt"
@@ -96,6 +169,12 @@ public final class ReloadFiles {
             throw document.invalid(document.has("stability.drop-tier-above-mspt") ? "stability.drop-tier-above-mspt"
                     : "stability.pause-spawning-above-mspt", "drop-tier-above-mspt must not be below pause-spawning-above-mspt");
         }
+        if (result.getDouble("director.shadow-stalker.blink.range")
+                < result.getDouble("director.shadow-stalker.blink.distance")) {
+            throw document.invalid(document.has("director.shadow-stalker.blink.range")
+                    ? "director.shadow-stalker.blink.range" : "director.shadow-stalker.blink.distance",
+                    "blink range must not be below blink distance");
+        }
         return result;
     }
 
@@ -104,9 +183,11 @@ public final class ReloadFiles {
             case "arena-world.border-size" -> new double[] {16, 2048};
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};
             case "arena-grid.cell-size" -> new double[] {32, 4096};
-            case "waiting-room.min-players" -> new double[] {1, 64};
+            case "spectating.max-per-match", "waiting-room.min-players" -> new double[] {1, 64};
             case "waiting-room.countdown-seconds" -> new double[] {1, 600};
             case "waiting-room.radius" -> new double[] {2, 64};
+            case "waiting-room.max-players" -> new double[] {0, 256};
+            case "waiting-room.team-size" -> new double[] {0, 64};
             case "match.prep-seconds", "match.round-seconds", "match.round-end-seconds", "match.match-end-seconds"
                     -> new double[] {1, 3600};
             case "match.overrun-limit-seconds" -> new double[] {0, 3600};
@@ -133,10 +214,27 @@ public final class ReloadFiles {
                     "director.intensity.relax-seconds" -> new double[] {1, 600};
             case "director.intensity.damage-full-stress" -> new double[] {1, 1000};
             case "director.intensity.budget-round-step", "director.intensity.budget-per-player" -> new double[] {0, 10};
+            case "director.shadow-stalker.max-alive" -> new double[] {0, 5};
+            case "director.shadow-stalker.health" -> new double[] {1, 1024};
+            case "director.shadow-stalker.damage" -> new double[] {0, 100};
+            case "director.shadow-stalker.speed" -> new double[] {0.1, 0.5};
+            case "director.shadow-stalker.scale" -> new double[] {0.5, 2};
+            case "director.shadow-stalker.blink.distance" -> new double[] {2, 32};
+            case "director.shadow-stalker.blink.range" -> new double[] {4, 64};
+            case "director.shadow-stalker.blink.tell-ticks" -> new double[] {5, 100};
+            case "director.shadow-stalker.blink.behind" -> new double[] {1, 6};
+            case "director.shadow-stalker.blink.cooldown-seconds" -> new double[] {1, 120};
+            case "director.shadow-stalker.glow-seconds" -> new double[] {1, 60};
             case "tools.smoke-bomb.radius" -> new double[] {1, 8};
             case "tools.shuriken.damage" -> new double[] {0, 20};
             case "tools.dash.strength" -> new double[] {0.1, 2};
             case "tools.dash.lift" -> new double[] {0, 0.6};
+            case StatsPlaceholders.CACHE_SECONDS ->
+                    new double[] {StatsPlaceholders.MIN_SECONDS, StatsPlaceholders.MAX_SECONDS};
+            case "rewards.vault.amount-per-match", "rewards.vault.daily-cap" -> new double[] {0, 1_000_000};
+            case "stats.mysql.port" -> new double[] {1, 65535};
+            case PlayerPortalSettings.SECTION + ".max-per-player" -> new double[] {0, PlayerPortalSettings.MAX_PER_PLAYER};
+            case PlayerPortalSettings.SECTION + ".min-distance" -> new double[] {0, PlayerPortalSettings.MAX_DISTANCE};
             default -> throw new IllegalStateException("No validation range for " + path);
         };
     }

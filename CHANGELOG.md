@@ -25,6 +25,48 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Weekly arena events with configurable announcements, featured-arena matchmaking,
+  optional Discord delivery and capped bonus rewards. Admins can list, start or cancel
+  event occurrences with `/narena event`.
+- Configurable milestone and season placing rewards with cached title and chat tag
+  placeholders, pending cosmetic trophies, and opt-in Vault payouts with a daily cap.
+- Player-built portals. A crying obsidian frame shaped like a nether portal (opening 2x3
+  up to 21x21, either axis, corners optional) and lit with flint and steel opens a portal
+  with a coloured particle curtain that needs no resource pack. It follows
+  `waiting-room.lobby`: the shared hub, or a filling waiting room, else a free arena, else
+  "All arenas are busy". Entry uses the admin portals' checks, snapshot and empty
+  inventory. `player-portals` in `config.yml` sets the allowed worlds (never the arena
+  world), frame block, per-player limit, minimum distance and colour, and reloads safely.
+  Breaking any frame block removes the portal; the frame is also checked while players are
+  near. Portals persist in `portals.yml`, which earlier versions refuse once it holds one.
+- Shared or dedicated lobbies. A shared hub, set with `/narena portal sethub`, gathers
+  players from every shared portal and sends the first arrivals to a free arena's teams
+  once enough are there; the rest wait for the next free arena. Each portal chooses with
+  `/narena portal lobby`, and portals that do not choose, player-built ones included, use
+  `waiting-room.lobby`. The hub keeps the waiting-room inventory, lockdown and restore
+  rules, holds while arenas are edited, and sends its players home when moved, removed or
+  on shutdown.
+- Player caps: `waiting-room.max-players` and `waiting-room.team-size` limit one match in
+  both modes. A full dedicated room turns arrivals away with a message before their
+  snapshot is saved; spectators never count.
+- View all-time or current-season top tens with `/narena leaderboard`. PlaceholderAPI
+  can show personal stats, ranked scores and names, and the current season.
+- Player stats and seasons: wins, rounds won, player kills, enemy kills, deaths, best
+  Overrun survival and matches played, all-time and per season, written in batches off
+  the server thread when a match ends. SQLite by default; MySQL or MariaDB lets several
+  servers share one set of tables. Changing `stats.season` archives the current season
+  without deleting it. Unreachable databases are retried, and the queue is flushed on
+  shutdown. `plugin.stats()` reads a player's stats, top lists and seasons.
+- Waiting players and spectator portal entrants can watch live matches within the arena
+  bounds. Viewers use the existing snapshot and restore flow, with separate admission
+  limits and no effect on team rosters or enemy pressure.
+- The Shadow Stalker signature enemy: a wither skeleton changed only through attributes,
+  equipment, particles and Paper Mob Goals, so Bedrock players see it without a resource
+  pack. It ignores stealth by default (`ignores-stealth.shadow-stalker`), hunts the leading
+  team, and when its target is out of reach blinks behind them after a particle tell and
+  makes them glow for 3 seconds. The director spends its threat cost, caps it at one per
+  match by default, and removes it with the other enemies. Health, damage, speed, size,
+  blink timing and range and the glow are under `director.shadow-stalker`.
 - Unit coverage for composed director pressure, repeated binary snapshots and safe-landing
   search boundaries. A separate local Paper stability probe records tick durations, decoded
   save comparisons and pending chunkholders. The short diagnostic reproduces retained

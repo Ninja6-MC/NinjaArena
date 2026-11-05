@@ -6,6 +6,11 @@ import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.DirectorCommand;
+import com.ninja6.ninjaarena.command.EventCommand;
+import com.ninja6.ninjaarena.event.ArenaEvents;
+import com.ninja6.ninjaarena.event.EventSettings;
+import com.ninja6.ninjaarena.event.EventWebhook;
+import com.ninja6.ninjaarena.command.LeaderboardCommand;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.PortalCommand;
 import com.ninja6.ninjaarena.config.ConfigReload;
@@ -16,9 +21,11 @@ import com.ninja6.ninjaarena.director.EnemyLifecycle;
 import com.ninja6.ninjaarena.director.IntensitySettings;
 import com.ninja6.ninjaarena.director.MatchDirector;
 import com.ninja6.ninjaarena.director.MobSpawner;
+import com.ninja6.ninjaarena.director.ShadowStalker;
 import com.ninja6.ninjaarena.director.SpawnSettings;
 import com.ninja6.ninjaarena.director.StabilityGate;
 import com.ninja6.ninjaarena.director.StabilitySettings;
+import com.ninja6.ninjaarena.director.StalkerSettings;
 import com.ninja6.ninjaarena.director.StealthSettings;
 import com.ninja6.ninjaarena.director.ThreatBudget;
 import com.ninja6.ninjaarena.director.WorldSenses;
@@ -37,6 +44,12 @@ import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.match.TeamScores;
 import com.ninja6.ninjaarena.match.TeamScoringListener;
 import com.ninja6.ninjaarena.portal.ArenaAdmission;
+import com.ninja6.ninjaarena.portal.LobbyMode;
+import com.ninja6.ninjaarena.portal.ParticleCurtain;
+import com.ninja6.ninjaarena.portal.PlayerPortalListener;
+import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
+import com.ninja6.ninjaarena.portal.PlayerPortals;
+import com.ninja6.ninjaarena.portal.PortalCurtains;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.portal.PortalListener;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
@@ -45,7 +58,16 @@ import com.ninja6.ninjaarena.restore.ArenaCombatCleanup;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
+import com.ninja6.ninjaarena.spectate.SpectatorSettings;
+import com.ninja6.ninjaarena.spectate.Spectators;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
+import com.ninja6.ninjaarena.placeholder.NinjaArenaExpansion;
+import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
+import com.ninja6.ninjaarena.reward.RewardSettings;
+import com.ninja6.ninjaarena.reward.Rewards;
+import com.ninja6.ninjaarena.stats.StatsSettings;
+import com.ninja6.ninjaarena.stats.StatsStore;
+import com.ninja6.ninjaarena.stats.StatsTracker;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.HostingService;
@@ -59,7 +81,12 @@ import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import com.ninja6.ninjaarena.world.ArenaExtentListener;
 import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.io.IOException;
+import java.time.Clock;
+import java.time.Instant;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import java.util.List;
+import java.util.Optional;
 import java.util.SplittableRandom;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
@@ -75,8 +102,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private volatile ArenaWorld arenaWorld;
     private ArenaChunkUnloader chunkUnloader;
     private RestoreService restores;
+    private Spectators spectators;
     private ArenaRegistry arenas;
     private PortalRegistry portals;
+    private PortalCurtains curtains;
     private MatchService matches;
     private MatchDeathListener deaths;
     private TeamScores scores;
@@ -87,6 +116,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private NinjaTools tools;
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
+    private StatsStore stats;
+    private Rewards rewards;
+    private StatsPlaceholders placeholders;
+    private Runnable unregisterPlaceholders;
 
     @Override
     public void onEnable() {
@@ -131,19 +164,23 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer);
         getServer().getPluginManager().registerEvents(scoring, this);
         // Starts and stops each match's spawn loop with its fights; closed before the matches.
+        StalkerSettings stalker = StalkerSettings.from(getConfig().getConfigurationSection("director.shadow-stalker"));
         directors = new DirectorService(this,
                 IntensitySettings.from(getConfig().getConfigurationSection("director.intensity")),
                 ThreatBudget.from(getConfig().getConfigurationSection("director.threat-budget")),
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")),
                 scores, matches::matchOf, MobSpawner.factory(arenas, arenaWorld::world, getServer()::getPlayer,
-                        SpawnSettings.from(getConfig().getConfigurationSection("director")), getLogger()),
-                new SplittableRandom()::nextDouble);
+                        SpawnSettings.from(getConfig().getConfigurationSection("director")),
+                        new ShadowStalker(stalker, getServer().getMobGoals(), Bukkit::getCurrentTick), getLogger()),
+                new SplittableRandom()::nextDouble, stalker);
         getServer().getPluginManager().registerEvents(directors, this);
         enemyLifecycle = new EnemyLifecycle(matches::matches, directors::director,
                 name -> arenas.get(name).map(Arena::bounds), arenaWorld::world, scores,
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")), System::nanoTime);
         getServer().getPluginManager().registerEvents(enemyLifecycle, this);
         enemyLifecycle.start(this);
+        startStats(enemyLifecycle);
+        startPlaceholders();
         kitItems = new KitItems();
         NinjaTools.registerItems(kitItems);
         tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
@@ -167,14 +204,33 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         matches.start();
         deaths.start();
         // A finished countdown hands its players to the match engine.
+        String lobby = getConfig().getString("waiting-room.lobby");
+        if (lobby != null && LobbyMode.parse(lobby).isEmpty()) {
+            getLogger().warning("waiting-room.lobby must be dedicated or shared, not " + lobby
+                    + "; portals use dedicated waiting rooms until it is fixed.");
+        }
         waitingRooms = new WaitingRoomService(this, arenas,
                 WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
                 KitInventory::emptyForWaiting, matches);
+        SpectatorSettings spectating;
+        try {
+            if (!getConfig().isConfigurationSection("spectating")) {
+                throw new IllegalArgumentException("spectating must be a section");
+            }
+            spectating = SpectatorSettings.from(getConfig().getConfigurationSection("spectating"));
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Spectating disabled: " + e.getMessage());
+            spectating = new SpectatorSettings(false, 16);
+        }
+        spectators = new Spectators(this, arenas, matches, waitingRooms, restores, arenaWorld::world, spectating);
+        Spectators watching = spectators;
+        getServer().getPluginManager().registerEvents(watching, this);
+        arenas.onEditOrDelete(watching::closeArena);
         // Waiting players are locked like match players; the fields are cleared on disable.
         MatchService inMatch = matches;
         WaitingRoomService waiting = waitingRooms;
         getServer().getPluginManager().registerEvents(new InventoryLockdownListener(
-                id -> inMatch.isInMatch(id) || waiting.isWaiting(id)), this);
+                id -> inMatch.isInMatch(id) || waiting.isWaiting(id) || watching.contains(id)), this);
         getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
         arenas.onEditOrDelete(waitingRooms::closeRoom);
         // Match slots, enemy caps, the spawn rate and the tick-time guard; enemies are counted
@@ -190,15 +246,42 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
                 Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger())));
         waitingRooms.setStartAllowed(() -> inMatch.matches().size() < stability.maxMatches());
+        ArenaEvents arenaEvents = startEvents();
+        waitingRooms.setEventArena(arenaEvents::arena);
+        matches.setEventBonus(arenaEvents::bonus);
         waitingRooms.start();
-        PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null);
-        PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist);
-        ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots, waitingRooms::join);
+        // Each portal leads to its arena's waiting room or the shared hub; the default is read
+        // from the current settings, so a reload changes it for the next entry.
+        PortalRegistry portalList = portals;
+        waitingRooms.setHub(portalList::hub);
+        PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null,
+                () -> waiting.settings().lobby());
+        PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist, watching::destination);
+        entry.setLobbies(() -> waiting.settings().lobby(), portalList::hub, waiting::full);
+        ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots, waitingRooms::join,
+                waitingRooms::joinHub);
         hosting = new HostingService(this, arenas, waitingRooms, entry, admission, arenaWorld::world,
                 inMatch::isInMatch, arenaWorld::acquire);
         getServer().getPluginManager().registerEvents(hosting, this);
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
-                snapshots, portalCommand::forget, waitingRooms::join, arenaWorld::acquire), this);
+                admission, portalCommand::forget, arenaWorld::acquire, watching::arrived), this);
+        // Player-built portals share the registry and the entry above; under the dedicated lobby
+        // each entry is routed to a filling waiting room or a free arena.
+        entry.setRouting(waiting::openArena);
+        PlayerPortalSettings building;
+        try {
+            building = PlayerPortalSettings.from(getConfig().getConfigurationSection(PlayerPortalSettings.SECTION));
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Building portals is off: " + e.getMessage() + ". Portals already built still work;"
+                    + " fix config.yml and reload.");
+            building = PlayerPortalSettings.OFF;
+        }
+        ParticleCurtain curtain = new ParticleCurtain(building.color(), new SplittableRandom());
+        PlayerPortals playerPortals = new PlayerPortals(portals, building, getLogger());
+        getServer().getPluginManager().registerEvents(new PlayerPortalListener(playerPortals, portals), this);
+        curtains = new PortalCurtains(portals, playerPortals, getServer()::getOnlinePlayers, getServer()::getWorld,
+                curtain, Bukkit::getCurrentTick);
+        curtains.start(this);
         ConfigReload reloader = new ConfigReload(getDataFolder().toPath(), getConfig(), kit, kitItems,
                 new ConfigReload.Target() {
                     @Override
@@ -235,6 +318,17 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void spectating(SpectatorSettings settings) {
+                        watching.setSettings(settings);
+                    }
+
+                    @Override
+                    public void playerPortals(PlayerPortalSettings settings) {
+                        playerPortals.setSettings(settings);
+                        curtain.setColor(settings.color());
+                    }
+
+                    @Override
                     public void tools(ToolSettings settings) {
                         tools.setSettings(settings);
                     }
@@ -245,7 +339,29 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void season(String name) {
+                        if (stats != null) {
+                            stats.useSeason(name);
+                        }
+                        if (placeholders != null) {
+                            placeholders.invalidateSeason();
+                        }
+                    }
+
+                    @Override
+                    public boolean eventArenaExists(String arena) {
+                        return arenas.get(arena).isPresent();
+                    }
+
+                    @Override
                     public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
+                        if (placeholders != null) {
+                            placeholders.setCacheSeconds(settings.getInt(StatsPlaceholders.CACHE_SECONDS));
+                        }
+                        if (rewards != null) {
+                            rewards.settings(RewardSettings.from(settings));
+                        }
+                        arenaEvents.settings(EventSettings.from(settings, RewardSettings.from(settings)));
                         for (String path : settings.getKeys(true)) {
                             if (!settings.isConfigurationSection(path)) {
                                 getConfig().set(path, settings.get(path));
@@ -253,21 +369,119 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         }
                     }
                 });
-        NinjaArenaCommand command = new NinjaArenaCommand(new ArenaCommand(arenas, arenaWorld::world,
-                arenaWorld::acquire, task -> getServer().getScheduler().runTask(this, task)), portalCommand,
+        ArenaCommand arenaCommand = new ArenaCommand(arenas, arenaWorld::world, arenaWorld::acquire,
+                task -> getServer().getScheduler().runTask(this, task));
+        arenaCommand.setHub(() -> portals == null ? Optional.empty() : portals.hub());
+        NinjaArenaCommand command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 player -> {
                     boolean cancelled = hosting.leave(player);
-                    return waitingRooms.leave(player, Exit.COMMAND)
+                    return watching.leave(player) || waitingRooms.leave(player, Exit.COMMAND)
                             || matches.leave(player, MatchService.Exit.COMMAND) || cancelled;
-                }, hosting, reloader::execute);
+                }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats),
+                new EventCommand(arenaEvents));
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
     }
 
+    private ArenaEvents startEvents() {
+        EventSettings settings;
+        try {
+            settings = EventSettings.from(getConfig(), RewardSettings.from(getConfig()));
+            for (EventSettings.Night night : settings.schedule()) {
+                if (arenas.get(night.arena()).isEmpty()) {
+                    throw new IllegalArgumentException("unknown arena " + night.arena() + " for event " + night.id());
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Arena events disabled: " + e.getMessage());
+            settings = EventSettings.OFF;
+        }
+        EventWebhook webhook = EventWebhook.create(getLogger()::warning);
+        ArenaEvents events = new ArenaEvents(settings, Clock.systemUTC(), (window, minutes, url) -> {
+            String path = minutes == 0 ? "events.messages.start" : "events.messages.upcoming";
+            String message = getConfig().getString(path, "")
+                    .replace("{id}", window.night().id())
+                    .replace("{arena}", window.night().arena())
+                    .replace("{minutes}", Integer.toString(minutes));
+            getServer().broadcast(Component.text(message, NamedTextColor.GOLD));
+            webhook.post(url, message);
+        });
+        getServer().getScheduler().runTaskTimer(this, events::tick, 20, 20);
+        return events;
+    }
+
+    /**
+     * Records player stats from the match events. A bad stats setting or an unreachable
+     * database turns stats off or delays the writes; it never stops the plugin.
+     */
+    private void startStats(EnemyLifecycle enemies) {
+        StatsSettings settings;
+        try {
+            settings = StatsSettings.from(getConfig().getConfigurationSection("stats"));
+        } catch (IllegalArgumentException e) {
+            getLogger().severe("Stats are off: " + e.getMessage() + ". Fix config.yml and restart to record stats.");
+            return;
+        }
+        if (!settings.enabled()) {
+            return;
+        }
+        stats = StatsStore.open(settings, getDataFolder().toPath(), getLogger());
+        StatsTracker tracker = new StatsTracker(record -> {
+            stats.record(record);
+            if (rewards != null) {
+                rewards.onRecorded(record);
+            }
+        }, getServer()::getPlayer, Instant::now);
+        getServer().getPluginManager().registerEvents(tracker, this);
+        enemies.setKills(tracker::enemyKilled);
+        RewardSettings rewardSettings;
+        try {
+            rewardSettings = RewardSettings.from(getConfig());
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Reward configuration ignored: " + e.getMessage());
+            rewardSettings = RewardSettings.OFF;
+        }
+        rewards = new Rewards(this, arenaWorld::world, rewardSettings);
+    }
+
+    private void startPlaceholders() {
+        if (!getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            return;
+        }
+        Object configured = getConfig().get(StatsPlaceholders.CACHE_SECONDS);
+        int seconds = StatsPlaceholders.DEFAULT_SECONDS;
+        if (configured instanceof Integer value
+                && value >= StatsPlaceholders.MIN_SECONDS && value <= StatsPlaceholders.MAX_SECONDS) {
+            seconds = value;
+        } else {
+            getLogger().warning(StatsPlaceholders.CACHE_SECONDS + " must be an integer from "
+                    + StatsPlaceholders.MIN_SECONDS + " to " + StatsPlaceholders.MAX_SECONDS + ". Using " + seconds + ".");
+        }
+        placeholders = new StatsPlaceholders(stats, seconds);
+        unregisterPlaceholders = NinjaArenaExpansion.install(this, placeholders);
+    }
+
     @Override
     public void onDisable() {
+        if (rewards != null) {
+            rewards.close();
+            rewards = null;
+        }
+        if (unregisterPlaceholders != null) {
+            unregisterPlaceholders.run();
+            unregisterPlaceholders = null;
+            placeholders = null;
+        }
+        if (curtains != null) {
+            curtains.close();
+            curtains = null;
+        }
+        if (spectators != null) {
+            spectators.close();
+            spectators = null;
+        }
         if (hosting != null) {
             hosting.close();
             hosting = null;
@@ -291,6 +505,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (matches != null) {
             matches.close();
             matches = null;
+        }
+        // After the matches: stopping them records what they had so far.
+        if (stats != null) {
+            stats.close();
+            stats = null;
         }
         if (tools != null) {
             tools.close();
@@ -342,7 +561,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         return arenas;
     }
 
-    /** Waiting rooms and their start countdowns; {@code null} while the plugin is disabled. */
+    /**
+     * Waiting rooms, the shared hub and their start countdowns; {@code null} while the plugin
+     * is disabled.
+     */
     public WaitingRoomService waitingRooms() {
         return waitingRooms;
     }
@@ -376,6 +598,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** The ninja kit tools and the shuriken mark query; {@code null} while disabled. */
     public NinjaTools tools() {
         return tools;
+    }
+
+    /**
+     * Player stats and seasons: reads for leaderboards and rewards, and season changes.
+     * {@code null} while the plugin is disabled or stats are off in {@code config.yml}.
+     */
+    public StatsStore stats() {
+        return stats;
     }
 
     /** Registered portals; {@code null} while the plugin is disabled. */

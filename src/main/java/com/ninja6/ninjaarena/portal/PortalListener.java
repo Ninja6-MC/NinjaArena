@@ -27,12 +27,15 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Sends players who walk into a portal to its arena's waiting room.
+ * Sends players who walk into a portal to its waiting room, the shared hub or a live match.
+ * {@link PortalEntry} decides which; everything below applies to each. A player-built portal
+ * is routed to an arena as the player walks in ({@link PortalEntry#route}) and the entry keeps
+ * that arena: a room that fills while the chunk loads refuses them as for any portal.
  *
  * <p><b>Detection.</b> Only a move that crosses into another block is looked at, and the
  * portal is found through the registry's chunk index. Entry fires when the new block is in
  * a portal and the old one was not in the same portal, so walking around inside a portal
- * does nothing. Spectators are ignored.
+ * does nothing. Players in spectator mode are ignored by waiting-room portals.
  *
  * <p><b>Teleports.</b> A teleport that lands inside a portal does not enter it: commands,
  * other plugins and the restore path all teleport players, and a player returned home next
@@ -69,6 +72,7 @@ public final class PortalListener implements Listener {
     private final Supplier<Runnable> acquireWorld;
     private final ArenaAdmission admission;
     private final Consumer<UUID> onQuit;
+    private final BiConsumer<Player, String> onSpectate;
 
     /** Players whose entry is waiting for the waiting room's chunk. */
     private final Map<UUID, Object> entering = new HashMap<>();
@@ -86,12 +90,20 @@ public final class PortalListener implements Listener {
     public PortalListener(Plugin plugin, PortalRegistry portals, PortalEntry entry, Supplier<World> arenaWorld,
             SnapshotService snapshots, Consumer<UUID> onQuit, BiConsumer<Player, String> onEnter,
             Supplier<Runnable> acquireWorld) {
+        this(plugin, portals, entry, arenaWorld, new ArenaAdmission(plugin, entry, arenaWorld, snapshots, onEnter),
+                onQuit, acquireWorld, (player, arena) -> { });
+    }
+
+    public PortalListener(Plugin plugin, PortalRegistry portals, PortalEntry entry, Supplier<World> arenaWorld,
+            ArenaAdmission admission, Consumer<UUID> onQuit, Supplier<Runnable> acquireWorld,
+            BiConsumer<Player, String> onSpectate) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.portals = Objects.requireNonNull(portals, "portals");
         this.entry = Objects.requireNonNull(entry, "entry");
         this.arenaWorld = Objects.requireNonNull(arenaWorld, "arenaWorld");
         this.acquireWorld = Objects.requireNonNull(acquireWorld, "acquireWorld");
-        this.admission = new ArenaAdmission(plugin, entry, arenaWorld, snapshots, onEnter);
+        this.admission = Objects.requireNonNull(admission, "admission");
+        this.onSpectate = Objects.requireNonNull(onSpectate, "onSpectate");
         this.onQuit = Objects.requireNonNull(onQuit, "onQuit");
     }
 
@@ -107,7 +119,7 @@ public final class PortalListener implements Listener {
         }
         Player player = event.getPlayer();
         UUID playerId = player.getUniqueId();
-        if (player.getGameMode() == GameMode.SPECTATOR || entering.containsKey(playerId)) {
+        if ((!portal.spectator() && player.getGameMode() == GameMode.SPECTATOR) || entering.containsKey(playerId)) {
             return;
         }
         Location outside = event.getFrom().clone();
@@ -119,7 +131,10 @@ public final class PortalListener implements Listener {
             tell(player, refusal.get());
             return;
         }
-        ArenaPoint room = entry.waitingRoom(portal).orElseThrow();
+        // A player-built portal is bound to an arena for this entry; the checks above routed it
+        // the same way in this tick.
+        Portal target = entry.route(portal).orElseThrow();
+        ArenaPoint room = entry.destination(target).orElseThrow();
         Object request = new Object();
         Runnable releaseWorld;
         try {
@@ -135,7 +150,7 @@ public final class PortalListener implements Listener {
                         try {
                             if (!later(() -> {
                                 try {
-                                    enter(playerId, request, portal, outside, error);
+                                    enter(playerId, request, portal, target, outside, error);
                                 } finally {
                                     releaseWorld.run();
                                 }
@@ -170,7 +185,9 @@ public final class PortalListener implements Listener {
         onQuit.accept(playerId);
     }
 
-    private void enter(UUID playerId, Object request, Portal portal, Location outside, Throwable error) {
+    /** @param target the portal as routed when the player walked in, which the admission uses */
+    private void enter(UUID playerId, Object request, Portal portal, Portal target, Location outside,
+            Throwable error) {
         if (!entering.remove(playerId, request)) {
             // The player left while the chunk loaded.
             return;
@@ -189,7 +206,7 @@ public final class PortalListener implements Listener {
                 || !isAt(portal, player.getLocation())) {
             return;
         }
-        admission.enter(player, portal.arena(), message -> {
+        admission.enter(player, target, onSpectate, message -> {
             if (portal.equals(portals.at(player.getLocation()))) {
                 player.teleport(outside, TeleportCause.PLUGIN);
             }

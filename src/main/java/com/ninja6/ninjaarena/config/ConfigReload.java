@@ -4,6 +4,8 @@ import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
+import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
@@ -28,7 +30,18 @@ public final class ConfigReload {
         void waiting(WaitingRoomSettings settings);
         void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring);
         void tools(ToolSettings settings);
+        default void spectating(SpectatorSettings settings) {
+        }
+        /** New {@code player-portals} settings, for the next portal lit and the curtain colour. */
+        default void playerPortals(PlayerPortalSettings settings) {
+        }
         void kit(KitDefinition definition);
+        /** A new {@code stats.season}: archive the current season and start this one. */
+        default void season(String name) {
+        }
+        default boolean eventArenaExists(String arena) {
+            return true;
+        }
         default void configuration(ConfigurationSection settings) {
         }
     }
@@ -63,7 +76,7 @@ public final class ConfigReload {
     public List<String> reload() {
         ReloadFiles.Candidate candidate;
         try {
-            candidate = ReloadFiles.read(configFile, kitFile, items);
+            candidate = ReloadFiles.read(configFile, kitFile, items, target::eventArenaExists);
         } catch (ReloadYaml.Invalid e) {
             return List.of("The Arena reload was rejected: " + e.getMessage() + ". Nothing changed.");
         }
@@ -76,7 +89,8 @@ public final class ConfigReload {
             if (effective.isConfigurationSection(path) || same(effective.get(path), next.get(path))) {
                 continue;
             }
-            if (path.startsWith("director.") || path.startsWith("stability.")) {
+            if (path.startsWith("director.") || path.startsWith("stability.")
+                    || path.startsWith("stats.") && !path.equals("stats.season")) {
                 refused.add(path + " (restart required)");
                 next.set(path, effective.get(path));
             } else if (path.equals("arena-grid.cell-size") || path.equals("arena-world.border-size")) {
@@ -135,8 +149,16 @@ public final class ConfigReload {
         if (differs("tools.", next)) {
             target.tools(ToolSettings.from(next.getConfigurationSection("tools")));
         }
+        if (differs(PlayerPortalSettings.SECTION + ".", next)) {
+            target.playerPortals(PlayerPortalSettings.from(next.getConfigurationSection(PlayerPortalSettings.SECTION)));
+        }
+        // Apply validated admission settings even if startup fell back to disabling spectating.
+        target.spectating(SpectatorSettings.from(next.getConfigurationSection("spectating")));
         if (kitChanged) {
             target.kit(candidate.kit());
+        }
+        if (!same(effective.get("stats.season"), next.get("stats.season"))) {
+            target.season(next.getString("stats.season"));
         }
         target.configuration(next);
         effective = next;

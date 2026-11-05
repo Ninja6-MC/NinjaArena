@@ -13,6 +13,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.block.BlockType;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemType;
 import org.bukkit.inventory.MenuType;
@@ -54,6 +55,23 @@ public final class TestRegistryAccess implements RegistryAccess {
                                             case "stone" -> 64;
                                             default -> throw new UnsupportedOperationException("stack limit: " + value);
                                         };
+                                        default -> throw new UnsupportedOperationException(m.getName());
+                                    });
+                        }
+                        if (name.equals("block")) {
+                            // Items that are not blocks have no block type, as on a server.
+                            if (Set.of("diamond", "flint_and_steel", "wooden_sword", "snowball").contains(value)) {
+                                return null;
+                            }
+                            boolean air = Set.of("air", "cave_air", "void_air").contains(value);
+                            boolean solid = !air && !Set.of("water", "lava", "fire", "soul_fire", "torch",
+                                    "short_grass").contains(value);
+                            return Proxy.newProxyInstance(BlockType.Typed.class.getClassLoader(),
+                                    new Class<?>[] {BlockType.Typed.class}, (p, m, a) -> switch (m.getName()) {
+                                        case "typed" -> p;
+                                        case "getKey" -> NamespacedKey.minecraft(value);
+                                        case "isAir" -> air;
+                                        case "isSolid" -> solid;
                                         default -> throw new UnsupportedOperationException(m.getName());
                                     });
                         }

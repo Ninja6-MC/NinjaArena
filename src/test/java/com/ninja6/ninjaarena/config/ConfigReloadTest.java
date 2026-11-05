@@ -9,7 +9,10 @@ import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.portal.LobbyMode;
+import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.tool.NinjaTools;
+import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
@@ -41,8 +44,11 @@ class ConfigReloadTest {
         boolean friendlyFire;
         ScoringSettings scoring;
         ToolSettings tools;
+        SpectatorSettings spectating;
+        PlayerPortalSettings playerPortals;
         KitDefinition kit;
         ConfigurationSection published;
+        String season;
         @Override public boolean canResize() { return empty; }
         @Override public void world(ArenaWorldSettings settings) {
             calls.add("world"); world = new ArenaWorldSettings(world.borderSize(), settings.viewDistance(), settings.simulationDistance());
@@ -57,7 +63,13 @@ class ConfigReloadTest {
             calls.add("match"); match = settings; this.friendlyFire = friendlyFire; this.scoring = scoring;
         }
         @Override public void tools(ToolSettings settings) { calls.add("tools"); tools = settings; }
+        @Override public void spectating(SpectatorSettings settings) { spectating = settings; }
+        @Override public void playerPortals(PlayerPortalSettings settings) {
+            calls.add("player-portals"); playerPortals = settings;
+        }
         @Override public void kit(KitDefinition kit) { calls.add("kit"); this.kit = kit; }
+        @Override public void season(String name) { calls.add("season"); season = name; }
+        @Override public boolean eventArenaExists(String arena) { return arena.equals("dojo"); }
         @Override public void configuration(ConfigurationSection settings) { published = settings; }
     }
 
@@ -78,6 +90,120 @@ class ConfigReloadTest {
     }
 
     @Test
+    void invalidEventRejectsAllChangesAndDoesNotExposeWebhook() throws Exception {
+        String event = "{id: friday, day: FRIDAY, time: '19:30', arena: dojo, duration-minutes: 90}";
+        String good = "events:\n  time-zone: Europe/Paris\n  announcement-lead-minutes: [30, 1]\n  schedule:\n    - ";
+        write(good + event, EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        var accepted = target.published;
+        assertEquals(1, accepted.getMapList("events.schedule").size());
+        target.calls.clear();
+        for (String bad : List.of(event.replace("19:30", "25:00"), event.replace("FRIDAY", "FUNDAY"),
+                event.replace("dojo", "unknown"), event.replace("90", "0"),
+                event.replace("90}", "90, typo: true}"), event + "\n    - " + event,
+                event.replace("90}", "90, bonus: {reward-id: missing}}"), "null",
+                event + "\n  webhook-url: 'http://example.test/secret-token'")) {
+            write(good + bad + "\nwaiting-room: {min-players: 3}\n", EMPTY_KIT);
+            String message = reload.reload().getFirst();
+            assertTrue(message.contains("rejected") && message.contains("events"), message);
+            assertFalse(message.contains("secret-token"));
+            assertEquals(accepted, target.published);
+            assertTrue(target.calls.isEmpty());
+        }
+    }
+
+    @Test
+    void rewardListsReloadAndAnInvalidRuleKeepsTheLastConfiguration() throws Exception {
+        String valid = """
+                rewards:
+                  milestones:
+                    - {id: veteran, stat: wins, threshold: 5, title: Veteran}
+                  placings:
+                    - {id: champion, stat: wins, rank: 1, trophy: Cup}
+                  vault: {enabled: true, amount-per-match: 2.5, daily-cap: 10}
+                """;
+        write(valid, EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        ConfigurationSection accepted = target.published;
+        assertEquals(1, accepted.getMapList("rewards.milestones").size());
+        write(valid.replace("rank: 1", "rank: 0"), EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("rejected"));
+        assertEquals(accepted, target.published);
+        write(valid.replace("2.5", "2.555"), EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("rejected"));
+        assertEquals(accepted, target.published);
+    }
+
+    @Test
+    void invalidSpectatorLimitKeepsTheLastValidSettings() throws Exception {
+        write("spectating: {enabled: false, max-per-match: 3}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertEquals(new SpectatorSettings(false, 3), target.spectating);
+
+        write("spectating: {enabled: true, max-per-match: 65}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("spectating.max-per-match"));
+        assertEquals(new SpectatorSettings(false, 3), target.spectating);
+    }
+
+    @Test
+    void lobbyAndPlayerCapsReloadImmediatelyAndBadValuesAreRejected() throws Exception {
+        write("waiting-room:\n  lobby: shared\n  min-players: 3\n  max-players: 8\n  team-size: 2\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertTrue(report.getFirst().contains("complete"), report.toString());
+        assertEquals(new WaitingRoomSettings(3, 8, 2, 30, 16, LobbyMode.SHARED), target.waiting);
+        assertTrue(report.get(1).contains("waiting-room.lobby"), report.toString());
+
+        write("waiting-room:\n  min-players: 4\n  max-players: 3\n", EMPTY_KIT);
+        report = reload.reload();
+        assertTrue(report.getFirst().contains("waiting-room.max-players: max-players must be 0 or at least"
+                + " min-players"), report.toString());
+        write("waiting-room:\n  lobby: everywhere\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("waiting-room.lobby: expected dedicated or shared"));
+        write("waiting-room:\n  team-size: 65\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("waiting-room.team-size"));
+        assertEquals(new WaitingRoomSettings(3, 8, 2, 30, 16, LobbyMode.SHARED), target.waiting);
+    }
+
+    @Test
+    void playerPortalSettingsReloadImmediatelyAndBadValuesAreRejected() throws Exception {
+        write("player-portals:\n  worlds:\n    - survival\n    - survival_nether\n  frame-material: gilded_blackstone\n"
+                + "  max-per-player: 3\n  min-distance: 64\n  color: '#FF8800'\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertTrue(report.getFirst().contains("complete"), report.toString());
+        assertTrue(report.get(1).contains("player-portals.worlds"), report.toString());
+        assertEquals(new PlayerPortalSettings(java.util.Set.of("survival", "survival_nether"),
+                org.bukkit.Material.GILDED_BLACKSTONE, 3, 64, 0xFF8800), target.playerPortals);
+        assertEquals(List.of("survival", "survival_nether"), target.published.getStringList("player-portals.worlds"));
+
+        target.calls.clear();
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertFalse(target.calls.contains("player-portals"), "unchanged settings are not applied again");
+
+        for (String bad : List.of("worlds: world", "worlds: [" + com.ninja6.ninjaarena.world.ArenaWorld.NAME + "]",
+                "worlds: [{a: b}]", "frame-material: obsidian", "frame-material: water", "color: teal",
+                "max-per-player: 1001", "min-distance: -1")) {
+            String key = "player-portals." + bad.substring(0, bad.indexOf(':'));
+            write("player-portals:\n  " + bad + "\n", EMPTY_KIT);
+            String message = reload.reload().getFirst();
+            assertTrue(message.contains("rejected") && message.contains(key), bad + ": " + message);
+        }
+        assertEquals(3, target.playerPortals.maxPerPlayer());
+    }
+
+    @Test
+    void placeholderLifetimeReloadsAndInvalidValuesKeepTheLastAcceptedValue() throws Exception {
+        write("placeholders: {cache-seconds: 12}\n", EMPTY_KIT);
+        assertTrue(reload.reload().get(1).contains("placeholders.cache-seconds"));
+        assertEquals(12, target.published.getInt("placeholders.cache-seconds"));
+
+        for (String invalid : List.of("0", "301", "1.5", "'20'")) {
+            write("placeholders: {cache-seconds: " + invalid + "}\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("placeholders.cache-seconds"), invalid);
+            assertEquals(12, target.published.getInt("placeholders.cache-seconds"));
+        }
+    }
+
+    @Test
     void bundledSchemaAndKitValidateWithoutCallingItemProviders() throws Exception {
         Files.writeString(dir.resolve("config.yml"), ReloadFiles.defaults().saveToString());
         Files.writeString(dir.resolve("kits.yml"), "format: 1\nitems:\n  - slot: 1\n    id: ninjaarena:shuriken\n    amount: 8\n");
@@ -91,7 +217,8 @@ class ConfigReloadTest {
         for (String key : defaults.getKeys(true)) {
             if (defaults.isConfigurationSection(key)) continue;
             var invalid = ReloadFiles.defaults();
-            invalid.set(key, defaults.get(key) instanceof Boolean ? "false" : "bad-number");
+            invalid.set(key, defaults.get(key) instanceof Boolean ? "false"
+                    : defaults.get(key) instanceof String ? List.of("not", "text") : "bad-number");
             write(invalid.saveToString(), EMPTY_KIT);
             var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate, key);
             assertTrue(failure.getMessage().contains(key), failure.getMessage());
@@ -210,12 +337,58 @@ class ConfigReloadTest {
     }
 
     @Test
+    void shadowStalkerSettingsAreValidatedAndNeedARestart() throws Exception {
+        write("director:\n  shadow-stalker:\n    blink:\n      distance: 30.0\n", EMPTY_KIT);
+        var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate);
+        assertTrue(failure.getMessage().contains("director.shadow-stalker.blink.distance"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("blink range must not be below blink distance"));
+        write("director:\n  shadow-stalker:\n    blink:\n      distance: 30.0\n      range: 20.0\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("director.shadow-stalker.blink.range"));
+        write("director:\n  shadow-stalker:\n    max-alive: 6\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage().contains("must be from 0.0 to 5.0"));
+        write("director:\n  shadow-stalker:\n    health: 80.0\n", EMPTY_KIT);
+        assertTrue(reload.reload().get(3).contains("director.shadow-stalker.health (restart required)"));
+        assertEquals(40.0, target.published.getDouble("director.shadow-stalker.health"));
+    }
+
+    @Test
     void settingsOutsideTheReloadTableRemainRestartOnly() throws Exception {
         write("director:\n  debug: true\nstability:\n  max-concurrent-matches: 5\n", EMPTY_KIT);
         assertTrue(reload.reload().get(3).contains("director.debug (restart required)"));
         assertTrue(reload.reload().get(3).contains("stability.max-concurrent-matches (restart required)"));
         assertTrue(target.calls.isEmpty());
         assertFalse(target.published.getBoolean("director.debug"));
+    }
+
+    @Test
+    void aNewSeasonAppliesOnReloadWhileStatsStorageStaysRestartOnly() throws Exception {
+        write("stats:\n  season: Season 2\n  storage: mysql\n  mysql:\n    password: changed\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertEquals(List.of("season"), target.calls);
+        assertEquals("Season 2", target.season);
+        assertEquals("Changed: stats.season.", report.get(1));
+        assertTrue(report.get(3).contains("stats.storage (restart required)"), report.get(3));
+        assertTrue(report.get(3).contains("stats.mysql.password (restart required)"), report.get(3));
+        assertFalse(String.join(" ", report).contains("changed"), report.toString());
+        assertEquals("sqlite", target.published.getString("stats.storage"));
+        target.calls.clear();
+        reload.reload();
+        assertTrue(target.calls.isEmpty());
+    }
+
+    @Test
+    void statsTextSettingsAreValidatedOnReload() throws Exception {
+        for (String config : List.of("stats:\n  storage: postgres\n", "stats:\n  season: 2026\n",
+                "stats:\n  season: ''\n", "stats:\n  table-prefix: Bad-Prefix\n",
+                "stats:\n  sqlite:\n    file: ../stats.db\n", "stats:\n  mysql:\n    port: 70000\n")) {
+            write(config, EMPTY_KIT);
+            var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate, config);
+            assertTrue(failure.getMessage().contains("stats."), failure.getMessage());
+        }
+        write("stats:\n  season: 2026\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("config.yml: line 2: stats.season: expected text"));
+        assertTrue(target.calls.isEmpty());
     }
 
     @Test

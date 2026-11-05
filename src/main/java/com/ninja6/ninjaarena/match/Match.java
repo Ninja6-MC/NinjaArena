@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.match.MatchUpdate.PlayerEliminated;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerLeft;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundStarted;
+import com.ninja6.ninjaarena.event.EventSettings.Bonus;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -76,6 +77,7 @@ public final class Match implements MatchView {
     private boolean reachedOverrun;
     private MatchResult result;
     private boolean closed;
+    private final Bonus eventBonus;
 
     /**
      * @param arena     the arena's name
@@ -84,6 +86,11 @@ public final class Match implements MatchView {
      * @param standings ranks the teams after the last round
      */
     public Match(String arena, List<List<UUID>> teams, MatchSettings settings, MatchStandings standings) {
+        this(arena, teams, settings, standings, Bonus.NONE);
+    }
+
+    Match(String arena, List<List<UUID>> teams, MatchSettings settings, MatchStandings standings, Bonus eventBonus) {
+        this.eventBonus = eventBonus;
         this.arena = Objects.requireNonNull(arena, "arena");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.standings = Objects.requireNonNull(standings, "standings");
@@ -354,6 +361,11 @@ public final class Match implements MatchView {
             teams.add(teamOf.get(player));
         }
         return List.copyOf(teams);
+    }
+
+    @Override
+    public Bonus eventBonus() {
+        return eventBonus;
     }
 
     @Override

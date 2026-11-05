@@ -31,6 +31,11 @@ import java.util.function.DoubleSupplier;
  * player it chases ({@link TargetWeigher#keepsTarget}); an enemy that loses track is drawn
  * one of the other players, or none when nobody else is left.
  *
+ * <p><b>Shadow Stalker.</b> At most {@link StalkerSettings#maxAlive()} are alive in the match
+ * at once; while that many are, the director spends the budget on the other kinds. A
+ * Stalker is drawn only from the leading team's players while one team leads, and one whose
+ * target falls off the leading team is drawn a new one.
+ *
  * <p>Holds no server state: the spawner, the gate and the random source are passed in, and
  * time is the calls to {@link #tick()}. Not thread-safe: call it from the server thread.
  */
@@ -94,6 +99,7 @@ public final class MatchDirector {
     private final SpawnGate gate;
     private final TargetWeigher weigher;
     private final DoubleSupplier random;
+    private final StalkerSettings stalker;
     private final DamageWindow damage;
     private final List<Tracked> enemies = new ArrayList<>();
 
@@ -107,6 +113,17 @@ public final class MatchDirector {
      */
     public MatchDirector(MatchView match, IntensitySettings settings, ThreatBudget budget, EnemyCosts costs,
             MatchStandings standings, Spawner spawner, SpawnGate gate, TargetWeigher weigher, DoubleSupplier random) {
+        this(match, settings, budget, costs, standings, spawner, gate, weigher, random, StalkerSettings.DEFAULTS);
+    }
+
+    /**
+     * @param standings how teams are scored, for the leading-team bias
+     * @param random    a number from 0 (inclusive) to 1 (exclusive) on each call
+     * @param stalker   the Shadow Stalker settings; only {@link StalkerSettings#maxAlive()} is used
+     */
+    public MatchDirector(MatchView match, IntensitySettings settings, ThreatBudget budget, EnemyCosts costs,
+            MatchStandings standings, Spawner spawner, SpawnGate gate, TargetWeigher weigher, DoubleSupplier random,
+            StalkerSettings stalker) {
         this.match = Objects.requireNonNull(match, "match");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.budget = Objects.requireNonNull(budget, "budget");
@@ -116,6 +133,7 @@ public final class MatchDirector {
         this.gate = Objects.requireNonNull(gate, "gate");
         this.weigher = Objects.requireNonNull(weigher, "weigher");
         this.random = Objects.requireNonNull(random, "random");
+        this.stalker = Objects.requireNonNull(stalker, "stalker");
         damage = new DamageWindow(settings.damageWindowSeconds());
     }
 
@@ -234,6 +252,8 @@ public final class MatchDirector {
                 }
             } else if (target == null || !match.isAlive(target)) {
                 enemy.target(Targeting.pick(weights.of(enemy.kind()), random));
+            } else if (enemy.kind().huntsLeaders() && strays(weights.of(enemy.kind()), target)) {
+                enemy.target(Targeting.pick(weights.of(enemy.kind()), random));
             } else if (!weigher.keepsTarget(match, enemy, target)) {
                 Map<UUID, Double> others = new LinkedHashMap<>(weights.of(enemy.kind()));
                 others.remove(target);
@@ -249,7 +269,8 @@ public final class MatchDirector {
         boolean refused = false;
         while (true) {
             double gap = threat - inPlay;
-            List<EnemyKind> affordable = usable.stream().filter(kind -> kind.cost(costs) <= gap).toList();
+            List<EnemyKind> affordable = usable.stream()
+                    .filter(kind -> kind.cost(costs) <= gap && alive(kind) < kind.maxAlive(stalker)).toList();
             if (affordable.isEmpty()) {
                 // A successful fill is not a refusal; placement failures already explain themselves.
                 if (!placed && !refused) {
@@ -278,6 +299,28 @@ public final class MatchDirector {
         }
     }
 
+    /**
+     * Whether a hunter's target is no longer among the players it hunts: the lead changed
+     * hands. With nobody to hunt it keeps the target it has.
+     */
+    private static boolean strays(Map<UUID, Double> hunted, UUID target) {
+        return !hunted.isEmpty() && !hunted.containsKey(target);
+    }
+
+    /** The tracked enemies of the kind; only counted for kinds with a limit. */
+    private int alive(EnemyKind kind) {
+        if (kind.maxAlive(stalker) == Integer.MAX_VALUE) {
+            return 0;
+        }
+        int count = 0;
+        for (Tracked tracked : enemies) {
+            if (tracked.enemy().kind() == kind) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private int index(int size) {
         double roll = Math.clamp(random.getAsDouble(), 0, Math.nextDown(1.0));
         return Math.min(size - 1, (int) (roll * size));
@@ -289,8 +332,10 @@ public final class MatchDirector {
         private final Map<EnemyKind, Map<UUID, Double>> byKind = new EnumMap<>(EnemyKind.class);
 
         Map<UUID, Double> of(EnemyKind kind) {
-            return byKind.computeIfAbsent(kind,
-                    key -> Targeting.weights(match, standings, settings.leaderBias(), weigher, key));
+            return byKind.computeIfAbsent(kind, key -> {
+                Map<UUID, Double> weights = Targeting.weights(match, standings, settings.leaderBias(), weigher, key);
+                return key.huntsLeaders() ? Targeting.hunt(match, standings, weights) : weights;
+            });
         }
     }
 }

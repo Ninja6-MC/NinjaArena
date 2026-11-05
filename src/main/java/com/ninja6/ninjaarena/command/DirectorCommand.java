@@ -91,7 +91,7 @@ public final class DirectorCommand {
         int count = 0;
         for (MatchDirector.InPlay inPlay : director.inPlay()) {
             count += inPlay.count();
-            kinds.add(inPlay.count() + " " + inPlay.kind().name().toLowerCase(Locale.ROOT) + " (threat "
+            kinds.add(inPlay.count() + " " + inPlay.kind().label() + " (threat "
                     + inPlay.threat() + ")");
         }
         line(sender, "Enemies in play", count + ", threat " + format(director.threatInPlay())
