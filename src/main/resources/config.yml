@@ -19,8 +19,9 @@ resource-pack:
   # Same-server Geyser-Spigot hook. Restart after changing any of these settings.
   bedrock:
     enabled: false
-    # Operator assertion only: Geyser enforces packs and the matching mappings are installed.
-    # This never records a successful load. Off keeps Bedrock tools vanilla.
+    # Operator declaration: matching mappings are installed and Geyser enforces packs.
+    # Also requires gameplay.force-resource-packs: true in Geyser's config.yml (checked
+    # on enable and successful reload). This never records a successful client load.
     geyser-enforces-packs: false
     # Copy pinned release files into the NinjaArena data folder, outside Geyser's packs folder.
     standard:

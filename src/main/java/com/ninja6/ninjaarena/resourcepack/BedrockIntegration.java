@@ -12,8 +12,10 @@ public interface BedrockIntegration extends AutoCloseable {
 
     boolean isBedrock(UUID player);
 
-    /** Operator assertion plus a selected pack, never evidence of client loading. */
+    /** Operator declaration, verified enforcement config and a selected pack; never client load evidence. */
     boolean customHeld(UUID player);
+
+    default void refreshEnforcement() { }
 
     default java.util.Optional<BedrockSelections> selections() { return java.util.Optional.empty(); }
 
