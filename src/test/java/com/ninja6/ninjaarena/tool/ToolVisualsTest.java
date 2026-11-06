@@ -105,6 +105,27 @@ class ToolVisualsTest {
     }
 
     @Test
+    void operatorAssertionAllowsBedrockHeldModelsWithoutClaimingLoadedOrEnablingFlight() {
+        loaded.remove(thrower);
+        var asserted = new ToolVisuals(loaded::contains, id -> true, () -> true,
+                arena -> List.of(spectator), id -> Optional.of(match), (tool, custom, color) -> {
+                    creations.add(custom);
+                    return vanilla;
+                }, () -> vanilla);
+        asserted.give(NinjaTool.SHURIKEN, player(thrower));
+        assertEquals(List.of(true), creations);
+        assertFalse(asserted.customFlight(match, world));
+        assertFalse(loaded.contains(thrower));
+        var optional = new ToolVisuals(loaded::contains, id -> false, () -> true,
+                arena -> List.of(spectator), id -> Optional.of(match), (tool, custom, color) -> {
+                    creations.add(custom);
+                    return vanilla;
+                }, () -> vanilla);
+        optional.give(NinjaTool.SMOKE_BOMB, player(thrower));
+        assertEquals(List.of(true, false), creations);
+    }
+
+    @Test
     void flightSetsAnExplicitVanillaStackAndDoesNotChangeItsDecisionLater() {
         List<ItemStack> assigned = new ArrayList<>();
         World arena = proxy(World.class, (name, args) -> {
@@ -144,6 +165,7 @@ class ToolVisualsTest {
             assertEquals(new NamespacedKey("ninjaarena", tool == NinjaTool.SMOKE_BOMB ? "smoke_bomb" : tool.key()),
                     changed.get("setItemModel"));
             assertEquals(List.of(Color.fromRGB(0xFF5555)), changed.get("setColors"));
+            assertEquals(List.of("red"), changed.get("setStrings"));
             assertSame(data, changed.get("setCustomModelDataComponent"));
             changed.clear();
             tool.appearance(meta, false, 0xFF5555);
@@ -151,5 +173,12 @@ class ToolVisualsTest {
             assertNull(changed.get("setItemModel"));
             assertEquals(1, changed.size());
         }
+    }
+
+    @Test
+    void appearanceMarkersMatchEveryTeamAndNeutral() {
+        assertEquals(List.of("white", "red", "blue", "green", "yellow"),
+                java.util.stream.IntStream.rangeClosed(0, 4).map(ToolVisuals::teamColor)
+                        .mapToObj(NinjaTool::accentMarker).toList());
     }
 }

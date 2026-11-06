@@ -8,7 +8,7 @@ description: Team vs Team vs Enemies arena with ninja stealth mechanics.
 # Paper only. Folia refuses to enable a plugin that does not declare support, and this one
 # deliberately does not.
 folia-supported: false
-softdepend: [PlaceholderAPI, Vault]
+softdepend: [PlaceholderAPI, Vault, Geyser-Spigot, floodgate]
 
 commands:
   # The long name is the registered root and the short one an alias, so a collision on the

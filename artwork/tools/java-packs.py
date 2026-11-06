@@ -142,9 +142,9 @@ def verify(root, folder, version, source, run_id, attempt):
             "run_id": str(run_id), "attempt": str(attempt), "result": "passed"}
 
 
-def publish(root, folder, evidence_file, version, source, run_id, attempt):
+def publish(root, folder, evidence_file, version, source, run_id, attempt, *, verifier=None, manifest_name="manifest.json"):
     evidence = read_json(evidence_file)
-    expected = verify(root, folder, version, source, run_id, attempt)
+    expected = (verifier or verify)(root, folder, version, source, run_id, attempt)
     if any(evidence.get(key) != value for key, value in expected.items()) or not evidence.get("verification_run_id") or not evidence.get("verification_attempt"):
         raise ValueError("passing verification evidence is missing or does not identify this candidate")
     if version_channel(version) == "snapshot":
@@ -163,8 +163,8 @@ def publish(root, folder, evidence_file, version, source, run_id, attempt):
                                                  "--json", "tagName,isPrerelease,isDraft,assets"], text=True))
     if release["isDraft"] or release["tagName"] != version or release["isPrerelease"] != (version_channel(version) == "prerelease"):
         raise ValueError("published release tag/channel mismatch")
-    manifest = read_json(folder / "manifest.json")
-    intended = set(manifest["files"]) | {"manifest.json"}
+    manifest = read_json(folder / manifest_name)
+    intended = set(manifest["files"]) | {manifest_name}
     existing = {asset["name"] for asset in release["assets"]} & intended
     with tempfile.TemporaryDirectory() as temp:
         for name in sorted(existing):

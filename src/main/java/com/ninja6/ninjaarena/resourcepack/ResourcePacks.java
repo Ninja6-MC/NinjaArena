@@ -45,18 +45,25 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
     private final ResourcePackSettings settings;
     private final Transport transport;
     private final LongSupplier ticks;
+    private final java.util.function.Predicate<UUID> bedrock;
     private final Map<UUID, Connection> connections = new HashMap<>();
     private boolean closed;
 
     public ResourcePacks(ResourcePackSettings settings, Transport transport, LongSupplier ticks) {
+        this(settings, transport, ticks, player -> false);
+    }
+
+    public ResourcePacks(ResourcePackSettings settings, Transport transport, LongSupplier ticks,
+            java.util.function.Predicate<UUID> bedrock) {
         this.settings = java.util.Objects.requireNonNull(settings, "settings");
         this.transport = java.util.Objects.requireNonNull(transport, "transport");
         this.ticks = java.util.Objects.requireNonNull(ticks, "ticks");
+        this.bedrock = java.util.Objects.requireNonNull(bedrock, "Bedrock detector");
     }
 
     /** One base request per connection, even after failure. A reconnect starts a new attempt. */
     public void join(UUID player) {
-        if (closed || !settings.enabled() || connections.containsKey(player)) {
+        if (closed || !settings.enabled() || bedrock.test(player) || connections.containsKey(player)) {
             return;
         }
         Connection connection = new Connection(ticks.getAsLong());
@@ -76,13 +83,13 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
     @Override
     public boolean loaded(UUID player) {
         Connection connection = connections.get(player);
-        return !closed && connection != null && connection.base.phase == Phase.LOADED;
+        return !closed && !bedrock.test(player) && connection != null && connection.base.phase == Phase.LOADED;
     }
 
     /** Only statuses for this connection's requested identities affect it. */
     public void status(UUID player, UUID pack, Status status) {
         Connection connection = connections.get(player);
-        if (closed || connection == null) {
+        if (closed || bedrock.test(player) || connection == null) {
             return;
         }
         boolean base = settings.base().id().equals(pack);

@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -244,6 +245,42 @@ class ConfigReloadTest {
         assertFalse(target.published.getBoolean("resource-pack.enabled"));
         assertFalse(target.published.getBoolean("resource-pack.thrown-visuals"));
         assertEquals("", target.published.getString("resource-pack.url"));
+    }
+
+    private static String bedrockConfig() {
+        return packConfig() + "  bedrock:\n    enabled: true\n    geyser-enforces-packs: true\n"
+                + "    standard:\n      file: standard.mcpack\n      sha256: '" + "a".repeat(64) + "'\n";
+    }
+
+    @Test
+    void bedrockAssertionAndFilePinsValidateButRequireRestart() throws Exception {
+        assertFalse(ReloadFiles.defaults().getBoolean("resource-pack.bedrock.geyser-enforces-packs"));
+        write(bedrockConfig(), EMPTY_KIT);
+        assertTrue(candidate().config().getBoolean("resource-pack.bedrock.geyser-enforces-packs"));
+        var report = reload.reload();
+        for (String key : List.of("enabled", "geyser-enforces-packs", "standard.file", "standard.sha256")) {
+            assertTrue(report.get(3).contains("resource-pack.bedrock." + key + " (restart required)"), report.toString());
+        }
+        assertFalse(target.published.getBoolean("resource-pack.bedrock.geyser-enforces-packs"));
+        assertEquals("", target.published.getString("resource-pack.bedrock.standard.file"));
+    }
+
+    @Test
+    void invalidBedrockCandidateRollsBackBothFilesAndAllServices() throws Exception {
+        write("waiting-room: {radius: 8}\n", EMPTY_KIT);
+        reload.reload();
+        var accepted = target.published;
+        target.calls.clear();
+        for (String bad : List.of(bedrockConfig().replace("geyser-enforces-packs: true", "geyser-enforces-packs: 'true'"),
+                bedrockConfig().replace("standard.mcpack", "../standard.mcpack"),
+                bedrockConfig().replace("a".repeat(64), "bad-hash"),
+                bedrockConfig().replace("standard:", "unknown:"))) {
+            write(bad + "waiting-room: {radius: 12}\n", "format: 1\nitems:\n  - slot: 1\n    material: STICK\n");
+            var report = reload.reload();
+            assertTrue(report.getFirst().contains("rejected"), report.toString());
+            assertSame(accepted, target.published);
+            assertTrue(target.calls.isEmpty());
+        }
     }
 
     @Test

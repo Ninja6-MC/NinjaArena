@@ -9,6 +9,7 @@ import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
 import com.ninja6.ninjaarena.stats.StatsSettings;
 import com.ninja6.ninjaarena.reward.RewardSettings;
 import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
+import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -144,6 +145,7 @@ public final class ReloadFiles {
         }
         try {
             ResourcePackSettings.from(result.getConfigurationSection("resource-pack"));
+            BedrockPackSettings.from(result.getConfigurationSection("resource-pack"));
         } catch (IllegalArgumentException e) {
             throw document.invalid("resource-pack", e.getMessage());
         }

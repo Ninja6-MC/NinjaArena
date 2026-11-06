@@ -16,6 +16,19 @@ resource-pack:
     url: ''
     sha1: ''
     id: ''
+  # Same-server Geyser-Spigot hook. Restart after changing any of these settings.
+  bedrock:
+    enabled: false
+    # Operator assertion only: Geyser enforces packs and the matching mappings are installed.
+    # This never records a successful load. Off keeps Bedrock tools vanilla.
+    geyser-enforces-packs: false
+    # Copy pinned release files into the NinjaArena data folder, outside Geyser's packs folder.
+    standard:
+      file: ''
+      sha256: ''
+    detailed:
+      file: ''
+      sha256: ''
 
 arena-world:
   # Hard gameplay diameter in blocks (16..2048), centred on 0, 0. Bounds and visits

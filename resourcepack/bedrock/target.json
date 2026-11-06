@@ -1,0 +1,12 @@
+{
+  "min_engine_version": [1, 21, 0],
+  "snapshot_version": [0, 0, 1],
+  "standard": {
+    "header_uuid": "91de2af7-4a74-4dd8-8ac9-e09b8ec83aad",
+    "module_uuid": "74f4bb2b-1430-4555-8816-f686971459f2"
+  },
+  "detailed": {
+    "header_uuid": "a232ba22-3d8d-4680-b5d8-35a966028dfa",
+    "module_uuid": "1bb9cb29-7daf-46fa-a632-c62b6ca341aa"
+  }
+}
