@@ -51,6 +51,28 @@ class NinjaArenaCommandTest {
     private boolean waiting;
 
     @Test
+    void packStatusIsAdminOnlyReadOnlyAndHasStrictSyntax() {
+        int[] reads = {0};
+        String status = com.ninja6.ninjaarena.resourcepack.PackStatus.describe(
+                com.ninja6.ninjaarena.resourcepack.ResourcePackSettings.OFF,
+                "vanilla (same-server Geyser absent, disabled or unavailable)");
+        command.setPackStatus(() -> { reads[0]++; return status; });
+        Player admin = playerWithPermissions(NinjaArenaCommand.ADMIN);
+        Player player = playerWithPermissions(NinjaArenaCommand.PLAY);
+        run(player, "pack status");
+        assertEquals(0, reads[0]);
+        assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"pack", ""}));
+        assertEquals(List.of("status"), command.onTabComplete(admin, null, "narena", new String[] {"pack", "s"}));
+        run(admin, "pack status extra");
+        run(admin, "pack reload");
+        assertEquals(0, reads[0]);
+        run(admin, "pack status");
+        assertEquals(1, reads[0]);
+        assertEquals(status, messages.getLast());
+        assertTrue(status.contains("Java: disabled; Bedrock: vanilla"));
+    }
+
+    @Test
     void eventPermissionAloneOpensTheRouteAndProtectsItsCompletions() {
         var night = new com.ninja6.ninjaarena.event.EventSettings.Night("friday", java.time.DayOfWeek.FRIDAY,
                 java.time.LocalTime.NOON, "dojo", java.time.Duration.ofHours(1),
@@ -250,6 +272,7 @@ class NinjaArenaCommandTest {
                 "/narena arena <subcommand> - create, edit and set up arenas",
                 "/narena portal <subcommand> - mark out portals that lead to arenas",
                 "/narena director [arena] - show the enemy director of a running match",
+                "/narena pack status - show Java and Bedrock resource pack state",
                 "/narena admin reload - safely reload the Arena configuration");
         assertEquals("The Arena commands:", messages.get(0));
         assertEquals(help, messages.subList(1, messages.size()));
@@ -289,7 +312,7 @@ class NinjaArenaCommandTest {
         CommandSender sender = console(true);
         run(sender, "arena create dojo");
         assertEquals(List.of("arena", "admin"), command.onTabComplete(sender, null, "narena", new String[] {"a"}));
-        assertEquals(List.of("help", "arena", "portal", "director", "admin"),
+        assertEquals(List.of("help", "arena", "portal", "director", "pack", "admin"),
                 command.onTabComplete(sender, null, "narena", new String[] {""}));
         assertEquals(List.of("setbounds", "setwaitingroom", "setteamspawn"),
                 command.onTabComplete(sender, null, "narena", new String[] {"arena", "set"}));

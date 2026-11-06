@@ -17,6 +17,7 @@ import org.geysermc.geyser.api.pack.option.ResourcePackOption;
 /** Same-server Paper adapter. Only public Geyser API classes belong in this package. */
 public final class GeyserPackHook implements BedrockIntegration, EventRegistrar {
     private final GeyserApi api;
+    private final BedrockPackSettings settings;
     private final GeyserEnforcement enforcement;
     private BedrockSelections selections;
     private ResourcePack standard;
@@ -25,7 +26,8 @@ public final class GeyserPackHook implements BedrockIntegration, EventRegistrar 
 
     public GeyserPackHook(Plugin plugin, BedrockPackSettings settings) {
         this.api = GeyserApi.api();
-        enforcement = new GeyserEnforcement(settings.enabled() && settings.geyserEnforcesPacks(),
+        this.settings = settings;
+        enforcement = new GeyserEnforcement(settings.enabled() && settings.required(),
                 () -> GeyserConfigSource.find(plugin.getServer().getPluginManager()), plugin.getLogger()::warning);
         enforcement.evaluate();
         if (!settings.enabled()) return;
@@ -73,13 +75,19 @@ public final class GeyserPackHook implements BedrockIntegration, EventRegistrar 
     }
 
     @Override public boolean customHeld(UUID player) {
-        if (closed || !enforcement.allowed() || selections == null) return false;
+        if (closed || !settings.vanillaReason(selections != null, enforcement.allowed()).isEmpty()) return false;
         var connection = api.connectionByUuid(player);
         return connection != null && selections.selected(connection);
     }
 
     @Override public Optional<BedrockSelections> selections() {
         return closed ? Optional.empty() : Optional.ofNullable(selections);
+    }
+
+    @Override public String status() {
+        if (closed) return "vanilla (Geyser hook closed)";
+        String reason = settings.vanillaReason(selections != null, enforcement.allowed());
+        return reason.isEmpty() ? "custom held models eligible (client load unobserved)" : "vanilla (" + reason + ")";
     }
 
     @Override public void refreshEnforcement() {

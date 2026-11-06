@@ -41,6 +41,7 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]",
                     "show the enemy director of a running match"),
             new Route(EventCommand.NAME, EventCommand.PERMISSION, EventCommand.USAGE, "manage scheduled arena events"),
+            new Route("pack", ADMIN, "pack status", "show Java and Bedrock resource pack state"),
             new Route("admin", ADMIN, "admin reload", "safely reload the Arena configuration"));
 
     private final ArenaCommand arena;
@@ -52,6 +53,11 @@ public final class NinjaArenaCommand implements TabExecutor {
     private final BiConsumer<Player, String> spectate;
     private final LeaderboardCommand leaderboard;
     private final EventCommand event;
+    private java.util.function.Supplier<String> packStatus = () -> "Resource pack status unavailable.";
+
+    public void setPackStatus(java.util.function.Supplier<String> status) {
+        packStatus = Objects.requireNonNull(status);
+    }
 
     /**
      * @param leave takes the player out of their waiting room or match and sends them home;
@@ -177,6 +183,13 @@ public final class NinjaArenaCommand implements TabExecutor {
                         }
                     }
                 }
+                case "pack" -> {
+                    if (args.length == 2 && args[1].equalsIgnoreCase("status")) {
+                        sender.sendMessage(Component.text(packStatus.get(), NamedTextColor.YELLOW));
+                    } else {
+                        usage(sender, label, route.usage());
+                    }
+                }
                 case "admin" -> {
                     if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
                         if (reload == null) {
@@ -276,6 +289,8 @@ public final class NinjaArenaCommand implements TabExecutor {
             return List.of();
         }
         return switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "pack" -> args.length == 2 && "status".startsWith(args[1].toLowerCase(Locale.ROOT))
+                    ? List.of("status") : List.of();
             case "admin" -> args.length == 2 && "reload".startsWith(args[1].toLowerCase(Locale.ROOT))
                     ? List.of("reload") : List.of();
             case ArenaCommand.NAME -> arena.complete(sender, tail(args));

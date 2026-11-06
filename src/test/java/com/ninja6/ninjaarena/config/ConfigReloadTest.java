@@ -119,7 +119,7 @@ class ConfigReloadTest {
         assertTrue(gate.allowed());
         assertEquals(3, reads[0]);
         assertEquals(1, warnings.size());
-        write("resource-pack: {bedrock: {geyser-enforces-packs: 'true'}}", EMPTY_KIT);
+        write("resource-pack: {bedrock: {mappings-installed: 'true'}}", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("rejected"));
         assertEquals(3, reads[0], "invalid NinjaArena candidates must not change the enforcement gate");
         assertTrue(gate.allowed());
@@ -283,21 +283,33 @@ class ConfigReloadTest {
     }
 
     private static String bedrockConfig() {
-        return packConfig() + "  bedrock:\n    enabled: true\n    geyser-enforces-packs: true\n"
+        return packConfig() + "  bedrock:\n    mappings-installed: true\n"
                 + "    standard:\n      file: standard.mcpack\n      sha256: '" + "a".repeat(64) + "'\n";
     }
 
     @Test
     void bedrockAssertionAndFilePinsValidateButRequireRestart() throws Exception {
-        assertFalse(ReloadFiles.defaults().getBoolean("resource-pack.bedrock.geyser-enforces-packs"));
+        assertFalse(ReloadFiles.defaults().getBoolean("resource-pack.bedrock.mappings-installed"));
         write(bedrockConfig(), EMPTY_KIT);
-        assertTrue(candidate().config().getBoolean("resource-pack.bedrock.geyser-enforces-packs"));
+        assertTrue(candidate().config().getBoolean("resource-pack.bedrock.mappings-installed"));
         var report = reload.reload();
-        for (String key : List.of("enabled", "geyser-enforces-packs", "standard.file", "standard.sha256")) {
+        for (String key : List.of("mappings-installed", "standard.file", "standard.sha256")) {
             assertTrue(report.get(3).contains("resource-pack.bedrock." + key + " (restart required)"), report.toString());
         }
-        assertFalse(target.published.getBoolean("resource-pack.bedrock.geyser-enforces-packs"));
+        assertFalse(target.published.getBoolean("resource-pack.bedrock.mappings-installed"));
         assertEquals("", target.published.getString("resource-pack.bedrock.standard.file"));
+    }
+
+    @Test
+    void removedBedrockKeysNameTheirReplacementsAndChangeNothing() throws Exception {
+        for (String key : List.of("enabled", "geyser-enforces-packs")) {
+            write("resource-pack: {bedrock: {" + key + ": false}}", EMPTY_KIT);
+            var report = reload.reload();
+            assertTrue(report.getFirst().contains("resource-pack.bedrock." + key), report.toString());
+            assertTrue(report.getFirst().contains(key.equals("enabled") ? "resource-pack.enabled"
+                    : "resource-pack.required"), report.toString());
+            assertTrue(target.calls.isEmpty());
+        }
     }
 
     @Test
@@ -306,7 +318,7 @@ class ConfigReloadTest {
         reload.reload();
         var accepted = target.published;
         target.calls.clear();
-        for (String bad : List.of(bedrockConfig().replace("geyser-enforces-packs: true", "geyser-enforces-packs: 'true'"),
+        for (String bad : List.of(bedrockConfig().replace("mappings-installed: true", "mappings-installed: 'true'"),
                 bedrockConfig().replace("standard.mcpack", "../standard.mcpack"),
                 bedrockConfig().replace("a".repeat(64), "bad-hash"),
                 bedrockConfig().replace("standard:", "unknown:"))) {

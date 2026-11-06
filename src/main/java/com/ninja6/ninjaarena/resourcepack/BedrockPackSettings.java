@@ -10,11 +10,12 @@ import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.configuration.ConfigurationSection;
 
-/** Bedrock file pins and an explicit operator assertion, separate from Java pack outcomes. */
-public record BedrockPackSettings(boolean enabled, boolean geyserEnforcesPacks, Pack standard, Optional<Pack> detailed) {
+/** Bedrock file pins and a mapping-installation assertion; enforcement comes from Geyser. */
+public record BedrockPackSettings(boolean enabled, boolean required, boolean mappingsInstalled,
+        Pack standard, Optional<Pack> detailed) {
     public static final UUID STANDARD_ID = UUID.fromString("91de2af7-4a74-4dd8-8ac9-e09b8ec83aad");
     public static final UUID DETAILED_ID = UUID.fromString("a232ba22-3d8d-4680-b5d8-35a966028dfa");
-    public static final BedrockPackSettings OFF = new BedrockPackSettings(false, false, null, Optional.empty());
+    public static final BedrockPackSettings OFF = new BedrockPackSettings(false, true, false, null, Optional.empty());
 
     public record Pack(String file, String sha256) {
         public Pack {
@@ -64,12 +65,22 @@ public record BedrockPackSettings(boolean enabled, boolean geyserEnforcesPacks, 
         }
         ConfigurationSection section = resourcePack.getConfigurationSection("bedrock");
         if (section == null) return OFF;
-        boolean enabled = bool(section, "enabled", false);
-        boolean assertion = bool(section, "geyser-enforces-packs", false);
-        Pack standard = pack(section, "standard", enabled);
+        boolean mappings = bool(section, "mappings-installed", false);
+        Pack standard = pack(section, "standard", false);
         Pack detailed = pack(section, "detailed", false);
-        return new BedrockPackSettings(bool(resourcePack, "enabled", false) && enabled, assertion,
+        return new BedrockPackSettings(bool(resourcePack, "enabled", false) && standard != null,
+                bool(resourcePack, "required", true), mappings,
                 standard, Optional.ofNullable(detailed));
+    }
+
+    /** Server policy only; this never claims a successful client load. */
+    public String vanillaReason(boolean deliveryReady, boolean enforcement) {
+        if (!enabled) return "pack delivery disabled or Bedrock files not configured";
+        if (!required) return "resource-pack.required is false";
+        if (!deliveryReady) return "Bedrock pack files failed validation";
+        if (!mappingsInstalled) return "matching Geyser mappings are not declared installed";
+        if (!enforcement) return "set gameplay.force-resource-packs: true in Geyser (config missing, unreadable or not enforcing)";
+        return "";
     }
 
     private static Pack pack(ConfigurationSection section, String quality, boolean required) {

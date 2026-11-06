@@ -53,11 +53,11 @@ class GeyserEnforcementTest {
     private void assertOneWarning() {
         assertEquals(1, warnings.size());
         assertTrue(warnings.getFirst().contains(source.file().toAbsolutePath().toString()));
-        assertTrue(warnings.getFirst().contains("gameplay.force-resource-packs"));
+        assertTrue(warnings.getFirst().contains("set gameplay.force-resource-packs: true in Geyser"));
         assertTrue(warnings.getFirst().contains("Bedrock held models disabled"));
     }
 
-    @Test void declarationAndFileMustBothBeTrue() {
+    @Test void requiredPolicyAndFileMustBothBeTrue() {
         var gate = gate(true);
         assertFalse(gate.allowed());
         gate.evaluate();
@@ -103,7 +103,7 @@ class GeyserEnforcementTest {
         assertOneWarning();
     }
 
-    @Test void falseDeclarationDoesNotEvenLookUpGeyser() {
+    @Test void optionalPolicyDoesNotEvenLookUpGeyser() {
         var gate = new GeyserEnforcement(false, () -> {
             throw new AssertionError("must not look up a config source");
         }, warnings::add);

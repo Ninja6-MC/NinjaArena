@@ -13,12 +13,13 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Fixed
-- Bedrock held models now require both the operator declaration and
-  `gameplay.force-resource-packs: true` in Geyser-Spigot's own `config.yml`.
-  A bounded, read-only file check runs on enable and successful reload; false,
-  missing, unreadable or malformed settings warn once and retain vanilla models.
-  This reads the config file rather than a public API and cannot observe player
-  pack-load outcomes.
+- Resource pack delivery now uses shared `enabled` and `required` switches for Java
+  and Bedrock. Bedrock custom held models require Geyser's force-pack file check
+  and the narrowly scoped `bedrock.mappings-installed` assertion. Optional Bedrock
+  policy keeps vanilla tools without an enforcement warning. Removed Bedrock
+  switches are rejected on reload with replacements; file and SHA-256 keys stay.
+- Startup and admin-only `/narena pack status` report both platforms and the reason
+  for vanilla Bedrock tools. Status reads cached policy, not client load outcomes.
 - Idle arena worlds now unload without saving through the world lifecycle, releasing
   Paper's partial chunk holders as well as full chunks. A later use reopens the same world
   and restores authoritative arena copies before admission. Pending entry and teleport

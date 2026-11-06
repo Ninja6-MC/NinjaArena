@@ -440,7 +440,7 @@ class PortalCommandTest {
     void tabCompletesSubcommandsCornersAndNames() throws Exception {
         portals.create("lobby", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "dojo");
         CommandSender sender = player(true);
-        assertEquals(List.of("portal"), complete(sender, "p"));
+        assertEquals(List.of("portal", "pack"), complete(sender, "p"));
         assertEquals(List.of("setcorner", "create", "delete", "list", "info", "lobby", "sethub", "removehub"),
                 complete(sender, "portal", ""));
         assertEquals(List.of("1", "2"), complete(sender, "portal", "setcorner", ""));

@@ -140,7 +140,7 @@ whole stack. The quality menu will call this API later.
 
 Each flat `item/generated` model puts fixed artwork on `layer0` and grayscale
 accent on `layer1`. Only the accent reads the first `custom_model_data` colour.
-Teams 1–4 use `#FF5555`, `#5555FF`, `#55FF55`, `#FFFF55`; unassigned items use white.
+Teams 1â€“4 use `#FF5555`, `#5555FF`, `#55FF55`, `#FFFF55`; unassigned items use white.
 Recognition uses the `ninjaarena:tool` data tag alone, never model, name or colour.
 
 Only tool items given to a player with loaded Standard get a custom `item_model`.
@@ -247,7 +247,7 @@ models. Geyser does not convert Java packs or generate mappings at runtime.
    **outside Geyser's automatic `packs/` folder**, which otherwise offers all
    packs to everyone. Configure their exact plain filenames and SHA-256 below.
    Standard is required to enable this hook; Detailed may remain unconfigured.
-5. Configure Java delivery as above and enable the Bedrock hook. Restart Paper
+5. Configure Java delivery as above and configure the Bedrock files. Restart Paper
    after mapping, file or delivery-setting changes. An invalid file, hash or
    manifest identity disables Bedrock delivery with an operator error, keeping
    Bedrock tool visuals vanilla. Invalid reload candidates change nothing.
@@ -256,9 +256,9 @@ models. Geyser does not convert Java packs or generate mappings at runtime.
 resource-pack:
   # Also configure the Java url, sha1 and id described above.
   enabled: true
+  required: true
   bedrock:
-    enabled: true
-    geyser-enforces-packs: false
+    mappings-installed: false
     standard:
       file: 'NinjaArena-v0.1.0-rc.1-bedrock-standard.mcpack'
       sha256: '<64 hexadecimal characters from bedrock-manifest.json>'
@@ -274,46 +274,54 @@ the selected one, preserving unrelated packs. Files must remain immutable while
 the server is running. There is no automatic download, live quality swap,
 forced reconnect or repeated offer.
 
-## Bedrock acceptance and the operator assertion
+## Pack policy and status
 
-`resource-pack.required` controls Java delivery. **Geyser's negotiation settings
-control required versus optional Bedrock packs for the entire connection.**
-NinjaArena never changes them. In the checked Geyser source,
-`gameplay.force-resource-packs` or an active integrated pack forces acceptance
-of all offered packs. The integrated pack can therefore override an otherwise
-optional configuration. Operators must configure Geyser consistently with their
-intended policy. The held-model gate requires the explicit force setting even
-if Geyser's integrated pack would otherwise force acceptance.
+| Setting | Java | Bedrock |
+| --- | --- | --- |
+| `resource-pack.enabled` | Enables pack delivery | Enables delivery with enabled same-server Geyser and configured Standard files |
+| `resource-pack.required` | Kicks on decline or failure | Allows custom held models only with verified Geyser enforcement; false keeps vanilla tools without an enforcement warning |
+| `resource-pack.url` / `sha1` / `id` | Required Standard HTTPS pack identity and pin | No effect |
+| `resource-pack.detailed.url` / `sha1` / `id` | Optional overlay identity and pin | No effect |
+| `resource-pack.timeout-seconds` | Time limit for loading a pack | No second timer; Geyser owns negotiation |
+| `resource-pack.thrown-visuals` | Enables custom flight when every viewer loaded the pack | Flight remains vanilla |
+| `resource-pack.bedrock.mappings-installed` | No effect | Confirms matching mappings were installed; false keeps vanilla tools |
+| `resource-pack.bedrock.standard.file` / `sha256` | No effect | Required file pin for delivery |
+| `resource-pack.bedrock.detailed.file` / `sha256` | No effect | Optional quality file pin |
 
-Geyser exposes no public pack-load outcome. NinjaArena never marks a Bedrock
-connection loaded, even when `geyser-enforces-packs: true`. It skips Java pack
-offers and ignores Java success statuses for Bedrock players: Geyser can synthesize
-those statuses without loading the corresponding Bedrock pack.
+`resource-pack.bedrock.enabled` and `geyser-enforces-packs` were removed.
+Reload rejects either key and names its replacement. Use the shared enabled and
+required switches, and keep only the mapping-installation assertion. All pack
+settings except `thrown-visuals` remain restart-only.
 
-Leave the assertion **false** for optional packs or any uncertain deployment.
-Bedrock players then receive usable vanilla snowball/feather tools, even when
-the selected pack was offered. Set it **true** only after confirming Geyser
-requires packs and the matching mappings are installed. Custom held models also
-require `gameplay.force-resource-packs: true` in Geyser-Spigot's own `config.yml`.
-NinjaArena locates that file through Bukkit's plugin manager and the enabled
-Geyser plugin's data folder. It reads at most 256 KiB plus one overflow-detection
-byte, parses YAML strictly and accepts only a boolean true at the nested key.
-False, missing, unreadable, malformed or oversized config disables new custom
-held items and logs one operator warning naming the file and key per evaluation.
-Individual player checks neither read the file nor repeat that warning.
+Geyser's public API exposes definitions during its initialization event, but
+NinjaArena starts after Geyser and cannot query its loaded mapping registry.
+Checking for a JSON file would not prove Geyser loaded the matching definitions.
+Set `mappings-installed: true` only after installing matching mappings and enabling
+Geyser custom content. This option asserts installation only, never enforcement.
 
-The file check runs on enable and after every successful `/narena reload`, even
-if NinjaArena's settings did not change. Rejected reload candidates preserve
-the previous gate. The NinjaArena declaration itself remains restart-only.
-When it is false, or Geyser is absent/disabled, no config file is read. Already
-issued items are not rewritten; the next kit issue uses the reevaluated gate.
+When enabled and required with configured Bedrock files, NinjaArena reads
+Geyser-Spigot's own `config.yml` through its enabled Bukkit plugin's data folder.
+Custom held models require boolean `gameplay.force-resource-packs: true`, the
+mapping assertion and a connection selected by the hook. False, missing,
+unreadable, malformed or oversized config keeps vanilla tools and logs one warning
+per evaluation: `set gameplay.force-resource-packs: true in Geyser`.
+Optional policy does not read the file or warn. NinjaArena cannot enforce Bedrock
+acceptance and never changes Geyser's settings.
 
-This is a read-only **config-file check, not a public Geyser API**. It does not
-reload Geyser, change its settings or prove that Geyser's live settings match
-the file; apply changes in Geyser too before reevaluating NinjaArena. Custom
-held models still require a connection selected by the hook. The check cannot
-observe per-player pack-load outcomes or prove that a client rendered the pack.
-Gameplay and data tags do not depend on the gate or selected quality.
+The bounded, strict YAML check runs on enable and successful `/narena admin reload`.
+Rejected reloads preserve the gate. Apply changes in Geyser too: reading the file
+does not prove its live configuration matches. Already issued items are not
+rewritten; the next kit issue uses the reevaluated gate.
+
+Startup and `/narena pack status` show Java state, Bedrock state and the reason
+for vanilla Bedrock tools in one line. The command requires `ninjaarena.admin`
+and reads cached state without reading files or changing settings.
+
+Geyser exposes no public pack-load outcome. The status reports eligibility, never
+successful rendering or loading. NinjaArena skips Java pack offers and ignores
+Java success statuses for Bedrock connections. Gameplay and data tags do not
+depend on this gate. Automated policy and adapter tests do not establish real
+Bedrock client behavior.
 
 Decline, download failure and pre-login timeout belong to Geyser's negotiation.
 The checked implementation disconnects on `REFUSED`; NinjaArena cannot promise
