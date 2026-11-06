@@ -140,7 +140,7 @@ whole stack. The quality menu will call this API later.
 
 Each flat `item/generated` model puts fixed artwork on `layer0` and grayscale
 accent on `layer1`. Only the accent reads the first `custom_model_data` colour.
-Teams 1â€“4 use `#FF5555`, `#5555FF`, `#55FF55`, `#FFFF55`; unassigned items use white.
+Teams 1–4 use `#FF5555`, `#5555FF`, `#55FF55`, `#FFFF55`; unassigned items use white.
 Recognition uses the `ninjaarena:tool` data tag alone, never model, name or colour.
 
 Only tool items given to a player with loaded Standard get a custom `item_model`.
