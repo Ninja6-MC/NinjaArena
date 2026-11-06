@@ -53,6 +53,11 @@ public final class BukkitResourcePacks implements Listener, AutoCloseable {
             public void error(String message, RuntimeException failure) {
                 plugin.getLogger().warning(message + " (" + failure.getClass().getSimpleName() + ")");
             }
+
+            @Override
+            public void warn(String message) {
+                plugin.getLogger().warning(message);
+            }
         }, () -> Integer.toUnsignedLong(Bukkit.getCurrentTick()));
     }
 

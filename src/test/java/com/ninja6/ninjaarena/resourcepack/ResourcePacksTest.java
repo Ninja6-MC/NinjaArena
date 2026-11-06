@@ -29,6 +29,7 @@ class ResourcePacksTest {
         private final List<Removed> removed = new ArrayList<>();
         private final List<String> kicks = new ArrayList<>();
         private final List<String> errors = new ArrayList<>();
+        private final List<String> warnings = new ArrayList<>();
         private boolean breakSend;
 
         @Override
@@ -52,6 +53,11 @@ class ResourcePacksTest {
         @Override
         public void error(String message, RuntimeException failure) {
             errors.add(message);
+        }
+
+        @Override
+        public void warn(String message) {
+            warnings.add(message);
         }
     }
 
@@ -282,5 +288,18 @@ class ResourcePacksTest {
         assertFalse(packs.loaded(PLAYER));
         assertEquals(1, wire.errors.size());
         assertEquals(1, wire.kicks.size());
+    }
+
+    @Test
+    void aRequiredPackFailureLeavesAnOperatorWarningButADeclineDoesNot() {
+        ResourcePacks packs = packs(true);
+        packs.join(PLAYER);
+        packs.status(PLAYER, BASE.id(), Status.FAILED_DOWNLOAD);
+        assertEquals(1, wire.warnings.size());
+        assertTrue(wire.warnings.getFirst().contains("resource-pack.url"));
+        packs.quit(PLAYER);
+        packs.join(PLAYER);
+        packs.status(PLAYER, BASE.id(), Status.DECLINED);
+        assertEquals(1, wire.warnings.size());
     }
 }

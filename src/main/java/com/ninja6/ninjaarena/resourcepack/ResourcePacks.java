@@ -16,6 +16,10 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
         void remove(UUID player, UUID pack);
         void kick(UUID player, String message);
         void error(String message, RuntimeException failure);
+
+        /** An operator-facing problem with no exception behind it. */
+        default void warn(String message) {
+        }
     }
 
     private enum Phase { PENDING, ACCEPTED, DOWNLOADED, LOADED, FAILED }
@@ -164,6 +168,10 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
         removeDetailed(player);
         remove(player, settings.base().id());
         if (settings.required()) {
+            if (!reason.equals(reason(Status.DECLINED))) {
+                transport.warn("The required resource pack " + reason + " for " + player
+                        + ". Check resource-pack.url and resource-pack.sha1; players cannot join until it loads.");
+            }
             transport.kick(player, "NinjaArena's required resource pack " + reason
                     + ". Check Server Resource Packs in this server's settings, then reconnect."
                     + " If it still fails, contact the server operator.");
