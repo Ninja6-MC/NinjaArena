@@ -55,6 +55,14 @@ in the order you need it:
    so the portal is a doorway rather than a flat pad. Move sideways first for a wider
    door. `/narena portal create dojo-door dojo` binds it to the arena.
 
+Restoration keeps the saved position inside the gate when it is safe (#107); it does not
+move the player outside. Standing still or walking forward within the same portal region
+cannot enter again. Leave the region and walk back in to enter normally. Entry checks the
+old and new blocks on each move, so this guard has no timer to expire and no per-player
+state to lose on logout, death or restart. Teleporting into a gate also requires leaving
+and walking back in. Existing pending snapshots keep their saved coordinates and facing;
+the usual unsafe-landing fallbacks still apply.
+
 ## Lobbies and player caps
 
 Before a match, players wait either in a dedicated waiting room or in one shared hub. The

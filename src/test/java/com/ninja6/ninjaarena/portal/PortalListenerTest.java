@@ -13,6 +13,9 @@ import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
 import com.ninja6.ninjaarena.arena.MemoryCopies;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
+import com.ninja6.ninjaarena.restore.RestoreService;
+import com.ninja6.ninjaarena.snapshot.PlayerSnapshot;
+import com.ninja6.ninjaarena.snapshot.SnapshotLocation;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService.CaptureResult;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
@@ -23,6 +26,7 @@ import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -43,6 +47,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.CraftingInventory;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
@@ -52,6 +57,8 @@ import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class PortalListenerTest {
 
@@ -87,6 +94,7 @@ class PortalListenerTest {
     private GameMode gameMode = GameMode.SURVIVAL;
     private boolean canPlay = true;
     private boolean online = true;
+    private boolean dead;
     private boolean teleportRefused;
     /** Whether the waiting room's chunk is already loaded, so its future is complete at once. */
     private boolean chunkLoaded;
@@ -211,7 +219,7 @@ class PortalListenerTest {
                     case "getGameMode" -> gameMode;
                     case "getLocation" -> location.clone();
                     case "isOnline" -> online;
-                    case "isDead" -> false;
+                    case "isDead" -> dead;
                     case "teleport" -> {
                         if (teleportRefused) {
                             yield false;
@@ -396,6 +404,100 @@ class PortalListenerTest {
         move(11.7, 65.2, 10.3, 90);
         assertTrue(chunkLoads.isEmpty());
         assertTrue(messages.isEmpty());
+    }
+
+    /** A pre-existing pending snapshot, read through the production store and restore service. */
+    private Location restoreInGate() throws Exception {
+        // A deeper admin gate exercises walking forward across several portal blocks.
+        portals.create("deep", "world", new ArenaBounds(20, 64, 20, 22, 67, 23), "dojo");
+        SnapshotLocation saved = new SnapshotLocation(new UUID(0, 77), "world", 21.25, 64, 20.375, 35, -12);
+        snapshots.persist(new PlayerSnapshot(ALICE, "Alice", Instant.parse("2026-10-27T10:00:00Z"), saved,
+                new byte[] {1}, new byte[] {2}, new byte[] {3}, 5, 0.5f, 60, 20, 20, 5, 0,
+                List.of(), GameMode.SURVIVAL, 0, 0));
+        Logger logger = plugin.getLogger();
+        SnapshotService reopened = new SnapshotService(new SnapshotStore(dir.resolve("snapshots")), logger);
+        // Only the live state applier is substituted; landing safety is covered by restore tests.
+        RestoreService restores = new RestoreService(reopened, (player, snapshot) -> {
+            assertEquals(saved, snapshot.location());
+            SnapshotLocation spot = snapshot.location();
+            player.teleport(new Location(overworld, spot.x(), spot.y(), spot.z(), spot.yaw(), spot.pitch()),
+                    PlayerTeleportEvent.TeleportCause.PLUGIN);
+        }, logger);
+        restores.markPendingOnStartup();
+        assertTrue(restores.shouldRestoreOnJoin(ALICE));
+        assertEquals(RestoreResult.RESTORED, restores.restore(player()));
+        assertFalse(reopened.hasPending(ALICE));
+        assertEquals(new Location(overworld, saved.x(), saved.y(), saved.z(), saved.yaw(), saved.pitch()), location);
+        return location.clone();
+    }
+
+    @Test
+    void restoredPlayerCanStayStillThenWalkForwardUntilOutsideWithoutEntering() throws Exception {
+        Location saved = restoreInGate();
+        for (int tick = 0; tick < 1200; tick++) {
+            runNextTick();
+        }
+        assertEquals(saved, location);
+        move(21.25, 64, 21.375, 35);
+        move(21.25, 64, 22.375, 35);
+        move(21.25, 64, 23.375, 35);
+        move(21.25, 64, 24.375, 35);
+        finishChunkLoads();
+        assertTrue(chunkLoads.isEmpty());
+        assertEquals(0, captures);
+        assertEquals(1, teleports.size()); // The restore only.
+
+        move(21.25, 64, 23.375, 35);
+        finishChunkLoads();
+        assertEquals(1, captures);
+        assertEquals(List.of("dojo"), entered);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"logout", "death", "restart", "teleport"})
+    void returningInsideTheGateNeedsAnExitBeforeEntry(String transition) throws Exception {
+        Location saved = restoreInGate();
+        switch (transition) {
+            case "logout" -> {
+                online = false;
+                listener.onQuit(new PlayerQuitEvent(player(), (Component) null,
+                        PlayerQuitEvent.QuitReason.DISCONNECTED));
+                online = true;
+            }
+            case "death" -> {
+                dead = true;
+                finishChunkLoads();
+                dead = false;
+                // Respawning in the gate, the most restrictive destination for re-entry.
+                player().teleport(saved, PlayerTeleportEvent.TeleportCause.PLUGIN);
+            }
+            case "restart" -> {
+                portals = new PortalRegistry(new PortalStore(dir.resolve("portals.yml")));
+                portals.load();
+                listener = new PortalListener(plugin, portals, entry, () -> arenaWorld, snapshots,
+                        id -> { }, (player, arena) -> entered.add(arena));
+            }
+            case "teleport" -> {
+                player().teleport(new Location(overworld, 100, 64, 100), PlayerTeleportEvent.TeleportCause.PLUGIN);
+                player().teleport(saved, PlayerTeleportEvent.TeleportCause.PLUGIN);
+            }
+            default -> throw new AssertionError(transition);
+        }
+        move(21.25, 64, 21.375, 35);
+        finishChunkLoads();
+        assertTrue(chunkLoads.isEmpty());
+        assertEquals(0, captures);
+        move(21.25, 64, 24.375, 35);
+        move(21.25, 64, 23.375, 35);
+        finishChunkLoads();
+        assertEquals(1, captures);
+        assertEquals(List.of("dojo"), entered);
+    }
+
+    @Test
+    void teleportsHaveSeparateHandlersFromMoves() {
+        // Paper dispatches these separately, even though PlayerTeleportEvent extends PlayerMoveEvent.
+        assertFalse(PlayerMoveEvent.getHandlerList() == PlayerTeleportEvent.getHandlerList());
     }
 
     @Test
