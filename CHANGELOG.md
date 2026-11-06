@@ -30,6 +30,14 @@ Java 25, and does not run on Folia.
 - Director enemies remain protected from daylight ignition when Paper ignores their
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
+### Changed
+- Confirmed the restore-position decision for #107: keep the saved in-gate position,
+  including existing pending snapshots, subject to the usual safe-landing checks.
+  The existing portal-region crossing guard prevents re-entry while stationary or moving
+  within the same gate; leaving and walking back in enters normally. No timed cooldown
+  or restore-position migration is needed. Added regression coverage for the guard across
+  logout, death, restart and teleport transitions using simulated player state.
+
 ### Added
 - Complete Standard and Detailed Bedrock tool packs with deterministic builds, pinned
   artifacts and fifteen accent-colour mappings through Geyser. A same-server Paper hook
