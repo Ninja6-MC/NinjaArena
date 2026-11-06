@@ -21,7 +21,6 @@ class BedrockPackSettingsTest {
     private YamlConfiguration configured() {
         var config = new YamlConfiguration();
         config.set("enabled", true);
-        config.set("bedrock.enabled", true);
         config.set("bedrock.standard.file", "standard.mcpack");
         config.set("bedrock.standard.sha256", "A".repeat(64));
         return config;
@@ -33,11 +32,11 @@ class BedrockPackSettingsTest {
         var config = configured();
         var settings = BedrockPackSettings.from(config);
         assertTrue(settings.enabled());
-        assertFalse(settings.geyserEnforcesPacks());
+        assertFalse(settings.mappingsInstalled());
         assertTrue(settings.detailed().isEmpty());
         assertEquals("a".repeat(64), settings.standard().sha256());
-        config.set("bedrock.geyser-enforces-packs", true);
-        assertTrue(BedrockPackSettings.from(config).geyserEnforcesPacks());
+        config.set("bedrock.mappings-installed", true);
+        assertTrue(BedrockPackSettings.from(config).mappingsInstalled());
         config.set("enabled", false);
         assertFalse(BedrockPackSettings.from(config).enabled());
     }
@@ -48,7 +47,7 @@ class BedrockPackSettingsTest {
             config.set("bedrock.standard.file", bad);
             assertThrows(IllegalArgumentException.class, () -> BedrockPackSettings.from(config), bad);
         }
-        for (String key : new String[] {"bedrock.enabled", "bedrock.geyser-enforces-packs"}) {
+        for (String key : new String[] {"enabled", "required", "bedrock.mappings-installed"}) {
             var config = configured(); config.set(key, "true");
             assertThrows(IllegalArgumentException.class, () -> BedrockPackSettings.from(config));
         }
@@ -64,6 +63,24 @@ class BedrockPackSettingsTest {
         assertTrue(BedrockPackSettings.from(config).detailed().isPresent());
         config.set("bedrock.detailed.sha256", "");
         assertThrows(IllegalArgumentException.class, () -> BedrockPackSettings.from(config));
+    }
+
+    @Test void derivedDeliveryAndHeldModelPolicyCoverEveryGate() {
+        var config = configured();
+        config.set("bedrock.mappings-installed", true);
+        var settings = BedrockPackSettings.from(config);
+        assertEquals("", settings.vanillaReason(true, true));
+        assertTrue(settings.vanillaReason(true, false).contains("set gameplay.force-resource-packs: true in Geyser"));
+        assertTrue(settings.vanillaReason(false, true).contains("failed validation"));
+        config.set("required", false);
+        assertTrue(BedrockPackSettings.from(config).vanillaReason(true, true).contains("required is false"));
+        config.set("required", true);
+        config.set("bedrock.mappings-installed", false);
+        assertTrue(BedrockPackSettings.from(config).vanillaReason(true, true).contains("mappings"));
+        config.set("bedrock.standard.file", "");
+        config.set("bedrock.standard.sha256", "");
+        assertFalse(BedrockPackSettings.from(config).enabled());
+        assertTrue(BedrockPackSettings.from(config).vanillaReason(false, false).contains("not configured"));
     }
 
     @Test void exactFileBytesMustMatchThePin() throws Exception {

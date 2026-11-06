@@ -123,6 +123,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private KitItems kitItems;
     private NinjaTools tools;
     private BukkitResourcePacks resourcePacks;
+    private ResourcePackSettings activePackSettings = ResourcePackSettings.OFF;
     private BedrockIntegration bedrock = BedrockIntegration.NONE;
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
@@ -217,6 +218,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     + e.getClass().getSimpleName() + "). Check the supported Geyser version and restart.");
             packSettings = ResourcePackSettings.OFF;
         }
+        activePackSettings = packSettings;
+        getLogger().info(packStatus());
         resourcePacks = new BukkitResourcePacks(this, packSettings, bedrock::isBedrock);
         resourcePacks.start();
         ToolVisuals visuals = new ToolVisuals(resourcePacks.packs(),
@@ -428,6 +431,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                             || matches.leave(player, MatchService.Exit.COMMAND) || cancelled;
                 }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats),
                 new EventCommand(arenaEvents));
+        command.setPackStatus(this::packStatus);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -657,6 +661,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Main-thread pack API for explicit Detailed selection; never replaces another plugin's packs. */
     public ResourcePacks resourcePacks() {
         return resourcePacks == null ? null : resourcePacks.packs();
+    }
+
+    private String packStatus() {
+        return com.ninja6.ninjaarena.resourcepack.PackStatus.describe(activePackSettings, bedrock.status());
     }
 
     private BedrockIntegration startBedrock(BedrockPackSettings settings) {

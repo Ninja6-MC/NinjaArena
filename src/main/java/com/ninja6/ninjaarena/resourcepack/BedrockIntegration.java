@@ -12,8 +12,10 @@ public interface BedrockIntegration extends AutoCloseable {
 
     boolean isBedrock(UUID player);
 
-    /** Operator declaration, verified enforcement config and a selected pack; never client load evidence. */
+    /** Mapping assertion, required policy, verified enforcement config and a selected pack; never client load evidence. */
     boolean customHeld(UUID player);
+
+    default String status() { return "vanilla (same-server Geyser absent, disabled or unavailable)"; }
 
     default void refreshEnforcement() { }
 

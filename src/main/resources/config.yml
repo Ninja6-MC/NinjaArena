@@ -2,6 +2,7 @@ resource-pack:
   # Delivery and custom tool artwork are opt-in. Invalid enabled settings turn delivery
   # off at startup with an operator error; they never cause a player prompt loop.
   enabled: false
+  # Java kicks on decline/failure. Bedrock held models also need Geyser enforcement.
   required: true
   # Live-reloadable flight fallback. All other resource-pack keys require a restart.
   thrown-visuals: true
@@ -18,11 +19,9 @@ resource-pack:
     id: ''
   # Same-server Geyser-Spigot hook. Restart after changing any of these settings.
   bedrock:
-    enabled: false
-    # Operator declaration: matching mappings are installed and Geyser enforces packs.
-    # Also requires gameplay.force-resource-packs: true in Geyser's config.yml (checked
-    # on enable and successful reload). This never records a successful client load.
-    geyser-enforces-packs: false
+    # Confirm matching mappings are installed in Geyser. Its public API cannot query
+    # loaded mappings after startup. This asserts installation only, never enforcement.
+    mappings-installed: false
     # Copy pinned release files into the NinjaArena data folder, outside Geyser's packs folder.
     standard:
       file: ''

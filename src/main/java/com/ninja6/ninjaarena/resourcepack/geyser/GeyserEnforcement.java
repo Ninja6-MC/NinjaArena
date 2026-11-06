@@ -14,13 +14,13 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 public final class GeyserEnforcement {
     static final int MAX_BYTES = 256 * 1024;
     static final String KEY = "gameplay.force-resource-packs";
-    private final boolean declared;
+    private final boolean required;
     private final Supplier<GeyserConfigSource> sources;
     private final Consumer<String> warning;
     private volatile boolean allowed;
 
-    public GeyserEnforcement(boolean declared, Supplier<GeyserConfigSource> sources, Consumer<String> warning) {
-        this.declared = declared;
+    public GeyserEnforcement(boolean required, Supplier<GeyserConfigSource> sources, Consumer<String> warning) {
+        this.required = required;
         this.sources = sources;
         this.warning = warning;
     }
@@ -30,7 +30,7 @@ public final class GeyserEnforcement {
     /** Called at enable and after a successful reload, never for individual players. */
     public void evaluate() {
         allowed = false;
-        if (!declared) return;
+        if (!required) return;
         GeyserConfigSource source = sources.get();
         if (source == null) return; // Geyser absent/disabled: no file access or warning.
         String problem;
@@ -58,7 +58,7 @@ public final class GeyserEnforcement {
             // Do not include parser snippets: Geyser's config can contain credentials.
             problem = "config is unreadable or malformed";
         }
-        warning.accept("Bedrock held models disabled: " + source.file().toAbsolutePath() + " must set " + KEY
-                + " to true (" + problem + "). Check Geyser's config, then reload NinjaArena.");
+        warning.accept("Bedrock held models disabled: " + source.file().toAbsolutePath() + "; set " + KEY
+                + ": true in Geyser (" + problem + "). Check Geyser's config, then reload NinjaArena.");
     }
 }
