@@ -90,6 +90,7 @@ public final class ConfigReload {
                 continue;
             }
             if (path.startsWith("director.") || path.startsWith("stability.")
+                    || path.startsWith("resource-pack.") && !path.equals("resource-pack.thrown-visuals")
                     || path.startsWith("stats.") && !path.equals("stats.season")) {
                 refused.add(path + " (restart required)");
                 next.set(path, effective.get(path));

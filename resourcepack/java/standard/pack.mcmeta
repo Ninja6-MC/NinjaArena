@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "description": "NinjaArena Standard (16x16)",
+    "min_format": [97, 1],
+    "max_format": [97, 1]
+  }
+}

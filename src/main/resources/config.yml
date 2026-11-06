@@ -1,3 +1,22 @@
+resource-pack:
+  # Delivery and custom tool artwork are opt-in. Invalid enabled settings turn delivery
+  # off at startup with an operator error; they never cause a player prompt loop.
+  enabled: false
+  required: true
+  # Live-reloadable flight fallback. All other resource-pack keys require a restart.
+  thrown-visuals: true
+  timeout-seconds: 120
+  # Direct HTTPS ZIP URL, its 40-character SHA-1 and a UUID owned by this plugin.
+  # Keep identity stable between versions; change URL and hash when the ZIP changes.
+  url: ''
+  sha1: ''
+  id: ''
+  # Optional texture overlay. Configure all three together; enabled only through the API.
+  detailed:
+    url: ''
+    sha1: ''
+    id: ''
+
 arena-world:
   # Hard gameplay diameter in blocks (16..2048), centred on 0, 0. Bounds and visits
   # must fit inside it, so a continuously busy non-saving world has a finite footprint.

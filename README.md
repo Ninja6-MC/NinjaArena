@@ -236,6 +236,7 @@ and never moves match players or restarts a match.
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
 | Player-built portals | Apply to the next portal lit; the curtain colour changes immediately. Portals already built stay, with their own frame block. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
+| Resource packs | `resource-pack.thrown-visuals` applies to the next throw. All delivery settings, URLs, hashes and identities require a restart. |
 | Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
 | Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |
 | Grid cell size and world border | Apply only before any arena exists and while no match runs. Otherwise refuse the change and require a restart. |
@@ -252,6 +253,19 @@ providers declare stack limits of 16 for shuriken and smoke bombs and 1 for dash
 providers can declare a safe limit with `kitItems.register(id, maxStackSize, provider)`;
 the existing two-argument registration conservatively permits one item during reload
 validation. Item providers still resolve at round-kit application time.
+
+## Java resource packs
+
+Resource-pack delivery is off by default. Enable it only after hosting the versioned
+Standard ZIP and configuring its URL, SHA-1 and UUID. Required packs disconnect a player
+once on decline, failure or timeout; optional packs retain vanilla tool behaviour.
+Acceptance alone never enables custom tool models. The Detailed overlay is optional and
+is added only through the API, ready for the later quality menu.
+
+See [resourcepack/README.md](resourcepack/README.md) for settings, hosting, hashes,
+release pinning, the per-throw visibility rule and the optional-pack held-item limitation.
+The Java client pack load, thrown appearance and optional missing-model case still need
+real-client verification. Bedrock packs and the portal curtain artwork are deferred.
 
 ## Icon artwork
 

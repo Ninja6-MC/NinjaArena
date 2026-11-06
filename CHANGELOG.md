@@ -25,6 +25,12 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Opt-in Java resource-pack delivery with required or optional loading, bounded failures,
+  versioned Standard and Detailed ZIPs and SHA-1 hashes. Tool models and team accents are
+  applied only for loaded recipients. Thrown tools use custom artwork only when all match
+  participants, spectators and arena-world players have loaded the base at throw time;
+  `resource-pack.thrown-visuals: false` keeps vanilla flight. Detailed stays API-only.
+  Portal artwork and Bedrock delivery remain deferred.
 - Weekly arena events with configurable announcements, featured-arena matchmaking,
   optional Discord delivery and capped bonus rewards. Admins can list, start or cancel
   event occurrences with `/narena event`.

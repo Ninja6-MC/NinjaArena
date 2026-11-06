@@ -16,6 +16,23 @@ const errors = [];
 const read = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
 const assets = (variant) => path.join(PACK, variant, "assets", NAMESPACE);
 
+const target = read(path.join(REPO, "resourcepack", "target.json"));
+const gradle = fs.readFileSync(path.join(REPO, "build.gradle.kts"), "utf8");
+if (!gradle.includes(`paper-api:${target.minecraft}.build.`)) {
+  errors.push("resourcepack/target.json Minecraft version differs from the Paper dependency");
+}
+for (const variant of ["standard", "detailed"]) {
+  const metadata = read(path.join(PACK, variant, "pack.mcmeta")).pack;
+  for (const bound of ["min_format", "max_format"]) {
+    if (JSON.stringify(metadata[bound]) !== JSON.stringify(target.resource_format)) {
+      errors.push(`${variant}: ${bound} differs from the verified target resource format`);
+    }
+  }
+  if (typeof metadata.description !== "string" || !metadata.description.trim()) {
+    errors.push(`${variant}: missing pack description`);
+  }
+}
+
 function resolve(variant, id, kind, ext) {
   const [ns, p] = id.includes(":") ? id.split(":") : ["minecraft", id];
   return ns === NAMESPACE ? path.join(assets(variant), kind, `${p}.${ext}`) : null;
