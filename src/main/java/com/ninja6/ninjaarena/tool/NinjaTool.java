@@ -98,7 +98,19 @@ public enum NinjaTool {
         if (custom) {
             var data = meta.getCustomModelDataComponent();
             data.setColors(java.util.List.of(Color.fromRGB(color)));
+            data.setStrings(java.util.List.of(accentMarker(color)));
             meta.setCustomModelDataComponent(data);
         }
+    }
+
+    /** Presentation only. Geyser maps these names to precomposed accents; recognition never reads them. */
+    static String accentMarker(int color) {
+        return switch (color) {
+            case 0xFF5555 -> "red";
+            case 0x5555FF -> "blue";
+            case 0x55FF55 -> "green";
+            case 0xFFFF55 -> "yellow";
+            default -> "white";
+        };
     }
 }

@@ -1,7 +1,7 @@
 # NinjaArena pack release process
 
-This process publishes Java resource packs only, not the plugin JAR, Bedrock
-packs, or packages to external registries.
+This process publishes Java and Bedrock resource packs and Geyser mappings, not
+the plugin JAR or packages to external registries.
 
 ## Versioning and channels
 
@@ -13,11 +13,26 @@ publisher checks this and never edits release channels or latest status.
 Pack versions follow the tag; this pack-only workflow does not rewrite the
 plugin build version.
 
+Bedrock needs numeric three-part versions in addition to the artifact tag.
+`v0.MINOR.PATCH` maps to `[MINOR + 1, PATCH, 30000]`; prereleases use a last
+component of `N` for alpha, `10000 + N` for beta and `20000 + N` for rc. `N`
+must be from 1 to 9999. This makes each later prerelease, stable release and
+subsequent patch/minor increase the client version while retaining pack UUIDs.
+Minor must be below 65535 and patch at most 65535. Standard and Detailed use
+distinct permanent header and module UUIDs recorded in
+`resourcepack/bedrock/target.json`.
+
+CI snapshots use that file's explicit `snapshot_version`, below the release
+version range. They are verification artifacts, not production deployment
+pins. Increment `snapshot_version` before deploying changed snapshot bytes
+manually; never replace a hosted UUID/version with different content. Prefer
+a new tagged prerelease for client testing, especially after testing a release.
+
 ## Prepare a release
 
 1. Start from a reviewed, green `main` commit. Run the plugin suite, standards,
-   artwork validators and pack tests. Test on a real Java 26.3 client before
-   declaring visual acceptance.
+   artwork validators and pack tests. Test on real Java 26.3 and supported
+   Bedrock clients through Geyser before declaring visual acceptance.
 2. Stable versions need a `## [0.MINOR.PATCH]` changelog section; the build rejects
    a stable candidate without one. Pre-releases may use `[Unreleased]`.
 3. Create and push the tag at that commit, then manually publish its GitHub
@@ -42,6 +57,17 @@ validated item definitions, models and PNGs. It retains passing evidence bound
 to the candidate and manifest digest, plus verification run and attempt, in a
 second artifact. These tests do not establish client rendering or negotiation;
 release notes must preserve those gaps until real-client checks pass.
+
+Artwork CI explicitly converts the Java base/accent layers into two complete
+Bedrock packs, explicitly generates v2 Geyser mappings, and only then packages
+them. It retains a second candidate artifact with the `-bedrock` suffix,
+containing both `.mcpack` files, versioned Geyser mappings,
+`BEDROCK-SHA1SUMS` and `bedrock-manifest.json`. The manifest records SHA-256
+digests of every asset and SHA-1 digests of the downloadable packs. Verification
+downloads that candidate, regenerates expected conversion/mapping bytes from
+the checked-out source and validates pack manifests, textures, atlas and file
+inventory. The same evidence artifact includes
+`bedrock-pack-verification.json`, bound to this candidate's manifest digest.
 
 The publisher waits on the **`release` environment**. Before using it, configure
 that environment with a required maintainer reviewer and verify the setting
@@ -69,6 +95,11 @@ already attached intended assets and compares them byte-for-byte, uploads only
 missing ones, then downloads and checks all public assets. It never overwrites
 conflicting bytes or uses `--clobber`; unrelated release assets are untouched.
 Attachments are both ZIPs, `SHA1SUMS`, and `manifest.json`.
+The same protected publisher also attaches both `.mcpack` files,
+`NinjaArena-<version>-geyser-mappings.json`, `BEDROCK-SHA1SUMS`, and
+`bedrock-manifest.json`. It uses the same environment, tag, evidence, channel
+and no-overwrite checks. A partial publication of either candidate is recovered
+by downloading and reconciling the retained bytes, never by rebuilding them.
 
 After a partial upload, rerun only the failed publisher job in the same workflow
 run while its candidate and evidence are retained. Do not rebuild under the same

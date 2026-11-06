@@ -254,7 +254,7 @@ providers can declare a safe limit with `kitItems.register(id, maxStackSize, pro
 the existing two-argument registration conservatively permits one item during reload
 validation. Item providers still resolve at round-kit application time.
 
-## Java resource packs
+## Tool resource packs
 
 Resource-pack delivery is off by default. Enable it only after hosting the versioned
 Standard ZIP and configuring its URL, SHA-1 and UUID. Required packs disconnect a player
@@ -264,8 +264,12 @@ is added only through the API, ready for the later quality menu.
 
 See [resourcepack/README.md](resourcepack/README.md) for settings, hosting, hashes,
 release pinning, the per-throw visibility rule and the optional-pack held-item limitation.
-The Java client pack load, thrown appearance and optional missing-model case still need
-real-client verification. Bedrock packs and the portal curtain artwork are deferred.
+The same guide covers complete Standard and Detailed Bedrock packs, generated Geyser
+mappings and the same-server Geyser-Spigot/Floodgate setup. Bedrock custom held models
+require an operator assertion that Geyser enforces packs; load outcomes are not exposed
+by its public API. Otherwise tools retain vanilla visuals. Bedrock flight uses snowballs.
+Real-client loading, held/thrown appearance, team colours and live negotiation still
+need verification. Quality preferences and portal curtain artwork remain deferred.
 
 ## Icon artwork
 
@@ -370,7 +374,8 @@ the snapshot still holds the player's real inventory.
 ## Ninja kit tools
 
 Three tools ship with the plugin, each a vanilla item recognised by a data tag, so
-Bedrock players see the base item. The kit decides who gets them: `amount` is how many
+Bedrock players see the base item unless the configured Geyser integration enables held
+artwork. The kit decides who gets them: `amount` is how many
 each player receives per round, and leaving an entry out turns that tool off for the kit.
 
 | Kit ID | Item | Default kit | Effect |

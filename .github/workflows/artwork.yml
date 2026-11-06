@@ -62,7 +62,22 @@ jobs:
         run: node artwork/tools/validate-pack.js
 
       - name: Test Pack Builder
-        run: python -m unittest discover -s artwork/tools -p test_java_packs.py -v
+        run: python -m unittest discover -s artwork/tools -p 'test_*packs.py' -v
+
+      - name: Convert Java Layers To Complete Bedrock Packs
+        env:
+          PACK_VERSION: ${{ steps.identity.outputs.version }}
+        run: python artwork/tools/bedrock-packs.py convert
+
+      - name: Generate Geyser Item Mappings
+        env:
+          PACK_VERSION: ${{ steps.identity.outputs.version }}
+        run: python artwork/tools/bedrock-packs.py mappings
+
+      - name: Build Versioned Bedrock Pack Candidate
+        env:
+          PACK_VERSION: ${{ steps.identity.outputs.version }}
+        run: python artwork/tools/bedrock-packs.py build --source "${{ steps.identity.outputs.source }}"
 
       - name: Build Versioned Java Pack Candidate
         env:
@@ -77,8 +92,16 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Retain Bedrock Candidate And Manifest
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ${{ steps.identity.outputs.candidate }}-bedrock
+          path: build/bedrock-resourcepacks/*
+          if-no-files-found: error
+          retention-days: 30
+
   verify:
-    name: Verify Downloaded Java Packs
+    name: Verify Downloaded Packs
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -102,11 +125,26 @@ jobs:
           CANDIDATE_ATTEMPT: ${{ needs.validate.outputs.attempt }}
         run: python artwork/tools/java-packs.py verify --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"
 
+      - name: Download Retained Bedrock Candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ needs.validate.outputs.candidate }}-bedrock
+          path: build/bedrock-resourcepacks
+
+      - name: Verify Bedrock Inventories, Conversion, Mappings And All Bytes
+        env:
+          PACK_VERSION: ${{ needs.validate.outputs.version }}
+          SOURCE: ${{ needs.validate.outputs.source }}
+          CANDIDATE_ATTEMPT: ${{ needs.validate.outputs.attempt }}
+        run: python artwork/tools/bedrock-packs.py verify --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"
+
       - name: Retain Passing Artifact Evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ needs.validate.outputs.candidate }}-verification
-          path: build/pack-verification.json
+          path: |
+            build/pack-verification.json
+            build/bedrock-pack-verification.json
           if-no-files-found: error
           retention-days: 30
 
@@ -139,10 +177,18 @@ jobs:
           name: ${{ needs.validate.outputs.candidate }}-verification
           path: build
 
+      - name: Download Same Bedrock Candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ needs.validate.outputs.candidate }}-bedrock
+          path: build/bedrock-resourcepacks
+
       - name: Reconcile And Publish Missing Assets Without Rebuilding
         env:
           GH_TOKEN: ${{ github.token }}
           PACK_VERSION: ${{ needs.validate.outputs.version }}
           SOURCE: ${{ needs.validate.outputs.source }}
           CANDIDATE_ATTEMPT: ${{ needs.validate.outputs.attempt }}
-        run: python artwork/tools/java-packs.py publish --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"
+        run: |
+          python artwork/tools/java-packs.py publish --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"
+          python artwork/tools/bedrock-packs.py publish --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"

@@ -75,6 +75,26 @@ class ResourcePacksTest {
     }
 
     @Test
+    void bedrockNeverReceivesJavaOffersOrAcquiresLoadedStateFromSyntheticStatuses() {
+        var packs = new ResourcePacks(new ResourcePackSettings(true, true, true, 120, BASE, Optional.of(DETAIL)),
+                wire, ticks::get, id -> id.equals(PLAYER));
+        packs.join(PLAYER);
+        for (Status status : Status.values()) packs.status(PLAYER, BASE.id(), status);
+        ticks.set(100_000);
+        packs.tick();
+        assertFalse(packs.loaded(PLAYER));
+        assertFalse(packs.addDetailed(PLAYER));
+        assertTrue(wire.sent.isEmpty());
+        assertTrue(wire.kicks.isEmpty());
+        assertTrue(wire.removed.isEmpty());
+        UUID java = UUID.randomUUID();
+        packs.join(java);
+        packs.status(java, BASE.id(), Status.SUCCESSFULLY_LOADED);
+        assertTrue(packs.loaded(java));
+        assertEquals(1, wire.sent.size());
+    }
+
+    @Test
     void disabledDeliveryNeitherPromptsNorEnforces() {
         ResourcePacks packs = new ResourcePacks(ResourcePackSettings.OFF, wire, ticks::get);
         packs.join(PLAYER);

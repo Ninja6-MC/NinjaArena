@@ -25,6 +25,11 @@ Java 25, and does not run on Folia.
   daylight-burning flag. Fire, lava and attacks can still ignite them.
 
 ### Added
+- Complete Standard and Detailed Bedrock tool packs with deterministic builds, pinned
+  artifacts and fifteen accent-colour mappings through Geyser. A same-server Paper hook
+  selects one quality by XUID, defaulting to Standard. Bedrock held models require an
+  explicit operator assertion that Geyser enforces packs; client load outcomes remain
+  unobservable, and flight keeps the vanilla snowball appearance.
 - Opt-in Java resource-pack delivery with required or optional loading, bounded failures,
   versioned Standard and Detailed ZIPs and SHA-1 hashes. Tool models and team accents are
   applied only for loaded recipients. Thrown tools use custom artwork only when all match

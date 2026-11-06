@@ -74,6 +74,10 @@ import com.ninja6.ninjaarena.tool.ToolVisuals;
 import com.ninja6.ninjaarena.resourcepack.BukkitResourcePacks;
 import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
 import com.ninja6.ninjaarena.resourcepack.ResourcePacks;
+import com.ninja6.ninjaarena.resourcepack.BedrockIntegration;
+import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
+import com.ninja6.ninjaarena.resourcepack.BedrockSelections;
+import com.ninja6.ninjaarena.resourcepack.BedrockSupport;
 import com.ninja6.ninjaarena.waiting.HostingService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
@@ -119,6 +123,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private KitItems kitItems;
     private NinjaTools tools;
     private BukkitResourcePacks resourcePacks;
+    private BedrockIntegration bedrock = BedrockIntegration.NONE;
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
     private StatsStore stats;
@@ -197,9 +202,25 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     + ". Fix resource-pack in config.yml and restart. Players keep vanilla visuals.");
             packSettings = ResourcePackSettings.OFF;
         }
-        resourcePacks = new BukkitResourcePacks(this, packSettings);
+        BedrockPackSettings bedrockSettings;
+        try {
+            bedrockSettings = packSettings.enabled()
+                    ? BedrockPackSettings.from(getConfig().getConfigurationSection("resource-pack")) : BedrockPackSettings.OFF;
+        } catch (IllegalArgumentException e) {
+            getLogger().severe("Bedrock pack delivery is off: " + e.getMessage() + ". Fix config.yml and restart.");
+            bedrockSettings = BedrockPackSettings.OFF;
+        }
+        try {
+            bedrock = startBedrock(bedrockSettings);
+        } catch (LinkageError | RuntimeException e) {
+            getLogger().severe("Resource pack delivery is off: the same-server Geyser API could not be initialized ("
+                    + e.getClass().getSimpleName() + "). Check the supported Geyser version and restart.");
+            packSettings = ResourcePackSettings.OFF;
+        }
+        resourcePacks = new BukkitResourcePacks(this, packSettings, bedrock::isBedrock);
         resourcePacks.start();
         ToolVisuals visuals = new ToolVisuals(resourcePacks.packs(),
+                id -> bedrock.isBedrock(id) ? bedrock.customHeld(id) : resourcePacks.packs().loaded(id),
                 () -> getConfig().getBoolean("resource-pack.thrown-visuals", true),
                 name -> spectators == null ? List.of() : spectators.players(name), matches::matchOf);
         kitItems = new KitItems();
@@ -491,6 +512,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             resourcePacks.close();
             resourcePacks = null;
         }
+        bedrock.close();
+        bedrock = BedrockIntegration.NONE;
         if (rewards != null) {
             rewards.close();
             rewards = null;
@@ -629,6 +652,16 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Main-thread pack API for explicit Detailed selection; never replaces another plugin's packs. */
     public ResourcePacks resourcePacks() {
         return resourcePacks == null ? null : resourcePacks.packs();
+    }
+
+    private BedrockIntegration startBedrock(BedrockPackSettings settings) {
+        return BedrockSupport.start(getServer().getPluginManager().isPluginEnabled("Geyser-Spigot"),
+                () -> new com.ninja6.ninjaarena.resourcepack.geyser.GeyserPackHook(this, settings));
+    }
+
+    /** Connection-time, XUID-based selection seam for #80; absent without configured same-server Geyser delivery. */
+    public Optional<BedrockSelections> bedrockSelections() {
+        return bedrock.selections();
     }
 
     /**

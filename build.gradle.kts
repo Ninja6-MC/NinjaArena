@@ -15,6 +15,12 @@ java {
 
 repositories {
     mavenCentral()
+    maven("https://repo.opencollab.dev/main/") {
+        content {
+            includeGroupByRegex("org\\.geysermc.*")
+            includeGroupByRegex("org\\.cloudburstmc.*")
+        }
+    }
     maven("https://repo.helpch.at/releases/") {
         content { includeGroup("me.clip") }
     }
@@ -25,6 +31,7 @@ val paperApi = "io.papermc.paper:paper-api:26.3.build.223-stable"
 
 dependencies {
     compileOnly(paperApi)
+    compileOnly("org.geysermc.geyser:api:2.12.1-SNAPSHOT")
     compileOnly("me.clip:placeholderapi:2.11.6")
 
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")

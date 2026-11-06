@@ -61,9 +61,11 @@ class PluginDescriptionTest {
 
     @Test
     void integrationsAreOptional() throws Exception {
-        assertEquals(List.of("PlaceholderAPI", "Vault"), description().getSoftDepend());
+        assertEquals(List.of("PlaceholderAPI", "Vault", "Geyser-Spigot", "floodgate"), description().getSoftDepend());
         assertFalse(description().getDepend().contains("PlaceholderAPI"));
         assertFalse(description().getDepend().contains("Vault"));
+        assertFalse(description().getDepend().contains("Geyser-Spigot"));
+        assertFalse(description().getDepend().contains("floodgate"));
     }
 
     @Test

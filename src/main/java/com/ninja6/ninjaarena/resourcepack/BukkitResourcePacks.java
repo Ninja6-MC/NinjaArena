@@ -22,6 +22,10 @@ public final class BukkitResourcePacks implements Listener, AutoCloseable {
     private boolean closed;
 
     public BukkitResourcePacks(Plugin plugin, ResourcePackSettings settings) {
+        this(plugin, settings, player -> false);
+    }
+
+    public BukkitResourcePacks(Plugin plugin, ResourcePackSettings settings, java.util.function.Predicate<UUID> bedrock) {
         this.plugin = plugin;
         packs = new ResourcePacks(settings, new ResourcePacks.Transport() {
             @Override
@@ -58,7 +62,7 @@ public final class BukkitResourcePacks implements Listener, AutoCloseable {
             public void warn(String message) {
                 plugin.getLogger().warning(message);
             }
-        }, () -> Integer.toUnsignedLong(Bukkit.getCurrentTick()));
+        }, () -> Integer.toUnsignedLong(Bukkit.getCurrentTick()), bedrock);
     }
 
     public ResourcePacks packs() {

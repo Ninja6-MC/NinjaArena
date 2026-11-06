@@ -20,6 +20,7 @@ public final class ToolVisuals {
     }
 
     private final LoadedPacks packs;
+    private final java.util.function.Predicate<UUID> customHeld;
     private final BooleanSupplier thrownVisuals;
     private final Function<String, Collection<UUID>> spectators;
     private final Function<UUID, java.util.Optional<MatchView>> matches;
@@ -32,11 +33,25 @@ public final class ToolVisuals {
         this(packs, thrownVisuals, spectators, matches, NinjaTool::create, () -> ItemStack.of(Material.SNOWBALL));
     }
 
+    public ToolVisuals(LoadedPacks packs, java.util.function.Predicate<UUID> customHeld, BooleanSupplier thrownVisuals,
+            Function<String, Collection<UUID>> spectators,
+            Function<UUID, java.util.Optional<MatchView>> matches) {
+        this(packs, customHeld, thrownVisuals, spectators, matches, NinjaTool::create, () -> ItemStack.of(Material.SNOWBALL));
+    }
+
     ToolVisuals(LoadedPacks packs, BooleanSupplier thrownVisuals,
             Function<String, Collection<UUID>> spectators,
             Function<UUID, java.util.Optional<MatchView>> matches, Items items,
             java.util.function.Supplier<ItemStack> snowball) {
+        this(packs, packs::loaded, thrownVisuals, spectators, matches, items, snowball);
+    }
+
+    ToolVisuals(LoadedPacks packs, java.util.function.Predicate<UUID> customHeld, BooleanSupplier thrownVisuals,
+            Function<String, Collection<UUID>> spectators,
+            Function<UUID, java.util.Optional<MatchView>> matches, Items items,
+            java.util.function.Supplier<ItemStack> snowball) {
         this.packs = packs;
+        this.customHeld = customHeld;
         this.thrownVisuals = thrownVisuals;
         this.spectators = spectators;
         this.matches = matches;
@@ -46,7 +61,7 @@ public final class ToolVisuals {
 
     public ItemStack give(NinjaTool tool, Player player) {
         int team = matches.apply(player.getUniqueId()).map(match -> match.teamOf(player.getUniqueId())).orElse(0);
-        return items.create(tool, packs.loaded(player.getUniqueId()), teamColor(team));
+        return items.create(tool, customHeld.test(player.getUniqueId()), teamColor(team));
     }
 
     /** Includes the roster and spectators even if they are temporarily outside the arena world. */
