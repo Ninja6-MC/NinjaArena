@@ -12,6 +12,8 @@ import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
+import com.ninja6.ninjaarena.resourcepack.geyser.GeyserConfigSource;
+import com.ninja6.ninjaarena.resourcepack.geyser.GeyserEnforcement;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
@@ -50,6 +52,7 @@ class ConfigReloadTest {
         KitDefinition kit;
         ConfigurationSection published;
         String season;
+        Runnable enforcement = () -> { };
         @Override public boolean canResize() { return empty; }
         @Override public void world(ArenaWorldSettings settings) {
             calls.add("world"); world = new ArenaWorldSettings(world.borderSize(), settings.viewDistance(), settings.simulationDistance());
@@ -72,6 +75,7 @@ class ConfigReloadTest {
         @Override public void season(String name) { calls.add("season"); season = name; }
         @Override public boolean eventArenaExists(String arena) { return arena.equals("dojo"); }
         @Override public void configuration(ConfigurationSection settings) { published = settings; }
+        @Override public void bedrockEnforcement() { enforcement.run(); }
     }
 
     @BeforeEach
@@ -88,6 +92,37 @@ class ConfigReloadTest {
 
     private ReloadFiles.Candidate candidate() throws Exception {
         return ReloadFiles.read(dir.resolve("config.yml"), dir.resolve("kits.yml"), items);
+    }
+
+    @Test
+    void successfulReloadRechecksGeyserEvenWhenNinjaArenaSettingsAreUnchanged() throws Exception {
+        boolean[] enforced = {true};
+        int[] reads = {0};
+        List<String> warnings = new ArrayList<>();
+        GeyserConfigSource source = new GeyserConfigSource() {
+            @Override public Path file() { return dir.resolve("geyser-config.yml"); }
+            @Override public java.io.InputStream open() {
+                reads[0]++;
+                return new java.io.ByteArrayInputStream(("gameplay: {force-resource-packs: " + enforced[0] + "}")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        };
+        var gate = new GeyserEnforcement(true, () -> source, warnings::add);
+        gate.evaluate();
+        target.enforcement = gate::evaluate;
+        assertTrue(gate.allowed());
+        enforced[0] = false;
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertFalse(gate.allowed());
+        enforced[0] = true;
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertTrue(gate.allowed());
+        assertEquals(3, reads[0]);
+        assertEquals(1, warnings.size());
+        write("resource-pack: {bedrock: {geyser-enforces-packs: 'true'}}", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("rejected"));
+        assertEquals(3, reads[0], "invalid NinjaArena candidates must not change the enforcement gate");
+        assertTrue(gate.allowed());
     }
 
     @Test

@@ -44,6 +44,8 @@ public final class ConfigReload {
         }
         default void configuration(ConfigurationSection settings) {
         }
+        default void bedrockEnforcement() {
+        }
     }
 
     private final Path configFile;
@@ -162,6 +164,7 @@ public final class ConfigReload {
             target.season(next.getString("stats.season"));
         }
         target.configuration(next);
+        target.bedrockEnforcement();
         effective = next;
         kit = candidate.kit();
         return List.of("The Arena reload complete.", report("Changed", changed), report("Postponed", postponed),

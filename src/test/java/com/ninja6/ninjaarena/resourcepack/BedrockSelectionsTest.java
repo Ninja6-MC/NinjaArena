@@ -87,6 +87,7 @@ class BedrockSelectionsTest {
         assertFalse(BedrockIntegration.NONE.isBedrock(UUID.randomUUID()));
         assertFalse(BedrockIntegration.NONE.customHeld(UUID.randomUUID()));
         assertTrue(BedrockIntegration.NONE.selections().isEmpty());
+        BedrockIntegration.NONE.refreshEnforcement();
         // Geyser is compile-only: the entry point and core seams must link without it at runtime.
         assertThrows(ClassNotFoundException.class, () -> Class.forName("org.geysermc.geyser.api.GeyserApi"));
         assertNotNull(Class.forName("com.ninja6.ninjaarena.NinjaArenaPlugin"));

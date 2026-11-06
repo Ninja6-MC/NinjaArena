@@ -397,6 +397,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void bedrockEnforcement() {
+                        bedrock.refreshEnforcement();
+                    }
+
+                    @Override
                     public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
                         if (placeholders != null) {
                             placeholders.setCacheSeconds(settings.getInt(StatsPlaceholders.CACHE_SECONDS));

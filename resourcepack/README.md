@@ -282,7 +282,8 @@ NinjaArena never changes them. In the checked Geyser source,
 `gameplay.force-resource-packs` or an active integrated pack forces acceptance
 of all offered packs. The integrated pack can therefore override an otherwise
 optional configuration. Operators must configure Geyser consistently with their
-intended policy; NinjaArena cannot verify it through the public API.
+intended policy. The held-model gate requires the explicit force setting even
+if Geyser's integrated pack would otherwise force acceptance.
 
 Geyser exposes no public pack-load outcome. NinjaArena never marks a Bedrock
 connection loaded, even when `geyser-enforces-packs: true`. It skips Java pack
@@ -292,10 +293,27 @@ those statuses without loading the corresponding Bedrock pack.
 Leave the assertion **false** for optional packs or any uncertain deployment.
 Bedrock players then receive usable vanilla snowball/feather tools, even when
 the selected pack was offered. Set it **true** only after confirming Geyser
-requires packs and the matching mappings are installed. This enables custom
-held models only for connections selected by the hook; it is an operator
-assertion, not evidence that the client rendered the content. Gameplay and data
-tags do not depend on the assertion or selected quality.
+requires packs and the matching mappings are installed. Custom held models also
+require `gameplay.force-resource-packs: true` in Geyser-Spigot's own `config.yml`.
+NinjaArena locates that file through Bukkit's plugin manager and the enabled
+Geyser plugin's data folder. It reads at most 256 KiB plus one overflow-detection
+byte, parses YAML strictly and accepts only a boolean true at the nested key.
+False, missing, unreadable, malformed or oversized config disables new custom
+held items and logs one operator warning naming the file and key per evaluation.
+Individual player checks neither read the file nor repeat that warning.
+
+The file check runs on enable and after every successful `/narena reload`, even
+if NinjaArena's settings did not change. Rejected reload candidates preserve
+the previous gate. The NinjaArena declaration itself remains restart-only.
+When it is false, or Geyser is absent/disabled, no config file is read. Already
+issued items are not rewritten; the next kit issue uses the reevaluated gate.
+
+This is a read-only **config-file check, not a public Geyser API**. It does not
+reload Geyser, change its settings or prove that Geyser's live settings match
+the file; apply changes in Geyser too before reevaluating NinjaArena. Custom
+held models still require a connection selected by the hook. The check cannot
+observe per-player pack-load outcomes or prove that a client rendered the pack.
+Gameplay and data tags do not depend on the gate or selected quality.
 
 Decline, download failure and pre-login timeout belong to Geyser's negotiation.
 The checked implementation disconnects on `REFUSED`; NinjaArena cannot promise

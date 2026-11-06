@@ -17,7 +17,7 @@ import org.geysermc.geyser.api.pack.option.ResourcePackOption;
 /** Same-server Paper adapter. Only public Geyser API classes belong in this package. */
 public final class GeyserPackHook implements BedrockIntegration, EventRegistrar {
     private final GeyserApi api;
-    private final BedrockPackSettings settings;
+    private final GeyserEnforcement enforcement;
     private BedrockSelections selections;
     private ResourcePack standard;
     private ResourcePack detailed;
@@ -25,7 +25,9 @@ public final class GeyserPackHook implements BedrockIntegration, EventRegistrar 
 
     public GeyserPackHook(Plugin plugin, BedrockPackSettings settings) {
         this.api = GeyserApi.api();
-        this.settings = settings;
+        enforcement = new GeyserEnforcement(settings.enabled() && settings.geyserEnforcesPacks(),
+                () -> GeyserConfigSource.find(plugin.getServer().getPluginManager()), plugin.getLogger()::warning);
+        enforcement.evaluate();
         if (!settings.enabled()) return;
         try {
             standard = load(plugin, settings.standard(), BedrockPackSettings.STANDARD_ID);
@@ -37,10 +39,6 @@ public final class GeyserPackHook implements BedrockIntegration, EventRegistrar 
             api.eventBus().subscribe(this, SessionLoadResourcePacksEvent.class, this::negotiate);
             plugin.getLogger().info("Bedrock pack selection is active; client load outcomes are not observable."
                     + " Geyser's force-resource-packs and integrated pack control acceptance for the whole connection.");
-            if (settings.geyserEnforcesPacks()) {
-                plugin.getLogger().warning("Bedrock held models use the operator's geyser-enforces-packs assertion;"
-                        + " NinjaArena cannot verify Geyser's negotiation settings or a client's loaded pack.");
-            }
         } catch (IOException | RuntimeException e) {
             selections = null;
             standard = null;
@@ -75,13 +73,17 @@ public final class GeyserPackHook implements BedrockIntegration, EventRegistrar 
     }
 
     @Override public boolean customHeld(UUID player) {
-        if (closed || !settings.geyserEnforcesPacks() || selections == null) return false;
+        if (closed || !enforcement.allowed() || selections == null) return false;
         var connection = api.connectionByUuid(player);
         return connection != null && selections.selected(connection);
     }
 
     @Override public Optional<BedrockSelections> selections() {
         return closed ? Optional.empty() : Optional.ofNullable(selections);
+    }
+
+    @Override public void refreshEnforcement() {
+        if (!closed) enforcement.evaluate();
     }
 
     @Override public void close() {
