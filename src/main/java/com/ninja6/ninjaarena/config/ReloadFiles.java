@@ -8,6 +8,7 @@ import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
 import com.ninja6.ninjaarena.stats.StatsSettings;
 import com.ninja6.ninjaarena.reward.RewardSettings;
+import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -92,6 +93,8 @@ public final class ReloadFiles {
                     problem = LobbyMode.parse(text).isPresent() ? null : "expected dedicated or shared";
                 } else if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
                     problem = PlayerPortalSettings.problem(path, text);
+                } else if (path.startsWith("resource-pack.")) {
+                    problem = null; // Validated together below, including enabled-pack completeness.
                 } else if (path.startsWith("events.messages.")) {
                     problem = text.isBlank() || text.length() > 1000 ? "expected 1 to 1000 characters" : null;
                 } else if (path.startsWith("events.")) {
@@ -139,6 +142,11 @@ public final class ReloadFiles {
             }
             result.set(path, value);
         }
+        try {
+            ResourcePackSettings.from(result.getConfigurationSection("resource-pack"));
+        } catch (IllegalArgumentException e) {
+            throw document.invalid("resource-pack", e.getMessage());
+        }
         RewardSettings rewards;
         try {
             rewards = RewardSettings.from(result);
@@ -180,6 +188,7 @@ public final class ReloadFiles {
 
     private static double[] range(String path) {
         return switch (path) {
+            case "resource-pack.timeout-seconds" -> new double[] {1, 600};
             case "arena-world.border-size" -> new double[] {16, 2048};
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};
             case "arena-grid.cell-size" -> new double[] {32, 4096};

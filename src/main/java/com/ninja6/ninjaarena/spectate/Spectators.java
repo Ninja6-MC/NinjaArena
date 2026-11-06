@@ -73,6 +73,12 @@ public final class Spectators implements Listener {
         return viewers.containsKey(id);
     }
 
+    /** Spectators of this match, including any in a transition between worlds. */
+    public java.util.Collection<UUID> players(String arena) {
+        return viewers.entrySet().stream().filter(entry -> entry.getValue().match().arena().equals(arena))
+                .map(Map.Entry::getKey).toList();
+    }
+
     public Optional<ArenaPoint> destination(String arena) {
         return seat(arena).map(Seat::point);
     }

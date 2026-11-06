@@ -1,13 +1,18 @@
 name: Artwork
 
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - 'artwork/**'
       - 'resourcepack/**'
       - '.github/workflows/artwork.yml'
+      - 'build.gradle.kts'
   merge_group:
   workflow_dispatch:
+  release:
+    types: [published]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,6 +26,11 @@ jobs:
     name: Validate Artwork Exports
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      source: ${{ steps.identity.outputs.source }}
+      version: ${{ steps.identity.outputs.version }}
+      attempt: ${{ steps.identity.outputs.attempt }}
+      candidate: ${{ steps.identity.outputs.candidate }}
 
     steps:
       - name: Checkout Code
@@ -28,8 +38,111 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Identify Candidate
+        id: identity
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          source=$(git rev-parse HEAD)
+          version="${RELEASE_TAG:-ci-$source}"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "candidate=java-packs-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+
       - name: Validate Exports Against The Manifest
         run: node artwork/tools/validate-exports.js
 
       - name: Validate Resource Pack Tree
         run: node artwork/tools/validate-pack.js
+
+      - name: Test Pack Builder
+        run: python -m unittest discover -s artwork/tools -p test_java_packs.py -v
+
+      - name: Build Versioned Java Pack Candidate
+        env:
+          PACK_VERSION: ${{ steps.identity.outputs.version }}
+        run: python artwork/tools/java-packs.py build --source "${{ steps.identity.outputs.source }}"
+
+      - name: Retain Candidate And Manifest
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ${{ steps.identity.outputs.candidate }}
+          path: build/resourcepacks/*
+          if-no-files-found: error
+          retention-days: 30
+
+  verify:
+    name: Verify Downloaded Java Packs
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Candidate Source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.source }}
+          persist-credentials: false
+
+      - name: Download Retained Candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ needs.validate.outputs.candidate }}
+          path: build/resourcepacks
+
+      - name: Verify Inventories, Embedded Version And All Bytes
+        env:
+          PACK_VERSION: ${{ needs.validate.outputs.version }}
+          SOURCE: ${{ needs.validate.outputs.source }}
+          CANDIDATE_ATTEMPT: ${{ needs.validate.outputs.attempt }}
+        run: python artwork/tools/java-packs.py verify --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"
+
+      - name: Retain Passing Artifact Evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ${{ needs.validate.outputs.candidate }}-verification
+          path: build/pack-verification.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Attach Verified Packs To Release
+    if: github.event_name == 'release'
+    needs: [validate, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout Verified Source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.source }}
+          persist-credentials: false
+
+      - name: Download Same Candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ needs.validate.outputs.candidate }}
+          path: build/resourcepacks
+
+      - name: Download Passing Artifact Evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ needs.validate.outputs.candidate }}-verification
+          path: build
+
+      - name: Reconcile And Publish Missing Assets Without Rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACK_VERSION: ${{ needs.validate.outputs.version }}
+          SOURCE: ${{ needs.validate.outputs.source }}
+          CANDIDATE_ATTEMPT: ${{ needs.validate.outputs.attempt }}
+        run: python artwork/tools/java-packs.py publish --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"

@@ -4,22 +4,23 @@ import java.util.Optional;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
+import org.bukkit.Color;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
- * The ninja kit tools. Each is a plain vanilla item, so Bedrock clients show the base item,
- * marked with the {@link #KEY} data tag; display names are never used to recognise a tool.
+ * The ninja kit tools use vanilla materials with optional Java artwork, marked with the
+ * {@link #KEY} data tag; display names and models are never used to recognise a tool.
  */
 public enum NinjaTool {
 
     /** Thrown; leaves a cloud that blinds rival players inside it. */
-    SMOKE_BOMB("smoke-bomb", Material.SNOWBALL, "Smoke Bomb", NamespacedKey.minecraft("gunpowder")),
+    SMOKE_BOMB("smoke-bomb", Material.SNOWBALL, "Smoke Bomb", new NamespacedKey("ninjaarena", "smoke_bomb")),
     /** Thrown; deals low damage and makes a rival glow for a few seconds. */
-    SHURIKEN("shuriken", Material.SNOWBALL, "Shuriken", NamespacedKey.minecraft("nether_star")),
+    SHURIKEN("shuriken", Material.SNOWBALL, "Shuriken", new NamespacedKey("ninjaarena", "shuriken")),
     /** Used in place; a short forward burst with a cooldown. Never consumed. */
-    DASH("dash", Material.FEATHER, "Dash", null);
+    DASH("dash", Material.FEATHER, "Dash", new NamespacedKey("ninjaarena", "dash"));
 
     /** The data tag holding a tool item's {@link #key()}. */
     public static final NamespacedKey KEY = new NamespacedKey("ninjaarena", "tool");
@@ -74,17 +75,30 @@ public enum NinjaTool {
 
     /** A new single tool item. Needs a running server. */
     public ItemStack create() {
+        return create(false, 0xFFFFFF);
+    }
+
+    /** Creates a tool with custom artwork only after its recipient has loaded the pack. */
+    public ItemStack create(boolean custom, int color) {
         ItemStack item = ItemStack.of(material);
         item.editMeta(meta -> {
             meta.itemName(Component.text(displayName, NamedTextColor.GRAY));
-            if (model != null) {
-                meta.setItemModel(model);
-            }
+            appearance(meta, custom, color);
             if (this == DASH) {
                 meta.setMaxStackSize(1);
             }
         });
         item.editPersistentDataContainer(data -> data.set(KEY, PersistentDataType.STRING, key));
         return item;
+    }
+
+    /** Only the accent layer reads the first custom-model-data colour. */
+    void appearance(org.bukkit.inventory.meta.ItemMeta meta, boolean custom, int color) {
+        meta.setItemModel(custom ? model : null);
+        if (custom) {
+            var data = meta.getCustomModelDataComponent();
+            data.setColors(java.util.List.of(Color.fromRGB(color)));
+            meta.setCustomModelDataComponent(data);
+        }
     }
 }

@@ -30,6 +30,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Snowball;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -93,6 +94,7 @@ public final class NinjaTools implements Listener {
     private final Function<UUID, Player> players;
     private final Function<String, Optional<ArenaBounds>> bounds;
     private ToolSettings settings;
+    private ToolVisuals visuals;
     private final LongSupplier ticks;
     private final Strike strike;
     private final Function<Location, AreaEffectCloud> clouds;
@@ -139,6 +141,16 @@ public final class NinjaTools implements Listener {
         for (NinjaTool tool : NinjaTool.values()) {
             items.register(tool.kitId(), tool == NinjaTool.DASH ? 1 : 16, player -> tool.create());
         }
+    }
+
+    public static void registerItems(KitItems items, ToolVisuals visuals) {
+        for (NinjaTool tool : NinjaTool.values()) {
+            items.register(tool.kitId(), tool == NinjaTool.DASH ? 1 : 16, player -> visuals.give(tool, player));
+        }
+    }
+
+    public void setVisuals(ToolVisuals visuals) {
+        this.visuals = Objects.requireNonNull(visuals, "visuals");
     }
 
     /**
@@ -224,6 +236,9 @@ public final class NinjaTools implements Listener {
         }
         Projectile projectile = event.getProjectile();
         String arena = matches.matchOf(player.getUniqueId()).orElseThrow().arena();
+        if (visuals != null && projectile instanceof Snowball snowball) {
+            visuals.flight(snowball, tool.get(), matches.match(arena).orElseThrow(), player.getUniqueId());
+        }
         thrown.put(projectile.getUniqueId(), new Thrown(tool.get(), player.getUniqueId(), arena, projectile));
     }
 

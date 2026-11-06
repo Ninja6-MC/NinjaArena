@@ -40,6 +40,21 @@ class NinjaToolTest {
     }
 
     @Test
+    void detectionNeverReadsModelOrNameOrRequiresTheExpectedMaterial() {
+        var tag = new TestTaggedItem(Material.DIAMOND, Map.of(NinjaTool.KEY, "shuriken"), 1);
+        var disguised = new org.bukkit.inventory.ItemStack() {
+            @Override public boolean isEmpty() { return false; }
+            @Override public org.bukkit.inventory.meta.ItemMeta getItemMeta() {
+                throw new AssertionError("recognition must not inspect the model or name");
+            }
+            @Override public io.papermc.paper.persistence.PersistentDataContainerView getPersistentDataContainer() {
+                return tag.getPersistentDataContainer();
+            }
+        };
+        assertEquals(Optional.of(NinjaTool.SHURIKEN), NinjaTool.of(disguised));
+    }
+
+    @Test
     void everyToolRegistersItsKitId() {
         var items = new KitItems();
         NinjaTools.registerItems(items);

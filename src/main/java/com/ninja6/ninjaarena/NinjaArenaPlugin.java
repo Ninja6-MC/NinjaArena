@@ -70,6 +70,10 @@ import com.ninja6.ninjaarena.stats.StatsStore;
 import com.ninja6.ninjaarena.stats.StatsTracker;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import com.ninja6.ninjaarena.tool.ToolSettings;
+import com.ninja6.ninjaarena.tool.ToolVisuals;
+import com.ninja6.ninjaarena.resourcepack.BukkitResourcePacks;
+import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
+import com.ninja6.ninjaarena.resourcepack.ResourcePacks;
 import com.ninja6.ninjaarena.waiting.HostingService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
@@ -114,6 +118,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private EnemyLifecycle enemyLifecycle;
     private KitItems kitItems;
     private NinjaTools tools;
+    private BukkitResourcePacks resourcePacks;
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
     private StatsStore stats;
@@ -181,11 +186,28 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         enemyLifecycle.start(this);
         startStats(enemyLifecycle);
         startPlaceholders();
+        ResourcePackSettings packSettings;
+        try {
+            if (getConfig().contains("resource-pack") && !getConfig().isConfigurationSection("resource-pack")) {
+                throw new IllegalArgumentException("resource-pack must be a section");
+            }
+            packSettings = ResourcePackSettings.from(getConfig().getConfigurationSection("resource-pack"));
+        } catch (IllegalArgumentException e) {
+            getLogger().severe("Resource pack delivery is off: " + e.getMessage()
+                    + ". Fix resource-pack in config.yml and restart. Players keep vanilla visuals.");
+            packSettings = ResourcePackSettings.OFF;
+        }
+        resourcePacks = new BukkitResourcePacks(this, packSettings);
+        resourcePacks.start();
+        ToolVisuals visuals = new ToolVisuals(resourcePacks.packs(),
+                () -> getConfig().getBoolean("resource-pack.thrown-visuals", true),
+                name -> spectators == null ? List.of() : spectators.players(name), matches::matchOf);
         kitItems = new KitItems();
-        NinjaTools.registerItems(kitItems);
+        NinjaTools.registerItems(kitItems, visuals);
         tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
                 ToolSettings.from(getConfig().getConfigurationSection("tools")), Bukkit::getCurrentTick,
                 NinjaTools::damage, at -> at.getWorld().spawn(at, AreaEffectCloud.class));
+        tools.setVisuals(visuals);
         getServer().getPluginManager().registerEvents(tools, this);
         // Stealth, smoke and shuriken marks steer the enemies' targets.
         DirectorService steered = directors;
@@ -465,6 +487,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (resourcePacks != null) {
+            resourcePacks.close();
+            resourcePacks = null;
+        }
         if (rewards != null) {
             rewards.close();
             rewards = null;
@@ -598,6 +624,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** The ninja kit tools and the shuriken mark query; {@code null} while disabled. */
     public NinjaTools tools() {
         return tools;
+    }
+
+    /** Main-thread pack API for explicit Detailed selection; never replaces another plugin's packs. */
+    public ResourcePacks resourcePacks() {
+        return resourcePacks == null ? null : resourcePacks.packs();
     }
 
     /**

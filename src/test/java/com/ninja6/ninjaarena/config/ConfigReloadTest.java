@@ -211,6 +211,66 @@ class ConfigReloadTest {
         assertTrue(reload.reload().get(2).contains("kits.yml (next round)"));
     }
 
+    private static String packConfig() {
+        return """
+                resource-pack:
+                  enabled: true
+                  required: false
+                  thrown-visuals: false
+                  timeout-seconds: 45
+                  url: https://example.test/standard-v1.zip
+                  sha1: '0123456789012345678901234567890123456789'
+                  id: 11111111-1111-4111-8111-111111111111
+                  detailed:
+                    url: https://example.test/detailed-v1.zip
+                    sha1: 'abcdefabcdefabcdefabcdefabcdefabcdefabcd'
+                    id: 22222222-2222-4222-8222-222222222222
+                """;
+    }
+
+    @Test
+    void completePackConfigurationValidatesButOnlyFlightToggleReloads() throws Exception {
+        write(packConfig(), EMPTY_KIT);
+        var config = candidate().config();
+        assertTrue(config.getBoolean("resource-pack.enabled"));
+        assertFalse(config.getBoolean("resource-pack.required"));
+        assertEquals(45, config.getInt("resource-pack.timeout-seconds"));
+        var report = reload.reload();
+        assertTrue(report.get(1).contains("resource-pack.thrown-visuals"), report.toString());
+        for (String key : List.of("enabled", "required", "timeout-seconds", "url", "sha1", "id",
+                "detailed.url", "detailed.sha1", "detailed.id")) {
+            assertTrue(report.get(3).contains("resource-pack." + key + " (restart required)"), key);
+        }
+        assertFalse(target.published.getBoolean("resource-pack.enabled"));
+        assertFalse(target.published.getBoolean("resource-pack.thrown-visuals"));
+        assertEquals("", target.published.getString("resource-pack.url"));
+    }
+
+    @Test
+    void invalidEnabledPackRejectsBothFilesAndPreservesTheLastSettings() throws Exception {
+        write("resource-pack: {thrown-visuals: false}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        var accepted = target.published;
+        target.calls.clear();
+        for (String bad : List.of("resource-pack: {enabled: true}",
+                packConfig().replace("https://example.test/standard-v1.zip", "http://example.test/pack.zip"),
+                packConfig().replace("0123456789012345678901234567890123456789", "bad-hash"),
+                packConfig().replace("11111111-1111-4111-8111-111111111111", "bad-id"),
+                packConfig().replace("timeout-seconds: 45", "timeout-seconds: 601"),
+                packConfig().replace("timeout-seconds: 45", "timeout-seconds: 1.5"),
+                packConfig().replace("required: false", "required: 'false'"),
+                packConfig().replace("thrown-visuals: false", "thrown-visuals: 'true'"),
+                packConfig().replace("https://example.test/detailed-v1.zip", ""),
+                packConfig().replace("22222222-2222-4222-8222-222222222222", "11111111-1111-4111-8111-111111111111"))) {
+            write(bad + "\nwaiting-room: {radius: 10}\n", EMPTY_KIT);
+            var report = reload.reload();
+            assertTrue(report.getFirst().contains("rejected") && report.getFirst().contains("resource-pack"),
+                    report.toString());
+            assertEquals(accepted, target.published);
+            assertTrue(target.calls.isEmpty());
+        }
+    }
+
     @Test
     void everyConfigLeafHasStrictTypeValidation() throws Exception {
         var defaults = ReloadFiles.defaults();
