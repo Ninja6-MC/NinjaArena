@@ -56,6 +56,15 @@ public final class BedrockSelections {
         return selected;
     }
 
+    /** The quality frozen for this connection at negotiation, or empty before it negotiated. */
+    public synchronized java.util.Optional<Quality> active(Object connection) {
+        return java.util.Optional.ofNullable(selections.get(connection));
+    }
+
+    public boolean detailedAvailable() {
+        return detailedAvailable;
+    }
+
     public synchronized boolean selected(Object connection) {
         return selections.containsKey(connection);
     }

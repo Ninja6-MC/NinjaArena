@@ -258,18 +258,74 @@ class ResourcePacksTest {
     }
 
     @Test
-    void detailedFailureAndTimeoutNeverEnforceTheOptionalOverlay() {
+    void detailedFailureAndTimeoutNeverEnforceTheOptionalOverlayAndEachConnectionGetsOneOffer() {
         ResourcePacks packs = packs(true);
         load(packs);
         assertTrue(packs.addDetailed(PLAYER));
         packs.status(PLAYER, DETAIL.id(), Status.FAILED_RELOAD);
         assertTrue(packs.loaded(PLAYER));
+        assertEquals(ResourcePacks.OverlayState.FAILED, packs.overlay(PLAYER));
+        assertEquals("could not be reloaded", packs.overlayReason(PLAYER));
+        assertFalse(packs.addDetailed(PLAYER));
+        packs.quit(PLAYER);
+        load(packs);
+        assertEquals(ResourcePacks.OverlayState.NONE, packs.overlay(PLAYER));
         assertTrue(packs.addDetailed(PLAYER));
         ticks.set(2_400);
         packs.tick();
         assertTrue(packs.loaded(PLAYER));
+        assertEquals(ResourcePacks.OverlayState.FAILED, packs.overlay(PLAYER));
+        assertEquals("timed out while loading", packs.overlayReason(PLAYER));
+        assertFalse(packs.addDetailed(PLAYER));
         assertTrue(wire.kicks.isEmpty());
         assertEquals(List.of(new Removed(PLAYER, DETAIL.id()), new Removed(PLAYER, DETAIL.id())), wire.removed);
+    }
+
+    @Test
+    void overlayStatesAndListenerFollowTheClientsReports() {
+        ResourcePacks packs = packs(false);
+        List<String> events = new ArrayList<>();
+        packs.setListener(new ResourcePacks.Listener() {
+            @Override public void baseLoaded(UUID player) { events.add("base"); }
+            @Override public void overlay(UUID player, ResourcePacks.OverlayState state, String reason) {
+                events.add(state + (reason.isEmpty() ? "" : ":" + reason));
+            }
+        });
+        assertTrue(packs.detailedConfigured());
+        packs.join(PLAYER);
+        packs.status(PLAYER, BASE.id(), Status.ACCEPTED);
+        packs.status(PLAYER, BASE.id(), Status.SUCCESSFULLY_LOADED);
+        packs.status(PLAYER, BASE.id(), Status.SUCCESSFULLY_LOADED);
+        assertTrue(packs.addDetailed(PLAYER));
+        packs.status(PLAYER, DETAIL.id(), Status.ACCEPTED);
+        packs.status(PLAYER, DETAIL.id(), Status.DOWNLOADED);
+        assertEquals(ResourcePacks.OverlayState.PENDING, packs.overlay(PLAYER));
+        packs.status(PLAYER, DETAIL.id(), Status.SUCCESSFULLY_LOADED);
+        assertEquals(ResourcePacks.OverlayState.LOADED, packs.overlay(PLAYER));
+        packs.removeDetailed(PLAYER);
+        assertEquals(List.of("base", "PENDING", "LOADED", "CANCELLED"), events);
+        assertEquals(ResourcePacks.OverlayState.NONE, packs.overlay(UUID.randomUUID()));
+    }
+
+    @Test
+    void declineIsADistinctOverlayOutcomeFromFailure() {
+        ResourcePacks packs = packs(true);
+        load(packs);
+        packs.addDetailed(PLAYER);
+        packs.status(PLAYER, DETAIL.id(), Status.DECLINED);
+        assertEquals(ResourcePacks.OverlayState.DECLINED, packs.overlay(PLAYER));
+        assertTrue(packs.loaded(PLAYER));
+        assertTrue(wire.kicks.isEmpty());
+    }
+
+    @Test
+    void anUnconfiguredOverlayIsNeverRequested() {
+        ResourcePacks packs = new ResourcePacks(new ResourcePackSettings(true, true, true, 120, BASE, Optional.empty()),
+                wire, ticks::get);
+        assertFalse(packs.detailedConfigured());
+        load(packs);
+        assertFalse(packs.addDetailed(PLAYER));
+        assertEquals(ResourcePacks.OverlayState.NONE, packs.overlay(PLAYER));
     }
 
     @Test

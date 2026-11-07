@@ -7,9 +7,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
 
-/** Opens connections to the stats database. Only the stats thread calls it. */
+/** Opens connections to the shared storage database. Only the owning storage thread calls it. */
 @FunctionalInterface
-interface ConnectionSource {
+public interface ConnectionSource {
 
     /** Bundled with Paper; looked up at runtime because the plugin does not ship drivers. */
     String SQLITE_DRIVER = "org.sqlite.JDBC";
@@ -19,12 +19,12 @@ interface ConnectionSource {
 
     /** A driver class that is not on the server; retrying cannot help. */
     final class MissingDriver extends Exception {
-        MissingDriver(String message, Throwable cause) {
+        public MissingDriver(String message, Throwable cause) {
             super(message, cause);
         }
     }
 
-    static ConnectionSource sqlite(Path file, String driverClass) throws MissingDriver {
+    public static ConnectionSource sqlite(Path file, String driverClass) throws MissingDriver {
         Driver driver = driver(driverClass, "SQLite");
         String url = "jdbc:sqlite:" + file.toAbsolutePath();
         return () -> {
@@ -41,7 +41,7 @@ interface ConnectionSource {
         };
     }
 
-    static ConnectionSource mysql(StatsSettings.MySql settings, String driverClass) throws MissingDriver {
+    public static ConnectionSource mysql(StatsSettings.MySql settings, String driverClass) throws MissingDriver {
         Driver driver = driver(driverClass, "MySQL");
         String host = settings.host().contains(":") && !settings.host().startsWith("[")
                 ? "[" + settings.host() + "]" : settings.host();

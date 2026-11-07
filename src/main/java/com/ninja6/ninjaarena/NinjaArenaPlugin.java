@@ -96,9 +96,11 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import java.util.List;
 import java.util.Optional;
 import java.util.SplittableRandom;
+import java.util.UUID;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.AreaEffectCloud;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -125,6 +127,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private BukkitResourcePacks resourcePacks;
     private ResourcePackSettings activePackSettings = ResourcePackSettings.OFF;
     private BedrockIntegration bedrock = BedrockIntegration.NONE;
+    private com.ninja6.ninjaarena.texture.PreferenceStore preferences;
+    private com.ninja6.ninjaarena.texture.TextureService textures;
+    private com.ninja6.ninjaarena.texture.TextureMenu textureMenu;
+    private com.ninja6.ninjaarena.command.TextureCommands textureCommands;
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
     private StatsStore stats;
@@ -223,6 +229,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getLogger().info(packStatus());
         resourcePacks = new BukkitResourcePacks(this, packSettings, bedrock::isBedrock);
         resourcePacks.start();
+        startTextures(packSettings);
         ToolVisuals visuals = new ToolVisuals(resourcePacks.packs(),
                 id -> bedrock.isBedrock(id) ? bedrock.customHeld(id) : resourcePacks.packs().loaded(id),
                 () -> getConfig().getBoolean("resource-pack.thrown-visuals", true),
@@ -433,6 +440,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats),
                 new EventCommand(arenaEvents));
         command.setPackStatus(this::packStatus);
+        command.setTextures(textureCommands);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -499,6 +507,87 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         rewards = new Rewards(this, arenaWorld::world, rewardSettings);
     }
 
+    /**
+     * Player texture quality choices. They share the stats storage settings (SQLite by default,
+     * optionally MySQL) but live in their own tables and work whether or not stats are enabled.
+     */
+    private void startTextures(ResourcePackSettings packSettings) {
+        String off = "Texture quality choices are off: custom tool visuals are disabled on this server.";
+        textureCommands = disabledTextures(off);
+        if (!packSettings.enabled()) {
+            return;
+        }
+        StatsSettings storage;
+        try {
+            storage = StatsSettings.from(getConfig().getConfigurationSection("stats"));
+        } catch (IllegalArgumentException e) {
+            getLogger().severe("Texture quality choices are off: " + e.getMessage()
+                    + ". Fix the stats storage settings in config.yml and restart.");
+            textureCommands = disabledTextures("Texture quality choices are off: the storage settings are invalid.");
+            return;
+        }
+        com.ninja6.ninjaarena.texture.PreferenceStore store = com.ninja6.ninjaarena.texture.PreferenceStore.open(
+                storage, getDataFolder().toPath(), getLogger());
+        preferences = store;
+        java.util.concurrent.Executor main = task -> {
+            if (isEnabled()) {
+                getServer().getScheduler().runTask(this, task);
+            }
+        };
+        com.ninja6.ninjaarena.texture.TextureService.Notifier notifier = (id, message) -> {
+            Player online = getServer().getPlayer(id);
+            if (online != null) {
+                online.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+            }
+        };
+        BedrockIntegration integration = bedrock;
+        textures = new com.ninja6.ninjaarena.texture.TextureService(store, resourcePacks.packs(),
+                new com.ninja6.ninjaarena.texture.TextureService.Identities() {
+                    @Override public boolean bedrock(UUID player) { return integration.isBedrock(player); }
+                    @Override public boolean javaAuthenticated() {
+                        return getServer().getOnlineMode() || getServer().getServerConfig().isProxyOnlineMode();
+                    }
+                    @Override public Optional<String> xuid(UUID player) { return integration.xuid(player); }
+                    @Override public Optional<BedrockSelections.Quality> bedrockActive(UUID player) {
+                        return integration.activeQuality(player);
+                    }
+                    @Override public boolean bedrockDetailedAvailable() { return integration.detailedAvailable(); }
+                    @Override public String bedrockStatus() { return integration.status(); }
+                }, main, notifier);
+        textureMenu = new com.ninja6.ninjaarena.texture.TextureMenu(textures,
+                new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), notifier);
+        getServer().getPluginManager().registerEvents(
+                new com.ninja6.ninjaarena.texture.TextureListener(textures, textureMenu), this);
+        for (Player online : getServer().getOnlinePlayers()) {
+            textures.join(online.getUniqueId());
+        }
+        // Bedrock negotiation reads only this memory snapshot, and only once it has loaded.
+        store.whenReady(() -> integration.selections().ifPresent(selections -> selections.selector(
+                xuid -> store.snapshot(com.ninja6.ninjaarena.texture.PlayerKey.bedrock(xuid)))));
+        com.ninja6.ninjaarena.texture.TextureService service = textures;
+        com.ninja6.ninjaarena.texture.TextureMenu menu = textureMenu;
+        textureCommands = new com.ninja6.ninjaarena.command.TextureCommands() {
+            @Override public void open(Player player) { menu.open(player); }
+            @Override public void reset(org.bukkit.command.CommandSender sender,
+                    com.ninja6.ninjaarena.texture.PlayerKey key) {
+                service.reset(key, result -> sender.sendMessage(Component.text(result.message(),
+                        result.saved() ? NamedTextColor.GREEN : NamedTextColor.RED)));
+            }
+        };
+    }
+
+    private static com.ninja6.ninjaarena.command.TextureCommands disabledTextures(String message) {
+        return new com.ninja6.ninjaarena.command.TextureCommands() {
+            @Override public void open(Player player) {
+                player.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+            }
+            @Override public void reset(org.bukkit.command.CommandSender sender,
+                    com.ninja6.ninjaarena.texture.PlayerKey key) {
+                sender.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+            }
+        };
+    }
+
     private void startPlaceholders() {
         if (!getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             return;
@@ -518,6 +607,19 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (textureMenu != null) {
+            textureMenu.closeAll(getServer()::getPlayer);
+            textureMenu = null;
+        }
+        if (textures != null) {
+            textures.closeAll();
+            textures = null;
+        }
+        if (preferences != null) {
+            preferences.close();
+            preferences = null;
+        }
+        textureCommands = null;
         if (resourcePacks != null) {
             resourcePacks.close();
             resourcePacks = null;
