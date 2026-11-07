@@ -2,7 +2,7 @@
   <!-- Geometry only. Paint and plates are supplied by scripts/export-icons.mjs.
        Crossed Minecraft combat broad-katanas with stepped chisel points,
        solid stepped broadblade bodies, flared quillons, and center combat gem.
-       Full-size strokes are 48 units; the small cut uses 118 with crossguard bars. -->
+       Full-size strokes are 48 units; the small cut uses 118 with stepped quillons crossing each blade. -->
   <defs>
     <g id="geo">
       <polyline points="212,272 212,212 272,212" fill="none" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter" />
@@ -24,8 +24,8 @@
     <g id="geo-small">
       <polyline points="272,272 332,272 332,332 392,332 392,392 452,392 452,452 512,452 512,512 572,512 572,572 632,572 632,632 692,632 692,692 752,692 752,752" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
       <polyline points="752,272 692,272 692,332 632,332 632,392 572,392 572,452 512,452 512,512 452,512 452,572 392,572 392,632 332,632 332,692 272,692 272,752" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
-      <polyline points="512,632 572,632 572,572 632,572" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
-      <polyline points="512,632 452,632 452,572 392,572" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
+      <polyline points="602,662 602,632 632,632 632,572 722,572" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
+      <polyline points="422,662 422,632 392,632 392,572 302,572" fill="none" stroke-width="118" stroke-linecap="square" stroke-linejoin="miter" />
     </g>
   </defs>
 </svg>
