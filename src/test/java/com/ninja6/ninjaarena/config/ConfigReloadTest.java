@@ -12,6 +12,8 @@ import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
+import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
+import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
 import com.ninja6.ninjaarena.resourcepack.geyser.GeyserConfigSource;
 import com.ninja6.ninjaarena.resourcepack.geyser.GeyserEnforcement;
 import com.ninja6.ninjaarena.tool.NinjaTools;
@@ -25,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -303,12 +306,35 @@ class ConfigReloadTest {
     @Test
     void removedBedrockKeysNameTheirReplacementsAndChangeNothing() throws Exception {
         for (String key : List.of("enabled", "geyser-enforces-packs")) {
-            write("resource-pack: {bedrock: {" + key + ": false}}", EMPTY_KIT);
-            var report = reload.reload();
-            assertTrue(report.getFirst().contains("resource-pack.bedrock." + key), report.toString());
-            assertTrue(report.getFirst().contains(key.equals("enabled") ? "resource-pack.enabled"
-                    : "resource-pack.required"), report.toString());
-            assertTrue(target.calls.isEmpty());
+            for (boolean value : List.of(false, true)) {
+                for (boolean pins : List.of(false, true)) {
+                    for (boolean enabled : List.of(false, true)) {
+                        var config = new YamlConfiguration();
+                        config.loadFromString(packConfig());
+                        config.set("resource-pack.enabled", enabled);
+                        if (pins) {
+                            config.set("resource-pack.bedrock.standard.file", "standard.mcpack");
+                            config.set("resource-pack.bedrock.standard.sha256", "a".repeat(64));
+                        }
+                        var section = config.getConfigurationSection("resource-pack");
+                        var javaSettings = ResourcePackSettings.from(section);
+                        config.set("resource-pack.bedrock." + key, value);
+                        write(config.saveToString(), EMPTY_KIT);
+                        var startup = assertThrows(IllegalArgumentException.class,
+                                () -> BedrockPackSettings.validateRemovedKeys(section));
+                        assertEquals(startup.getMessage(), assertThrows(IllegalArgumentException.class,
+                                () -> BedrockPackSettings.from(section)).getMessage());
+                        var rejected = assertThrows(ReloadYaml.Invalid.class, this::candidate);
+                        assertTrue(rejected.getMessage().endsWith(startup.getMessage()), rejected.getMessage());
+                        assertTrue(startup.getMessage().contains(key.equals("enabled") ? "resource-pack.enabled"
+                                : "resource-pack.required"), startup.getMessage());
+                        var report = reload.reload();
+                        assertTrue(report.getFirst().contains(startup.getMessage()), report.toString());
+                        assertTrue(target.calls.isEmpty());
+                        assertEquals(javaSettings, ResourcePackSettings.from(section));
+                    }
+                }
+            }
         }
     }
 

@@ -59,11 +59,9 @@ public final class ReloadFiles {
         YamlConfiguration result = new YamlConfiguration();
         for (var entry : document.nodes().entrySet()) {
             String path = entry.getKey();
-            if (path.equals("resource-pack.bedrock.enabled")) {
-                throw document.invalidKey(path, "removed; use resource-pack.enabled and configure resource-pack.bedrock.standard file/sha256");
-            }
-            if (path.equals("resource-pack.bedrock.geyser-enforces-packs")) {
-                throw document.invalidKey(path, "removed; use resource-pack.required, set gameplay.force-resource-packs: true in Geyser, and confirm resource-pack.bedrock.mappings-installed");
+            String removed = BedrockPackSettings.removedKeyProblem(path);
+            if (removed != null) {
+                throw document.invalidKey(path, removed);
             }
             if (path.startsWith("events.schedule.") || path.startsWith("rewards.milestones.") || path.startsWith("rewards.placings.")) {
                 continue; // RewardSettings validates the contents of these lists.

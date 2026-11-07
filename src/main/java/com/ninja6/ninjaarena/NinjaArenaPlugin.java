@@ -205,6 +205,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         }
         BedrockPackSettings bedrockSettings;
         try {
+            BedrockPackSettings.validateRemovedKeys(getConfig().getConfigurationSection("resource-pack"));
             bedrockSettings = packSettings.enabled()
                     ? BedrockPackSettings.from(getConfig().getConfigurationSection("resource-pack")) : BedrockPackSettings.OFF;
         } catch (IllegalArgumentException e) {
