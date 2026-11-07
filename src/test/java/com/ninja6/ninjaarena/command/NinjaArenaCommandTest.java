@@ -55,7 +55,8 @@ class NinjaArenaCommandTest {
         int[] reads = {0};
         String status = com.ninja6.ninjaarena.resourcepack.PackStatus.describe(
                 com.ninja6.ninjaarena.resourcepack.ResourcePackSettings.OFF,
-                "vanilla (same-server Geyser absent, disabled or unavailable)");
+                "vanilla (same-server Geyser absent, disabled or unavailable)",
+                com.ninja6.ninjaarena.resourcepack.JavaAuthentication.NONE);
         command.setPackStatus(() -> { reads[0]++; return status; });
         Player admin = playerWithPermissions(NinjaArenaCommand.ADMIN);
         Player player = playerWithPermissions(NinjaArenaCommand.PLAY);
@@ -69,7 +70,7 @@ class NinjaArenaCommandTest {
         run(admin, "pack status");
         assertEquals(1, reads[0]);
         assertEquals(status, messages.getLast());
-        assertTrue(status.contains("Java: disabled; Bedrock: vanilla"));
+        assertTrue(status.contains("Java: disabled; Java accounts: not authenticated: choices last one connection; Bedrock: vanilla"));
     }
 
     @Test

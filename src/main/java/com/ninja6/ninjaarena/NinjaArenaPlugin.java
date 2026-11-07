@@ -545,7 +545,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 new com.ninja6.ninjaarena.texture.TextureService.Identities() {
                     @Override public boolean bedrock(UUID player) { return integration.isBedrock(player); }
                     @Override public boolean javaAuthenticated() {
-                        return getServer().getOnlineMode() || getServer().getServerConfig().isProxyOnlineMode();
+                        return javaAuthentication().authenticated();
                     }
                     @Override public Optional<String> xuid(UUID player) { return integration.xuid(player); }
                     @Override public Optional<BedrockSelections.Quality> bedrockActive(UUID player) {
@@ -767,7 +767,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     }
 
     private String packStatus() {
-        return com.ninja6.ninjaarena.resourcepack.PackStatus.describe(activePackSettings, bedrock.status());
+        return com.ninja6.ninjaarena.resourcepack.PackStatus.describe(activePackSettings, bedrock.status(),
+                javaAuthentication());
+    }
+
+    private com.ninja6.ninjaarena.resourcepack.JavaAuthentication javaAuthentication() {
+        return com.ninja6.ninjaarena.resourcepack.JavaAuthentication.resolve(getServer().getOnlineMode(),
+                getServer().getServerConfig().isProxyOnlineMode(), activePackSettings.javaLoginGate());
     }
 
     private BedrockIntegration startBedrock(BedrockPackSettings settings) {

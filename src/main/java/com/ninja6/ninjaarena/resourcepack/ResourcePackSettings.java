@@ -9,10 +9,16 @@ import org.bukkit.configuration.ConfigurationSection;
 
 /** Validated delivery configuration. Missing enabled configuration is rejected before any prompt is sent. */
 public record ResourcePackSettings(boolean enabled, boolean required, boolean thrownVisuals, int timeoutSeconds,
-        Pack base, Optional<Pack> detailed) {
+        Pack base, Optional<Pack> detailed, boolean javaLoginGate) {
 
     public static final ResourcePackSettings OFF = new ResourcePackSettings(false, true, true, 120, null,
             Optional.empty());
+
+    /** Settings without a declared login gate. */
+    public ResourcePackSettings(boolean enabled, boolean required, boolean thrownVisuals, int timeoutSeconds,
+            Pack base, Optional<Pack> detailed) {
+        this(enabled, required, thrownVisuals, timeoutSeconds, base, detailed, false);
+    }
 
     public record Pack(UUID id, String url, String sha1) {
         public Pack {
@@ -58,12 +64,13 @@ public record ResourcePackSettings(boolean enabled, boolean required, boolean th
         boolean enabled = bool(section, "enabled", false);
         boolean required = bool(section, "required", true);
         boolean thrown = bool(section, "thrown-visuals", true);
+        boolean loginGate = bool(section, "java-login-gate", false);
         Object timeout = section.get("timeout-seconds", 120);
         if (!(timeout instanceof Integer seconds)) {
             throw new IllegalArgumentException("resource-pack.timeout-seconds must be an integer");
         }
         if (!enabled) {
-            return new ResourcePackSettings(false, required, thrown, seconds, null, Optional.empty());
+            return new ResourcePackSettings(false, required, thrown, seconds, null, Optional.empty(), loginGate);
         }
         if (section.contains("detailed") && !section.isConfigurationSection("detailed")) {
             throw new IllegalArgumentException("resource-pack.detailed must be a section");
@@ -74,7 +81,8 @@ public record ResourcePackSettings(boolean enabled, boolean required, boolean th
                 || !text(section, detailedPrefix + "sha1").isBlank()
                 || !text(section, detailedPrefix + "id").isBlank();
         return new ResourcePackSettings(true, required, thrown, seconds, base,
-                hasDetailed ? Optional.of(pack(section, detailedPrefix, "resource-pack.detailed")) : Optional.empty());
+                hasDetailed ? Optional.of(pack(section, detailedPrefix, "resource-pack.detailed")) : Optional.empty(),
+                loginGate);
     }
 
     private static Pack pack(ConfigurationSection section, String prefix, String path) {

@@ -91,6 +91,7 @@ resource-pack:
   enabled: false
   required: true
   thrown-visuals: true
+  java-login-gate: false
   timeout-seconds: 120
   url: ''
   sha1: ''
@@ -283,6 +284,7 @@ forced reconnect or repeated offer.
 | `resource-pack.required` | Kicks on decline or failure | Allows custom held models only with verified Geyser enforcement; false keeps vanilla tools without an enforcement warning |
 | `resource-pack.url` / `sha1` / `id` | Required Standard HTTPS pack identity and pin | No effect |
 | `resource-pack.detailed.url` / `sha1` / `id` | Optional overlay identity and pin | No effect |
+| `resource-pack.java-login-gate` | Default `false`. Declares that a login plugin gates Java accounts, so choices are saved by account UUID (restart required; see Player texture quality) | No effect |
 | `resource-pack.timeout-seconds` | Time limit for loading a pack | No second timer; Geyser owns negotiation |
 | `resource-pack.thrown-visuals` | Enables custom flight when every viewer loaded the pack | Flight remains vanilla |
 | `resource-pack.bedrock.mappings-installed` | No effect | Confirms matching mappings were installed; false keeps vanilla tools |
@@ -409,11 +411,37 @@ Only explicit choices are stored: identity, quality and revision/update times.
 No record means Standard. Keys never merge editions and are never guessed from a
 name:
 
-- native Java: `java:<authenticated account UUID>`, used only when the server or its
-  proxy authenticates accounts (`online-mode` or a proxy that reports online mode);
+- native Java: `java:<authenticated account UUID>`, used only when Java accounts
+  count as authenticated: `online-mode`, a proxy that reports online mode, or
+  `resource-pack.java-login-gate: true`;
 - Geyser/Floodgate: `bedrock:<authenticated XUID>` from Geyser's connection;
-- a missing, blank or non-numeric XUID, or unauthenticated Java accounts, give no
-  identity: the player is Standard and nothing can be saved.
+- a missing, blank or non-numeric XUID gives no identity: the Bedrock player is
+  Standard and nothing can be saved.
+
+Startup and `/narena pack status` report which of these applies:
+`authenticated (online mode)`, `authenticated (online proxy)`,
+`authenticated (operator-declared login gate)` or
+`not authenticated: choices last one connection`.
+
+#### Offline-mode servers
+
+Both settings below apply to Java players only; Bedrock is unchanged.
+
+- `resource-pack.java-login-gate: true` (default `false`, restart required) is the
+  operator's statement that a login plugin blocks commands until a Java player has
+  logged in. Java accounts then count as authenticated and the same `java:<uuid>`
+  preference is saved, read and applied as on an online-mode server; there is no
+  schema change. The trade-off is plain: on an offline-mode server, whoever holds a
+  player name can use that name's account UUID, so whoever holds the name can change
+  that name's cosmetic quality. Enable it only where a login plugin (AuthMe by
+  default) blocks commands before login.
+- With the setting off and Java accounts not authenticated, a player may still pick
+  a quality for the current connection only. The choice is kept in memory against
+  that connection, never written to storage, and dropped when the player leaves, so
+  it does not reach a later connection or another player. Detailed loads through
+  the usual overlay request (after Standard has loaded, once per connection, never
+  required). The menu and the command reply say the choice is not saved and resets
+  when they leave.
 
 Database work runs on one thread of its own and writes are serialized. A write
 publishes its committed value to a thread-safe snapshot before success is

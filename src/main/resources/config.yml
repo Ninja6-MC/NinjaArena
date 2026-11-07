@@ -6,6 +6,15 @@ resource-pack:
   required: true
   # Live-reloadable flight fallback. All other resource-pack keys require a restart.
   thrown-visuals: true
+  # Declares that a login plugin (AuthMe by default) blocks commands until a Java
+  # player has logged in, even though the server is offline-mode. When true, Java
+  # accounts count as authenticated and a player's Standard/Detailed choice is saved
+  # under their account UUID, exactly as on an online-mode server. Trade-off: whoever
+  # holds a player name can change that name's cosmetic quality, so enable it only
+  # where the login plugin gates commands. When false and the server is offline-mode
+  # with no online proxy, Java players may still choose, but only for the current
+  # connection: it is never saved and resets when they leave. Requires a restart.
+  java-login-gate: false
   timeout-seconds: 120
   # Direct HTTPS ZIP URL, its 40-character SHA-1 and a UUID owned by this plugin.
   # Keep identity stable between versions; change URL and hash when the ZIP changes.

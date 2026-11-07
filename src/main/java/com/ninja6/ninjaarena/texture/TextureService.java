@@ -25,7 +25,10 @@ public final class TextureService implements ResourcePacks.Listener {
     public interface Identities {
         boolean bedrock(UUID player);
 
-        /** Whether Java account UUIDs are authenticated: online mode or a trusted online proxy. */
+        /**
+         * Whether Java account UUIDs are authenticated: online mode, a trusted online proxy or an
+         * operator-declared login gate. When false, a Java player's choice lasts one connection.
+         */
         boolean javaAuthenticated();
 
         /** The authenticated Xbox user id of a connected Bedrock player, if Geyser reports one. */
@@ -51,7 +54,7 @@ public final class TextureService implements ResourcePacks.Listener {
 
     /** Everything the menu and status show for one player. */
     public record View(Optional<PlayerKey> key, boolean bedrock, Optional<Quality> explicit, Quality saved,
-            boolean detailedAvailable, String delivery, String storage) {
+            boolean detailedAvailable, String delivery, String storage, boolean sessionOnly) {
     }
 
     private static final class Session {
@@ -59,16 +62,20 @@ public final class TextureService implements ResourcePacks.Listener {
         private final Optional<PlayerKey> key;
         private Quality preference;
         private boolean loadFailed;
+        /** A Java connection with no trusted identity: the choice lives here and nowhere else. */
+        private final boolean sessionOnly;
         private long choice;
 
-        private Session(long id, Optional<PlayerKey> key) {
+        private Session(long id, Optional<PlayerKey> key, boolean sessionOnly) {
             this.id = id;
             this.key = key;
+            this.sessionOnly = sessionOnly;
         }
     }
 
     public static final String SAVE_FAILED = "Could not save: texture preference storage is unavailable."
             + " Nothing was changed.";
+    public static final String SESSION_ONLY_NOTE = "This is not saved and resets when you leave.";
     public static final String BEDROCK_SAVED_TAIL = " Applies on your next connection. Pack loading cannot be observed.";
 
     private final PreferenceStore store;
@@ -103,7 +110,9 @@ public final class TextureService implements ResourcePacks.Listener {
 
     /** Starts a connection's session and reads its saved choice off the server thread. */
     public void join(UUID player) {
-        Session session = new Session(++sequence, identity(player));
+        Optional<PlayerKey> identity = identity(player);
+        Session session = new Session(++sequence, identity, identity.isEmpty() && !identities.bedrock(player));
+        session.preference = Quality.STANDARD;
         sessions.put(player, session);
         if (session.key.isEmpty() || identities.bedrock(player)) {
             return;
@@ -168,13 +177,20 @@ public final class TextureService implements ResourcePacks.Listener {
     @Override
     public void overlay(UUID player, OverlayState state, String reason) {
         switch (state) {
-            case DECLINED -> notifier.tell(player, "Detailed was declined. Standard stays active and your Detailed"
-                    + " choice is kept for your next connection.");
+            case DECLINED -> notifier.tell(player, "Detailed was declined. Standard stays active and "
+                    + keptNote(player));
             case FAILED -> notifier.tell(player, "Detailed could not be loaded (" + reason + "). Standard stays"
-                    + " active and your Detailed choice is kept for your next connection.");
+                    + " active and " + keptNote(player));
             case LOADED -> notifier.tell(player, "Detailed is now active.");
             default -> { }
         }
+    }
+
+    private String keptNote(UUID player) {
+        Session session = sessions.get(player);
+        return session != null && session.sessionOnly
+                ? "your Detailed choice was for this connection only and is not saved."
+                : "your Detailed choice is kept for your next connection.";
     }
 
     private boolean detailedAvailable(UUID player) {
@@ -185,16 +201,19 @@ public final class TextureService implements ResourcePacks.Listener {
     public View describe(UUID player) {
         Session session = session(player);
         boolean bedrock = identities.bedrock(player);
-        Optional<Quality> explicit = session.key.flatMap(store::explicit);
+        Optional<Quality> explicit = session.sessionOnly ? Optional.of(session.preference)
+                : session.key.flatMap(store::explicit);
         Quality saved = explicit.orElse(Quality.STANDARD);
-        String storage = switch (store.health()) {
+        String storage = session.sessionOnly ? "" : switch (store.health()) {
             case READY -> "";
             case STARTING -> "Storage is still starting; Standard is used until it is ready.";
             case DEGRADED -> "Storage is unavailable; Standard is used and choices cannot be saved.";
             case UNSUPPORTED -> "Storage is unsupported (" + store.problem() + "); Standard is used.";
         };
         String delivery;
-        if (session.key.isEmpty()) {
+        if (session.sessionOnly) {
+            delivery = javaDelivery(player, saved) + ". Your choice is for this connection only: " + SESSION_ONLY_NOTE;
+        } else if (session.key.isEmpty()) {
             delivery = "Standard (your account could not be verified, so nothing is saved)";
         } else if (store.health() != Health.READY && explicit.isEmpty()) {
             delivery = "Standard (saved choices are unavailable)";
@@ -203,7 +222,8 @@ public final class TextureService implements ResourcePacks.Listener {
         } else {
             delivery = javaDelivery(player, saved);
         }
-        return new View(session.key, bedrock, explicit, saved, detailedAvailable(player), delivery, storage);
+        return new View(session.key, bedrock, explicit, saved, detailedAvailable(player), delivery, storage,
+                session.sessionOnly);
     }
 
     private String bedrockDelivery(UUID player, Quality saved) {
@@ -246,13 +266,23 @@ public final class TextureService implements ResourcePacks.Listener {
     public void choose(UUID player, Quality quality, Consumer<Result> done) {
         Session session = session(player);
         boolean bedrock = identities.bedrock(player);
-        if (session.key.isEmpty()) {
-            done.accept(new Result(false, "Your account could not be verified, so Standard is used and nothing"
-                    + " can be saved."));
+        if (session.key.isEmpty() && !session.sessionOnly) {
+            done.accept(new Result(false, "Your Bedrock account could not be verified, so Standard is used and"
+                    + " nothing can be saved."));
             return;
         }
         if (quality == Quality.DETAILED && !detailedAvailable(player)) {
             done.accept(new Result(false, "Detailed is not set up on this server, so nothing was changed."));
+            return;
+        }
+        if (session.sessionOnly) {
+            session.preference = quality;
+            if (quality == Quality.STANDARD) {
+                packs.removeDetailed(player);
+            } else {
+                reconcile(player, session);
+            }
+            done.accept(new Result(false, savedMessage(player, quality, true, true)));
             return;
         }
         if (!bedrock && quality == Quality.STANDARD) {
@@ -276,12 +306,13 @@ public final class TextureService implements ResourcePacks.Listener {
                     reconcile(player, current);
                 }
             }
-            done.accept(new Result(true, savedMessage(player, quality, live)));
+            done.accept(new Result(true, savedMessage(player, quality, live, false)));
         }));
     }
 
-    private String savedMessage(UUID player, Quality quality, boolean live) {
-        String saved = "Saved: " + display(quality) + ".";
+    private String savedMessage(UUID player, Quality quality, boolean live, boolean sessionOnly) {
+        String saved = sessionOnly ? display(quality) + " chosen for this connection only. " + SESSION_ONLY_NOTE
+                : "Saved: " + display(quality) + ".";
         if (identities.bedrock(player)) {
             return saved + BEDROCK_SAVED_TAIL;
         }
@@ -295,8 +326,11 @@ public final class TextureService implements ResourcePacks.Listener {
             case PENDING -> " Requesting the Detailed overlay now. If you decline it, Standard stays active.";
             case LOADED -> " It is already active.";
             case NONE -> " It will be requested once Standard has loaded.";
-            default -> " This connection already used its one overlay request, so Detailed applies on your next"
-                    + " connection.";
+            default -> sessionOnly
+                    ? " This connection already used its one overlay request, so Detailed cannot load until you"
+                            + " reconnect and choose it again."
+                    : " This connection already used its one overlay request, so Detailed applies on your next"
+                            + " connection.";
         };
     }
 

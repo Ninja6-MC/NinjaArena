@@ -25,6 +25,16 @@ Java 25, and does not run on Folia.
   Standard. Real-client menu, pack loading, live Geyser timing and real MySQL are
   unverified; see `resourcepack/README.md`.
 
+- `resource-pack.java-login-gate` (default `false`, restart required) declares that a
+  login plugin gates Java accounts on an offline-mode server. When true, Java accounts
+  count as authenticated and the existing `java:<uuid>` preference is saved and applied
+  as on an online-mode server. Whoever holds a player name can then change that name's
+  cosmetic quality, so enable it only where a login plugin blocks commands before login
+  (AuthMe by default). With it off, Java players on such a server can still pick a
+  quality for the current connection only; it is not saved and resets when they leave.
+  `/narena pack status` and the startup line now report whether Java accounts are
+  treated as authenticated and why.
+
 ### Changed
 - Each Java connection gets one Detailed overlay request through `ResourcePacks`;
   `overlay(UUID)` reports its state.
