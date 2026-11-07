@@ -97,6 +97,28 @@ class TextureMenuTest {
     }
 
     @Test
+    void anUnauthenticatedJavaPlayerPicksForThisConnectionAndTheMenuSaysItIsNotSaved() {
+        MenuHarness h = harness(true);
+        fixture.authenticated = false;
+        joined(ALICE);
+        h.menu.open(h.player(ALICE));
+        var screen = h.screen();
+        assertTrue(screen.items.get(12).contains("for this connection only. This is not saved and resets when you leave."));
+        assertTrue(screen.items.get(14).contains("This connection only (not saved): Standard"));
+        assertFalse(screen.items.get(14).contains("Saved choice"));
+        h.menu.click(h.player(ALICE), screen.holder, TextureMenu.DETAILED_SLOT);
+        assertTrue(screen.items.get(12).contains(
+                "[SELECTED] This is your choice for this connection only. This is not saved and resets when you leave."));
+        assertFalse(screen.items.get(12).contains("Saving..."));
+        assertFalse(screen.items.get(10).contains("[SELECTED]"));
+        assertTrue(screen.items.get(14).contains("This connection only (not saved): Detailed"));
+        assertTrue(h.menuTold.getLast().contains("This is not saved and resets when you leave."));
+        assertFalse(h.menuTold.getLast().contains("Saved:"));
+        assertEquals(1, fixture.wire.overlayOffers());
+        assertEquals(0, fixture.backend.writes.get());
+    }
+
+    @Test
     void aFailedWriteNeverAppearsSaved() {
         MenuHarness h = harness(true);
         joined(ALICE);

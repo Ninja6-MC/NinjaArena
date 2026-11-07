@@ -451,29 +451,156 @@ class TextureServiceTest {
     // Identity.
 
     @Test
-    void aMissingOrUntrustedIdentityGetsStandardAndCannotSave() {
+    void anUnverifiedBedrockIdentityGetsStandardAndCannotSave() {
         TextureFixture f = fixture(true);
-        f.authenticated = false;
-        f.saved(ALICE, Quality.DETAILED);
-        f.join(ALICE);
-        f.loadBase(ALICE);
-        f.settle();
-        assertEquals(0, f.wire.overlayOffers());
-        var result = f.choose(ALICE, Quality.DETAILED);
-        assertFalse(result.saved());
-        assertTrue(result.message().contains("could not be verified"));
-        assertTrue(f.service.describe(ALICE).key().isEmpty());
-        assertEquals(0, f.backend.writes.get());
-
         f.bedrockPlayers.add(FLOOD);
         f.join(FLOOD);
         f.settle();
         assertTrue(f.service.describe(FLOOD).key().isEmpty());
+        assertFalse(f.service.describe(FLOOD).sessionOnly());
         f.xuids.put(FLOOD, "not-an-xuid");
         f.join(FLOOD);
         assertTrue(f.service.describe(FLOOD).key().isEmpty());
-        assertFalse(f.choose(FLOOD, Quality.DETAILED).saved());
-        assertTrue(f.backend.rows.size() == 1);
+        var result = f.choose(FLOOD, Quality.DETAILED);
+        assertFalse(result.saved());
+        assertTrue(result.message().contains("could not be verified"));
+        assertEquals(0, f.backend.writes.get());
+    }
+
+    // Session-only choices on a server whose Java accounts are not authenticated.
+
+    @Test
+    void anUnauthenticatedJavaPlayerChoosesDetailedForThisConnectionOnlyAndNothingIsStored() {
+        TextureFixture f = fixture(true);
+        f.authenticated = false;
+        f.saved(ALICE, Quality.STANDARD);
+        f.join(ALICE);
+        f.loadBase(ALICE);
+        f.settle();
+        var before = f.service.describe(ALICE);
+        assertTrue(before.sessionOnly());
+        assertTrue(before.key().isEmpty());
+        assertEquals(Quality.STANDARD, before.saved());
+        assertTrue(before.delivery().contains(TextureService.SESSION_ONLY_NOTE));
+
+        var result = f.choose(ALICE, Quality.DETAILED);
+        assertFalse(result.saved());
+        assertEquals("Detailed chosen for this connection only. This is not saved and resets when you leave."
+                + " Requesting the Detailed overlay now. If you decline it, Standard stays active.", result.message());
+        assertEquals(1, f.wire.overlayOffers());
+        assertEquals(DETAIL.id(), f.wire.sent.getLast().pack().id());
+        assertFalse(f.wire.sent.getLast().required());
+        f.overlayStatus(ALICE, Status.SUCCESSFULLY_LOADED);
+        assertEquals(OverlayState.LOADED, f.packs.overlay(ALICE));
+        var after = f.service.describe(ALICE);
+        assertEquals(Quality.DETAILED, after.saved());
+        assertEquals("Detailed is active. Your choice is for this connection only: "
+                + TextureService.SESSION_ONLY_NOTE, after.delivery());
+        assertEquals("", after.storage());
+        assertEquals(0, f.backend.writes.get());
+        assertEquals(Quality.STANDARD, f.backend.rows.get(PlayerKey.java(ALICE)).quality());
+    }
+
+    @Test
+    void aSessionOnlyDetailedChosenBeforeTheBaseLoadsWaitsForIt() {
+        TextureFixture f = fixture(true);
+        f.authenticated = false;
+        f.join(ALICE);
+        f.settle();
+        var result = f.choose(ALICE, Quality.DETAILED);
+        assertTrue(result.message().endsWith("It will be requested once Standard has loaded."));
+        assertEquals(0, f.wire.overlayOffers());
+        f.loadBase(ALICE);
+        f.settle();
+        assertEquals(1, f.wire.overlayOffers());
+        assertEquals(0, f.backend.writes.get());
+    }
+
+    @Test
+    void choosingStandardAgainInASessionOnlyConnectionRemovesTheOverlayAndStopsLateStatuses() {
+        TextureFixture f = fixture(true);
+        f.authenticated = false;
+        f.join(ALICE);
+        f.loadBase(ALICE);
+        f.settle();
+        f.choose(ALICE, Quality.DETAILED);
+        f.overlayStatus(ALICE, Status.SUCCESSFULLY_LOADED);
+        var back = f.choose(ALICE, Quality.STANDARD);
+        assertEquals("Standard chosen for this connection only. This is not saved and resets when you leave."
+                + " The Detailed overlay is removed for this connection.", back.message());
+        assertEquals(List.of(new Removed(ALICE, DETAIL.id())), f.wire.removed);
+        assertEquals(OverlayState.CANCELLED, f.packs.overlay(ALICE));
+        f.overlayStatus(ALICE, Status.SUCCESSFULLY_LOADED);
+        f.settle();
+        assertEquals(OverlayState.CANCELLED, f.packs.overlay(ALICE));
+        assertEquals(Quality.STANDARD, f.service.describe(ALICE).saved());
+        var again = f.choose(ALICE, Quality.DETAILED);
+        assertTrue(again.message().contains("cannot load until you reconnect and choose it again"));
+        assertEquals(1, f.wire.overlayOffers());
+        assertEquals(0, f.backend.writes.get());
+    }
+
+    @Test
+    void aSessionOnlyChoiceIsDroppedOnQuitAndNeverReachesAReconnectOrAnotherPlayer() {
+        TextureFixture f = fixture(true);
+        f.authenticated = false;
+        f.join(ALICE);
+        f.join(BOB);
+        f.loadBase(ALICE);
+        f.loadBase(BOB);
+        f.settle();
+        f.choose(ALICE, Quality.DETAILED);
+        assertEquals(Quality.STANDARD, f.service.describe(BOB).saved());
+
+        f.service.quit(ALICE);
+        f.packs.quit(ALICE);
+        f.join(ALICE);
+        f.loadBase(ALICE);
+        f.settle();
+        var view = f.service.describe(ALICE);
+        assertEquals(Quality.STANDARD, view.saved());
+        assertTrue(view.sessionOnly());
+        assertEquals(1, f.wire.overlayOffers());
+        assertEquals(0, f.backend.writes.get());
+        assertTrue(f.backend.rows.isEmpty());
+    }
+
+    @Test
+    void aSessionOnlyDetailedThatIsNotConfiguredIsRefused() {
+        fixture = new TextureFixture(true, false);
+        TextureFixture f = fixture;
+        f.authenticated = false;
+        f.join(ALICE);
+        f.loadBase(ALICE);
+        f.settle();
+        assertEquals("Detailed is not set up on this server, so nothing was changed.",
+                f.choose(ALICE, Quality.DETAILED).message());
+    }
+
+    @Test
+    void aDeclinedSessionOnlyOverlayDoesNotPromiseToKeepTheChoice() {
+        TextureFixture f = fixture(true);
+        f.authenticated = false;
+        f.join(BOB);
+        f.loadBase(BOB);
+        f.settle();
+        f.choose(BOB, Quality.DETAILED);
+        f.told.clear();
+        f.overlayStatus(BOB, Status.DECLINED);
+        f.settle();
+        assertEquals(List.of("Detailed was declined. Standard stays active and your Detailed choice was for this"
+                + " connection only and is not saved."), f.told);
+    }
+
+    @Test
+    void anAuthenticatedJavaPlayerStillSavesAndIsNotSessionOnly() {
+        TextureFixture f = fixture(true);
+        f.join(ALICE);
+        f.loadBase(ALICE);
+        f.settle();
+        assertFalse(f.service.describe(ALICE).sessionOnly());
+        assertTrue(f.choose(ALICE, Quality.DETAILED).saved());
+        assertEquals(Quality.DETAILED, f.backend.rows.get(PlayerKey.java(ALICE)).quality());
     }
 
     @Test

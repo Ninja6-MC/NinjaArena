@@ -107,4 +107,18 @@ class ResourcePackSettingsTest {
         section.set("id", "1-1-1-1-1");
         assertThrows(IllegalArgumentException.class, () -> ResourcePackSettings.from(section));
     }
+
+    @Test
+    void theJavaLoginGateDefaultsToFalseIsParsedAndMustBeABoolean() {
+        assertFalse(ResourcePackSettings.OFF.javaLoginGate());
+        assertFalse(ResourcePackSettings.from(configured()).javaLoginGate());
+        var section = configured();
+        section.set("java-login-gate", true);
+        assertTrue(ResourcePackSettings.from(section).javaLoginGate());
+        var off = new YamlConfiguration();
+        off.set("java-login-gate", true);
+        assertTrue(ResourcePackSettings.from(off).javaLoginGate());
+        section.set("java-login-gate", "true");
+        assertThrows(IllegalArgumentException.class, () -> ResourcePackSettings.from(section));
+    }
 }

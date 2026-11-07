@@ -277,7 +277,14 @@ mappings and the same-server Geyser-Spigot/Floodgate setup. Bedrock custom held 
 require an operator assertion that Geyser enforces packs; load outcomes are not exposed
 by its public API. Otherwise tools retain vanilla visuals. Bedrock flight uses snowballs.
 Real-client loading, held/thrown appearance, team colours and live negotiation still
-need verification. Quality preferences and portal curtain artwork remain deferred.
+need verification. Portal curtain artwork remains deferred.
+
+Texture quality choices are saved by authenticated account. On an offline-mode server,
+set `resource-pack.java-login-gate: true` only where a login plugin (AuthMe by default)
+blocks commands before login: Java accounts then count as authenticated, but whoever
+holds a player name can change that name's cosmetic quality. With it off, Java players
+may still choose a quality for the current connection only; it is not saved and resets
+when they leave. `/narena pack status` shows which case applies.
 
 ## Icon artwork
 

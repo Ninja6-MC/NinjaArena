@@ -199,7 +199,7 @@ public final class TextureMenu {
     private static Item standard(TextureService.View view, Quality saving) {
         boolean selected = view.saved() == Quality.STANDARD;
         String line = saving == Quality.STANDARD ? "Saving..."
-                : selected ? "[SELECTED] This is your saved choice." : "Click to choose Standard.";
+                : selected ? selectedLine(view) : "Click to choose Standard.";
         return new Item(Material.PAPER, "Standard 16x16", selected ? NamedTextColor.GREEN : NamedTextColor.WHITE,
                 List.of("The default 16x16 ninja tool textures.", line), selected);
     }
@@ -215,18 +215,27 @@ public final class TextureMenu {
                     false);
         }
         String line = saving == Quality.DETAILED ? "Saving..."
-                : selected ? "[SELECTED] This is your saved choice." : "Click to choose Detailed.";
+                : selected ? selectedLine(view) : "Click to choose Detailed.";
         return new Item(Material.DIAMOND, "Detailed 32x32", selected ? NamedTextColor.GREEN : NamedTextColor.WHITE,
                 List.of("Sharper 32x32 textures with the same gameplay.",
                         view.bedrock() ? "Applies on your next connection."
-                                : "Loads on top of Standard. You can decline it and keep Standard.",
+                                : view.sessionOnly()
+                                        ? "Loads on top of Standard for this connection only. "
+                                                + TextureService.SESSION_ONLY_NOTE
+                                        : "Loads on top of Standard. You can decline it and keep Standard.",
                         line),
                 selected);
     }
 
+    private static String selectedLine(TextureService.View view) {
+        return view.sessionOnly() ? "[SELECTED] This is your choice for this connection only. "
+                + TextureService.SESSION_ONLY_NOTE : "[SELECTED] This is your saved choice.";
+    }
+
     private static Item status(TextureService.View view, String note) {
         List<String> lore = new java.util.ArrayList<>();
-        lore.add("Saved choice: " + (view.explicit().isPresent() ? view.saved() == Quality.DETAILED ? "Detailed"
+        String label = view.sessionOnly() ? "This connection only (not saved): " : "Saved choice: ";
+        lore.add(label + (view.explicit().isPresent() ? view.saved() == Quality.DETAILED ? "Detailed"
                 : "Standard" : "Standard (default)"));
         lore.add("Right now: " + view.delivery());
         if (!view.storage().isEmpty()) {
