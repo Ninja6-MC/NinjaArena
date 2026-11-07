@@ -80,6 +80,24 @@ public final class GeyserPackHook implements BedrockIntegration, EventRegistrar 
         return connection != null && selections.selected(connection);
     }
 
+    @Override public Optional<String> xuid(UUID player) {
+        if (closed) return Optional.empty();
+        var connection = api.connectionByUuid(player);
+        if (connection == null) return Optional.empty();
+        String xuid = connection.xuid();
+        return xuid == null || xuid.isBlank() ? Optional.empty() : Optional.of(xuid.strip());
+    }
+
+    @Override public Optional<BedrockSelections.Quality> activeQuality(UUID player) {
+        if (closed || selections == null) return Optional.empty();
+        var connection = api.connectionByUuid(player);
+        return connection == null ? Optional.empty() : selections.active(connection);
+    }
+
+    @Override public boolean detailedAvailable() {
+        return !closed && selections != null && selections.detailedAvailable();
+    }
+
     @Override public Optional<BedrockSelections> selections() {
         return closed ? Optional.empty() : Optional.ofNullable(selections);
     }

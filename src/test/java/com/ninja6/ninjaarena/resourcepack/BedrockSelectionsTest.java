@@ -33,6 +33,18 @@ class BedrockSelectionsTest {
         }
     }
 
+    @Test void activeQualityIsOnlyKnownAfterNegotiationAndNeverChangesOnTheSameConnection() {
+        Object connection = new Object();
+        assertTrue(selections.active(connection).isEmpty());
+        selections.selector(xuid -> Quality.DETAILED);
+        selections.negotiate(connection, "123456789", new Wire());
+        selections.selector(xuid -> Quality.STANDARD);
+        assertEquals(Quality.DETAILED, selections.active(connection).orElseThrow());
+        assertTrue(selections.active(new Object()).isEmpty());
+        assertTrue(selections.detailedAvailable());
+        assertFalse(new BedrockSelections(standard, detailed, false).detailedAvailable());
+    }
+
     @Test void defaultsToExactlyStandardAndPreservesUnrelatedPacks() {
         Wire wire = new Wire();
         Object connection = new Object();

@@ -2,8 +2,8 @@
 
 Standard provides the ninja tool item definitions, flat item models and 16x16
 textures. Detailed is a separate, optional 32x32 texture-only pack, using the same
-paths above Standard. Detailed is never enabled automatically; quality selection
-belongs to #80.
+paths above Standard. Detailed is never enabled automatically; players choose it in
+`/ninjaarena textures` (see [Player texture quality](#player-texture-quality)).
 
 ```
 resourcepack/java/
@@ -126,9 +126,11 @@ even when Standard is required.
 For integrations, `plugin.resourcePacks()` exposes `ResourcePacks` on the server
 thread. `loaded(UUID)` reports successful Standard loading.
 `addDetailed(UUID)` adds this plugin's overlay only after Standard loads and
-returns false when unavailable or already active. `removeDetailed(UUID)` removes
-only this plugin's overlay. Neither operation replaces other packs or clears the
-whole stack. The quality menu will call this API later.
+returns false when unavailable or when this connection already used its one
+overlay request. `removeDetailed(UUID)` removes only this plugin's overlay.
+Neither operation replaces other packs or clears the whole stack. The quality
+menu calls this API. `overlay(UUID)` reports `NONE`, `PENDING`, `LOADED`,
+`DECLINED`, `FAILED` or `CANCELLED` for the current connection.
 
 ## Models, accents and flight
 
@@ -170,8 +172,7 @@ Coexistence with other plugins' actual packs also needs an in-game check; this
 API isolates its own pack identities by construction.
 
 Bedrock loading, held looks, team colours, Geyser negotiation and Floodgate
-identities have not been verified on a real client/server. Quality preferences
-belong to #80. Portal surface artwork is deliberately absent. Its rendering is deferred
+identities have not been verified on a real client/server. Portal surface artwork is deliberately absent. Its rendering is deferred
 until agreement with the player-built portal curtain, and portal colour must
 not be inferred from equipment team colours.
 
@@ -328,8 +329,8 @@ The checked implementation disconnects on `REFUSED`; NinjaArena cannot promise
 that optional decline/failure continues on the same connection or report a
 specific load outcome. `resource-pack.timeout-seconds` is the Java timer only.
 The Bedrock hook does not start a second timer, retry downloads or reoffer packs.
-If Detailed causes trouble, #80 must allow its saved preference to be reset to
-Standard before the next negotiation.
+If Detailed causes trouble, an administrator resets the saved preference to
+Standard before the next negotiation with `/narena admin textures reset`.
 
 Bedrock flight always renders as vanilla snowballs because Geyser ignores the
 snowball display ItemStack. Having a Bedrock viewer also fails Java's existing
@@ -338,7 +339,7 @@ We do not replace global snowball textures. Other players' custom held stacks
 may still show missing artwork to a packless viewer; there is no per-viewer
 equipment rewriting. Optional players' own tools remain vanilla and functional.
 
-## Selection seam for #80 and deployment limits
+## Selection seam and deployment limits
 
 `plugin.bedrockSelections()` returns an optional `BedrockSelections` service.
 Its `selector(Function<String, Quality>)` accepts a fast saved-preference lookup
@@ -347,8 +348,8 @@ UUID. The default, missing identity, null result, failed lookup or unavailable
 Detailed pack selects Standard. Explicit Detailed selects only Detailed.
 The decision is frozen for the connection; changing the selector affects later
 connections. The callback runs on Geyser's event thread, so it must not call
-Bukkit or block on storage. #80 must provide the menu, persistence, Floodgate
-identity reconciliation and any preload/cache of preferences. None is built here.
+Bukkit or block on storage. The texture preference store installs a selector that
+reads only its in-memory snapshot, once that snapshot has loaded.
 
 Proxy and standalone Geyser deployments are **not covered**. They would need a
 Geyser-side extension or proxy integration and a shared identity/preference
@@ -362,3 +363,125 @@ synthetic-status rejection and strict configuration rollback. A real Bedrock
 client loading either pack, held rendering, team colours, live Geyser negotiation
 and Floodgate identities remain unverified. Vanilla flight is the accepted
 fallback, not a claim of custom projectile rendering.
+
+## Player texture quality
+
+Players choose Standard (16x16) or Detailed (32x32) with `/ninjaarena textures`
+(alias `/narena textures`). The command needs `ninjaarena.play`, is player-only,
+appears in help and completion only for players who hold the node, and opens a
+chest menu titled **Arena Texture Quality**. It uses vanilla icons and plain
+text, so it works without either pack, and it never uses clickable chat or a
+second pack popup. Standard is the default; Detailed is used only after an
+explicit choice. Both qualities have the same identifiers, team colours, tool
+behaviour and gameplay.
+
+| Control | Meaning |
+| --- | --- |
+| Standard 16x16 | Saves Standard. |
+| Detailed 32x32 | Saves Detailed. Shown as unavailable when no Detailed pack is configured for the player's edition. |
+| Status | Shows the saved choice and, separately, what this connection is doing now. |
+| Close | Closes the menu. |
+
+The selected choice is marked `[SELECTED]` in text as well as by colour and glint.
+A saved Detailed choice that is no longer configured stays visibly Detailed and
+says that Standard is used instead. The menu shows `Saving...` until the write
+has committed; a failed write is reported as failed and never shown as saved.
+Every transfer, drag, shift-click, number-key swap, drop and collect action that
+touches the menu is cancelled. The menu is identified by its holder and a
+per-open token, and each choice rechecks ownership and permission, so an old
+window cannot change anything. A match's inventory lockdown may refuse to open
+the window; leave the match first.
+
+### Storage and identity
+
+Choices are stored through the existing storage settings (`stats.storage`,
+`stats.sqlite.file`, `stats.mysql.*`, `stats.table-prefix`) in two tables of their
+own, `<prefix>texture_preferences` and `<prefix>texture_schema`. The schema
+version is separate from the stats schema. There is no separate preferences file
+or setting. The store works when `stats.enabled` is `false` and is unaffected by
+seasons, archived seasons or clearing seasonal records. It starts only when
+`resource-pack.enabled` is true. A database written by a newer build is left
+untouched and the feature reports itself unsupported. Changing the backend (for
+example SQLite to MySQL) starts with no preferences, so everyone is Standard;
+there is no migration tool.
+
+Only explicit choices are stored: identity, quality and revision/update times.
+No record means Standard. Keys never merge editions and are never guessed from a
+name:
+
+- native Java: `java:<authenticated account UUID>`, used only when the server or its
+  proxy authenticates accounts (`online-mode` or a proxy that reports online mode);
+- Geyser/Floodgate: `bedrock:<authenticated XUID>` from Geyser's connection;
+- a missing, blank or non-numeric XUID, or unauthenticated Java accounts, give no
+  identity: the player is Standard and nothing can be saved.
+
+Database work runs on one thread of its own and writes are serialized. A write
+publishes its committed value to a thread-safe snapshot before success is
+reported. While storage is unreachable the feature is degraded: everyone is
+Standard, saving fails, and stored records are not overwritten. It reconnects in
+the background. Loading happens at startup; Java players are also read on join.
+Servers sharing one MySQL database see another server's Java changes on the next
+join, but a Bedrock preference changed elsewhere reaches this server's snapshot
+only after a restart.
+
+### Java sequence
+
+`ResourcePacks` stays the authority for every request.
+
+1. On join, Standard is offered once with the existing `required` policy.
+2. A saved Detailed choice waits for Standard's `SUCCESSFULLY_LOADED`; acceptance
+   or download alone is not enough. Preference load and base load may finish in
+   either order, and completions from an earlier connection are ignored.
+3. Detailed is then requested with `required=false`, even when Standard is required.
+4. Detailed is active only after its own successful-load status.
+5. A decline, failed download or reload, timeout or send failure removes only the
+   overlay. The accepted base and the saved choice are kept, the player is told,
+   and there is no disconnect or automatic reprompt.
+6. Choosing Standard cancels pending Detailed intent, then removes only this
+   plugin's overlay identity. Later overlay statuses cannot reactivate it.
+7. On reconnect the same sequence runs; a matching cached hash still waits for a
+   successful-load response.
+
+Each connection gets one overlay request. After a cancellation, decline or
+failure, another Detailed choice is saved for the next connection. Standard ->
+Detailed -> Standard within a connection is immediate. Status separates the saved
+choice from the overlay state (pending, loaded, declined, failed or removed).
+
+### Bedrock
+
+The choice is saved by XUID and applies on the next connection only. The current
+connection keeps the quality frozen at negotiation, nothing is swapped live and no
+reconnect is forced. The message is: `Saved: Detailed. Applies on your next
+connection. Pack loading cannot be observed.` NinjaArena never reports a Bedrock
+pack as loaded; the menu shows only the saved choice, the quality selected for
+this connection, unavailable files and the existing enforcement status.
+
+The Geyser selector reads only the in-memory snapshot, with no Bukkit call or
+database access, and is installed after the snapshot loads. Until then, and while
+storage is degraded, Standard is selected. Exactly one complete pack is selected.
+Only same-server Geyser-Spigot is supported; proxy and standalone Geyser are not.
+
+### Recovery
+
+If Detailed cannot load, an administrator (or the console) runs:
+
+```
+/narena admin textures reset <java|bedrock> <uuid|xuid>
+```
+
+It requires `ninjaarena.admin`, works for offline identities and saves Standard
+durably before the next negotiation. A connected Java player also has their
+overlay removed.
+
+### Tests and what is not verified
+
+Automated tests cover defaults and explicit choice, menu and permission handling,
+the Java sequence, failure and cache cases, both `required` values, the Bedrock
+selector against the committed XUID snapshot, identity isolation, persistence in a
+real SQLite file across close and reopen, schema versioning, offline reset, and
+unchanged gameplay at both qualities. The MySQL statements are exercised only in
+H2's MySQL compatibility mode, which is not a MySQL server.
+
+Not verified: menu usability on real Java and Bedrock clients, real pack loading,
+caching and coexistence with other plugins' packs, live Geyser and Floodgate
+timing, a real MySQL or MariaDB server, and per-client Bedrock outcomes.

@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.command;
 
 import com.ninja6.ninjaarena.portal.PortalEntry;
+import com.ninja6.ninjaarena.texture.PlayerKey;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -23,6 +24,7 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String PLAY = "ninjaarena.play";
     /** Leaves the waiting room or match the player is in and sends them home. */
     public static final String LEAVE = "leave";
+    public static final String TEXTURES = "textures";
 
     private record Route(String name, String permission, String usage, String description) {
     }
@@ -32,6 +34,7 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route("spectate", PortalEntry.SPECTATE, "spectate <arena>", "watch a live match from a waiting room"),
             new Route(LeaderboardCommand.NAME, LeaderboardCommand.PERMISSION, LeaderboardCommand.USAGE,
                     "show the top 10 for an Arena stat"),
+            new Route(TEXTURES, PLAY, TEXTURES, "choose Standard or Detailed ninja tool textures"),
             new Route("accept", PLAY, "accept <host>", "accept an invitation to the Arena"),
             new Route("host", HOST, "host <arena>", "open a match in the Arena"),
             new Route("invite", HOST, "invite <player>", "invite a player to the Arena"),
@@ -42,7 +45,8 @@ public final class NinjaArenaCommand implements TabExecutor {
                     "show the enemy director of a running match"),
             new Route(EventCommand.NAME, EventCommand.PERMISSION, EventCommand.USAGE, "manage scheduled arena events"),
             new Route("pack", ADMIN, "pack status", "show Java and Bedrock resource pack state"),
-            new Route("admin", ADMIN, "admin reload", "safely reload the Arena configuration"));
+            new Route("admin", ADMIN, "admin <reload|textures reset <java|bedrock> <id>>",
+                    "reload the Arena configuration, or reset a player's texture quality to Standard"));
 
     private final ArenaCommand arena;
     private final PortalCommand portal;
@@ -55,8 +59,15 @@ public final class NinjaArenaCommand implements TabExecutor {
     private final EventCommand event;
     private java.util.function.Supplier<String> packStatus = () -> "Resource pack status unavailable.";
 
+    private TextureCommands textures;
+
     public void setPackStatus(java.util.function.Supplier<String> status) {
         packStatus = Objects.requireNonNull(status);
+    }
+
+    /** Without it the textures route says the feature is unavailable. */
+    public void setTextures(TextureCommands textures) {
+        this.textures = textures;
     }
 
     /**
@@ -190,12 +201,25 @@ public final class NinjaArenaCommand implements TabExecutor {
                         usage(sender, label, route.usage());
                     }
                 }
+                case TEXTURES -> {
+                    if (args.length != 1) {
+                        usage(sender, label, route.usage());
+                    } else if (!(sender instanceof Player player)) {
+                        sender.sendMessage(Component.text("Only players can use this Arena command.", NamedTextColor.RED));
+                    } else if (textures == null) {
+                        unavailable(sender, "Texture quality");
+                    } else {
+                        textures.open(player);
+                    }
+                }
                 case "admin" -> {
                     if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
                         if (reload == null) {
                             unavailable(sender, "Configuration reload");
                         }
                         else reload.accept(sender);
+                    } else if (args.length >= 2 && args[1].equalsIgnoreCase(TEXTURES)) {
+                        resetTextures(sender, label, args);
                     } else {
                         usage(sender, label, route.usage());
                     }
@@ -207,6 +231,33 @@ public final class NinjaArenaCommand implements TabExecutor {
             }
         }
         return true;
+    }
+
+    private void resetTextures(CommandSender sender, String label, String[] args) {
+        String usage = "admin textures reset <java|bedrock> <uuid|xuid>";
+        if (args.length != 5 || !args[2].equalsIgnoreCase("reset")) {
+            usage(sender, label, usage);
+            return;
+        }
+        PlayerKey.Edition edition = args[3].equalsIgnoreCase("java") ? PlayerKey.Edition.JAVA
+                : args[3].equalsIgnoreCase("bedrock") ? PlayerKey.Edition.BEDROCK : null;
+        if (edition == null) {
+            usage(sender, label, usage);
+            return;
+        }
+        PlayerKey key;
+        try {
+            key = PlayerKey.of(edition, args[4]);
+        } catch (IllegalArgumentException e) {
+            sender.sendMessage(Component.text(e.getMessage() + ". Usage: /" + label + " " + usage,
+                    NamedTextColor.RED));
+            return;
+        }
+        if (textures == null) {
+            unavailable(sender, "Texture quality");
+        } else {
+            textures.reset(sender, key);
+        }
     }
 
     private static boolean canUseRoot(CommandSender sender) {
@@ -291,13 +342,24 @@ public final class NinjaArenaCommand implements TabExecutor {
         return switch (args[0].toLowerCase(Locale.ROOT)) {
             case "pack" -> args.length == 2 && "status".startsWith(args[1].toLowerCase(Locale.ROOT))
                     ? List.of("status") : List.of();
-            case "admin" -> args.length == 2 && "reload".startsWith(args[1].toLowerCase(Locale.ROOT))
-                    ? List.of("reload") : List.of();
+            case "admin" -> completeAdmin(args);
             case ArenaCommand.NAME -> arena.complete(sender, tail(args));
             case PortalCommand.NAME -> portal.complete(sender, tail(args));
             case DirectorCommand.NAME -> director.complete(sender, tail(args));
             default -> List.of();
         };
+    }
+
+    private static List<String> completeAdmin(String[] args) {
+        String last = args[args.length - 1].toLowerCase(Locale.ROOT);
+        List<String> options = switch (args.length) {
+            case 2 -> List.of("reload", TEXTURES);
+            case 3 -> args[1].equalsIgnoreCase(TEXTURES) ? List.of("reset") : List.of();
+            case 4 -> args[1].equalsIgnoreCase(TEXTURES) && args[2].equalsIgnoreCase("reset")
+                    ? List.of("java", "bedrock") : List.of();
+            default -> List.of();
+        };
+        return options.stream().filter(option -> option.startsWith(last)).toList();
     }
 
     private static String[] tail(String[] args) {

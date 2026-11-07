@@ -273,7 +273,8 @@ class NinjaArenaCommandTest {
                 "/narena portal <subcommand> - mark out portals that lead to arenas",
                 "/narena director [arena] - show the enemy director of a running match",
                 "/narena pack status - show Java and Bedrock resource pack state",
-                "/narena admin reload - safely reload the Arena configuration");
+                "/narena admin <reload|textures reset <java|bedrock> <id>> - reload the Arena configuration,"
+                        + " or reset a player's texture quality to Standard");
         assertEquals("The Arena commands:", messages.get(0));
         assertEquals(help, messages.subList(1, messages.size()));
 
@@ -364,7 +365,7 @@ class NinjaArenaCommandTest {
         messages.clear();
         run(player, "arena list");
         assertEquals(List.of("You do not have permission to use this command."), messages);
-        assertEquals(List.of("help", "leave", "accept"),
+        assertEquals(List.of("help", "leave", "textures", "accept"),
                 command.onTabComplete(player, null, "narena", new String[] {""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
     }
@@ -447,16 +448,17 @@ class NinjaArenaCommandTest {
         assertEquals(List.of("The Arena commands:",
                 "/ninjaarena help - show the commands you can use",
                 "/ninjaarena leave - leave the arena and return home",
+                "/ninjaarena textures - choose Standard or Detailed ninja tool textures",
                 "/ninjaarena accept <host> - accept an invitation to the Arena"), messages);
 
         messages.clear();
         Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
         run(host, "HELP");
-        assertEquals(6, messages.size());
+        assertEquals(7, messages.size());
         assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena host <arena>")));
         assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena invite <player>")));
         assertFalse(messages.stream().anyMatch(message -> message.contains("admin") || message.contains("portal")));
-        assertEquals(List.of("help", "leave", "accept", "host", "invite"),
+        assertEquals(List.of("help", "leave", "textures", "accept", "host", "invite"),
                 command.onTabComplete(host, null, "narena", new String[] {""}));
         assertEquals(List.of("help", "host"), command.onTabComplete(host, null, "narena", new String[] {"H"}));
         assertEquals(List.of("accept"), command.onTabComplete(player, null, "narena", new String[] {"AC"}));
@@ -621,4 +623,140 @@ class NinjaArenaCommandTest {
         assertEquals(List.of("host dojo", "invite Bob", "accept Alice", "reload"), calls);
     }
 
+
+    // Texture quality routes.
+
+    private final List<String> textureCalls = new ArrayList<>();
+
+    private void withTextures() {
+        command.setTextures(new TextureCommands() {
+            @Override public void open(Player player) { textureCalls.add("open"); }
+            @Override public void reset(CommandSender sender, com.ninja6.ninjaarena.texture.PlayerKey key) {
+                textureCalls.add("reset " + key);
+            }
+        });
+    }
+
+    private CommandSender everything() {
+        return (CommandSender) Proxy.newProxyInstance(ConsoleCommandSender.class.getClassLoader(),
+                new Class<?>[] {ConsoleCommandSender.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "hasPermission" -> true;
+                    case "sendMessage" -> {
+                        messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
+                        yield null;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    @Test
+    void texturesOpensTheMenuForPlayersWithPlayUnderBothAliases() {
+        withTextures();
+        Player player = playerWithPlay();
+        command.onCommand(player, null, "ninjaarena", new String[] {"textures"});
+        command.onCommand(player, null, "narena", new String[] {"TEXTURES"});
+        assertEquals(List.of("open", "open"), textureCalls);
+        assertTrue(messages.isEmpty());
+    }
+
+    @Test
+    void texturesIsPlayerOnlyAndStrictAboutSyntax() {
+        withTextures();
+        run(everything(), "textures");
+        assertEquals(List.of("Only players can use this Arena command."), messages);
+        messages.clear();
+        run(playerWithPlay(), "textures extra");
+        assertEquals(List.of("Usage: /narena textures"), messages);
+        assertTrue(textureCalls.isEmpty());
+    }
+
+    @Test
+    void texturesNeedsPlayAndStaysOutOfHelpAndCompletionWithoutIt() {
+        withTextures();
+        Player hostOnly = playerWithPermissions(NinjaArenaCommand.HOST);
+        run(hostOnly, "textures");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+        assertTrue(textureCalls.isEmpty());
+        messages.clear();
+        run(hostOnly, "help");
+        assertFalse(messages.stream().anyMatch(line -> line.contains("textures")));
+        assertEquals(List.of(), command.onTabComplete(hostOnly, null, "narena", new String[] {"tex"}));
+
+        Player player = playerWithPlay();
+        assertEquals(List.of("textures"), command.onTabComplete(player, null, "narena", new String[] {"TEX"}));
+        assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"textures", ""}));
+        messages.clear();
+        run(player, "help");
+        assertTrue(messages.stream().anyMatch(line -> line.equals(
+                "/narena textures - choose Standard or Detailed ninja tool textures")));
+    }
+
+    @Test
+    void texturesWithoutAServiceSaysSoInsteadOfFailing() {
+        run(playerWithPlay(), "textures");
+        assertEquals(1, messages.size());
+        assertTrue(messages.getFirst().contains("not available"));
+    }
+
+    @Test
+    void adminTextureResetWorksFromConsoleForBothEditions() {
+        withTextures();
+        CommandSender console = console(true);
+        run(console, "admin textures reset java 123E4567-E89B-12D3-A456-426614174000");
+        run(console, "admin TEXTURES RESET Bedrock 2535412345678901");
+        assertEquals(List.of("reset java:123e4567-e89b-12d3-a456-426614174000",
+                "reset bedrock:2535412345678901"), textureCalls);
+        assertTrue(messages.isEmpty());
+    }
+
+    @Test
+    void adminTextureResetValidatesIdentitiesAndSyntax() {
+        withTextures();
+        CommandSender console = console(true);
+        for (String line : List.of("admin textures", "admin textures reset", "admin textures reset java",
+                "admin textures reset other 1", "admin textures reset java a b", "admin textures clear java 1")) {
+            messages.clear();
+            run(console, line);
+            assertEquals(1, messages.size(), line);
+            assertTrue(messages.getFirst().startsWith("Usage: /narena admin textures reset"), messages.toString());
+        }
+        for (String line : List.of("admin textures reset java Steve", "admin textures reset java 12345",
+                "admin textures reset bedrock Steve", "admin textures reset bedrock 123456789012345678901")) {
+            messages.clear();
+            run(console, line);
+            assertEquals(1, messages.size(), line);
+            assertTrue(messages.getFirst().contains("Usage: /narena admin textures reset"), messages.toString());
+        }
+        assertTrue(textureCalls.isEmpty());
+    }
+
+    @Test
+    void adminTextureResetNeedsAdminAndIsNotCompletedForOthers() {
+        withTextures();
+        Player player = playerWithPlay();
+        run(player, "admin textures reset bedrock 1");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+        Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
+        run(host, "admin textures reset java 123e4567-e89b-12d3-a456-426614174000");
+        assertTrue(textureCalls.isEmpty());
+        assertEquals(List.of(), command.onTabComplete(host, null, "narena", new String[] {"admin", ""}));
+
+        CommandSender admin = console(true);
+        assertEquals(List.of("reload", "textures"), command.onTabComplete(admin, null, "narena", new String[] {"admin", ""}));
+        assertEquals(List.of("textures"), command.onTabComplete(admin, null, "narena", new String[] {"admin", "t"}));
+        assertEquals(List.of("reset"), command.onTabComplete(admin, null, "narena", new String[] {"admin", "textures", ""}));
+        assertEquals(List.of("java", "bedrock"),
+                command.onTabComplete(admin, null, "narena", new String[] {"admin", "textures", "reset", ""}));
+        assertEquals(List.of("bedrock"),
+                command.onTabComplete(admin, null, "narena", new String[] {"admin", "textures", "reset", "B"}));
+        assertEquals(List.of(),
+                command.onTabComplete(admin, null, "narena", new String[] {"admin", "textures", "reset", "java", ""}));
+    }
+
+    @Test
+    void packStatusStaysAdminOnlyBesideTheNewRoutes() {
+        withTextures();
+        run(playerWithPlay(), "pack status");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+    }
 }

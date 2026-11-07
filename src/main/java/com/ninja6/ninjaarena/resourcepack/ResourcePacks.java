@@ -22,6 +22,30 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
         }
     }
 
+    /** What became of this connection's one Detailed overlay request. */
+    public enum OverlayState {
+        /** Never requested on this connection. */
+        NONE,
+        /** Requested; the client has not reported success. */
+        PENDING,
+        /** The client reported that the overlay loaded. */
+        LOADED,
+        DECLINED,
+        /** Download, reload, timeout or send failure; see {@link #overlayReason}. */
+        FAILED,
+        /** Removed on request, for example when Standard was chosen. */
+        CANCELLED
+    }
+
+    /** Observes changes the preference layer reacts to. Called on the server thread. */
+    public interface Listener {
+        /** The base pack reported success for this connection. */
+        void baseLoaded(UUID player);
+
+        /** The overlay reached a new state; {@code reason} is empty unless it failed or was declined. */
+        void overlay(UUID player, OverlayState state, String reason);
+    }
+
     private enum Phase { PENDING, ACCEPTED, DOWNLOADED, LOADED, FAILED }
 
     private static final class Attempt {
@@ -36,6 +60,8 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
     private static final class Connection {
         private final Attempt base;
         private Attempt overlay;
+        private OverlayState overlayState = OverlayState.NONE;
+        private String overlayReason = "";
 
         private Connection(long started) {
             base = new Attempt(started);
@@ -47,6 +73,7 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
     private final LongSupplier ticks;
     private final java.util.function.Predicate<UUID> bedrock;
     private final Map<UUID, Connection> connections = new HashMap<>();
+    private Listener listener;
     private boolean closed;
 
     public ResourcePacks(ResourcePackSettings settings, Transport transport, LongSupplier ticks) {
@@ -74,6 +101,26 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
             transport.error("Could not send the Standard resource pack to " + player, e);
             failBase(player, connection, "could not be requested");
         }
+    }
+
+    public void setListener(Listener listener) {
+        this.listener = listener;
+    }
+
+    /** Whether an overlay is configured, regardless of any connection. */
+    public boolean detailedConfigured() {
+        return settings.enabled() && settings.detailed().isPresent();
+    }
+
+    /** This connection's overlay state; {@link OverlayState#NONE} for an unknown player. */
+    public OverlayState overlay(UUID player) {
+        Connection connection = connections.get(player);
+        return connection == null ? OverlayState.NONE : connection.overlayState;
+    }
+
+    public String overlayReason(UUID player) {
+        Connection connection = connections.get(player);
+        return connection == null ? "" : connection.overlayReason;
     }
 
     public void quit(UUID player) {
@@ -109,12 +156,24 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
                     attempt.phase = Phase.DOWNLOADED;
                 }
             }
-            case SUCCESSFULLY_LOADED -> attempt.phase = Phase.LOADED;
+            case SUCCESSFULLY_LOADED -> {
+                boolean first = attempt.phase != Phase.LOADED;
+                attempt.phase = Phase.LOADED;
+                if (first && base) {
+                    if (listener != null) {
+                        listener.baseLoaded(player);
+                    }
+                } else if (first) {
+                    connection.overlayState = OverlayState.LOADED;
+                    notifyOverlay(player, connection);
+                }
+            }
             case DECLINED, FAILED_DOWNLOAD, INVALID_URL, FAILED_RELOAD, DISCARDED -> {
                 if (base) {
                     failBase(player, connection, reason(status));
                 } else {
-                    removeDetailed(player);
+                    endOverlay(player, connection, status == Status.DECLINED ? OverlayState.DECLINED
+                            : OverlayState.FAILED, reason(status));
                 }
             }
         }
@@ -131,34 +190,57 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
             if (timedOut(connection.base, now)) {
                 failBase(entry.getKey(), connection, "timed out while loading");
             } else if (connection.overlay != null && timedOut(connection.overlay, now)) {
-                removeDetailed(entry.getKey());
+                endOverlay(entry.getKey(), connection, OverlayState.FAILED, "timed out while loading");
             }
         }
     }
 
-    /** Explicit quality selection only. Detailed is optional even when Standard is required. */
+    /**
+     * Explicit quality selection only. Detailed is optional even when Standard is required,
+     * and each connection gets one overlay request: after a decline, failure or removal this
+     * returns false until the player reconnects.
+     */
     public boolean addDetailed(UUID player) {
         Connection connection = connections.get(player);
-        if (!loaded(player) || settings.detailed().isEmpty() || connection.overlay != null) {
+        if (!loaded(player) || settings.detailed().isEmpty() || connection.overlayState != OverlayState.NONE) {
             return false;
         }
         connection.overlay = new Attempt(ticks.getAsLong());
+        connection.overlayState = OverlayState.PENDING;
         try {
             transport.send(player, settings.detailed().orElseThrow(), false);
-            return true;
         } catch (RuntimeException e) {
             transport.error("Could not send the Detailed resource pack to " + player, e);
-            removeDetailed(player);
+            endOverlay(player, connection, OverlayState.FAILED, "could not be requested");
             return false;
         }
+        notifyOverlay(player, connection);
+        return true;
     }
 
     /** Removes this plugin's overlay only. Standard and every other plugin's packs remain. */
     public void removeDetailed(UUID player) {
         Connection connection = connections.get(player);
         if (connection != null && connection.overlay != null) {
-            connection.overlay = null;
-            remove(player, settings.detailed().orElseThrow().id());
+            endOverlay(player, connection, OverlayState.CANCELLED, "");
+        }
+    }
+
+    /** Ends the active overlay request, removing only its identity from the client. */
+    private void endOverlay(UUID player, Connection connection, OverlayState state, String reason) {
+        if (connection.overlay == null) {
+            return;
+        }
+        connection.overlay = null;
+        connection.overlayState = state;
+        connection.overlayReason = reason;
+        remove(player, settings.detailed().orElseThrow().id());
+        notifyOverlay(player, connection);
+    }
+
+    private void notifyOverlay(UUID player, Connection connection) {
+        if (listener != null) {
+            listener.overlay(player, connection.overlayState, connection.overlayReason);
         }
     }
 

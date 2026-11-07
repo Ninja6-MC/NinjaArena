@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Nothing has been released yet. The plugin targets Paper 26.3, needs the server to run on
 Java 25, and does not run on Folia.
 
+### Added
+- Players choose Standard (16x16) or Detailed (32x32) tool textures in the
+  "Arena Texture Quality" menu, opened with `/ninjaarena textures` (permission
+  `ninjaarena.play`). Standard is the default; Detailed is used only after an
+  explicit choice. On Java, a saved Detailed choice requests the optional overlay
+  once Standard has loaded; declining or failing it keeps the base and the choice.
+  On Bedrock the choice applies on the next connection through the existing Geyser
+  selector. Choices are stored by authenticated Java UUID or Bedrock XUID in their
+  own tables of the existing storage (SQLite or MySQL), independent of statistics and
+  seasons. `/narena admin textures reset <java|bedrock> <uuid|xuid>` restores
+  Standard. Real-client menu, pack loading, live Geyser timing and real MySQL are
+  unverified; see `resourcepack/README.md`.
+
+### Changed
+- Each Java connection gets one Detailed overlay request through `ResourcePacks`;
+  `overlay(UUID)` reports its state.
+
 ### Fixed
 - Startup rejects removed Bedrock pack switches with the same replacement guidance
   as reload, logs an operator error and keeps Bedrock delivery off until they are

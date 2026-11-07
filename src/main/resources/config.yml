@@ -12,7 +12,8 @@ resource-pack:
   url: ''
   sha1: ''
   id: ''
-  # Optional texture overlay. Configure all three together; enabled only through the API.
+  # Optional Detailed overlay. Configure all three together. Players opt in with
+  # /ninjaarena textures; it is never sent otherwise and is never required.
   detailed:
     url: ''
     sha1: ''
@@ -294,7 +295,8 @@ stats:
   # Record each player's wins, rounds won, player kills, enemy kills, deaths, best Overrun
   # survival and matches played, all-time and per season. Written in the background once a
   # match ends; matches run the same when stats are off or the database is down. Restart to
-  # change anything here except season.
+  # change anything here except season. Players' texture quality choices use this same
+  # storage in tables of their own and keep working when enabled is false.
   enabled: true
   # sqlite keeps a file in the plugin folder. mysql shares one MySQL or MariaDB database
   # between servers; give every server the same settings below.
