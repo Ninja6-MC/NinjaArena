@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.resourcepack;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -39,6 +40,20 @@ class BedrockPackSettingsTest {
         assertTrue(BedrockPackSettings.from(config).mappingsInstalled());
         config.set("enabled", false);
         assertFalse(BedrockPackSettings.from(config).enabled());
+    }
+
+    @Test void absentRemovedKeysPreserveSharedSwitchAndPinBehaviour() {
+        for (boolean enabled : new boolean[] {false, true}) {
+            for (boolean pins : new boolean[] {false, true}) {
+                var config = configured();
+                config.set("enabled", enabled);
+                if (!pins) config.set("bedrock", null);
+                assertDoesNotThrow(() -> BedrockPackSettings.validateRemovedKeys(config));
+                var settings = BedrockPackSettings.from(config);
+                assertEquals(enabled && pins, settings.enabled());
+                assertEquals(pins, settings.standard() != null);
+            }
+        }
     }
 
     @Test void pinsRequireCompleteSafeDistinctFilesAndStrictTypes() {

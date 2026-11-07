@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Fixed
+- Startup rejects removed Bedrock pack switches with the same replacement guidance
+  as reload, logs an operator error and keeps Bedrock delivery off until they are
+  removed. Java delivery and the rest of the plugin continue running.
 - Resource pack delivery now uses shared `enabled` and `required` switches for Java
   and Bedrock. Bedrock custom held models require Geyser's force-pack file check
   and the narrowly scoped `bedrock.mappings-installed` assertion. Optional Bedrock

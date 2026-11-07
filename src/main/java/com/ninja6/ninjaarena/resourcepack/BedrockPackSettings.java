@@ -59,6 +59,7 @@ public record BedrockPackSettings(boolean enabled, boolean required, boolean map
 
     /** Reads the whole resource-pack section. Top-level enabled also gates Bedrock delivery. */
     public static BedrockPackSettings from(ConfigurationSection resourcePack) {
+        validateRemovedKeys(resourcePack);
         if (resourcePack == null) return OFF;
         if (resourcePack.contains("bedrock") && !resourcePack.isConfigurationSection("bedrock")) {
             throw new IllegalArgumentException("resource-pack.bedrock must be a section");
@@ -71,6 +72,27 @@ public record BedrockPackSettings(boolean enabled, boolean required, boolean map
         return new BedrockPackSettings(bool(resourcePack, "enabled", false) && standard != null,
                 bool(resourcePack, "required", true), mappings,
                 standard, Optional.ofNullable(detailed));
+    }
+
+    /** Rejects obsolete switches even when shared pack delivery is disabled. */
+    public static void validateRemovedKeys(ConfigurationSection resourcePack) {
+        if (resourcePack == null) return;
+        for (String key : resourcePack.getKeys(true)) {
+            String path = "resource-pack." + key;
+            String problem = removedKeyProblem(path);
+            if (problem != null) throw new IllegalArgumentException(path + ": " + problem);
+        }
+    }
+
+    /** Shared by startup settings and reload's source-located validation. */
+    public static String removedKeyProblem(String path) {
+        return switch (path) {
+            case "resource-pack.bedrock.enabled" ->
+                    "removed; use resource-pack.enabled and configure resource-pack.bedrock.standard file/sha256";
+            case "resource-pack.bedrock.geyser-enforces-packs" ->
+                    "removed; use resource-pack.required, set gameplay.force-resource-packs: true in Geyser, and confirm resource-pack.bedrock.mappings-installed";
+            default -> null;
+        };
     }
 
     /** Server policy only; this never claims a successful client load. */
