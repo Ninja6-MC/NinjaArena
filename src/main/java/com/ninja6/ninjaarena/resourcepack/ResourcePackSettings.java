@@ -5,14 +5,22 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.bukkit.configuration.ConfigurationSection;
 
 /** Validated delivery configuration. Missing enabled configuration is rejected before any prompt is sent. */
 public record ResourcePackSettings(boolean enabled, boolean required, boolean thrownVisuals, int timeoutSeconds,
-        Pack base, Optional<Pack> detailed, boolean javaLoginGate) {
+        Pack base, Optional<Pack> detailed, boolean javaLoginGate, TextureMenuMode textureMenu) {
 
     public static final ResourcePackSettings OFF = new ResourcePackSettings(false, true, true, 120, null,
             Optional.empty());
+
+    /** Settings with the default texture menu. */
+    public ResourcePackSettings(boolean enabled, boolean required, boolean thrownVisuals, int timeoutSeconds,
+            Pack base, Optional<Pack> detailed, boolean javaLoginGate) {
+        this(enabled, required, thrownVisuals, timeoutSeconds, base, detailed, javaLoginGate,
+                TextureMenuMode.DIALOG);
+    }
 
     /** Settings without a declared login gate. */
     public ResourcePackSettings(boolean enabled, boolean required, boolean thrownVisuals, int timeoutSeconds,
@@ -45,6 +53,7 @@ public record ResourcePackSettings(boolean enabled, boolean required, boolean th
 
     public ResourcePackSettings {
         Objects.requireNonNull(detailed, "Detailed pack option");
+        Objects.requireNonNull(textureMenu, "texture menu");
         if (timeoutSeconds < 1 || timeoutSeconds > 600) {
             throw new IllegalArgumentException("resource-pack.timeout-seconds must be from 1 to 600");
         }
@@ -58,6 +67,11 @@ public record ResourcePackSettings(boolean enabled, boolean required, boolean th
 
     /** The supplied section is {@code resource-pack}, not the entire configuration. */
     public static ResourcePackSettings from(ConfigurationSection section) {
+        return from(section, message -> { });
+    }
+
+    /** As {@link #from(ConfigurationSection)}; {@code warn} receives recoverable problems. */
+    public static ResourcePackSettings from(ConfigurationSection section, Consumer<String> warn) {
         if (section == null) {
             return OFF;
         }
@@ -65,12 +79,13 @@ public record ResourcePackSettings(boolean enabled, boolean required, boolean th
         boolean required = bool(section, "required", true);
         boolean thrown = bool(section, "thrown-visuals", true);
         boolean loginGate = bool(section, "java-login-gate", false);
+        TextureMenuMode menu = TextureMenuMode.parse(section.get("texture-menu"), warn);
         Object timeout = section.get("timeout-seconds", 120);
         if (!(timeout instanceof Integer seconds)) {
             throw new IllegalArgumentException("resource-pack.timeout-seconds must be an integer");
         }
         if (!enabled) {
-            return new ResourcePackSettings(false, required, thrown, seconds, null, Optional.empty(), loginGate);
+            return new ResourcePackSettings(false, required, thrown, seconds, null, Optional.empty(), loginGate, menu);
         }
         if (section.contains("detailed") && !section.isConfigurationSection("detailed")) {
             throw new IllegalArgumentException("resource-pack.detailed must be a section");
@@ -82,7 +97,7 @@ public record ResourcePackSettings(boolean enabled, boolean required, boolean th
                 || !text(section, detailedPrefix + "id").isBlank();
         return new ResourcePackSettings(true, required, thrown, seconds, base,
                 hasDetailed ? Optional.of(pack(section, detailedPrefix, "resource-pack.detailed")) : Optional.empty(),
-                loginGate);
+                loginGate, menu);
     }
 
     private static Pack pack(ConfigurationSection section, String prefix, String path) {

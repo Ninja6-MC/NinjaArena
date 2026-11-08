@@ -129,7 +129,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private BedrockIntegration bedrock = BedrockIntegration.NONE;
     private com.ninja6.ninjaarena.texture.PreferenceStore preferences;
     private com.ninja6.ninjaarena.texture.TextureService textures;
-    private com.ninja6.ninjaarena.texture.TextureMenu textureMenu;
+    private com.ninja6.ninjaarena.texture.TextureMenus textureMenu;
     private com.ninja6.ninjaarena.command.TextureCommands textureCommands;
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
@@ -203,7 +203,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             if (getConfig().contains("resource-pack") && !getConfig().isConfigurationSection("resource-pack")) {
                 throw new IllegalArgumentException("resource-pack must be a section");
             }
-            packSettings = ResourcePackSettings.from(getConfig().getConfigurationSection("resource-pack"));
+            packSettings = ResourcePackSettings.from(getConfig().getConfigurationSection("resource-pack"),
+                    message -> getLogger().warning(message));
         } catch (IllegalArgumentException e) {
             getLogger().severe("Resource pack delivery is off: " + e.getMessage()
                     + ". Fix resource-pack in config.yml and restart. Players keep vanilla visuals.");
@@ -554,10 +555,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     @Override public boolean bedrockDetailedAvailable() { return integration.detailedAvailable(); }
                     @Override public String bedrockStatus() { return integration.status(); }
                 }, main, notifier);
-        textureMenu = new com.ninja6.ninjaarena.texture.TextureMenu(textures,
-                new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), notifier);
+        com.ninja6.ninjaarena.texture.TextureMenu chestMenu = new com.ninja6.ninjaarena.texture.TextureMenu(
+                textures, new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), notifier);
+        com.ninja6.ninjaarena.texture.TextureDialog dialogMenu = new com.ninja6.ninjaarena.texture.TextureDialog(
+                textures, new com.ninja6.ninjaarena.texture.TextureDialog.PaperScreens(main), notifier);
+        textureMenu = new com.ninja6.ninjaarena.texture.TextureMenus(packSettings.textureMenu(), chestMenu,
+                dialogMenu, message -> getLogger().warning(message));
         getServer().getPluginManager().registerEvents(
-                new com.ninja6.ninjaarena.texture.TextureListener(textures, textureMenu), this);
+                new com.ninja6.ninjaarena.texture.TextureListener(textures, chestMenu, dialogMenu), this);
         for (Player online : getServer().getOnlinePlayers()) {
             textures.join(online.getUniqueId());
         }
@@ -565,7 +570,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         store.whenReady(() -> integration.selections().ifPresent(selections -> selections.selector(
                 xuid -> store.snapshot(com.ninja6.ninjaarena.texture.PlayerKey.bedrock(xuid)))));
         com.ninja6.ninjaarena.texture.TextureService service = textures;
-        com.ninja6.ninjaarena.texture.TextureMenu menu = textureMenu;
+        com.ninja6.ninjaarena.texture.TextureMenus menu = textureMenu;
         textureCommands = new com.ninja6.ninjaarena.command.TextureCommands() {
             @Override public void open(Player player) { menu.open(player); }
             @Override public void reset(org.bukkit.command.CommandSender sender,
@@ -768,7 +773,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     private String packStatus() {
         return com.ninja6.ninjaarena.resourcepack.PackStatus.describe(activePackSettings, bedrock.status(),
-                javaAuthentication());
+                javaAuthentication(), textureMenu == null ? activePackSettings.textureMenu().label()
+                        : textureMenu.describe());
     }
 
     private com.ninja6.ninjaarena.resourcepack.JavaAuthentication javaAuthentication() {

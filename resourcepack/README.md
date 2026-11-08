@@ -370,10 +370,17 @@ fallback, not a claim of custom projectile rendering.
 
 Players choose Standard (16x16) or Detailed (32x32) with `/ninjaarena textures`
 (alias `/narena textures`). The command needs `ninjaarena.play`, is player-only,
-appears in help and completion only for players who hold the node, and opens a
-chest menu titled **Arena Texture Quality**. It uses vanilla icons and plain
-text, so it works without either pack, and it never uses clickable chat or a
-second pack popup. Standard is the default; Detailed is used only after an
+appears in help and completion only for players who hold the node, and opens
+**Arena Texture Quality**. `resource-pack.texture-menu` (restart required) picks
+the screen: `dialog` (default) is a native Paper dialog with the status text and
+Standard, Detailed and Close buttons, which Geyser 2.8.2 or newer turns into a
+form for Bedrock players; `chest` is the chest menu described below. An unknown
+value falls back to `dialog` with an operator warning. If the dialog does not show
+or misbehaves, for example with an older Geyser or a proxy setup, set `chest`; the
+two behave the same. If the dialog cannot be built or sent, that opening uses the
+chest menu and the failure is logged once. `/narena pack status` reports the menu
+in use. Both menus use plain text, so they work without either pack, and neither
+uses clickable chat or a second pack popup. Standard is the default; Detailed is used only after an
 explicit choice. Both qualities have the same identifiers, team colours, tool
 behaviour and gameplay.
 
@@ -393,6 +400,15 @@ touches the menu is cancelled. The menu is identified by its holder and a
 per-open token, and each choice rechecks ownership and permission, so an old
 window cannot change anything. A match's inventory lockdown may refuse to open
 the window; leave the match first.
+
+The dialog buttons call the same service as the chest, so saving, choices for the
+current connection only, the "not saved" wording and the unauthenticated wording
+are identical. A dialog has no close event, so the player's latest dialog is the
+current one; a press from an older dialog is refused with the same out-of-date
+message as a stale chest, and every press rechecks ownership and `ninjaarena.play`.
+A choice re-shows the dialog with `Saving...` and then the result, and the result
+is also sent in chat. The dialog is not an inventory, so a match's inventory
+lockdown does not stop it from opening.
 
 ### Storage and identity
 
@@ -510,6 +526,7 @@ real SQLite file across close and reopen, schema versioning, offline reset, and
 unchanged gameplay at both qualities. The MySQL statements are exercised only in
 H2's MySQL compatibility mode, which is not a MySQL server.
 
-Not verified: menu usability on real Java and Bedrock clients, real pack loading,
+Not verified: menu and dialog usability on real Java and Bedrock clients, the dialog
+as a Geyser form, real pack loading,
 caching and coexistence with other plugins' packs, live Geyser and Floodgate
 timing, a real MySQL or MariaDB server, and per-client Bedrock outcomes.

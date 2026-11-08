@@ -286,6 +286,12 @@ holds a player name can change that name's cosmetic quality. With it off, Java p
 may still choose a quality for the current connection only; it is not saved and resets
 when they leave. `/narena pack status` shows which case applies.
 
+`/ninjaarena textures` opens a native dialog screen (title, status text and Standard,
+Detailed and Close buttons) by default; Bedrock players through Geyser 2.8.2 or newer see
+it as a form. Set `resource-pack.texture-menu: chest` to use the chest menu instead, for
+example with an older Geyser or a proxy setup where the dialog does not show. Both menus
+behave the same, and `/narena pack status` reports which one is in use.
+
 ## Icon artwork
 
 The geometry master is `docs/assets/icon-master.svg`. All other SVG and PNG icons

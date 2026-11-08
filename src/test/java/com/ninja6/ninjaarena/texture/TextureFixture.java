@@ -132,6 +132,11 @@ final class TextureFixture implements TextureService.Identities, AutoCloseable {
         return result[0];
     }
 
+    /** The view and stored row for a player, for comparing two runs. */
+    String describeAll(UUID player) {
+        return service.describe(player) + "|" + backend.rows.get(PlayerKey.java(player));
+    }
+
     void saved(UUID player, Quality quality) {
         backend.rows.put(PlayerKey.java(player), new Stored(quality, 1, 1));
     }
