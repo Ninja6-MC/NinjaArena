@@ -34,6 +34,39 @@ class ResourcePackSettingsTest {
     }
 
     @Test
+    void textureMenuDefaultsToDialogAndAcceptsDialogOrChest() {
+        java.util.List<String> warnings = new java.util.ArrayList<>();
+        assertEquals(TextureMenuMode.DIALOG, ResourcePackSettings.OFF.textureMenu());
+        assertEquals(TextureMenuMode.DIALOG, ResourcePackSettings.from(configured(), warnings::add).textureMenu());
+        for (String value : new String[] {"chest", "CHEST", " chest "}) {
+            var section = configured();
+            section.set("texture-menu", value);
+            assertEquals(TextureMenuMode.CHEST, ResourcePackSettings.from(section, warnings::add).textureMenu());
+        }
+        var section = configured();
+        section.set("texture-menu", "dialog");
+        assertEquals(TextureMenuMode.DIALOG, ResourcePackSettings.from(section, warnings::add).textureMenu());
+        var disabled = new YamlConfiguration();
+        disabled.set("texture-menu", "chest");
+        assertEquals(TextureMenuMode.CHEST, ResourcePackSettings.from(disabled, warnings::add).textureMenu());
+        assertEquals(java.util.List.of(), warnings);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"form", "", "chests", "inventory"})
+    void anUnknownTextureMenuFallsBackToDialogWithAWarning(String value) {
+        java.util.List<String> warnings = new java.util.ArrayList<>();
+        var section = configured();
+        section.set("texture-menu", value);
+        assertEquals(TextureMenuMode.DIALOG, ResourcePackSettings.from(section, warnings::add).textureMenu());
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.getFirst().contains("resource-pack.texture-menu"));
+        section.set("texture-menu", 5);
+        assertEquals(TextureMenuMode.DIALOG, ResourcePackSettings.from(section, warnings::add).textureMenu());
+        assertEquals(2, warnings.size());
+    }
+
+    @Test
     void enabledNeedsCompleteBaseConfiguration() {
         for (String field : new String[] {"url", "sha1", "id"}) {
             var section = configured();

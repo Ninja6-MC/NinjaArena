@@ -15,13 +15,23 @@ class PackStatusTest {
             var java = new ResourcePackSettings(true, required, true, 120, pack, Optional.empty());
             assertEquals("Resource packs: Java: enabled, " + (required ? "required" : "optional")
                     + "; Java accounts: not authenticated: choices last one connection"
-                    + "; Bedrock: " + BedrockIntegration.NONE.status(),
+                    + "; Bedrock: " + BedrockIntegration.NONE.status() + "; Texture menu: dialog",
                     PackStatus.describe(java, BedrockIntegration.NONE.status(), JavaAuthentication.NONE));
         }
         assertTrue(PackStatus.describe(ResourcePackSettings.OFF, BedrockIntegration.NONE.status(),
                 JavaAuthentication.NONE)
                 .contains("Java: disabled; Java accounts: not authenticated: choices last one connection;"
                         + " Bedrock: vanilla (same-server Geyser absent, disabled or unavailable)"));
+    }
+
+    @Test void reportsTheTextureMenuInUse() {
+        var pack = new ResourcePackSettings.Pack(UUID.randomUUID(), "https://example.test/pack.zip", "a".repeat(40));
+        var chest = new ResourcePackSettings(true, true, true, 120, pack, Optional.empty(), false,
+                TextureMenuMode.CHEST);
+        assertTrue(PackStatus.describe(chest, BedrockIntegration.NONE.status(), JavaAuthentication.NONE)
+                .endsWith("; Texture menu: chest"));
+        assertTrue(PackStatus.describe(chest, BedrockIntegration.NONE.status(), JavaAuthentication.NONE,
+                "dialog (chest after an error)").endsWith("; Texture menu: dialog (chest after an error)"));
     }
 
     @Test void saysWhyJavaAccountsAreTreatedAsAuthenticated() {

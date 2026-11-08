@@ -35,6 +35,15 @@ Java 25, and does not run on Folia.
   `/narena pack status` and the startup line now report whether Java accounts are
   treated as authenticated and why.
 
+- `resource-pack.texture-menu` (`dialog` or `chest`, default `dialog`, restart required)
+  chooses the screen for `/ninjaarena textures`. The dialog is a native Paper dialog with
+  the same status text and Standard, Detailed and Close buttons, and Geyser 2.8.2 or newer
+  shows it to Bedrock players as a form. Its buttons use the same service as the chest
+  menu, with the same saving, session-only and out-of-date behaviour. If the dialog cannot
+  be sent, that opening uses the chest menu and the failure is logged once. An unknown
+  value uses `dialog` with a warning. Set `chest` if the dialog does not show. `/narena
+  pack status` reports the menu in use.
+
 ### Changed
 - Each Java connection gets one Detailed overlay request through `ResourcePacks`;
   `overlay(UUID)` reports its state.

@@ -23,10 +23,16 @@ public final class TextureListener implements Listener {
 
     private final TextureService service;
     private final TextureMenu menu;
+    private final TextureDialog dialog;
 
     public TextureListener(TextureService service, TextureMenu menu) {
+        this(service, menu, null);
+    }
+
+    public TextureListener(TextureService service, TextureMenu menu, TextureDialog dialog) {
         this.service = service;
         this.menu = menu;
+        this.dialog = dialog;
     }
 
     @EventHandler
@@ -38,6 +44,9 @@ public final class TextureListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         service.quit(event.getPlayer().getUniqueId());
         menu.forget(event.getPlayer().getUniqueId());
+        if (dialog != null) {
+            dialog.forget(event.getPlayer().getUniqueId());
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)

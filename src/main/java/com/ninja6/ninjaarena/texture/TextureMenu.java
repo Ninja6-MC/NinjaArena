@@ -24,6 +24,8 @@ public final class TextureMenu {
 
     public static final String TITLE = "Arena Texture Quality";
     public static final String PERMISSION = "ninjaarena.play";
+    public static final String LOCKED =
+            "The texture menu cannot be opened right now. Leave your match and try again.";
     public static final int SIZE = 27;
     public static final int STANDARD_SLOT = 10;
     public static final int DETAILED_SLOT = 12;
@@ -102,7 +104,7 @@ public final class TextureMenu {
         if (player.openInventory(holder.inventory) == null) {
             // Another rule, such as a match's inventory lockdown, refused the window.
             open.remove(id, active);
-            notifier.tell(id, "The texture menu cannot be opened right now. Leave your match and try again.");
+            notifier.tell(id, LOCKED);
         }
     }
 
