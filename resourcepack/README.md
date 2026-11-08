@@ -380,9 +380,9 @@ or misbehaves, for example with an older Geyser or a proxy setup, set `chest`; t
 two behave the same. If the dialog cannot be built or sent, that opening uses the
 chest menu and the failure is logged once. `/narena pack status` reports the menu
 in use. Both menus use plain text, so they work without either pack, and neither
-uses clickable chat or a second pack popup. Standard is the default; Detailed is used only after an
-explicit choice. Both qualities have the same identifiers, team colours, tool
-behaviour and gameplay.
+uses clickable chat or a second pack popup. Standard is the default; Detailed is
+used only after an explicit choice. Both qualities have the same identifiers, team
+colours, tool behaviour and gameplay.
 
 | Control | Meaning |
 | --- | --- |
@@ -407,8 +407,10 @@ are identical. A dialog has no close event, so the player's latest dialog is the
 current one; a press from an older dialog is refused with the same out-of-date
 message as a stale chest, and every press rechecks ownership and `ninjaarena.play`.
 A choice re-shows the dialog with `Saving...` and then the result, and the result
-is also sent in chat. The dialog is not an inventory, so a match's inventory
-lockdown does not stop it from opening.
+is also sent in chat. The dialog is blocked exactly like the chest: it is refused
+while the player is in a match, waiting for one or spectating, with the same
+"cannot be opened right now" message. A button pressed in a dialog that was already
+open when the player entered a match is refused too, so no quality changes mid-match.
 
 ### Storage and identity
 

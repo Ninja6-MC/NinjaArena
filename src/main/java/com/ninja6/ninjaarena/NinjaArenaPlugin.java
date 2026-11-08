@@ -558,7 +558,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         com.ninja6.ninjaarena.texture.TextureMenu chestMenu = new com.ninja6.ninjaarena.texture.TextureMenu(
                 textures, new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), notifier);
         com.ninja6.ninjaarena.texture.TextureDialog dialogMenu = new com.ninja6.ninjaarena.texture.TextureDialog(
-                textures, new com.ninja6.ninjaarena.texture.TextureDialog.PaperScreens(main), notifier);
+                textures, new com.ninja6.ninjaarena.texture.TextureDialog.PaperScreens(main), notifier,
+                this::menuLocked);
         textureMenu = new com.ninja6.ninjaarena.texture.TextureMenus(packSettings.textureMenu(), chestMenu,
                 dialogMenu, message -> getLogger().warning(message));
         getServer().getPluginManager().registerEvents(
@@ -579,6 +580,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         result.saved() ? NamedTextColor.GREEN : NamedTextColor.RED)));
             }
         };
+    }
+
+    /** The inventory lockdown condition, read when used because matches start after textures. */
+    private boolean menuLocked(UUID id) {
+        return matches != null && matches.isInMatch(id)
+                || waitingRooms != null && waitingRooms.isWaiting(id)
+                || spectators != null && spectators.contains(id);
     }
 
     private static com.ninja6.ninjaarena.command.TextureCommands disabledTextures(String message) {

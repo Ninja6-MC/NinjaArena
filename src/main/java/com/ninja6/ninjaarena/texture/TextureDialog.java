@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
@@ -61,9 +62,17 @@ public final class TextureDialog {
     private final Screens screens;
     private final TextureService.Notifier notifier;
     private final Map<UUID, Active> open = new HashMap<>();
+    private final Predicate<UUID> locked;
     private long tokens;
 
     public TextureDialog(TextureService service, Screens screens, TextureService.Notifier notifier) {
+        this(service, screens, notifier, id -> false);
+    }
+
+    /** {@code locked} is the inventory lockdown condition: in a match, waiting for one, or spectating. */
+    public TextureDialog(TextureService service, Screens screens, TextureService.Notifier notifier,
+            Predicate<UUID> locked) {
+        this.locked = Objects.requireNonNull(locked, "locked");
         this.service = Objects.requireNonNull(service, "service");
         this.screens = Objects.requireNonNull(screens, "screens");
         this.notifier = Objects.requireNonNull(notifier, "notifier");
@@ -74,6 +83,10 @@ public final class TextureDialog {
         UUID id = player.getUniqueId();
         if (!player.hasPermission(TextureMenu.PERMISSION)) {
             notifier.tell(id, "You do not have permission to use this command.");
+            return;
+        }
+        if (locked.test(id)) {
+            notifier.tell(id, TextureMenu.LOCKED);
             return;
         }
         Active active = new Active(++tokens);
@@ -98,6 +111,12 @@ public final class TextureDialog {
             open.remove(id);
             screens.close(presser);
             notifier.tell(id, "You do not have permission to use this menu.");
+            return;
+        }
+        if (locked.test(id)) {
+            open.remove(id, active);
+            screens.close(presser);
+            notifier.tell(id, TextureMenu.LOCKED);
             return;
         }
         switch (button) {

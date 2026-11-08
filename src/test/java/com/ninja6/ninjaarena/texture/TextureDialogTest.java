@@ -51,12 +51,14 @@ class TextureDialogTest {
     private TextureDialog dialog;
     private final List<String> told = new ArrayList<>();
 
+    private final java.util.Set<UUID> inMatch = new java.util.HashSet<>();
+
     private void start(boolean authenticated) {
         fixture = new TextureFixture(true, true);
         fixture.authenticated = authenticated;
         chest = new MenuHarness(fixture);
         fake = new Fake();
-        dialog = new TextureDialog(fixture.service, fake, (id, message) -> told.add(message));
+        dialog = new TextureDialog(fixture.service, fake, (id, message) -> told.add(message), inMatch::contains);
         joined(ALICE);
         joined(BOB);
     }
@@ -285,6 +287,37 @@ class TextureDialogTest {
         assertEquals(1, fake.closes.get(ALICE));
         assertFalse(fake.closes.containsKey(BOB));
         press(fake.shown.getFirst(), chest.player(ALICE), TextureDialog.Button.DETAILED);
+        assertTrue(told.getLast().contains("out of date"));
+    }
+
+    @Test
+    void aDialogIsRefusedInAMatchWithTheChestMessageAndLeavesNothingCurrent() {
+        start(true);
+        inMatch.add(ALICE);
+        dialog.open(chest.player(ALICE));
+        assertTrue(fake.shown.isEmpty());
+        assertEquals(TextureMenu.LOCKED, told.getLast());
+        assertEquals("The texture menu cannot be opened right now. Leave your match and try again.", told.getLast());
+        inMatch.clear();
+        dialog.open(chest.player(ALICE));
+        assertEquals(1, fake.shown.size());
+    }
+
+    @Test
+    void aPressFromAnOpenDialogIsRefusedOnceThePlayerIsInAMatch() {
+        start(true);
+        Player alice = chest.player(ALICE);
+        dialog.open(alice);
+        var shown = fake.last();
+        inMatch.add(ALICE);
+        press(shown, alice, TextureDialog.Button.DETAILED);
+        fixture.settle();
+        assertTrue(fixture.backend.rows.isEmpty());
+        assertEquals(0, fixture.backend.writes.get());
+        assertEquals(1, fake.closes.get(ALICE));
+        assertEquals(TextureMenu.LOCKED, told.getLast());
+        inMatch.clear();
+        press(shown, alice, TextureDialog.Button.DETAILED);
         assertTrue(told.getLast().contains("out of date"));
     }
 }
