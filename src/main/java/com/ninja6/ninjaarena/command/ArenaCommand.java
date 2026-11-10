@@ -1,6 +1,5 @@
 package com.ninja6.ninjaarena.command;
 
-import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.ArenaExtent;
 
 import com.ninja6.ninjaarena.arena.Arena;
@@ -9,6 +8,7 @@ import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -218,7 +219,14 @@ public final class ArenaCommand {
                     + cell.describe() + "). Bounds: " + (arena.bounds() == null ? "not set" : arena.bounds().describe())
                     + ".");
             OwnTeleports.begin(player.getUniqueId());
-            player.teleportAsync(target).whenComplete((moved, error) -> {
+            CompletableFuture<Boolean> teleporting;
+            try {
+                teleporting = player.teleportAsync(target);
+            } catch (RuntimeException e) {
+                OwnTeleports.end(player.getUniqueId());
+                throw e;
+            }
+            teleporting.whenComplete((moved, error) -> {
                 OwnTeleports.end(player.getUniqueId());
                 try {
                     completeOnServer.accept(() -> {

@@ -71,6 +71,8 @@ class PortalListenerTest {
     private final List<CompletableFuture<Chunk>> chunkLoads = new ArrayList<>();
     private final List<String> messages = new ArrayList<>();
     private final List<Location> teleports = new ArrayList<>();
+    /** Whether each teleport was made inside an {@code OwnTeleports} mark. */
+    private final List<Boolean> ownTeleports = new ArrayList<>();
     private final List<String> entered = new ArrayList<>();
     private final List<Runnable> nextTick = new ArrayList<>();
     private final List<UUID> restored = new ArrayList<>();
@@ -226,6 +228,7 @@ class PortalListenerTest {
                         }
                         location = ((Location) args[0]).clone();
                         teleports.add(location);
+                        ownTeleports.add(com.ninja6.ninjaarena.restore.OwnTeleports.isActive(ALICE));
                         yield true;
                     }
                     case "sendMessage" -> {
@@ -353,6 +356,7 @@ class PortalListenerTest {
         assertEquals(ROOM.x(), target.getX());
         assertEquals(ROOM.z(), target.getZ());
         assertEquals(List.of("dojo"), entered);
+        assertEquals(List.of(true), ownTeleports, "admission marks its teleport as NinjaArena's own");
     }
 
     @Test

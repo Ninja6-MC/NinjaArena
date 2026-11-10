@@ -285,4 +285,11 @@ class JoinRestoreTest {
         advance(1);
         assertEquals(1, teleports.size());
     }
+
+    @Test
+    void quittingClearsAMarkLeftByAnAsynchronousTeleport() {
+        OwnTeleports.begin(ALICE);
+        join.onQuit(ALICE);
+        assertFalse(OwnTeleports.isActive(ALICE));
+    }
 }

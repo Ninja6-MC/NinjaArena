@@ -83,6 +83,7 @@ public final class JoinRestore {
 
     /** A player left; drops anything scheduled for their connection. */
     public void onQuit(UUID playerId) {
+        OwnTeleports.clear(playerId);
         next(playerId);
     }
 

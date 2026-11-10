@@ -54,6 +54,7 @@ import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.portal.PortalListener;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
 import com.ninja6.ninjaarena.restore.PlayerRestorer;
+import com.ninja6.ninjaarena.restore.ArenaBusy;
 import com.ninja6.ninjaarena.restore.ArenaCombatCleanup;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
@@ -154,7 +155,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 (x, z) -> arenaWorld != null && ArenaExtent.contains(x, z, arenaWorld.borderSize())), getLogger(),
                 new ArenaCombatCleanup(getLogger()));
         restores.markPendingOnStartup();
-        getServer().getPluginManager().registerEvents(new RestoreListener(this, restores, this::arenaBusy), this);
+        getServer().getPluginManager().registerEvents(new RestoreListener(this, restores, new ArenaBusy(() -> matches, () -> waitingRooms, () -> spectators)), this);
         getServer().getPluginManager().registerEvents(new ArenaExtentListener(() -> arenaWorld == null
                 ? ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")).borderSize()
                 : arenaWorld.borderSize(), getServer().getWorlds().getFirst().getSpawnLocation()), this);
@@ -719,13 +720,6 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Pre-entry player snapshots; {@code null} while the plugin is disabled. */
     public SnapshotService snapshots() {
         return snapshots;
-    }
-
-    /** Whether the player is in a match, a waiting room, the hub or spectating. */
-    private boolean arenaBusy(java.util.UUID id) {
-        return matches != null && matches.isInMatch(id)
-                || waitingRooms != null && (waitingRooms.isWaiting(id) || waitingRooms.inHub(id))
-                || spectators != null && spectators.contains(id);
     }
 
     /** Returns players home from their snapshot; {@code null} while the plugin is disabled. */

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.GridCell;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
+import com.ninja6.ninjaarena.restore.ArenaBusy;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.PlayerSnapshot;
@@ -57,6 +58,9 @@ class SpectatorLifecycleTest extends MatchFixture {
             viewers.onTeleport(event);
             if (!event.isCancelled()) {
                 waitingListener.onTeleport(event);
+            }
+            if (!event.isCancelled()) {
+                restoreListener.onTeleport(event);
             }
         };
         gameModeChanges = viewers::onGameMode;
@@ -118,6 +122,80 @@ class SpectatorLifecycleTest extends MatchFixture {
         assertEquals(List.of(DAVE), restored);
         assertEquals(GameMode.SURVIVAL, players.get(DAVE).gameMode);
         assertFalse(snapshots.exists(DAVE));
+    }
+
+    /** Joins and lets the restore run, which opens the window in which a competing teleport is undone. */
+    private void restoreOnJoin(UUID id) throws Exception {
+        snapshots.save(snapshot(id));
+        restoreListener.onJoin(new PlayerJoinEvent(player(id), Component.empty()));
+        runNextTick();
+        assertEquals(List.of(id), restored);
+    }
+
+    @Test
+    void matchEntryInsideTheSettleWindowIsNeitherUndoneNorRestoredAgain() throws Exception {
+        restoreOnJoin(DAVE);
+        int teleports = players.get(DAVE).teleports.size();
+
+        matches.start("dojo", List.of(List.of(ALICE), List.of(DAVE)));
+        runNextTick();
+
+        assertEquals(teleports + 1, players.get(DAVE).teleports.size(), "only the team spawn teleport");
+        assertEquals(arenaWorld, players.get(DAVE).location.getWorld());
+        assertEquals(List.of(DAVE), restored, "no second restore");
+    }
+
+    @Test
+    void spectatorTransferInsideTheSettleWindowIsNeitherUndoneNorRestoredAgain() throws Exception {
+        arenas.create("garden", new GridCell(1, 0));
+        arenas.update("garden", a -> a.withWaitingRoom(new ArenaPoint(300, 64, 50, 0, 0)));
+        arenas.finishEdit("garden");
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        restoreOnJoin(CAROL);
+        snapshots.save(snapshot(CAROL));
+        players.get(CAROL).canSpectate = true;
+        players.get(CAROL).location = new Location(arenaWorld, 300, 64, 50);
+        waiting.join(player(CAROL), "garden");
+
+        viewers.fromWaitingRoom(player(CAROL), "dojo");
+        runNextTick();
+
+        assertTrue(viewers.contains(CAROL));
+        assertEquals(arenaWorld, players.get(CAROL).location.getWorld());
+        assertEquals(List.of(CAROL), restored, "no second restore");
+    }
+
+    @Test
+    void anotherPluginTeleportInTheWindowIsStillUndoneAfterNinjaArenaOwnTeleports() throws Exception {
+        restoreOnJoin(DAVE);
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        Location hub = new Location(overworld, 5, 64, 5);
+
+        player(DAVE).teleport(hub, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        runNextTick();
+
+        assertEquals(100, players.get(DAVE).location.getX(), "moved back to the restored spot");
+    }
+
+    @Test
+    void theBusyPredicateCoversMatchWaitingRoomAndSpectators() throws Exception {
+        arenas.create("garden", new GridCell(1, 0));
+        arenas.update("garden", a -> a.withWaitingRoom(new ArenaPoint(300, 64, 50, 0, 0)));
+        arenas.finishEdit("garden");
+        var busy = new ArenaBusy(() -> matches, () -> waiting, () -> viewers);
+        assertFalse(busy.test(ALICE));
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        assertTrue(busy.test(ALICE));
+
+        snapshots.save(snapshot(DAVE));
+        viewers.arrived(player(DAVE), "dojo");
+        assertTrue(busy.test(DAVE));
+
+        waiting.join(player(CAROL), "garden");
+        assertTrue(busy.test(CAROL));
+
+        var unset = new ArenaBusy(() -> null, () -> null, () -> null);
+        assertFalse(unset.test(ALICE));
     }
 
     private PlayerSnapshot snapshot(UUID id) {

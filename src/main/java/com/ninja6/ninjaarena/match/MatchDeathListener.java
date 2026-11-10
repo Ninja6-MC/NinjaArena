@@ -6,6 +6,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +24,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -119,7 +121,8 @@ public final class MatchDeathListener implements Listener {
                 clearCamera(player);
                 player.setGameMode(GameMode.ADVENTURE);
                 MatchService.readyForRound(player);
-                matches.respawnPoint(player.getUniqueId()).ifPresent(player::teleport);
+                matches.respawnPoint(player.getUniqueId())
+                        .ifPresent(spot -> OwnTeleports.teleport(player, spot, TeleportCause.PLUGIN));
             }
         });
     }
@@ -206,7 +209,7 @@ public final class MatchDeathListener implements Listener {
         boolean outside = !allowedPosition(player.getLocation(), match, player);
         if (outside) {
             clearCamera(player);
-            if (!anchor(player, match).map(player::teleport).orElse(false)) {
+            if (!anchor(player, match).map(spot -> OwnTeleports.teleport(player, spot, TeleportCause.PLUGIN)).orElse(false)) {
                 return;
             }
         }
