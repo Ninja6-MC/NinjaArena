@@ -66,7 +66,7 @@ public final class PlayerRestorer implements RestoreService.Applier {
         player.leaveVehicle();
         player.eject();
         player.setGliding(false);
-        if (!player.teleport(landing.location(), TeleportCause.PLUGIN)) {
+        if (!OwnTeleports.teleport(player, landing.location(), TeleportCause.PLUGIN)) {
             throw new RestoreService.RestoreException("the teleport of " + player.getName()
                     + " was cancelled");
         }

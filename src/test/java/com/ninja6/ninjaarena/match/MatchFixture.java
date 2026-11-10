@@ -90,6 +90,8 @@ abstract class MatchFixture {
         final List<Sound> sounds = new ArrayList<>();
         final List<BossBar> bossBars = new ArrayList<>();
         final List<Location> teleports = new ArrayList<>();
+        /** Whether each teleport was made inside an OwnTeleports mark. */
+        final List<Boolean> ownMarks = new ArrayList<>();
         final List<PotionEffect> effects = new ArrayList<>();
         final Map<Material, Integer> cooldowns = new HashMap<>();
         Vector velocity;
@@ -183,6 +185,13 @@ abstract class MatchFixture {
                 new Class<?>[] {BukkitScheduler.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "runTask" -> {
                         nextTick.add((Runnable) args[1]);
+                        yield task;
+                    }
+                    case "runTaskLater" -> {
+                        // Only the one-tick join restore runs in these tests; longer delays are not driven.
+                        if ((long) args[2] <= 1) {
+                            nextTick.add((Runnable) args[1]);
+                        }
                         yield task;
                     }
                     case "runTaskTimer" -> { repeating.add((Runnable) args[1]); yield task; }
@@ -307,6 +316,7 @@ abstract class MatchFixture {
                     case "getLocation" -> fake.location.clone();
                     case "teleport" -> {
                         Location to = (Location) args[0];
+                        fake.ownMarks.add(com.ninja6.ninjaarena.restore.OwnTeleports.isActive(fake.id));
                         var event = new PlayerTeleportEvent(fake.proxy, fake.location.clone(), to,
                                 args.length > 1 && args[1] instanceof PlayerTeleportEvent.TeleportCause cause
                                         ? cause : PlayerTeleportEvent.TeleportCause.PLUGIN);

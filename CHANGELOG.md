@@ -49,6 +49,15 @@ Java 25, and does not run on Folia.
   `overlay(UUID)` reports its state.
 
 ### Fixed
+- A join restore that another plugin cancelled, such as a login plugin holding the
+  player at a spawn, is retried after 20, 100, 200, 400 and 600 ticks. The snapshot
+  stays until a restore succeeds, a retry replaces the inventory instead of adding
+  to it, and the player is told if the last attempt fails. Any other plugin's
+  teleport within 100 ticks after the restore (a plot placement, but also a spawn or
+  hub command) is undone once so the player ends at the restored spot; NinjaArena's
+  own teleports and players in a match, waiting room or hub are never undone. A player
+  who joins dead is restored on respawn, without retries or this window. Simulated in tests; not yet checked
+  against AuthMe or SpiralGenesis on a test server. Refs #105, #106.
 - Standard and Detailed Java and Bedrock packs show the NinjaArena plugin icon in the pack list.
   Build and downloaded-pack checks reject missing or changed icons (#127).
 - The Geyser mappings now give the Bedrock dash item a cooldown (`minecraft:use_cooldown`,

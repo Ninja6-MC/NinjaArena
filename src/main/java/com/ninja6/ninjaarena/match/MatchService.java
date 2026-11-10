@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.match;
 
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
@@ -42,6 +43,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -447,7 +449,7 @@ public final class MatchService implements MatchStart {
             }
             readyForRound.accept(player);
             Location spawn = location(running.spawns().get(match.teamOf(playerId) - 1));
-            if (!player.teleport(spawn)) {
+            if (!OwnTeleports.teleport(player, spawn, TeleportCause.PLUGIN)) {
                 plugin.getLogger().warning("Could not teleport " + player.getName() + " to their team spawn in arena "
                         + match.arena() + ".");
             }

@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.arena.Arena;
@@ -127,6 +128,7 @@ class NinjaArenaCommandTest {
             int[] operations = {0};
             Player admin = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(),
                     new Class<?>[] {Player.class}, (object, method, args) -> switch (method.getName()) {
+                        case "getUniqueId" -> java.util.UUID.nameUUIDFromBytes(new byte[] {1});
                         case "teleportAsync" -> teleport;
                         case "sendMessage" -> null;
                         default -> throw new UnsupportedOperationException(method.getName());
@@ -146,6 +148,33 @@ class NinjaArenaCommandTest {
             completions.getFirst().run();
             assertEquals(0, operations[0]);
         }
+    }
+
+    @Test
+    void aSynchronousTeleportFailureEndsTheOwnTeleportMarkAndReleasesTheOperation() throws Exception {
+        registry.create("dojo", new GridCell(1, 0));
+        java.util.UUID adminId = java.util.UUID.nameUUIDFromBytes(new byte[] {3});
+        int[] operations = {0};
+        Player admin = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
+                (object, method, args) -> switch (method.getName()) {
+                    case "getUniqueId" -> adminId;
+                    case "teleportAsync" -> {
+                        assertTrue(com.ninja6.ninjaarena.restore.OwnTeleports.isActive(adminId));
+                        throw new IllegalStateException("refused");
+                    }
+                    case "sendMessage" -> null;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        var route = new ArenaCommand(registry, () -> null, () -> {
+            operations[0]++;
+            return () -> operations[0]--;
+        }, completion -> { });
+
+        assertThrows(IllegalStateException.class,
+                () -> route.execute(admin, "narena", new String[] {"tp", "dojo"}));
+
+        assertFalse(com.ninja6.ninjaarena.restore.OwnTeleports.isActive(adminId));
+        assertEquals(0, operations[0]);
     }
 
     @Test
@@ -396,6 +425,7 @@ class NinjaArenaCommandTest {
                         calls.add("setFlying(" + args[0] + ")");
                         yield null;
                     }
+                    case "getUniqueId" -> java.util.UUID.nameUUIDFromBytes(new byte[] {2});
                     case "teleportAsync" -> {
                         Location target = (Location) args[0];
                         calls.add("teleport(" + target.getX() + ", " + target.getY() + ", " + target.getZ() + ")");

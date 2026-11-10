@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.portal;
 
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import java.io.IOException;
@@ -94,7 +95,7 @@ public final class ArenaAdmission {
         Location target = new Location(world.get(), room.x(), room.y(), room.z(), room.yaw(), room.pitch());
         boolean moved;
         try {
-            moved = player.teleport(target, TeleportCause.PLUGIN);
+            moved = OwnTeleports.teleport(player, target, TeleportCause.PLUGIN);
             if (!moved) {
                 plugin.getLogger().warning("The teleport of " + player.getName() + " (" + player.getUniqueId()
                         + ") to arena " + arena + " was refused.");

@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.waiting;
 
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
@@ -411,7 +412,7 @@ public final class WaitingRoomService {
         }
         transferring = id;
         try {
-            if (!player.teleport(destination, TeleportCause.PLUGIN)) {
+            if (!OwnTeleports.teleport(player, destination, TeleportCause.PLUGIN)) {
                 return false;
             }
             return leave(player, Exit.SPECTATE);
