@@ -58,10 +58,14 @@ order asynchronous placement, so NinjaArena defines the order itself:
 
 1. A placement that lands before the restore is overwritten by it. The player ends
    at the restored location with the restored inventory.
-2. A placement that lands within 100 ticks after a successful restore is undone
-   once: a tick later the player is moved back to the restored spot. The
-   inventory is not written again. Only plugin-caused and unknown-cause teleports
-   count, and a second placement in the window is left to win.
+2. Any other plugin's teleport that lands within 100 ticks after a successful
+   restore is undone once: a tick later the player is moved back to the spot they
+   were restored to. This is not limited to plot placement; a spawn or hub command
+   from another plugin in the window is reverted too. The inventory is not written
+   again. Only plugin-caused and unknown-cause teleports count, and a second one in
+   the window is left to win. Teleports NinjaArena starts itself (admission, portal
+   entry, waiting room, match, restore) are marked and never undone, and nothing is
+   undone for a player in a match, waiting room, hub or spectating.
 3. A placement later than that, and the plot assignment and respawn point the
    plugin sets, are not touched.
 
@@ -82,7 +86,9 @@ teleport through. Every attempt writes the snapshot over the player, so a retry
 does not duplicate items, and the snapshot is deleted only after one succeeds.
 When the last attempt fails the player is told to rejoin or ask staff, and the
 snapshot stays for their next join. Quitting stops the retries. A player who
-authenticates later than that window is restored on their next join. A later
+authenticates later than that window is restored on their next join. A player
+who joins dead is restored when they respawn, which is not retried, shows no
+failure message and has no settle window. A later
 forced spawn after a successful restore is handled like any other competing
 teleport (see SpiralGenesis above). Tracked in #105. See [AuthMe's settings][authme].
 This is tested with a simulated cancelling teleport, not with AuthMe.
