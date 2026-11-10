@@ -391,7 +391,8 @@ colours, tool behaviour and gameplay.
 | Status | Shows the saved choice and, separately, what this connection is doing now. |
 | Close | Closes the menu. |
 
-The selected choice is marked `[SELECTED]` in text as well as by colour and glint.
+The chest's selected choice is marked `[SELECTED]` in text as well as by colour and glint.
+An unsaved default reads `Standard (default, not saved yet)` in both menus.
 A saved Detailed choice that is no longer configured stays visibly Detailed and
 says that Standard is used instead. The menu shows `Saving...` until the write
 has committed; a failed write is reported as failed and never shown as saved.
@@ -406,8 +407,11 @@ current connection only, the "not saved" wording and the unauthenticated wording
 are identical. A dialog has no close event, so the player's latest dialog is the
 current one; a press from an older dialog is refused with the same out-of-date
 message as a stale chest, and every press rechecks ownership and `ninjaarena.play`.
-A choice re-shows the dialog with `Saving...` and then the result, and the result
-is also sent in chat. The dialog is blocked exactly like the chest: it is refused
+A choice re-shows the dialog with `Saving...` and then the updated choice and short
+status. The full result is sent in chat. The dialog uses three short lines: choice,
+current pack status and when changes apply. Option names and sizes stay on the
+buttons; full diagnostics remain in `/narena pack status`. The dialog is blocked
+exactly like the chest: it is refused
 while the player is in a match, waiting for one or spectating, with the same
 "cannot be opened right now" message. A button pressed in a dialog that was already
 open when the player entered a match is refused too, so no quality changes mid-match.

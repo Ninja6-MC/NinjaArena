@@ -54,7 +54,7 @@ public final class TextureService implements ResourcePacks.Listener {
 
     /** Everything the menu and status show for one player. */
     public record View(Optional<PlayerKey> key, boolean bedrock, Optional<Quality> explicit, Quality saved,
-            boolean detailedAvailable, String delivery, String storage, boolean sessionOnly) {
+            boolean detailedAvailable, String delivery, String storage, boolean sessionOnly, String playerStatus) {
     }
 
     private static final class Session {
@@ -223,7 +223,23 @@ public final class TextureService implements ResourcePacks.Listener {
             delivery = javaDelivery(player, saved);
         }
         return new View(session.key, bedrock, explicit, saved, detailedAvailable(player), delivery, storage,
-                session.sessionOnly);
+                session.sessionOnly, playerStatus(player, bedrock));
+    }
+
+    /** Short player wording; the full delivery diagnostics remain in {@link View#delivery()}. */
+    private String playerStatus(UUID player, boolean bedrock) {
+        if (bedrock) {
+            return identities.bedrockActive(player).map(quality -> display(quality) + " sent on connect.")
+                    .orElse("Current pack is unknown.");
+        }
+        String base = packs.loaded(player) ? "Standard active" : "Standard not loaded";
+        return switch (packs.overlay(player)) {
+            case LOADED -> "Detailed active.";
+            case PENDING -> base + "; Detailed loading.";
+            case DECLINED -> base + "; Detailed declined.";
+            case FAILED -> base + "; Detailed failed.";
+            case CANCELLED, NONE -> base + ".";
+        };
     }
 
     private String bedrockDelivery(UUID player, Quality saved) {

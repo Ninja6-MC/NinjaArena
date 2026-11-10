@@ -7,7 +7,6 @@ import io.papermc.paper.registry.data.dialog.DialogBase;
 import io.papermc.paper.registry.data.dialog.action.DialogAction;
 import io.papermc.paper.registry.data.dialog.body.DialogBody;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,8 +21,8 @@ import net.kyori.adventure.text.event.ClickCallback;
 import org.bukkit.entity.Player;
 
 /**
- * The "Arena Texture Quality" dialog screen. It shows the same status wording as the chest menu
- * and runs the same {@link TextureService} calls. A dialog has no close event, so the player's
+ * The "Arena Texture Quality" dialog screen. It uses compact text and runs the same
+ * {@link TextureService} calls as the chest menu. A dialog has no close event, so the player's
  * current dialog is the latest one opened; a press from any other is stale. Every press rechecks
  * ownership and permission.
  */
@@ -180,20 +179,22 @@ public final class TextureDialog {
         }
     }
 
-    /** The text for the current state, from the same wording the chest icons use. */
+    /** Three short lines leave room for the choice buttons on a Bedrock form. */
     static Content content(TextureService.View view, Quality saving, String note) {
-        Map<Integer, TextureMenu.Item> items = TextureMenu.layout(view, saving, note);
-        List<String> lines = new ArrayList<>();
-        for (int slot : new int[] {TextureMenu.STANDARD_SLOT, TextureMenu.DETAILED_SLOT, TextureMenu.STATUS_SLOT}) {
-            TextureMenu.Item item = items.get(slot);
-            if (!lines.isEmpty()) {
-                lines.add("");
-            }
-            lines.add(item.name());
-            lines.addAll(item.lore());
+        String choice = TextureMenu.choiceLine(view);
+        String status = saving != null ? "Saving..." : view.playerStatus();
+        if (saving == null && note.startsWith("Could not save")) {
+            status = "Could not save. Try again later.";
+        } else if (saving == null && !view.storage().isEmpty()) {
+            status = "Storage unavailable. Try again later.";
+        } else if (saving == null && view.bedrock() && view.key().isEmpty()) {
+            status = "Account unverified; choices unavailable.";
         }
-        return new Content(TextureMenu.TITLE, List.copyOf(lines), items.get(TextureMenu.STANDARD_SLOT).name(),
-                items.get(TextureMenu.DETAILED_SLOT).name());
+        String timing = view.bedrock() ? "Changes apply next connection."
+                : view.sessionOnly() ? "For this connection; resets on leave."
+                : "Applies now, or reconnect if needed.";
+        return new Content(TextureMenu.TITLE, List.of(choice, status, timing), "Standard 16x16",
+                view.detailedAvailable() ? "Detailed 32x32" : "Detailed 32x32 (unavailable)");
     }
 
     /** Builds and sends Paper dialogs. Button callbacks hop to the server thread before running. */
