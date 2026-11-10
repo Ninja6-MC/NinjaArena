@@ -37,7 +37,7 @@ Java 25, and does not run on Folia.
 
 - `resource-pack.texture-menu` (`dialog` or `chest`, default `dialog`, restart required)
   chooses the screen for `/ninjaarena textures`. The dialog is a native Paper dialog with
-  the same status text and Standard, Detailed and Close buttons, and Geyser 2.8.2 or newer
+  three short body lines and Standard, Detailed and Close buttons, and Geyser 2.8.2 or newer
   shows it to Bedrock players as a form. Its buttons use the same service as the chest
   menu, with the same saving, session-only and out-of-date behaviour. If the dialog cannot
   be sent, that opening uses the chest menu and the failure is logged once. An unknown

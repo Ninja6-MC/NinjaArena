@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.texture;
 
 import static com.ninja6.ninjaarena.texture.TextureFixture.ALICE;
 import static com.ninja6.ninjaarena.texture.TextureFixture.BOB;
+import static com.ninja6.ninjaarena.texture.TextureFixture.FLOOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -82,17 +83,130 @@ class TextureDialogTest {
     }
 
     @Test
-    void theDialogShowsTheChestWordingWithThreeButtons() {
+    void anUnsavedDefaultHasThreeShortLinesAndChoiceNamesOnlyOnButtons() {
         start(true);
         dialog.open(chest.player(ALICE));
         var content = fake.last().content();
         assertEquals("Arena Texture Quality", content.title());
         assertEquals("Standard 16x16", content.standard());
         assertEquals("Detailed 32x32", content.detailed());
+        assertEquals(List.of("Standard (default, not saved yet)", "Standard active.",
+                "Applies now, or reconnect if needed."), content.lines());
+        assertCompact(content);
+    }
+
+    private void assertCompact(TextureDialog.Content content) {
+        assertEquals(3, content.lines().size());
+        assertTrue(content.lines().stream().allMatch(line -> line.length() <= 50));
         String text = String.join("\n", content.lines());
-        assertTrue(text.contains("[SELECTED] This is your saved choice."));
-        assertTrue(text.contains("Saved choice: Standard (default)"));
-        assertTrue(text.contains("Right now: "));
+        assertFalse(text.contains("[SELECTED]"));
+        assertFalse(text.contains("Click to choose"));
+        assertFalse(text.contains("16x16"));
+        assertFalse(text.contains("32x32"));
+    }
+
+    @Test
+    void aSavedStandardIsDistinguishedFromTheUnsavedDefault() {
+        start(true);
+        fixture.choose(ALICE, Quality.STANDARD);
+        dialog.open(chest.player(ALICE));
+        assertEquals("Saved choice: Standard", fake.last().content().lines().getFirst());
+        assertCompact(fake.last().content());
+    }
+
+    @Test
+    void aSessionOnlyChoiceNeverClaimsToBeSaved() {
+        start(false);
+        fixture.choose(ALICE, Quality.DETAILED);
+        dialog.open(chest.player(ALICE));
+        assertEquals(List.of("This connection only (not saved): Detailed",
+                "Standard active; Detailed loading.", "For this connection; resets on leave."),
+                fake.last().content().lines());
+        assertCompact(fake.last().content());
+    }
+
+    @Test
+    void bedrockUsesCompactDeliveryAndKeepsDiagnosticsOutOfTheBodyEvenAfterSaving() {
+        start(true);
+        fixture.bedrockPlayers.add(FLOOD);
+        fixture.xuids.put(FLOOD, "2535400000001");
+        fixture.bedrockActive.put(FLOOD, Quality.STANDARD);
+        joined(FLOOD);
+        dialog.open(chest.player(FLOOD));
+        assertEquals(List.of("Standard (default, not saved yet)", "Standard sent on connect.",
+                "Changes apply next connection."), fake.last().content().lines());
+        press(fake.last(), chest.player(FLOOD), TextureDialog.Button.DETAILED);
+        fixture.settle();
+        assertEquals(List.of("Saved choice: Detailed", "Standard sent on connect.",
+                "Changes apply next connection."), fake.last().content().lines());
+        assertCompact(fake.last().content());
+        assertTrue(fixture.service.describe(FLOOD).delivery().contains("Pack loading cannot be observed"));
+        assertTrue(told.getLast().contains("Pack loading cannot be observed"));
+    }
+
+    @Test
+    void aFailedSaveStaysCompactAndDoesNotClaimThatTheDefaultWasSaved() {
+        start(true);
+        fixture.backend.failWrites = true;
+        dialog.open(chest.player(ALICE));
+        press(fake.last(), chest.player(ALICE), TextureDialog.Button.DETAILED);
+        fixture.settle();
+        assertEquals("Standard (default, not saved yet)", fake.last().content().lines().getFirst());
+        assertEquals("Could not save. Try again later.", fake.last().content().lines().get(1));
+        assertCompact(fake.last().content());
+    }
+
+    private static TextureService.View storageView(String storage) {
+        return new TextureService.View(java.util.Optional.of(PlayerKey.java(ALICE)), false,
+                java.util.Optional.empty(), Quality.STANDARD, true, "Standard", storage, false, "Standard active.");
+    }
+
+    @Test
+    void aStorageOutageSaysToTryAgainLater() {
+        var content = TextureDialog.content(storageView(
+                "Storage is unavailable; Standard is used and choices cannot be saved."), null, "");
+        assertEquals("Storage unavailable. Try again later.", content.lines().get(1));
+        assertCompact(content);
+    }
+
+    @Test
+    void unsupportedStorageDoesNotSuggestRetrying() {
+        var content = TextureDialog.content(storageView(
+                "Storage is unsupported (schema version 99); Standard is used."), null, "");
+        assertEquals("Storage unsupported. Ask a server admin.", content.lines().get(1));
+        assertFalse(String.join(" ", content.lines()).contains("Try again"));
+        assertCompact(content);
+    }
+
+    @Test
+    void anUnverifiedBedrockAccountSaysChoicesAreUnavailableAndPromisesNoSave() {
+        start(true);
+        fixture.bedrockPlayers.add(FLOOD);
+        joined(FLOOD);
+        dialog.open(chest.player(FLOOD));
+        assertEquals(List.of("Standard (default)", "Account unverified; choices unavailable.",
+                "Standard is used; nothing is saved."), fake.last().content().lines());
+        assertCompact(fake.last().content());
+        press(fake.last(), chest.player(FLOOD), TextureDialog.Button.DETAILED);
+        fixture.settle();
+        assertEquals(List.of("Standard (default)", "Account unverified; choices unavailable.",
+                "Standard is used; nothing is saved."), fake.last().content().lines());
+    }
+
+    @Test
+    void aSavedDetailedChoiceOnAServerWithoutDetailedSaysItIsNotSetUp() {
+        fixture = new TextureFixture(true, false);
+        chest = new MenuHarness(fixture);
+        fake = new Fake();
+        dialog = new TextureDialog(fixture.service, fake, (id, message) -> told.add(message), inMatch::contains);
+        fixture.saved(ALICE, Quality.DETAILED);
+        joined(ALICE);
+        dialog.open(chest.player(ALICE));
+        var content = fake.last().content();
+        assertEquals(List.of("Saved choice: Detailed", "Detailed is not set up on this server.",
+                "Standard is used."), content.lines());
+        assertEquals("Detailed 32x32 (unavailable)", content.detailed());
+        assertCompact(content);
     }
 
     @Test
@@ -105,7 +219,7 @@ class TextureDialogTest {
         fixture.settle();
         String text = String.join("\n", fake.last().content().lines());
         assertFalse(text.contains("Saving..."));
-        assertTrue(text.contains("Saved: Detailed."));
+        assertTrue(text.contains("Saved choice: Detailed"));
         assertTrue(told.getLast().startsWith("Saved: Detailed."));
         assertEquals(Quality.DETAILED, fixture.backend.rows.get(PlayerKey.java(ALICE)).quality());
         assertEquals(1, fixture.wire.overlayOffers());

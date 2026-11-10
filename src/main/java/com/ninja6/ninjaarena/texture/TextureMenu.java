@@ -231,14 +231,23 @@ public final class TextureMenu {
 
     private static String selectedLine(TextureService.View view) {
         return view.sessionOnly() ? "[SELECTED] This is your choice for this connection only. "
-                + TextureService.SESSION_ONLY_NOTE : "[SELECTED] This is your saved choice.";
+                + TextureService.SESSION_ONLY_NOTE : view.explicit().isPresent()
+                        ? "[SELECTED] This is your saved choice."
+                        : "[SELECTED] Standard (default, not saved yet).";
+    }
+
+    static String choiceLine(TextureService.View view) {
+        String quality = view.saved() == Quality.DETAILED ? "Detailed" : "Standard";
+        if (view.sessionOnly()) {
+            return "This connection only (not saved): " + quality;
+        }
+        return view.explicit().isPresent() ? "Saved choice: " + quality
+                : "Standard (default, not saved yet)";
     }
 
     private static Item status(TextureService.View view, String note) {
         List<String> lore = new java.util.ArrayList<>();
-        String label = view.sessionOnly() ? "This connection only (not saved): " : "Saved choice: ";
-        lore.add(label + (view.explicit().isPresent() ? view.saved() == Quality.DETAILED ? "Detailed"
-                : "Standard" : "Standard (default)"));
+        lore.add(choiceLine(view));
         lore.add("Right now: " + view.delivery());
         if (!view.storage().isEmpty()) {
             lore.add(view.storage());

@@ -66,7 +66,10 @@ class TextureMenuTest {
         h.menu.open(h.player(ALICE));
         assertTrue(h.screen().items.get(10).contains("[SELECTED]"));
         assertFalse(h.screen().items.get(12).contains("[SELECTED]"));
-        assertTrue(h.screen().items.get(14).contains("Saved choice: Standard (default)"));
+        assertTrue(h.screen().items.get(14).contains("Standard (default, not saved yet)"));
+        assertFalse(h.screen().items.get(14).contains("Saved choice"));
+        assertTrue(h.screen().items.get(10).contains("Standard (default, not saved yet)"));
+        assertFalse(h.screen().items.get(10).contains("your saved choice"));
 
         var standard = TextureMenu.layout(fixture.service.describe(ALICE), null, "");
         Item selected = standard.get(10);
