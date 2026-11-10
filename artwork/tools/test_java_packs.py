@@ -29,10 +29,11 @@ class JavaPacksTest(unittest.TestCase):
         return packs.verify(packs.ROOT, self.output, VERSION, SOURCE, "42", "1")
 
     def test_complete_standard_and_texture_only_detailed_have_root_metadata(self):
-        for variant, count in (("standard", 13), ("detailed", 7)):
+        for variant, count in (("standard", 14), ("detailed", 8)):
             with zipfile.ZipFile(self.output / f"NinjaArena-{VERSION}-java-{variant}.zip") as archive:
                 self.assertEqual(count, len(archive.namelist()))
                 self.assertEqual(None, archive.testzip())
+                self.assertEqual((packs.ROOT / f"resourcepack/java/{variant}/pack.png").read_bytes(), archive.read("pack.png"))
                 metadata = json.loads(archive.read("pack.mcmeta"))["pack"]
                 self.assertEqual([97, 1], metadata["min_format"])
                 self.assertEqual([97, 1], metadata["max_format"])
@@ -95,6 +96,45 @@ class JavaPacksTest(unittest.TestCase):
         packs.write_json(self.output / "manifest.json", manifest)
         with self.assertRaisesRegex(ValueError, "archive inventory mismatch"):
             self.verify()
+
+    def test_missing_or_changed_icons_fail_even_with_updated_digests(self):
+        for variant in packs.VARIANTS:
+            file = self.output / f"NinjaArena-{VERSION}-java-{variant}.zip"
+            original = file.read_bytes()
+            for replacement in (None, b"broken icon"):
+                with zipfile.ZipFile(file) as archive:
+                    entries = {n: archive.read(n) for n in archive.namelist() if n != "pack.png"}
+                if replacement is not None:
+                    entries["pack.png"] = replacement
+                with zipfile.ZipFile(file, "w") as archive:
+                    for name, data in entries.items():
+                        archive.writestr(name, data)
+                manifest = packs.read_json(self.output / "manifest.json")
+                for name, checksums in manifest["files"].items():
+                    if name.endswith(".zip"):
+                        manifest["files"][name] = {a: packs.digest((self.output / name).read_bytes(), a) for a in ("sha1", "sha256")}
+                sums = "".join(f'{v["sha1"]}  {n}\n' for n, v in sorted(manifest["files"].items()) if n.endswith(".zip"))
+                (self.output / "SHA1SUMS").write_bytes(sums.encode())
+                manifest["files"]["SHA1SUMS"]["sha256"] = packs.digest(sums.encode())
+                packs.write_json(self.output / "manifest.json", manifest)
+                with self.assertRaisesRegex(ValueError, "archive (inventory|content) mismatch"):
+                    self.verify()
+                file.write_bytes(original)
+
+    def test_missing_and_non_square_source_icons_fail(self):
+        root = Path(self.temp.name) / "icons-root"
+        shutil.copytree(packs.ROOT / "resourcepack", root / "resourcepack")
+        shutil.copyfile(packs.ROOT / "build.gradle.kts", root / "build.gradle.kts")
+        for variant in packs.VARIANTS:
+            icon = root / f"resourcepack/java/{variant}/pack.png"
+            original = icon.read_bytes()
+            icon.unlink()
+            with self.assertRaisesRegex(ValueError, "missing or unexpected pack files"):
+                packs.source_files(root, variant, VERSION)
+            icon.write_bytes(original[:20] + (128).to_bytes(4, "big") + original[24:])
+            with self.assertRaisesRegex(ValueError, "256x256 PNG"):
+                packs.source_files(root, variant, VERSION)
+            icon.write_bytes(original)
 
     def test_publication_requires_matching_passing_evidence_before_network(self):
         evidence = Path(self.temp.name) / "evidence.json"

@@ -49,6 +49,8 @@ Java 25, and does not run on Folia.
   `overlay(UUID)` reports its state.
 
 ### Fixed
+- Standard and Detailed Java and Bedrock packs show the NinjaArena plugin icon in the pack list.
+  Build and downloaded-pack checks reject missing or changed icons (#127).
 - The Geyser mappings now give the Bedrock dash item a cooldown (`minecraft:use_cooldown`,
   group `minecraft:feather`, 8 seconds), so Geyser's cooldown packet matches the item and
   the hotbar overlay can show after a dash. Reinstall the mappings from the next release.

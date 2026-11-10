@@ -124,7 +124,7 @@ def composite(base, accent, colour):
 def source_files(root, variant, version):
     config = target(root)
     # Reuse the Java source inventory/target checks before converting its layers.
-    java.source_files(root, variant, version)
+    java_files = java.source_files(root, variant, version)
     size = 16 if variant == "standard" else 32
     numeric = pack_version(root, version)
     metadata = {"format_version": 2,
@@ -133,7 +133,7 @@ def source_files(root, variant, version):
                            "min_engine_version": config["min_engine_version"]},
                 "modules": [{"type": "resources", "uuid": config[variant]["module_uuid"], "version": numeric}]}
     textures = {}
-    files = {"manifest.json": json_bytes(metadata)}
+    files = {"manifest.json": json_bytes(metadata), "pack_icon.png": java_files["pack.png"]}
     folder = root / f"resourcepack/java/{variant}/assets/ninjaarena/textures/item"
     for tool in java.TOOLS:
         width, height, base = read_png((folder / f"{tool}.png").read_bytes())
