@@ -150,6 +150,9 @@ def source_files(root, variant, version):
     return files
 
 
+DASH_COOLDOWN_SECONDS = 8.0
+
+
 def mappings():
     items = {"minecraft:snowball": [], "minecraft:feather": []}
     for tool in java.TOOLS:
@@ -159,7 +162,11 @@ def mappings():
                           "predicate": {"type": "match", "property": "custom_model_data", "index": 0, "value": colour},
                           "bedrock_options": {"icon": f"ninjaarena.{tool}_{colour}"}}
             if tool == "dash":
-                definition["components"] = {"minecraft:max_stack_size": 1}
+                # Geyser names the Bedrock cooldown category after this group; the server's
+                # cooldown packet for a feather uses the same group, so the hotbar overlay matches.
+                definition["components"] = {"minecraft:max_stack_size": 1,
+                                            "minecraft:use_cooldown": {"seconds": DASH_COOLDOWN_SECONDS,
+                                                                       "cooldown_group": "minecraft:feather"}}
             items["minecraft:feather" if tool == "dash" else "minecraft:snowball"].append(definition)
     return json_bytes({"format_version": 2, "items": items})
 

@@ -49,6 +49,10 @@ Java 25, and does not run on Folia.
   `overlay(UUID)` reports its state.
 
 ### Fixed
+- The Geyser mappings now give the Bedrock dash item a cooldown (`minecraft:use_cooldown`,
+  group `minecraft:feather`, 8 seconds), so Geyser's cooldown packet matches the item and
+  the hotbar overlay can show after a dash. Reinstall the mappings from the next release.
+  Not verified on a real Bedrock client (#128).
 - Startup rejects removed Bedrock pack switches with the same replacement guidance
   as reload, logs an operator error and keeps Bedrock delivery off until they are
   removed. Java delivery and the rest of the plugin continue running.

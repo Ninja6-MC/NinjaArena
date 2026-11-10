@@ -99,7 +99,9 @@ class BedrockPacksTest(unittest.TestCase):
                 identifiers.add(identifier)
                 if tool == "dash":
                     self.assertEqual("minecraft:feather", base)
-                    self.assertEqual({"minecraft:max_stack_size": 1}, definition["components"])
+                    self.assertEqual({"minecraft:max_stack_size": 1,
+                                      "minecraft:use_cooldown": {"seconds": 8.0, "cooldown_group": "minecraft:feather"}},
+                                     definition["components"])
                 else:
                     self.assertEqual("minecraft:snowball", base)
                     self.assertNotIn("components", definition)

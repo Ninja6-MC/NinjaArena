@@ -403,7 +403,14 @@ each player receives per round, and leaving an entry out turns that tool off for
 | :--- | :--- | :--- | :--- |
 | `ninjaarena:smoke-bomb` | Snowball | 2 | Thrown. Where it lands, a 3-block cloud lasts 4 seconds and blinds rival players inside it. |
 | `ninjaarena:shuriken` | Snowball | 8 | Thrown. A hit deals 2 damage and makes a rival glow for 3 seconds. |
-| `ninjaarena:dash` | Feather | 1 | Right-click for a short forward burst. 8-second cooldown, shown on the item. Not consumed. |
+| `ninjaarena:dash` | Feather | 1 | Right-click for a short forward burst. 8-second cooldown, shown on the item on Java and, with the Geyser mappings installed, on Bedrock (see the Bedrock note below). Not consumed. |
+
+Bedrock shows the dash cooldown on the hotbar slot only when the Geyser mappings
+are installed: they give the Bedrock dash item a cooldown category matching the one the
+server sends. Mappings from before this change leave the slot without an overlay, though
+dash is still refused until ready. The mapped duration is the default 8 seconds; the
+server restarts the overlay with the configured time on each use. Not verified on a real
+Bedrock client.
 
 Tools work only for players alive in the round during COMBAT and OVERRUN. During PREP,
 between rounds, or once eliminated, a throw or dash is cancelled and the item kept. Smoke
