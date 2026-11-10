@@ -185,6 +185,13 @@ abstract class MatchFixture {
                         nextTick.add((Runnable) args[1]);
                         yield task;
                     }
+                    case "runTaskLater" -> {
+                        // Only the one-tick join restore runs in these tests; longer delays are not driven.
+                        if ((long) args[2] <= 1) {
+                            nextTick.add((Runnable) args[1]);
+                        }
+                        yield task;
+                    }
                     case "runTaskTimer" -> { repeating.add((Runnable) args[1]); yield task; }
                     default -> throw new UnsupportedOperationException(method.getName());
                 });

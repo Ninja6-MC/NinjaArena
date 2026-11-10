@@ -49,29 +49,43 @@ setting in place and apply any arena hover grant after arrival. See the
 
 ### SpiralGenesis allocation
 
-**Code review.** SpiralGenesis skips returning players with an assigned plot
+**Code review and simulated.** SpiralGenesis skips returning players with an assigned plot
 and no placement owed. For an unassigned player or one still owed placement,
 its join, authentication or action-gate path can eventually set their respawn
 point and teleport them asynchronously to the plot. NinjaArena independently
-starts a pending restore one tick after join. Either teleport can run last, so
-the player's final position can differ from the earlier plugin's result.
-Listener priority alone cannot order asynchronous placement.
+starts a pending restore one tick after join. Listener priority alone cannot
+order asynchronous placement, so NinjaArena defines the order itself:
 
-Finish first placement before allowing arena admission. Avoid clearing or
-reassigning plots for players with pending arena restores. If deployment
-requires both operations for the same login, verify their order on a test
-backend or use separate backends until there is an explicit handoff. The race
-has no live reproduction in the issue notes. Tracked in #106.
+1. A placement that lands before the restore is overwritten by it. The player ends
+   at the restored location with the restored inventory.
+2. A placement that lands within 100 ticks after a successful restore is undone
+   once: a tick later the player is moved back to the restored spot. The
+   inventory is not written again. Only plugin-caused and unknown-cause teleports
+   count, and a second placement in the window is left to win.
+3. A placement later than that, and the plot assignment and respawn point the
+   plugin sets, are not touched.
+
+This is tested with a simulated competing teleport only. It has not been
+checked against SpiralGenesis on a test server, so whether its placement lands
+inside this window, and whether it also teleports on later events, is open
+(#106). Finish first placement before allowing arena admission and avoid
+clearing or reassigning plots for players with pending arena restores.
 
 ### Login and spawn plugins
 
-**Code review.** AuthMe documents pre-authentication spawn teleports and
+**Code review and simulated.** AuthMe documents pre-authentication spawn teleports and
 optional forced spawn after authentication. If a login plugin cancels the
-one-tick restore teleport, NinjaArena keeps the snapshot and leaves the saved
-state unapplied. The join path does not retry when authentication finishes on
-that connection. A later forced spawn can also override the landing after a
-successful restore. A subsequent join can retry a pending snapshot once the
-login flow allows the teleport. Tracked in #105. See [AuthMe's settings][authme].
+one-tick restore teleport, NinjaArena keeps the snapshot and tries again
+after 20, 100, 200, 400 and 600 ticks (six attempts in about 66 seconds,
+counting the first), so a restore runs once authentication has let the
+teleport through. Every attempt writes the snapshot over the player, so a retry
+does not duplicate items, and the snapshot is deleted only after one succeeds.
+When the last attempt fails the player is told to rejoin or ask staff, and the
+snapshot stays for their next join. Quitting stops the retries. A player who
+authenticates later than that window is restored on their next join. A later
+forced spawn after a successful restore is handled like any other competing
+teleport (see SpiralGenesis above). Tracked in #105. See [AuthMe's settings][authme].
+This is tested with a simulated cancelling teleport, not with AuthMe.
 
 Keep arena entry behind authentication. Keep arena worlds out of forced-spawn
 rules and verify that the login flow leaves the restored destination alone,

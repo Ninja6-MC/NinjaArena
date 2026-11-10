@@ -520,6 +520,7 @@ The next round returns spectators to Adventure mode at their team base. A player
 on the death screen at round start is placed and readied when they respawn. Use
 `/narena leave` to leave while spectating: the existing restore returns the saved
 belongings, game mode and location. Quitting leaves the restore to the next join.
+A join restore that another plugin cancels (for example a login plugin) is retried for about a minute, and the player is told if it still fails; see [plugin compatibility](docs/plugin-compatibility.md).
 Every exit first clears spectator mode, so an unsuccessful restore leaves the player in
 Adventure mode while their snapshot remains available for a retry.
 
