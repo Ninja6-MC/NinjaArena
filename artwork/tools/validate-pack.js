@@ -58,6 +58,9 @@ for (const file of fs.readdirSync(itemDir)) {
 const sync = spawnSync(process.execPath, [path.join(__dirname, "sync-pack-textures.js"), "--check"], { encoding: "utf8" });
 if (sync.status !== 0) errors.push((sync.stderr || sync.stdout).trim());
 
+const icons = spawnSync("python", [path.join(__dirname, "sync-pack-icons.py"), "--check"], { encoding: "utf8" });
+if (icons.status !== 0) errors.push((icons.stderr || icons.stdout || String(icons.error)).trim());
+
 if (errors.length) {
   console.error(errors.map((e) => `FAIL ${e}`).join("\n"));
   process.exit(1);

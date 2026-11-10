@@ -264,6 +264,11 @@ validation. Item providers still resolve at round-kit application time.
 
 ## Tool resource packs
 
+Both qualities use the NinjaArena plugin icon as their Java and Bedrock pack-list
+icon. Icon updates change pack hashes: when cutting the next release,
+follow [the release checklist](RELEASE_PROCESS.md#promotion-and-recovery) to
+refresh Java URL/SHA-1 and Bedrock filename/SHA-256 examples from verified assets.
+
 Resource-pack delivery is off by default. Enable it only after hosting the versioned
 Standard ZIP and configuring its URL, SHA-1 and UUID. Required packs disconnect a player
 once on decline, failure or timeout; optional packs retain vanilla tool behaviour.

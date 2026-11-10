@@ -57,8 +57,11 @@ class BedrockPacksTest(unittest.TestCase):
         identities = set()
         for variant, size in (("standard", 16), ("detailed", 32)):
             with zipfile.ZipFile(self.output / f"NinjaArena-{VERSION}-bedrock-{variant}.mcpack") as archive:
-                self.assertEqual(17, len(archive.namelist()))
+                self.assertEqual(18, len(archive.namelist()))
                 self.assertEqual(None, archive.testzip())
+                icon = archive.read("pack_icon.png")
+                self.assertEqual((256, 256), packs.read_png(icon)[:2])
+                self.assertEqual((packs.ROOT / f"resourcepack/java/{variant}/pack.png").read_bytes(), icon)
                 metadata = json.loads(archive.read("manifest.json"))
                 self.assertEqual(2, metadata["format_version"])
                 self.assertEqual("resources", metadata["modules"][0]["type"])
@@ -199,6 +202,33 @@ class BedrockPacksTest(unittest.TestCase):
         self.rehash()
         with self.assertRaisesRegex(ValueError, "archive inventory"):
             self.verify()
+
+    def test_missing_or_changed_icons_fail_even_with_updated_digests(self):
+        for variant in packs.java.VARIANTS:
+            file = self.output / f"NinjaArena-{VERSION}-bedrock-{variant}.mcpack"
+            original = file.read_bytes()
+            for replacement in (None, b"broken icon"):
+                with zipfile.ZipFile(file) as archive:
+                    entries = {n: archive.read(n) for n in archive.namelist() if n != "pack_icon.png"}
+                if replacement is not None:
+                    entries["pack_icon.png"] = replacement
+                with zipfile.ZipFile(file, "w") as archive:
+                    for name, data in entries.items():
+                        archive.writestr(name, data)
+                self.rehash()
+                with self.assertRaisesRegex(ValueError, "archive (inventory|content) mismatch"):
+                    self.verify()
+                file.write_bytes(original)
+                self.rehash()
+
+    def test_conversion_without_icon_cannot_build(self):
+        for variant in packs.java.VARIANTS:
+            icon = self.converted / variant / "pack_icon.png"
+            original = icon.read_bytes()
+            icon.unlink()
+            with self.assertRaisesRegex(ValueError, "differ from repository"):
+                self.build(self.folder / "other")
+            icon.write_bytes(original)
 
     def test_wrong_source_and_attempt_fail(self):
         with self.assertRaisesRegex(ValueError, "source mismatch"):

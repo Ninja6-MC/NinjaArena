@@ -53,8 +53,8 @@ A separate verifier downloads the candidate and checks the exact file list,
 identity, source, version, channel and all hashes. It opens each ZIP, tests CRCs,
 checks root metadata, embedded version and expected inventory, and compares every
 entry with the tagged production source bytes. This covers the previously
-validated item definitions, models and PNGs. It retains passing evidence bound
-to the candidate and manifest digest, plus verification run and attempt, in a
+validated item definitions, models, textures and root `pack.png` icons. It retains
+passing evidence bound to the candidate and manifest digest, plus verification run and attempt, in a
 second artifact. These tests do not establish client rendering or negotiation;
 release notes must preserve those gaps until real-client checks pass.
 
@@ -66,8 +66,8 @@ containing both `.mcpack` files, versioned Geyser mappings,
 digests of every asset and SHA-1 digests of the downloadable packs. Verification
 downloads that candidate, regenerates expected conversion/mapping bytes from
 the checked-out source and validates pack manifests, textures, atlas and file
-inventory. The same evidence artifact includes
-`bedrock-pack-verification.json`, bound to this candidate's manifest digest.
+inventory, including a root `pack_icon.png` in each quality. The same evidence
+artifact includes `bedrock-pack-verification.json`, bound to this candidate's manifest digest.
 
 The publisher waits on the **`release` environment**. Before using it, configure
 that environment with a required maintainer reviewer and verify the setting
@@ -110,6 +110,16 @@ and cut a new version rather than replacing a published ZIP. After retention
 expires, create a new version instead of rebuilding the old candidate silently.
 
 Once all attachments are verified, pin concrete release URLs and matching SHA-1
-values as described in [the pack guide](resourcepack/README.md). Open a separate
+values as described in [the pack guide](resourcepack/README.md). Icon changes
+change archive hashes too. Download the published Java ZIPs, Bedrock `.mcpack`
+files, `SHA1SUMS` and both manifests; verify the downloaded bytes before using
+their pins. Update both Java quality URLs and SHA-1 values together, and both
+Bedrock filenames and SHA-256 values together, in deployment configuration and
+any populated examples in `README.md`, `resourcepack/README.md` and
+`src/main/resources/config.yml`. Use Java SHA-1 values from `SHA1SUMS` and
+Bedrock SHA-256 values from `bedrock-manifest.json`; never reuse hashes from an
+earlier release or an Actions wrapper. Leave blank defaults blank. Check that
+both pack lists display the icon on real clients. Do not change existing release
+assets or publish a release solely to refresh these examples. Open a separate
 documentation PR to the organization profile to update the published version and
 actual release stage. Do not update it while attachment publication is incomplete.
