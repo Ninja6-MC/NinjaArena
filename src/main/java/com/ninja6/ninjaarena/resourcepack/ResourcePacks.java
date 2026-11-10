@@ -262,7 +262,8 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
                 String host = URI.create(settings.base().url()).getHost();
                 transport.warn("The client for " + player + " could not reach the required resource pack host "
                         + host + ". Ask the player to reconnect; reconnecting usually works."
-                        + " If failures persist, check the pack host's availability.");
+                        + " If failures persist, check the pack host's availability and"
+                        + " resource-pack.url and resource-pack.sha1.");
                 transport.kick(player, "Your client could not reach NinjaArena's required resource pack host "
                         + host + ". Please reconnect; reconnecting usually works."
                         + " If it still fails, contact the server operator.");

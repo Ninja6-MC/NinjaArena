@@ -379,7 +379,8 @@ class ResourcePacksTest {
                 + " If it still fails, contact the server operator."), wire.kicks);
         assertEquals(List.of("The client for " + PLAYER + " could not reach the required resource pack host "
                 + "packs.example.net. Ask the player to reconnect; reconnecting usually works."
-                + " If failures persist, check the pack host's availability."), wire.warnings);
+                + " If failures persist, check the pack host's availability and"
+                + " resource-pack.url and resource-pack.sha1."), wire.warnings);
     }
 
     @Test
