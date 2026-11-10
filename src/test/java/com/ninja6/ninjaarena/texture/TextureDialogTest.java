@@ -156,6 +156,59 @@ class TextureDialogTest {
         assertCompact(fake.last().content());
     }
 
+    private static TextureService.View storageView(String storage) {
+        return new TextureService.View(java.util.Optional.of(PlayerKey.java(ALICE)), false,
+                java.util.Optional.empty(), Quality.STANDARD, true, "Standard", storage, false, "Standard active.");
+    }
+
+    @Test
+    void aStorageOutageSaysToTryAgainLater() {
+        var content = TextureDialog.content(storageView(
+                "Storage is unavailable; Standard is used and choices cannot be saved."), null, "");
+        assertEquals("Storage unavailable. Try again later.", content.lines().get(1));
+        assertCompact(content);
+    }
+
+    @Test
+    void unsupportedStorageDoesNotSuggestRetrying() {
+        var content = TextureDialog.content(storageView(
+                "Storage is unsupported (schema version 99); Standard is used."), null, "");
+        assertEquals("Storage unsupported. Ask a server admin.", content.lines().get(1));
+        assertFalse(String.join(" ", content.lines()).contains("Try again"));
+        assertCompact(content);
+    }
+
+    @Test
+    void anUnverifiedBedrockAccountSaysChoicesAreUnavailableAndPromisesNoSave() {
+        start(true);
+        fixture.bedrockPlayers.add(FLOOD);
+        joined(FLOOD);
+        dialog.open(chest.player(FLOOD));
+        assertEquals(List.of("Standard (default)", "Account unverified; choices unavailable.",
+                "Standard is used; nothing is saved."), fake.last().content().lines());
+        assertCompact(fake.last().content());
+        press(fake.last(), chest.player(FLOOD), TextureDialog.Button.DETAILED);
+        fixture.settle();
+        assertEquals(List.of("Standard (default)", "Account unverified; choices unavailable.",
+                "Standard is used; nothing is saved."), fake.last().content().lines());
+    }
+
+    @Test
+    void aSavedDetailedChoiceOnAServerWithoutDetailedSaysItIsNotSetUp() {
+        fixture = new TextureFixture(true, false);
+        chest = new MenuHarness(fixture);
+        fake = new Fake();
+        dialog = new TextureDialog(fixture.service, fake, (id, message) -> told.add(message), inMatch::contains);
+        fixture.saved(ALICE, Quality.DETAILED);
+        joined(ALICE);
+        dialog.open(chest.player(ALICE));
+        var content = fake.last().content();
+        assertEquals(List.of("Saved choice: Detailed", "Detailed is not set up on this server.",
+                "Standard is used."), content.lines());
+        assertEquals("Detailed 32x32 (unavailable)", content.detailed());
+        assertCompact(content);
+    }
+
     @Test
     void aPressSavesThroughTheServiceShowsSavingThenTheResultAndTellsTheChat() {
         start(true);

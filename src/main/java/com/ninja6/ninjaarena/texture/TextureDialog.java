@@ -183,16 +183,23 @@ public final class TextureDialog {
     static Content content(TextureService.View view, Quality saving, String note) {
         String choice = TextureMenu.choiceLine(view);
         String status = saving != null ? "Saving..." : view.playerStatus();
-        if (saving == null && note.startsWith("Could not save")) {
-            status = "Could not save. Try again later.";
-        } else if (saving == null && !view.storage().isEmpty()) {
-            status = "Storage unavailable. Try again later.";
-        } else if (saving == null && view.bedrock() && view.key().isEmpty()) {
-            status = "Account unverified; choices unavailable.";
-        }
         String timing = view.bedrock() ? "Changes apply next connection."
                 : view.sessionOnly() ? "For this connection; resets on leave."
                 : "Applies now, or reconnect if needed.";
+        if (saving == null && note.startsWith("Could not save")) {
+            status = "Could not save. Try again later.";
+        } else if (saving == null && view.storage().startsWith(TextureService.STORAGE_UNSUPPORTED)) {
+            status = "Storage unsupported. Ask a server admin.";
+        } else if (saving == null && !view.storage().isEmpty()) {
+            status = "Storage unavailable. Try again later.";
+        } else if (saving == null && view.bedrock() && view.key().isEmpty()) {
+            choice = "Standard (default)";
+            status = "Account unverified; choices unavailable.";
+            timing = "Standard is used; nothing is saved.";
+        } else if (saving == null && view.saved() == Quality.DETAILED && !view.detailedAvailable()) {
+            status = "Detailed is not set up on this server.";
+            timing = "Standard is used.";
+        }
         return new Content(TextureMenu.TITLE, List.of(choice, status, timing), "Standard 16x16",
                 view.detailedAvailable() ? "Detailed 32x32" : "Detailed 32x32 (unavailable)");
     }

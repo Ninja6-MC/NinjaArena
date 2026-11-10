@@ -73,6 +73,9 @@ public final class TextureService implements ResourcePacks.Listener {
         }
     }
 
+    /** Start of the storage line for a store that can never work; the dialog words it differently. */
+    static final String STORAGE_UNSUPPORTED = "Storage is unsupported";
+
     public static final String SAVE_FAILED = "Could not save: texture preference storage is unavailable."
             + " Nothing was changed.";
     public static final String SESSION_ONLY_NOTE = "This is not saved and resets when you leave.";
@@ -208,7 +211,7 @@ public final class TextureService implements ResourcePacks.Listener {
             case READY -> "";
             case STARTING -> "Storage is still starting; Standard is used until it is ready.";
             case DEGRADED -> "Storage is unavailable; Standard is used and choices cannot be saved.";
-            case UNSUPPORTED -> "Storage is unsupported (" + store.problem() + "); Standard is used.";
+            case UNSUPPORTED -> STORAGE_UNSUPPORTED + " (" + store.problem() + "); Standard is used.";
         };
         String delivery;
         if (session.sessionOnly) {
