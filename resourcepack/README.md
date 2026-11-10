@@ -7,9 +7,9 @@ paths above Standard. Detailed is never enabled automatically; players choose it
 
 ```
 resourcepack/java/
-  standard/pack.mcmeta
+  standard/{pack.mcmeta,pack.png}
   standard/assets/ninjaarena/{items,models/item,textures/item}
-  detailed/pack.mcmeta
+  detailed/{pack.mcmeta,pack.png}
   detailed/assets/ninjaarena/textures/item
 ```
 
@@ -49,12 +49,19 @@ candidates are never overwritten. Each build produces:
   workflow run/attempt, destinations and SHA-256 digests
 
 ZIP entries are sorted with fixed timestamps, so identical sources and versions
-produce identical bytes. Each root contains `pack.mcmeta` and `assets/`, with no
-wrapper directory. The pack description embeds the artifact version. An explicit
+produce identical bytes. Each root contains `pack.mcmeta`, `pack.png` and
+`assets/`, with no wrapper directory. The pack description embeds the artifact version. An explicit
 allowlist excludes editable artwork, previews, 64x64 exports, portal assets and
 unrelated files. The builder runs the existing pack validator, including texture
 sync, before packaging. Never edit copied textures: refresh them from production
 exports with `node artwork/tools/sync-pack-textures.js`.
+
+Both qualities share a 256x256 neutral shuriken icon from the existing 64x64
+production base/accent layers. Refresh it with
+`python artwork/tools/sync-pack-icons.py`; the pack validator rejects missing or
+stale icons. Bedrock conversion reuses these exact bytes as root `pack_icon.png`.
+Build and downloaded-candidate verification require the icons and compare their
+bytes with the source, including for releases.
 
 Artwork CI builds both ZIPs for pull requests, merge groups, main pushes and
 manual runs. Snapshot versions are `ci-<full commit SHA>`. The candidate and
@@ -79,6 +86,10 @@ is a separate artifact integrity check.
 
 Pin a concrete release URL and matching hash, never a `latest` redirect. Do not
 replace a published ZIP in place. Update URL and SHA-1 together for new bytes.
+Adding or refreshing an icon changes the archive hashes. At the next release,
+update both Java quality URL/SHA-1 examples and Bedrock filename/SHA-256 examples
+from the verified release assets; see the release checklist. Existing published
+release bytes and their pins must remain unchanged.
 Clients can reuse a cached ZIP whose hash matches, but each offer still waits for
 a successful-load status. A new hash must negotiate again; an older cached version
 does not grant loaded status to the update. Actions downloads expire and wrap the

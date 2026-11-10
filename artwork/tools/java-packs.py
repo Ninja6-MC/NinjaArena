@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import struct
 import tempfile
 import zipfile
 
@@ -38,7 +39,7 @@ def version_channel(version):
 
 
 def inventory(variant):
-    names = {"pack.mcmeta"}
+    names = {"pack.mcmeta", "pack.png"}
     prefix = "assets/ninjaarena/"
     for tool in TOOLS:
         if variant == "standard":
@@ -61,6 +62,9 @@ def source_files(root, variant, version):
             files[file.relative_to(folder).as_posix()] = file.read_bytes()
     if files.keys() != inventory(variant):
         raise ValueError(f"{variant} has missing or unexpected pack files: {set(files) ^ inventory(variant)}")
+    icon = files["pack.png"]
+    if icon[:16] != b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR" or len(icon) < 24 or struct.unpack_from(">II", icon, 16) != (256, 256):
+        raise ValueError(f"{variant} pack.png must be a 256x256 PNG")
     metadata = json.loads(files["pack.mcmeta"])
     pack = metadata["pack"]
     if pack.get("min_format") != target["resource_format"] or pack.get("max_format") != target["resource_format"]:
