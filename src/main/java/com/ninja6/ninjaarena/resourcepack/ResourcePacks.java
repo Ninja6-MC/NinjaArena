@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.resourcepack;
 
 import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings.Pack;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -257,6 +258,16 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
         removeDetailed(player);
         remove(player, settings.base().id());
         if (settings.required()) {
+            if (reason.equals(reason(Status.FAILED_DOWNLOAD))) {
+                String host = URI.create(settings.base().url()).getHost();
+                transport.warn("The client for " + player + " could not reach the required resource pack host "
+                        + host + ". Ask the player to reconnect; reconnecting usually works."
+                        + " If failures persist, check the pack host's availability.");
+                transport.kick(player, "Your client could not reach NinjaArena's required resource pack host "
+                        + host + ". Please reconnect; reconnecting usually works."
+                        + " If it still fails, contact the server operator.");
+                return;
+            }
             if (!reason.equals(reason(Status.DECLINED))) {
                 transport.warn("The required resource pack " + reason + " for " + player
                         + ". Check resource-pack.url and resource-pack.sha1; players cannot join until it loads.");

@@ -367,12 +367,28 @@ class ResourcePacksTest {
     }
 
     @Test
+    void requiredDownloadFailureNamesOnlyTheConfiguredHostAndSuggestsReconnecting() {
+        Pack base = new Pack(BASE.id(), "https://packs.example.net:8443/private/standard.zip?token=secret",
+                BASE.sha1());
+        ResourcePacks packs = new ResourcePacks(
+                new ResourcePackSettings(true, true, true, 120, base, Optional.empty()), wire, ticks::get);
+        packs.join(PLAYER);
+        packs.status(PLAYER, base.id(), Status.FAILED_DOWNLOAD);
+        assertEquals(List.of("Your client could not reach NinjaArena's required resource pack host "
+                + "packs.example.net. Please reconnect; reconnecting usually works."
+                + " If it still fails, contact the server operator."), wire.kicks);
+        assertEquals(List.of("The client for " + PLAYER + " could not reach the required resource pack host "
+                + "packs.example.net. Ask the player to reconnect; reconnecting usually works."
+                + " If failures persist, check the pack host's availability."), wire.warnings);
+    }
+
+    @Test
     void aRequiredPackFailureLeavesAnOperatorWarningButADeclineDoesNot() {
         ResourcePacks packs = packs(true);
         packs.join(PLAYER);
         packs.status(PLAYER, BASE.id(), Status.FAILED_DOWNLOAD);
         assertEquals(1, wire.warnings.size());
-        assertTrue(wire.warnings.getFirst().contains("resource-pack.url"));
+        assertTrue(wire.warnings.getFirst().contains("example.org"));
         packs.quit(PLAYER);
         packs.join(PLAYER);
         packs.status(PLAYER, BASE.id(), Status.DECLINED);

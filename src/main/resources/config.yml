@@ -2,7 +2,9 @@ resource-pack:
   # Delivery and custom tool artwork are opt-in. Invalid enabled settings turn delivery
   # off at startup with an operator error; they never cause a player prompt loop.
   enabled: false
-  # Java kicks on decline/failure. Bedrock held models also need Geyser enforcement.
+  # Java kicks on decline/failure. Required delivery is only as reliable as the pack host:
+  # use a host you control or a CDN. GitHub release URLs are convenient for small/test setups.
+  # Bedrock held models also need Geyser enforcement.
   required: true
   # Live-reloadable flight fallback. All other resource-pack keys require a restart.
   thrown-visuals: true

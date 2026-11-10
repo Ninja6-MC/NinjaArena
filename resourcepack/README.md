@@ -64,7 +64,10 @@ attachments use the release tag; see [the release process](../RELEASE_PROCESS.md
 ## Hosting, hashes and pinning
 
 Use an HTTPS URL that directly returns the ZIP without login, cookies or a
-landing page. GitHub release assets work once the gated attachment job completes.
+landing page. With `required: true`, delivery is only as reliable as the pack host:
+use a host you control or a CDN. GitHub release URLs are a convenience for small or
+test setups, available once the gated attachment job completes. If a client cannot
+reach the pack host, reconnecting usually works.
 For example, replace this version with a published release containing the packs:
 
 ```

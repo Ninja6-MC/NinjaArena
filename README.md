@@ -267,6 +267,9 @@ validation. Item providers still resolve at round-kit application time.
 Resource-pack delivery is off by default. Enable it only after hosting the versioned
 Standard ZIP and configuring its URL, SHA-1 and UUID. Required packs disconnect a player
 once on decline, failure or timeout; optional packs retain vanilla tool behaviour.
+`resource-pack.required: true` is only as reliable as the pack host. Use a host you
+control or a CDN; GitHub release URLs are a convenience for small or test setups.
+If a client cannot reach the pack host, reconnecting usually works.
 Acceptance alone never enables custom tool models. The Detailed overlay is optional and
 is added only through the API, ready for the later quality menu.
 
