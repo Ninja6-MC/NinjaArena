@@ -264,8 +264,8 @@ validation. Item providers still resolve at round-kit application time.
 
 ## Tool resource packs
 
-Both qualities include the existing shuriken artwork as their Java and Bedrock
-pack-list icon. Icon updates change pack hashes: when cutting the next release,
+Both qualities use the NinjaArena plugin icon as their Java and Bedrock pack-list
+icon. Icon updates change pack hashes: when cutting the next release,
 follow [the release checklist](RELEASE_PROCESS.md#promotion-and-recovery) to
 refresh Java URL/SHA-1 and Bedrock filename/SHA-256 examples from verified assets.
 

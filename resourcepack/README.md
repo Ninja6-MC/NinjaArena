@@ -56,10 +56,10 @@ unrelated files. The builder runs the existing pack validator, including texture
 sync, before packaging. Never edit copied textures: refresh them from production
 exports with `node artwork/tools/sync-pack-textures.js`.
 
-Both qualities share a 256x256 neutral shuriken icon from the existing 64x64
-production base/accent layers. Refresh it with
-`python artwork/tools/sync-pack-icons.py`; the pack validator rejects missing or
-stale icons. Bedrock conversion reuses these exact bytes as root `pack_icon.png`.
+Both qualities share the plugin icon, a copy of `docs/assets/icon-256.png`
+(generated from `docs/assets/icon-master.svg`). After re-exporting the plugin
+icon, refresh the pack copies with `python artwork/tools/sync-pack-icons.py`; the
+pack validator rejects missing or stale icons. Bedrock conversion reuses these exact bytes as root `pack_icon.png`.
 Build and downloaded-candidate verification require the icons and compare their
 bytes with the source, including for releases.
 

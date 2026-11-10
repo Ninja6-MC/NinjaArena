@@ -7,6 +7,7 @@ on:
     paths:
       - 'artwork/**'
       - 'resourcepack/**'
+      - 'docs/assets/icon-256.png'
       - '.github/workflows/artwork.yml'
       - 'build.gradle.kts'
   merge_group:
