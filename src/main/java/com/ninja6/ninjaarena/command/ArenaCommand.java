@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.command;
 
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.ArenaExtent;
 
 import com.ninja6.ninjaarena.arena.Arena;
@@ -216,7 +217,9 @@ public final class ArenaCommand {
             success(sender, "Teleporting to arena " + arena.name() + " in cell " + arena.cell().describe() + " ("
                     + cell.describe() + "). Bounds: " + (arena.bounds() == null ? "not set" : arena.bounds().describe())
                     + ".");
+            OwnTeleports.begin(player.getUniqueId());
             player.teleportAsync(target).whenComplete((moved, error) -> {
+                OwnTeleports.end(player.getUniqueId());
                 try {
                     completeOnServer.accept(() -> {
                         try {

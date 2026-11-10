@@ -44,6 +44,7 @@ class JoinRestoreTest {
     private final List<String> messages = new ArrayList<>();
     private final List<Location> teleports = new ArrayList<>();
     private boolean online = true;
+    private boolean busy;
     private int cancelledAttempts;
     private int attempts;
     private Player player;
@@ -72,7 +73,7 @@ class JoinRestoreTest {
         };
         restores = new RestoreService(snapshots, applier, logger);
         join = new JoinRestore(restores, (ticks, task) -> queue.add(new Scheduled(now + ticks, task)),
-                id -> online ? player : null);
+                id -> online ? player : null, id -> busy);
         player = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "getUniqueId" -> ALICE;
@@ -235,5 +236,53 @@ class JoinRestoreTest {
         join.onForeignTeleport(player, new Location(null, 500, 65, 500), TeleportCause.PLUGIN);
         advance(5);
         assertTrue(teleports.isEmpty());
+    }
+
+    @Test
+    void aTeleportNinjaArenaStartsItselfInTheWindowIsLeftAlone() {
+        join.onJoin(ALICE);
+        advance(1);
+        Location arena = new Location(null, 900, 80, 900);
+        boolean moved = OwnTeleports.during(ALICE, () -> {
+            position = arena;
+            join.onForeignTeleport(player, arena, TeleportCause.PLUGIN);
+            return true;
+        });
+        assertTrue(moved);
+        advance(5);
+        assertTrue(teleports.isEmpty(), "arena entry is not undone");
+        assertEquals(900, position.getX());
+        assertEquals(1, attempts, "no second restore");
+        assertFalse(OwnTeleports.isActive(ALICE));
+    }
+
+    @Test
+    void aPlayerInAMatchOrWaitingRoomIsNeverUndone() {
+        join.onJoin(ALICE);
+        advance(1);
+        busy = true;
+        join.onForeignTeleport(player, new Location(null, 500, 65, 500), TeleportCause.PLUGIN);
+        advance(5);
+        assertTrue(teleports.isEmpty());
+    }
+
+    @Test
+    void aPlayerWhoEntersAnArenaBeforeTheCorrectionRunsIsNotMovedBack() {
+        join.onJoin(ALICE);
+        advance(1);
+        join.onForeignTeleport(player, new Location(null, 500, 65, 500), TeleportCause.PLUGIN);
+        busy = true;
+        advance(5);
+        assertTrue(teleports.isEmpty());
+    }
+
+    @Test
+    void anExternalPluginTeleportIsStillCorrectedAfterOwnOnesEnd() {
+        join.onJoin(ALICE);
+        advance(1);
+        OwnTeleports.during(ALICE, () -> true);
+        join.onForeignTeleport(player, new Location(null, 500, 65, 500), TeleportCause.PLUGIN);
+        advance(1);
+        assertEquals(1, teleports.size());
     }
 }

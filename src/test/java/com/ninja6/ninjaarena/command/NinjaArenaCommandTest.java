@@ -127,6 +127,7 @@ class NinjaArenaCommandTest {
             int[] operations = {0};
             Player admin = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(),
                     new Class<?>[] {Player.class}, (object, method, args) -> switch (method.getName()) {
+                        case "getUniqueId" -> java.util.UUID.nameUUIDFromBytes(new byte[] {1});
                         case "teleportAsync" -> teleport;
                         case "sendMessage" -> null;
                         default -> throw new UnsupportedOperationException(method.getName());
@@ -396,6 +397,7 @@ class NinjaArenaCommandTest {
                         calls.add("setFlying(" + args[0] + ")");
                         yield null;
                     }
+                    case "getUniqueId" -> java.util.UUID.nameUUIDFromBytes(new byte[] {2});
                     case "teleportAsync" -> {
                         Location target = (Location) args[0];
                         calls.add("teleport(" + target.getX() + ", " + target.getY() + ", " + target.getZ() + ")");

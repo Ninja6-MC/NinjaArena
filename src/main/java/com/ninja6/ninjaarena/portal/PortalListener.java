@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.portal;
 
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.portal.PortalEntry.Refusal;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
@@ -208,7 +209,7 @@ public final class PortalListener implements Listener {
         }
         admission.enter(player, target, onSpectate, message -> {
             if (portal.equals(portals.at(player.getLocation()))) {
-                player.teleport(outside, TeleportCause.PLUGIN);
+                OwnTeleports.teleport(player, outside, TeleportCause.PLUGIN);
             }
             tell(player, message);
         });

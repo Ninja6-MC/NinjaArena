@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
@@ -27,7 +28,8 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
  * <p>Ordering with a plugin that places the player on join (a plot plugin): the restore owns
  * the final position. A placement that lands before the restore is overwritten by it; one
  * that lands within {@link #SETTLE_TICKS} after it is undone once by moving the player back
- * to the restored spot. The other plugin's own state, such as an assigned plot or respawn
+ * to the restored spot, whatever the plugin and whatever the reason (a plot placement, but
+ * also a spawn or hub command). The other plugin's own state, such as an assigned plot or respawn
  * point, is not touched. Server thread only.
  */
 public final class JoinRestore {
@@ -50,10 +52,21 @@ public final class JoinRestore {
     private final RestoreService restores;
     private final Delayer delayer;
     private final Function<UUID, Player> online;
+    private final Predicate<UUID> busy;
     private final Map<UUID, Integer> generations = new HashMap<>();
     private final Map<UUID, Settle> settling = new HashMap<>();
 
     public JoinRestore(RestoreService restores, Delayer delayer, Function<UUID, Player> online) {
+        this(restores, delayer, online, id -> false);
+    }
+
+    /**
+     * @param busy whether the player is in a match, a waiting room or the hub, or spectating;
+     *             nothing is undone for them
+     */
+    public JoinRestore(RestoreService restores, Delayer delayer, Function<UUID, Player> online,
+            Predicate<UUID> busy) {
+        this.busy = Objects.requireNonNull(busy, "busy");
         this.restores = Objects.requireNonNull(restores, "restores");
         this.delayer = Objects.requireNonNull(delayer, "delayer");
         this.online = Objects.requireNonNull(online, "online");
@@ -115,8 +128,11 @@ public final class JoinRestore {
     }
 
     /**
-     * Another plugin moved a player who was just restored. Moves them back to the restored
-     * spot once, a tick later so the other plugin's teleport has finished.
+     * Another plugin moved a player who was just restored. Teleports NinjaArena starts itself
+     * ({@link OwnTeleports}) and players in a match, waiting room, hub or spectating are never
+     * undone.
+     * Any other plugin's teleport in the window moves the player back to the restored spot
+     * once, a tick later so that teleport has finished.
      *
      * @param destination where the other plugin is sending the player
      * @param cause       why the teleport happened
@@ -124,7 +140,8 @@ public final class JoinRestore {
     public void onForeignTeleport(Player player, Location destination, TeleportCause cause) {
         UUID playerId = player.getUniqueId();
         Settle settle = settling.get(playerId);
-        if (settle == null || !current(playerId, settle.generation())
+        if (settle == null || OwnTeleports.isActive(playerId) || busy.test(playerId)
+                || !current(playerId, settle.generation())
                 || cause != TeleportCause.PLUGIN && cause != TeleportCause.UNKNOWN
                 || sameSpot(destination, settle.landing())) {
             return;
@@ -133,7 +150,8 @@ public final class JoinRestore {
         settling.remove(playerId);
         delayer.later(1, () -> {
             Player current = online.apply(playerId);
-            if (current != null && current.isOnline() && current(playerId, settle.generation())) {
+            if (current != null && current.isOnline() && current(playerId, settle.generation())
+                    && !busy.test(playerId)) {
                 current.teleport(settle.landing(), TeleportCause.PLUGIN);
             }
         });

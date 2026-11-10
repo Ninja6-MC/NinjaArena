@@ -2,6 +2,8 @@ package com.ninja6.ninjaarena.restore;
 
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Predicate;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -22,11 +24,16 @@ public final class RestoreListener implements Listener {
     private final JoinRestore joinRestore;
 
     public RestoreListener(Plugin plugin, RestoreService restores) {
+        this(plugin, restores, id -> false);
+    }
+
+    /** @param busy whether the player is in a match, a waiting room, the hub or spectating */
+    public RestoreListener(Plugin plugin, RestoreService restores, Predicate<UUID> busy) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.restores = Objects.requireNonNull(restores, "restores");
         this.joinRestore = new JoinRestore(restores,
                 (ticks, task) -> plugin.getServer().getScheduler().runTaskLater(plugin, task, ticks),
-                id -> plugin.getServer().getPlayer(id));
+                id -> plugin.getServer().getPlayer(id), busy);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
