@@ -176,6 +176,7 @@ class WaitingRoomServiceTest {
                     }
                     case "sendActionBar" -> null;
                     case "teleport" -> {
+                        ownMarks.add(com.ninja6.ninjaarena.restore.OwnTeleports.isActive(id));
                         fake.location = ((Location) args[0]).clone();
                         yield true;
                     }
@@ -185,6 +186,9 @@ class WaitingRoomServiceTest {
                 });
         players.put(id, fake);
     }
+
+    /** Whether each teleport was made inside an OwnTeleports mark. */
+    private final List<Boolean> ownMarks = new ArrayList<>();
 
     private Player player(UUID id) {
         return players.get(id).proxy;
@@ -753,7 +757,9 @@ class WaitingRoomServiceTest {
     void aHubPlayerWhoGoesToSpectateLeavesTheQueueWithoutARestore() {
         joinHub(ALICE);
         joinHub(BOB);
+        ownMarks.clear();
         assertTrue(rooms.transferToSpectate(player(ALICE), new Location(arenaWorld, 20.5, 64, 20.5)));
+        assertEquals(List.of(true), ownMarks, "the transfer is NinjaArena's own teleport");
         assertFalse(rooms.isWaiting(ALICE));
         assertTrue(restored.isEmpty());
         for (int i = 0; i < 5; i++) {

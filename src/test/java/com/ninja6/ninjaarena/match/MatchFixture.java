@@ -90,6 +90,8 @@ abstract class MatchFixture {
         final List<Sound> sounds = new ArrayList<>();
         final List<BossBar> bossBars = new ArrayList<>();
         final List<Location> teleports = new ArrayList<>();
+        /** Whether each teleport was made inside an OwnTeleports mark. */
+        final List<Boolean> ownMarks = new ArrayList<>();
         final List<PotionEffect> effects = new ArrayList<>();
         final Map<Material, Integer> cooldowns = new HashMap<>();
         Vector velocity;
@@ -314,6 +316,7 @@ abstract class MatchFixture {
                     case "getLocation" -> fake.location.clone();
                     case "teleport" -> {
                         Location to = (Location) args[0];
+                        fake.ownMarks.add(com.ninja6.ninjaarena.restore.OwnTeleports.isActive(fake.id));
                         var event = new PlayerTeleportEvent(fake.proxy, fake.location.clone(), to,
                                 args.length > 1 && args[1] instanceof PlayerTeleportEvent.TeleportCause cause
                                         ? cause : PlayerTeleportEvent.TeleportCause.PLUGIN);

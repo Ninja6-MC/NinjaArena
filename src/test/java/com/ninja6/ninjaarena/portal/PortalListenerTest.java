@@ -223,12 +223,12 @@ class PortalListenerTest {
                     case "isOnline" -> online;
                     case "isDead" -> dead;
                     case "teleport" -> {
+                        ownTeleports.add(com.ninja6.ninjaarena.restore.OwnTeleports.isActive(ALICE));
                         if (teleportRefused) {
                             yield false;
                         }
                         location = ((Location) args[0]).clone();
                         teleports.add(location);
-                        ownTeleports.add(com.ninja6.ninjaarena.restore.OwnTeleports.isActive(ALICE));
                         yield true;
                     }
                     case "sendMessage" -> {
@@ -726,6 +726,7 @@ class PortalListenerTest {
         assertEquals(overworld, location.getWorld());
         assertTrue(entered.isEmpty());
         assertTrue(messages.contains("All arenas are busy. Try again when a match ends."), messages.toString());
+        assertEquals(List.of(true), ownTeleports, "the bounce back outside is NinjaArena's own teleport");
     }
 
     @Test

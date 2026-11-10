@@ -259,7 +259,10 @@ class MatchDeathListenerTest extends MatchFixture {
         respawn(ALICE);
         players.get(CAROL).location = new Location(arenaWorld, 1000, 70, 1000);
         players.get(ALICE).location = players.get(CAROL).location.clone();
+        int before = players.get(ALICE).ownMarks.size();
         deaths.tick();
+        assertEquals(List.of(true), players.get(ALICE).ownMarks.subList(before, players.get(ALICE).ownMarks.size()),
+                "the spectator anchor teleport is NinjaArena's own");
         assertNull(player(ALICE).getSpectatorTarget());
         assertAt(SPAWN_1, player(ALICE).getLocation());
         players.get(CAROL).location = new Location(arenaWorld, 40, 64, 40);
@@ -300,7 +303,10 @@ class MatchDeathListenerTest extends MatchFixture {
         assertEquals(teleports, players.get(ALICE).teleports.size());
         assertEquals(readies, readied.stream().filter(ALICE::equals).count());
         assertTrue(players.get(ALICE).dead);
+        int marks = players.get(ALICE).ownMarks.size();
         assertAt(SPAWN_1, respawn(ALICE).getRespawnLocation());
+        assertEquals(List.of(true), players.get(ALICE).ownMarks.subList(marks, players.get(ALICE).ownMarks.size()),
+                "the post-respawn placement is NinjaArena's own teleport");
         assertEquals(GameMode.ADVENTURE, player(ALICE).getGameMode());
         assertNull(player(ALICE).getSpectatorTarget());
     }
@@ -323,7 +329,10 @@ class MatchDeathListenerTest extends MatchFixture {
             assertEquals(GameMode.SPECTATOR, player(ALICE).getGameMode());
             assertSame(player(CAROL), player(ALICE).getSpectatorTarget());
             players.get(ALICE).storage = new ItemStack[] {new ItemStack() { }};
+            int before = players.get(ALICE).ownMarks.size();
             assertTrue(matches.leave(player(ALICE), MatchService.Exit.COMMAND));
+            assertEquals(List.of(true), players.get(ALICE).ownMarks.subList(before, players.get(ALICE).ownMarks.size()),
+                    "the restore teleport is NinjaArena's own");
             assertFalse(matches.isInMatch(ALICE));
             assertEquals(mode, player(ALICE).getGameMode());
             assertNull(player(ALICE).getSpectatorTarget());
