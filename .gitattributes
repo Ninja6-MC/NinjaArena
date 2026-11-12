@@ -44,3 +44,4 @@ LICENSE         text eol=lf
 *.jar           binary
 *.png           binary
 *.zip           binary
+*.nbt           binary

@@ -13,8 +13,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -37,13 +39,16 @@ public final class Rewards implements Listener {
     private final BukkitTask refresh;
     private final NamespacedKey trophyKey;
     private final Map<UUID, Runnable> undelivered = new HashMap<>();
+    private final Predicate<UUID> busy;
     private boolean closed;
     private RewardSettings settings;
     private boolean placing;
 
-    public Rewards(NinjaArenaPlugin plugin, RewardSettings settings) {
+    /** @param busy whether a player is in a match, a waiting room, the hub or the lobby, or spectating */
+    public Rewards(NinjaArenaPlugin plugin, RewardSettings settings, Predicate<UUID> busy) {
         this.plugin = plugin;
         this.settings = settings;
+        this.busy = Objects.requireNonNull(busy, "busy");
         trophyKey = new NamespacedKey(plugin, "season_trophy");
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         refresh = plugin.getServer().getScheduler().runTaskTimer(plugin, this::refresh, 1, 600);
@@ -134,8 +139,19 @@ public final class Rewards implements Listener {
     }
 
     private boolean canDeliver(UUID id) {
-        Player player = plugin.getServer().getPlayer(id);
-        return player != null && !player.isDead() && !PluginWorlds.isPluginWorld(player.getWorld()) && !plugin.restores().shouldRestoreOnJoin(id)
+        return deliverable(plugin.getServer().getPlayer(id), busy, plugin.restores()::shouldRestoreOnJoin);
+    }
+
+    /**
+     * Whether a trophy can be handed to a player now: they are online and alive, outside both
+     * plugin worlds, not in a match, a waiting room, the hub or the lobby, or spectating, have
+     * nothing waiting to be restored, and have a free slot. A claim is checked again just
+     * before the item is placed, so a player who has since entered a plugin world keeps it
+     * pending.
+     */
+    static boolean deliverable(Player player, Predicate<UUID> busy, Predicate<UUID> restorePending) {
+        return player != null && !player.isDead() && !PluginWorlds.isPluginWorld(player.getWorld())
+                && !busy.test(player.getUniqueId()) && !restorePending.test(player.getUniqueId())
                 && player.getInventory().firstEmpty() >= 0;
     }
 

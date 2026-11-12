@@ -159,8 +159,9 @@ rewards:
   awarded season, then by descending rule ID, with milestones last. An empty
   result means there is no cached label. Refreshes use `placeholders.cache-seconds`.
 - Trophies are display items. Delivery waits for the recipient to be online with an
-  empty inventory slot, outside the arena world and clear of pending snapshot
-  restoration. The server checks on join and every 30 seconds. A process crash
+  empty inventory slot, outside the arena and lobby worlds, out of any match, waiting
+  room, lobby or spectating, and clear of pending snapshot restoration. The server
+  checks on join and every 30 seconds. A process crash
   between recording the delivery claim and saving the player's inventory can lose
   that trophy.
 - Vault payouts default to disabled. When enabled, online players still in a

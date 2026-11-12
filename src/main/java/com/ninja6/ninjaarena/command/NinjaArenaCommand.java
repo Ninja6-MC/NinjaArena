@@ -23,9 +23,13 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String ADMIN = "ninjaarena.admin";
     public static final String HOST = "ninjaarena.host";
     public static final String PLAY = "ninjaarena.play";
+    /** Lobby edit mode and reset; a child of {@link #ADMIN}. */
+    public static final String LOBBY = "ninjaarena.admin.lobby";
     /** Leaves the waiting room or match the player is in and sends them home. */
     public static final String LEAVE = "leave";
     public static final String TEXTURES = "textures";
+    public static final String ADMIN_ROUTE = "admin";
+    private static final String LOBBY_USAGE = "admin lobby <edit|done|reset>";
 
     /** A route's help text is the message {@code help.<name>}. */
     private record Route(String name, String permission, String usage) {
@@ -44,7 +48,7 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]"),
             new Route(EventCommand.NAME, EventCommand.PERMISSION, EventCommand.USAGE),
             new Route("pack", ADMIN, "pack status"),
-            new Route("admin", ADMIN, "admin <reload|textures reset <java|bedrock> <id>>"));
+            new Route(ADMIN_ROUTE, ADMIN, "admin <reload|lobby <edit|done|reset>|textures reset <java|bedrock> <id>>"));
 
     private final ArenaCommand arena;
     private final PortalCommand portal;
@@ -59,9 +63,15 @@ public final class NinjaArenaCommand implements TabExecutor {
             () -> com.ninja6.ninjaarena.message.Messages.text("pack.status-unavailable");
 
     private TextureCommands textures;
+    private LobbyCommands lobby;
 
     public void setPackStatus(java.util.function.Supplier<String> status) {
         packStatus = Objects.requireNonNull(status);
+    }
+
+    /** Without it the lobby subcommands say the feature is unavailable. */
+    public void setLobby(LobbyCommands lobby) {
+        this.lobby = lobby;
     }
 
     /** Without it the textures route says the feature is unavailable. */
@@ -211,8 +221,12 @@ public final class NinjaArenaCommand implements TabExecutor {
                         textures.open(player);
                     }
                 }
-                case "admin" -> {
-                    if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
+                case ADMIN_ROUTE -> {
+                    if (args.length >= 2 && args[1].equalsIgnoreCase("lobby")) {
+                        lobby(sender, label, args);
+                    } else if (!sender.hasPermission(ADMIN)) {
+                        denied(sender);
+                    } else if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
                         if (reload == null) {
                             unavailable(sender, msg("command.feature.reload"));
                         }
@@ -230,6 +244,27 @@ public final class NinjaArenaCommand implements TabExecutor {
             }
         }
         return true;
+    }
+
+    private void lobby(CommandSender sender, String label, String[] args) {
+        if (!sender.hasPermission(LOBBY)) {
+            denied(sender);
+            return;
+        }
+        String action = args.length == 3 ? args[2].toLowerCase(Locale.ROOT) : "";
+        if (!List.of("edit", "done", "reset").contains(action)) {
+            usage(sender, label, LOBBY_USAGE);
+        } else if (lobby == null) {
+            unavailable(sender, msg("command.feature.lobby"));
+        } else if (action.equals("reset")) {
+            lobby.reset(sender);
+        } else if (!(sender instanceof Player player)) {
+            sender.sendMessage(msg("command.players-only"));
+        } else if (action.equals("edit")) {
+            lobby.edit(player, label);
+        } else {
+            lobby.done(player);
+        }
     }
 
     private void resetTextures(CommandSender sender, String label, String[] args) {
@@ -261,13 +296,14 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     private static boolean canUseRoot(CommandSender sender) {
         return sender.hasPermission(PLAY) || sender.hasPermission(HOST) || sender.hasPermission(ADMIN)
-                || sender.hasPermission(PortalEntry.SPECTATE) || sender.hasPermission(LeaderboardCommand.PERMISSION)
-                || sender.hasPermission(EventCommand.PERMISSION);
+                || sender.hasPermission(LOBBY) || sender.hasPermission(PortalEntry.SPECTATE)
+                || sender.hasPermission(LeaderboardCommand.PERMISSION) || sender.hasPermission(EventCommand.PERMISSION);
     }
 
     private static boolean canUse(CommandSender sender, Route route) {
         return sender.hasPermission(route.permission())
-                || (route.name().equals(LEAVE) && sender.hasPermission(PortalEntry.SPECTATE));
+                || (route.name().equals(LEAVE) && sender.hasPermission(PortalEntry.SPECTATE))
+                || (route.name().equals(ADMIN_ROUTE) && sender.hasPermission(LOBBY));
     }
 
     private static void denied(CommandSender sender) {
@@ -335,13 +371,15 @@ public final class NinjaArenaCommand implements TabExecutor {
         if (args[0].equalsIgnoreCase(EventCommand.NAME)) {
             return event != null && sender.hasPermission(EventCommand.PERMISSION) ? event.complete(tail(args)) : List.of();
         }
+        if (args[0].equalsIgnoreCase(ADMIN_ROUTE)) {
+            return completeAdmin(sender, args);
+        }
         if (!sender.hasPermission(ADMIN)) {
             return List.of();
         }
         return switch (args[0].toLowerCase(Locale.ROOT)) {
             case "pack" -> args.length == 2 && "status".startsWith(args[1].toLowerCase(Locale.ROOT))
                     ? List.of("status") : List.of();
-            case "admin" -> completeAdmin(args);
             case ArenaCommand.NAME -> arena.complete(sender, tail(args));
             case PortalCommand.NAME -> portal.complete(sender, tail(args));
             case DirectorCommand.NAME -> director.complete(sender, tail(args));
@@ -349,12 +387,27 @@ public final class NinjaArenaCommand implements TabExecutor {
         };
     }
 
-    private static List<String> completeAdmin(String[] args) {
+    private static List<String> completeAdmin(CommandSender sender, String[] args) {
         String last = args[args.length - 1].toLowerCase(Locale.ROOT);
+        boolean admin = sender.hasPermission(ADMIN);
+        boolean lobby = sender.hasPermission(LOBBY);
         List<String> options = switch (args.length) {
-            case 2 -> List.of("reload", TEXTURES);
-            case 3 -> args[1].equalsIgnoreCase(TEXTURES) ? List.of("reset") : List.of();
-            case 4 -> args[1].equalsIgnoreCase(TEXTURES) && args[2].equalsIgnoreCase("reset")
+            case 2 -> {
+                List<String> routes = new ArrayList<>();
+                if (admin) {
+                    routes.add("reload");
+                }
+                if (lobby) {
+                    routes.add("lobby");
+                }
+                if (admin) {
+                    routes.add(TEXTURES);
+                }
+                yield routes;
+            }
+            case 3 -> admin && args[1].equalsIgnoreCase(TEXTURES) ? List.of("reset")
+                    : lobby && args[1].equalsIgnoreCase("lobby") ? List.of("edit", "done", "reset") : List.of();
+            case 4 -> admin && args[1].equalsIgnoreCase(TEXTURES) && args[2].equalsIgnoreCase("reset")
                     ? List.of("java", "bedrock") : List.of();
             default -> List.of();
         };

@@ -21,6 +21,11 @@ through its toolchain support; the wrapper downloads Gradle itself.
 On Windows, use `gradlew.bat build`. The plugin JAR is written to `build/libs/`, and
 `./gradlew test` runs the unit tests on their own.
 
+The bundled lobby structure, `src/main/resources/lobby/obsidian-lobby.nbt`, is generated
+from the readable spec beside it, `obsidian-lobby.yml`, which also marks the lobby's
+spawn, room area, shop area and board positions. After changing the spec, run
+`./gradlew generateLobbyBuild` and commit both files; the tests fail while they differ.
+
 ## Verification
 
 A local Paper 26.3 build 226 run passed 600 measured seconds after 60 seconds of
@@ -172,13 +177,16 @@ under the root.
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
 | `event <subcommand>` | `ninjaarena.event.manage` | List, inspect, start or cancel scheduled arena events |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration, kits and messages |
+| `admin lobby <edit\|done\|reset>` | `ninjaarena.admin.lobby` | Change the lobby in edit mode, or put the bundled lobby back |
 
 Enter the Arena by walking through a portal or explicitly accepting an invitation.
-Leaderboard, event management and admin reload also work from the console.
+Leaderboard, event management, admin reload and lobby reset also work from the console.
 
 `ninjaarena.play`, `ninjaarena.spectate` and `ninjaarena.leaderboard` default to everyone.
-`ninjaarena.host` and `ninjaarena.admin` default to operators. Play grants spectate and
-leaderboard. Host grants play, and admin grants host. The root accepts any of these permissions.
+`ninjaarena.host`, `ninjaarena.admin` and `ninjaarena.admin.lobby` default to operators.
+Play grants spectate and leaderboard. Host grants play, and admin grants host and
+`ninjaarena.admin.lobby`, which can also be given on its own to someone who only edits
+the lobby. The root accepts any of these permissions.
 Dispatch, help and tab completion check the permissions for each route.
 
 ## Hosting and invitations
@@ -354,15 +362,39 @@ for save behavior, failure handling and the remaining continuous-use limitation.
 Startup also creates or loads a second void world, `ninjaarena_lobby`. Unlike the arena
 world it is saved normally and never unloaded. It has the same rules: inventories are
 kept on death, time stays at noon, the weather stays clear, no mobs spawn and fire,
-explosions, fluids and other environmental block changes are blocked at all times. It
-is empty for now; nothing sends players there yet.
+explosions, fluids and other environmental block changes are blocked at all times.
+
+The first time the plugin finds the lobby world without its build, it places the bundled
+obsidian lobby there: a walled platform around 0, 64, 0 with a spawn, a room area, a
+shop area and spots for boards. The world records that it has the build, so every later
+start and every retirement of the arena world leaves the lobby as it is. The world spawn
+is set to the lobby spawn.
+
+`/narena admin lobby edit` puts an admin in lobby edit mode, taking them to the lobby
+spawn if they are elsewhere. While in edit mode they may break and place blocks and
+change item frames and armour stands there; nobody else can. `/narena admin lobby done`
+saves the lobby world, ends edit mode and returns the admin to where they were. Leaving
+the lobby world or the server also ends it. `/narena admin lobby reset` clears the lobby
+area, places the bundled build again, removing every change made in edit mode, and puts
+everyone in the lobby world at the spawn.
+
+Nothing takes damage in the lobby world. Anyone who falls into its void is put back at
+the lobby spawn; such a fall never kills and never counts as a death in a match, and no
+death there counts in a match.
+
+Lobby membership is a player state like a waiting room. A member's inventory is locked
+as in a waiting room, the join restore treats them as busy, and a member who walks or
+falls out of the lobby area is put back at the spawn. That area takes the place of the
+waiting-room radius for members; waiting rooms keep their radius. Nothing sends players
+to the lobby yet: rooms and the move of waiting rooms to the lobby will use it.
 
 Neither world is a home. No snapshot is taken in either: entering an arena from the arena
 or lobby world is refused, so leave it first. A restore never lands in either: a saved
 spot there is skipped for the player's respawn point, and a respawn point there for the
 main world's spawn. A match player teleported into the lobby world, by NinjaArena or by
 any other plugin, leaves the match and is restored, as with a teleport to any other
-world. Portals cannot be created in either world.
+world. Portals cannot be created in either world. A claimed season trophy is delivered
+only once the player is outside both worlds and not a lobby member.
 
 See the [plugin compatibility audit](docs/plugin-compatibility.md) for setup and
 exclusions when running NinjaArena alongside other server plugins.

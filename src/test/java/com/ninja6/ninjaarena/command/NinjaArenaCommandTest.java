@@ -303,8 +303,9 @@ class NinjaArenaCommandTest {
                 "/narena portal <subcommand> - mark out portals that lead to arenas",
                 "/narena director [arena] - show the enemy director of a running match",
                 "/narena pack status - show Java and Bedrock resource pack state",
-                "/narena admin <reload|textures reset <java|bedrock> <id>> - reload the Arena configuration,"
-                        + " or reset a player's texture quality to Standard");
+                "/narena admin <reload|lobby <edit|done|reset>|textures reset <java|bedrock> <id>> - reload the"
+                        + " Arena configuration, edit or reset the lobby, or reset a player's texture quality to"
+                        + " Standard");
         assertEquals("The Arena commands:", messages.get(0));
         assertEquals(help, messages.subList(1, messages.size()));
 
@@ -378,6 +379,91 @@ class NinjaArenaCommandTest {
                     case "getName" -> "Alice";
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
+    }
+
+    /** Records lobby subcommands as they reach the lobby. */
+    private final List<String> lobbyCalls = new ArrayList<>();
+
+    private final LobbyCommands lobby = new LobbyCommands() {
+        @Override
+        public void edit(Player player, String label) {
+            lobbyCalls.add("edit " + player.getName() + " " + label);
+        }
+
+        @Override
+        public void done(Player player) {
+            lobbyCalls.add("done " + player.getName());
+        }
+
+        @Override
+        public void reset(CommandSender sender) {
+            lobbyCalls.add("reset " + sender.getName());
+        }
+    };
+
+    @Test
+    void theLobbyNodeRunsEditDoneAndResetAndCompletesThem() {
+        command.setLobby(lobby);
+        Player editor = playerWithPermissions(NinjaArenaCommand.LOBBY);
+        run(editor, "admin lobby edit");
+        run(editor, "admin LOBBY done");
+        run(editor, "admin lobby reset");
+        assertEquals(List.of("edit Alice narena", "done Alice", "reset Alice"), lobbyCalls);
+        assertEquals(List.of(), messages);
+
+        assertEquals(List.of("admin"), command.onTabComplete(editor, null, "narena", new String[] {"ad"}));
+        assertEquals(List.of("lobby"), command.onTabComplete(editor, null, "narena", new String[] {"admin", ""}));
+        assertEquals(List.of("edit", "done", "reset"),
+                command.onTabComplete(editor, null, "narena", new String[] {"admin", "lobby", ""}));
+
+        // The lobby node alone does not reach the rest of admin.
+        run(editor, "admin reload");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+    }
+
+    @Test
+    void theLobbySubcommandsNeedTheLobbyNodeAPlayerAndAKnownAction() {
+        command.setLobby(lobby);
+        Player admin = playerWithPermissions(NinjaArenaCommand.ADMIN);
+        run(admin, "admin lobby edit");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+        assertEquals(List.of("reload", "textures"),
+                command.onTabComplete(admin, null, "narena", new String[] {"admin", ""}));
+
+        messages.clear();
+        Player editor = playerWithPermissions(NinjaArenaCommand.ADMIN, NinjaArenaCommand.LOBBY);
+        run(editor, "admin lobby");
+        run(editor, "admin lobby build");
+        run(editor, "admin lobby edit now");
+        assertEquals(3, messages.size());
+        assertTrue(messages.stream().allMatch(message -> message.contains("admin lobby <edit|done|reset>")),
+                messages.toString());
+        assertEquals(List.of("reload", "lobby", "textures"),
+                command.onTabComplete(editor, null, "narena", new String[] {"admin", ""}));
+
+        CommandSender console = (CommandSender) Proxy.newProxyInstance(ConsoleCommandSender.class.getClassLoader(),
+                new Class<?>[] {ConsoleCommandSender.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "hasPermission" -> true;
+                    case "sendMessage" -> {
+                        messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
+                        yield null;
+                    }
+                    case "getName" -> "CONSOLE";
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        messages.clear();
+        run(console, "admin lobby edit");
+        run(console, "admin lobby reset");
+        assertEquals(List.of("Only players can use this Arena command."), messages);
+        assertEquals(List.of("reset CONSOLE"), lobbyCalls);
+    }
+
+    @Test
+    void withoutTheLobbyTheSubcommandsSayItIsUnavailable() {
+        Player editor = playerWithPermissions(NinjaArenaCommand.LOBBY);
+        run(editor, "admin lobby reset");
+        assertEquals(1, messages.size());
+        assertTrue(messages.getFirst().contains("Lobby editing"), messages.getFirst());
     }
 
     @Test
