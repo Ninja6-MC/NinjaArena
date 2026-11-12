@@ -126,6 +126,7 @@ final class StatsDatabase implements AutoCloseable {
      */
     SeasonResult useSeason(String name, Instant now) throws SQLException {
         return transaction(() -> {
+            lockForWrite();
             Optional<Season> current = currentSeason();
             if (current.isPresent() && current.get().name().equals(name)) {
                 return new SeasonResult(SeasonChange.UNCHANGED, current.get());
@@ -145,6 +146,7 @@ final class StatsDatabase implements AutoCloseable {
      */
     Season startSeason(String name, Instant now) throws SQLException {
         return transaction(() -> {
+            lockForWrite();
             if (season(name).isPresent()) {
                 throw new IllegalArgumentException("a season named " + name + " already exists");
             }
@@ -231,6 +233,7 @@ final class StatsDatabase implements AutoCloseable {
             return;
         }
         transaction(() -> {
+            lockForWrite();
             // Finish writes to the old season before a concurrent server can archive it.
             Optional<Season> season = currentSeason(true);
             try (PreparedStatement upsert = connection.prepareStatement(dialect.upsertStats(prefix))) {
@@ -438,6 +441,20 @@ final class StatsDatabase implements AutoCloseable {
     @FunctionalInterface
     private interface Work<T> {
         T run() throws SQLException;
+    }
+
+    /**
+     * Takes SQLite's write lock before the transaction reads anything. A transaction that reads
+     * first and then writes fails at once with SQLITE_BUSY_SNAPSHOT when another server commits
+     * in between; one that starts with a write waits for the lock under busy_timeout instead.
+     * MySQL locks the rows it reads with FOR UPDATE.
+     */
+    private void lockForWrite() throws SQLException {
+        if (dialect == Dialect.SQLITE) {
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("UPDATE " + prefix + "seasons SET id = id WHERE 0 = 1");
+            }
+        }
     }
 
     private <T> T transaction(Work<T> work) throws SQLException {
