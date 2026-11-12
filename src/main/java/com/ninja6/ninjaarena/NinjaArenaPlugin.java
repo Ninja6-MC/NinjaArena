@@ -416,6 +416,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         ArenaGrid next = new ArenaGrid(cellSize, borderSize, old.minY(), old.maxY());
                         arenaWorld.setBorderSize(borderSize);
                         arenas.setGrid(next);
+                        if (rooms != null) {
+                            rooms.gridChanged();
+                        }
                     }
 
                     @Override

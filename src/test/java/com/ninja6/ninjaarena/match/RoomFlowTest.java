@@ -277,6 +277,40 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void aMatchWithoutALeaseThatClosesLetsTheNextQueuedRoomInAtOnce() {
+        matches.start("temple", List.of(List.of(DAVE), List.of(EVE)));
+        Room leased = openWith(ALICE, BOB);
+        rooms.create(player(CAROL));
+        Room queued = room(CAROL);
+        assertEquals("dojo", leased.arena());
+        assertEquals("garden", queued.arena());
+        assertFalse(rooms.hasLease(queued), "the waiting-room match uses the second slot");
+
+        playToTheEnd("temple");
+        assertTrue(rooms.hasLease(queued), "granted at the close, before a waiting room's next tick");
+        assertFalse(rooms.hasFreeSlot());
+    }
+
+    @Test
+    void aReloadThatChangesTheGridWorksTheCapOutAgainFromTheConfiguredValue() throws Exception {
+        for (String name : List.of("dojo", "garden", "temple")) {
+            arenas.delete(name);
+        }
+        rooms.setMaxActive(20);
+        assertEquals(20, rooms.maxActive());
+
+        arenas.setGrid(new com.ninja6.ninjaarena.arena.ArenaGrid(256, 512, -64, 320));
+        rooms.gridChanged();
+        int cells = arenas.grid().cellsNearestFirst().size();
+        assertTrue(cells < 20, "cells " + cells);
+        assertEquals(cells, rooms.maxActive());
+
+        arenas.setGrid(new com.ninja6.ninjaarena.arena.ArenaGrid(256, 2048, -64, 320));
+        rooms.gridChanged();
+        assertEquals(20, rooms.maxActive(), "back to the configured value once the grid has room");
+    }
+
+    @Test
     void maxActiveIsLimitedToTheCellsOfTheArenaGrid() {
         rooms.setMaxActive(100);
         int cells = arenas.grid().cellsNearestFirst().size();

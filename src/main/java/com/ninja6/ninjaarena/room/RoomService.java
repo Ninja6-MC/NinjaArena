@@ -141,6 +141,15 @@ public final class RoomService implements RoomCommands, Listener {
         granted(slots.setMax(effectiveMax(maxActive)));
     }
 
+    /**
+     * The arena grid or the world border changed on reload: the cap is worked out again from
+     * the configured {@code arenas.max-active}. Like any change of the cap, it never ends a
+     * lease already granted.
+     */
+    public void gridChanged() {
+        setMaxActive(configuredMax);
+    }
+
     private int effectiveMax(int configured) {
         int cells = Math.max(1, arenas.grid().cellsNearestFirst().size());
         if (configured > cells) {
@@ -579,16 +588,20 @@ public final class RoomService implements RoomCommands, Listener {
         }
     }
 
-    /** A room's match closed and its players are back in the lobby. */
+    /**
+     * A match closed. A room's players are back in the lobby; any match, leased or not, frees
+     * a slot, which goes to the longest-queued room before a waiting room can take it.
+     */
     void matchClosed(String arena) {
         Room room = playing.remove(Arena.normalizeName(arena));
-        if (room == null) {
+        if (room == null || !rooms.contains(room)) {
+            if (room != null) {
+                room.setPlaying(false);
+            }
+            granted(slots.pump());
             return;
         }
         room.setPlaying(false);
-        if (!rooms.contains(room)) {
-            return;
-        }
         // Back in the lobby: the lease ends, and the room queues for its next match.
         granted(slots.release(room));
         broadcast(room, msg("room.returned"));
