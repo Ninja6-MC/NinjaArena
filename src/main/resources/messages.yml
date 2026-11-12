@@ -66,6 +66,7 @@ help:
   spectate: "watch a live match from a waiting room"
   leaderboard: "show the top 10 for an Arena stat"
   textures: "choose Standard or Detailed ninja tool textures"
+  intro: "show the lobby introduction again"
   accept: "accept an invitation to the Arena"
   host: "open a match in the Arena"
   invite: "invite a player to the Arena"
@@ -399,6 +400,15 @@ waiting:
   count-short: "(<size>/<min>)"
   count-one: "(<size> player)"
   count: "(<size> players)"
+
+# First-visit lobby help and /ninjaarena intro. The same body is used in dialogs and chat.
+intro:
+  title: "<gold>Welcome to NinjaArena"
+  tools: "Shuriken strike from a distance. Smoke bombs hide you. Dash gives a quick burst of movement."
+  shop: "Earn points in a match and spend them on items in the shop between rounds."
+  hazards: "Watch your step: lava, falls and enemies can hurt you in the arena."
+  close: "Close"
+  lobby-only: "<red>Enter the lobby to view the introduction."
 
 # The lobby world and /ninjaarena admin lobby. <label> is the command as typed.
 lobby:

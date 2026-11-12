@@ -166,6 +166,7 @@ under the root.
 | Command | Permission | Behavior |
 | :--- | :--- | :--- |
 | `help` | Any tier below | List permitted commands |
+| `intro` | `ninjaarena.play` | Show the introduction again in the lobby |
 | `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Return home and restore your snapshot |
 | `leaderboard <stat> [all_time\|season]` | `ninjaarena.leaderboard` | Show the [top ten for a stat](docs/leaderboards.md) |
 | `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from a waiting room |
@@ -387,6 +388,11 @@ behavior. See [arena world retirement](docs/arena-world-lifecycle.md)
 for save behavior, failure handling and the remaining continuous-use limitation.
 
 ## The lobby world
+
+The first successful lobby entry shows a short introduction to tools, the shop and
+arena hazards. It is remembered in player data across restarts and reloads. Use
+`/narena intro` in the lobby to read it again; `texture-menu: chest` sends it in chat.
+Automatic help begins once room admission calls `LobbyMembers.enter` (#143).
 
 Startup also creates or loads a second void world, `ninjaarena_lobby`. Unlike the arena
 world it is saved normally and never unloaded. It has the same rules: inventories are

@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- First-time lobby help covering tools, the shop and arena hazards, remembered across
+  restarts. `/narena intro` shows it again in the lobby; servers using chest menus get
+  the same help in chat. Automatic help awaits room admission through lobby membership.
 - A validated `shop.yml` catalogue with personal-point purchases, per-round buy limits,
   armour, extra thrown-tool uses, potion effects and consumables. Purchases apply after
   round kits; undelivered purchases are refunded while the ledger exists. The new
