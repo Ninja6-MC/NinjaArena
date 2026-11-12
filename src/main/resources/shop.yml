@@ -1,0 +1,34 @@
+# Round purchases; buying stays closed until the between-round shop phase is available.
+# Schema version.
+format: 1
+# Each entry has a unique id, positive points price, per-round limit, category and gift.
+items:
+  - id: iron-armour # Catalogue id used by the shop service.
+    price: 8 # Personal points spent per purchase.
+    limit: 1 # Maximum purchases of this entry for one round.
+    category: armour # armour, tools, potions or consumables.
+    gives: # Gift applied after the round kit rebuild.
+      tier: iron # leather, chain, iron or diamond; replaces all four armour slots.
+  - id: swift-step
+    price: 4
+    limit: 1
+    category: potions
+    gives:
+      effect: minecraft:speed # Registered potion effect id.
+      amplifier: 0 # Zero-based strength (0 is level I).
+      duration: 12000 # Duration in ticks, capped by round end.
+  - id: apples
+    price: 2
+    limit: 2
+    category: consumables
+    gives:
+      material: GOLDEN_APPLE # Vanilla item; use id instead for a registered plugin item.
+      amount: 1 # Stack size, within the item's stack limit.
+# Extra uses are useful only with a positive tools.<tool>.uses-per-round in config.yml:
+#   - id: extra-shuriken
+#     price: 2
+#     limit: 2
+#     category: tools
+#     gives:
+#       tool: ninjaarena:shuriken # Thrown tool id (dash is not thrown).
+#       count: 2 # Extra permitted throws for this round; supply tool items in the kit.

@@ -119,8 +119,10 @@ class PluginDescriptionTest {
         assertEquals(Map.of(), nodes.get("ninjaarena.leaderboard").getChildren());
         assertEquals(PermissionDefault.TRUE, nodes.get("ninjaarena.rewards.payout").getDefault());
         assertEquals(Map.of(), nodes.get("ninjaarena.rewards.payout").getChildren());
+        assertEquals(PermissionDefault.TRUE, nodes.get("ninjaarena.shop.use").getDefault());
+        assertEquals(Map.of(), nodes.get("ninjaarena.shop.use").getChildren());
         assertEquals(Map.of("ninjaarena.spectate", true, "ninjaarena.leaderboard", true,
-                "ninjaarena.rewards.payout", true),
+                "ninjaarena.rewards.payout", true, "ninjaarena.shop.use", true),
                 nodes.get("ninjaarena.play").getChildren());
         assertEquals(Map.of("ninjaarena.play", true), nodes.get("ninjaarena.host").getChildren());
         assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.event.manage").getDefault());
@@ -133,7 +135,7 @@ class PluginDescriptionTest {
         try (InputStream stream = pluginYml()) {
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(stream, StandardCharsets.UTF_8));
-            for (String tier : List.of("spectate", "leaderboard", "rewards.payout", "event.manage", "play", "host", "admin")) {
+            for (String tier : List.of("shop.use", "spectate", "leaderboard", "rewards.payout", "event.manage", "play", "host", "admin")) {
                 assertTrue(yaml.isConfigurationSection("permissions.ninjaarena." + tier + ".children"), tier);
             }
             assertTrue(yaml.getBoolean("permissions.ninjaarena.admin.children.ninjaarena.host"));

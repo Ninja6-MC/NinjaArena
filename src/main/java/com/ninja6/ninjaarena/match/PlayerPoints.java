@@ -31,6 +31,23 @@ public final class PlayerPoints implements Listener {
         return table == null ? 0 : table.getOrDefault(player, 0);
     }
 
+    /** Takes a positive price atomically on the server thread; never creates a ledger. */
+    public boolean spend(MatchView match, UUID player, int price) {
+        if (price <= 0 || !match.contains(player) || match.result().isPresent() || points(match, player) < price) {
+            return false;
+        }
+        points.get(match).computeIfPresent(player, (id, balance) -> balance - price);
+        return true;
+    }
+
+    /** Returns a cancelled purchase only while its original personal ledger still exists. */
+    public void refund(MatchView match, UUID player, int price) {
+        Map<UUID, Integer> table = points.get(match);
+        if (price > 0 && table != null) {
+            table.computeIfPresent(player, (id, balance) -> (int) Math.min(Integer.MAX_VALUE, (long) balance + price));
+        }
+    }
+
     /** Preserve the old awards for every running match, including those with no awards yet. */
     public void setSettings(PointsSettings settings, List<MatchView> running) {
         Objects.requireNonNull(settings, "settings");

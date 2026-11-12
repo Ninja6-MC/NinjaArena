@@ -13,6 +13,12 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- A validated `shop.yml` catalogue with personal-point purchases, per-round buy limits,
+  armour, extra thrown-tool uses, potion effects and consumables. Purchases apply after
+  round kits; undelivered purchases are refunded while the ledger exists. The new
+  `ninjaarena.shop.use` permission defaults to true and is a child of `ninjaarena.play`.
+  Buying remains closed until the between-round shop phase is available.
+
 - A second void world, `ninjaarena_lobby`, created or loaded at startup beside the
   arena world. It is saved normally and never unloaded, keeps inventories, has no
   mobs, weather or day cycle, and blocks environmental block changes at all times.

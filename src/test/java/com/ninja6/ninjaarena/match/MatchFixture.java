@@ -74,6 +74,7 @@ abstract class MatchFixture {
         boolean online = true;
         boolean dead;
         boolean canSpectate;
+        boolean canShop;
         GameMode gameMode = GameMode.SURVIVAL;
         Entity spectatorTarget;
         Player killer;
@@ -220,6 +221,13 @@ abstract class MatchFixture {
         fake.location = new Location(arenaWorld, ROOM.x(), ROOM.y(), ROOM.z());
         fake.inventory = (PlayerInventory) Proxy.newProxyInstance(PlayerInventory.class.getClassLoader(),
                 new Class<?>[] {PlayerInventory.class}, (p, m, a) -> switch (m.getName()) {
+                    case "firstEmpty" -> {
+                        int empty = -1;
+                        for (int i = 0; i < 36; i++) {
+                            if (i >= fake.storage.length || fake.storage[i] == null) { empty = i; break; }
+                        }
+                        yield empty;
+                    }
                     case "getStorageContents" -> fake.storage.clone();
                     case "setStorageContents" -> { fake.storage = ((ItemStack[]) a[0]).clone(); yield null; }
                     case "getArmorContents" -> fake.armour.clone();
@@ -271,7 +279,8 @@ abstract class MatchFixture {
                     case "isOnline" -> fake.online;
                     case "isDead" -> fake.dead;
                     case "getKiller" -> fake.killer;
-                    case "hasPermission" -> fake.canSpectate && "ninjaarena.spectate".equals(args[0]);
+                    case "hasPermission" -> fake.canSpectate && "ninjaarena.spectate".equals(args[0])
+                            || fake.canShop && "ninjaarena.shop.use".equals(args[0]);
                     case "getGameMode" -> fake.gameMode;
                     case "getSpectatorTarget" -> fake.spectatorTarget;
                     case "setSpectatorTarget" -> {

@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
+import com.ninja6.ninjaarena.shop.ShopCatalogue;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
@@ -20,13 +21,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.logging.Logger;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 /**
- * Validates config.yml, kits.yml and messages.yml first, then applies the reload policy on the
- * server thread.
+ * Validates config.yml, kits.yml, shop.yml and messages.yml first, then applies the reload
+ * policy on the server thread.
  */
 public final class ConfigReload {
 
@@ -46,6 +48,8 @@ public final class ConfigReload {
         default void playerPortals(PlayerPortalSettings settings) {
         }
         void kit(KitDefinition definition);
+        default void shop(ShopCatalogue catalogue) {
+        }
         /** A new {@code stats.season}: archive the current season and start this one. */
         default void season(String name) {
         }
@@ -72,6 +76,14 @@ public final class ConfigReload {
     private final Target target;
     private YamlConfiguration effective;
     private KitDefinition kit;
+    private ShopCatalogue shop;
+    private Logger logger;
+
+    /** Enables catalogue validation as part of the same all-or-nothing file reload. */
+    public void enableShop(ShopCatalogue initial, Logger logger) {
+        this.shop = initial;
+        this.logger = logger;
+    }
 
     public ConfigReload(Path folder, ConfigurationSection initial, KitDefinition kit, KitItems items, Target target) {
         this.configFile = folder.resolve("config.yml");
@@ -100,6 +112,16 @@ public final class ConfigReload {
             candidate = ReloadFiles.read(configFile, kitFile, items, target::eventArenaExists);
         } catch (ReloadYaml.Invalid e) {
             return List.of(text("reload.rejected", "reason", e.getMessage()));
+        }
+        ShopCatalogue nextShop = shop;
+        if (shop != null) {
+            try {
+                nextShop = ShopCatalogue.load(configFile.resolveSibling(ShopCatalogue.FILE), logger, items,
+                        ToolSettings.from(candidate.config().getConfigurationSection("tools")));
+            } catch (IOException | org.bukkit.configuration.InvalidConfigurationException | IllegalArgumentException e) {
+                logger.warning("Could not reload shop.yml: " + e.getMessage());
+                return List.of(text("reload.rejected", "reason", "shop.yml: " + e.getMessage()));
+            }
         }
         Messages messages;
         try {
@@ -134,6 +156,10 @@ public final class ConfigReload {
             } else {
                 changed.add(path);
             }
+        }
+        boolean shopChanged = !Objects.equals(shop, nextShop);
+        if (shopChanged) {
+            postponed.add(text("reload.next-match", "path", ShopCatalogue.FILE));
         }
         boolean kitChanged = !kit.equals(candidate.kit());
         if (kitChanged) {
@@ -195,6 +221,10 @@ public final class ConfigReload {
         if (!same(effective.get("stats.season"), next.get("stats.season"))) {
             target.season(next.getString("stats.season"));
         }
+        if (shopChanged) {
+            target.shop(nextShop);
+        }
+        shop = nextShop;
         target.configuration(next);
         target.bedrockEnforcement();
         if (messagesChanged) {

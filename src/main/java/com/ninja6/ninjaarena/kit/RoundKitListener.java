@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.logging.Logger;
 import org.bukkit.GameMode;
@@ -29,6 +30,12 @@ public final class RoundKitListener implements Listener {
     private final Map<MatchView, KitDefinition> roundKits = new IdentityHashMap<>();
     private final KitItems items;
     private final Logger logger;
+    private BiConsumer<MatchView, Player> afterKit = (match, player) -> { };
+
+    /** Runs after every successful round kit rebuild, including delayed respawns. */
+    public void setAfterKit(BiConsumer<MatchView, Player> hook) {
+        afterKit = Objects.requireNonNull(hook, "hook");
+    }
 
     public RoundKitListener(MatchService matches, Function<UUID, Player> players, KitDefinition definition,
             KitItems items, Logger logger) {
@@ -97,5 +104,6 @@ public final class RoundKitListener implements Listener {
         var inventory = player.getInventory();
         inventory.setHeldItemSlot(0);
         kit.forEach(inventory::setItem);
+        afterKit.accept(matches.matchOf(id).orElseThrow(), player);
     }
 }

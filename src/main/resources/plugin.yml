@@ -22,10 +22,15 @@ commands:
 permissions:
   # Each tier is a declared child of the one above it. Bukkit gives the dots in a node name
   # no meaning, so the inheritance exists only where it is written out.
+  ninjaarena.shop.use:
+    description: Buy round upgrades with personal points.
+    default: true
+    children: {}
   ninjaarena.play:
     description: Join and play arena matches
     default: true
     children:
+      ninjaarena.shop.use: true
       ninjaarena.spectate: true
       ninjaarena.leaderboard: true
       ninjaarena.rewards.payout: true
