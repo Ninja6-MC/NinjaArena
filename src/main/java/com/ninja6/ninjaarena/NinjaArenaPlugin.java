@@ -36,6 +36,11 @@ import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.shop.Shop;
 import com.ninja6.ninjaarena.shop.ShopCatalogue;
 import com.ninja6.ninjaarena.kit.RoundKitListener;
+import com.ninja6.ninjaarena.lobby.LobbyBuild;
+import com.ninja6.ninjaarena.lobby.LobbyEditing;
+import com.ninja6.ninjaarena.lobby.LobbyLayout;
+import com.ninja6.ninjaarena.lobby.LobbyListener;
+import com.ninja6.ninjaarena.lobby.LobbyMembers;
 import com.ninja6.ninjaarena.match.MatchDeathListener;
 import com.ninja6.ninjaarena.message.MessageMigration;
 import com.ninja6.ninjaarena.message.Messages;
@@ -107,6 +112,7 @@ import java.util.SplittableRandom;
 import java.util.UUID;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -119,6 +125,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private SnapshotService snapshots;
     private volatile ArenaWorld arenaWorld;
     private LobbyWorld lobbyWorld;
+    private LobbyMembers lobbyMembers;
+    private LobbyEditing lobbyEditing;
+    /** In a match, a waiting room, the hub or the lobby, or spectating. */
+    private final ArenaBusy busy = new ArenaBusy(() -> this.matches, () -> this.waitingRooms, () -> this.spectators,
+            () -> this.lobbyMembers);
     private final CrossWorldTransfers transfers = new CrossWorldTransfers();
     private ArenaChunkUnloader chunkUnloader;
     private RestoreService restores;
@@ -166,7 +177,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         restores = new RestoreService(snapshots, new PlayerRestorer(getLogger()), getLogger(),
                 new ArenaCombatCleanup(getLogger()));
         restores.markPendingOnStartup();
-        getServer().getPluginManager().registerEvents(new RestoreListener(this, restores, new ArenaBusy(() -> matches, () -> waitingRooms, () -> spectators)), this);
+        getServer().getPluginManager().registerEvents(new RestoreListener(this, restores, busy), this);
         getServer().getPluginManager().registerEvents(new ArenaExtentListener(() -> arenaWorld == null
                 ? ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")).borderSize()
                 : arenaWorld.borderSize(), getServer().getWorlds().getFirst().getSpawnLocation()), this);
@@ -174,6 +185,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 () -> arenas == null || arenas.editing().isEmpty()), this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         lobbyWorld = LobbyWorld.load(getLogger());
+        startLobby();
         arenas = ArenaRegistry.open(this, arenaWorld);
         chunkUnloader = new ArenaChunkUnloader(arenaWorld::currentWorld, arenaWorld::isSavingEnabled,
                 () -> arenaWorld.releaseIfIdle(arenas::canReleaseWorld), getLogger());
@@ -306,11 +318,12 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         Spectators watching = spectators;
         getServer().getPluginManager().registerEvents(watching, this);
         arenas.onEditOrDelete(watching::closeArena);
-        // Waiting players are locked like match players; the fields are cleared on disable.
+        // Waiting players and lobby members are locked like match players: by membership, never
+        // by world.
         MatchService inMatch = matches;
         WaitingRoomService waiting = waitingRooms;
-        getServer().getPluginManager().registerEvents(new InventoryLockdownListener(
-                id -> inMatch.isInMatch(id) || waiting.isWaiting(id) || watching.contains(id)), this);
+        LobbyMembers inLobby = lobbyMembers;
+        getServer().getPluginManager().registerEvents(new InventoryLockdownListener(busy), this);
         getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
         arenas.onEditOrDelete(waitingRooms::closeRoom);
         // Match slots, enemy caps, the spawn rate and the tick-time guard; enemies are counted
@@ -479,11 +492,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 player -> {
                     boolean cancelled = hosting.leave(player);
                     return watching.leave(player) || waitingRooms.leave(player, Exit.COMMAND)
-                            || matches.leave(player, MatchService.Exit.COMMAND) || cancelled;
+                            || matches.leave(player, MatchService.Exit.COMMAND)
+                            || inLobby.leave(player, LobbyMembers.Exit.COMMAND) || cancelled;
                 }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats),
                 new EventCommand(arenaEvents));
         command.setPackStatus(this::packStatus);
         command.setTextures(textureCommands);
+        command.setLobby(lobbyEditing);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -567,7 +582,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getLogger().warning("Reward configuration ignored: " + e.getMessage());
             rewardSettings = RewardSettings.OFF;
         }
-        rewards = new Rewards(this, rewardSettings);
+        rewards = new Rewards(this, rewardSettings, busy);
     }
 
     /**
@@ -645,9 +660,32 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     /** The inventory lockdown condition, read when used because matches start after textures. */
     private boolean menuLocked(UUID id) {
-        return matches != null && matches.isInMatch(id)
-                || waitingRooms != null && waitingRooms.isWaiting(id)
-                || spectators != null && spectators.contains(id);
+        return busy.test(id);
+    }
+
+    /**
+     * Places the bundled lobby build if the lobby world has never had it, and starts lobby
+     * membership and edit mode. Entering the lobby is left to the features that send players
+     * there; they call {@link LobbyMembers#enter}.
+     */
+    private void startLobby() {
+        LobbyLayout layout = LobbyLayout.bundled();
+        World world = lobbyWorld.world();
+        LobbyBuild build = new LobbyBuild(layout, LobbyBuild.site(world, layout), getLogger());
+        build.placeIfNew();
+        world.setSpawnLocation(layout.spawn(world));
+        lobbyMembers = new LobbyMembers(this, layout, lobbyWorld::world,
+                id -> matches != null && matches.isInMatch(id)
+                        || waitingRooms != null && waitingRooms.isWaiting(id)
+                        || spectators != null && spectators.contains(id),
+                KitInventory::emptyForWaiting, player -> restores.restore(player));
+        LobbyMembers members = lobbyMembers;
+        lobbyEditing = new LobbyEditing(build, members::spawn, busy, world::save, () -> {
+            for (Player player : world.getPlayers()) {
+                members.returnToSpawn(player);
+            }
+        }, getLogger());
+        getServer().getPluginManager().registerEvents(new LobbyListener(members, lobbyEditing), this);
     }
 
     /** {@code reason} is the message key, read when shown so a reload rewords it. */
@@ -726,6 +764,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             waitingRooms.close();
             waitingRooms = null;
         }
+        if (lobbyMembers != null) {
+            lobbyMembers.close();
+            lobbyMembers = null;
+        }
+        if (lobbyEditing != null) {
+            lobbyEditing.close();
+            lobbyEditing = null;
+        }
         if (hud != null) {
             hud.close();
             hud = null;
@@ -797,6 +843,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** The saved world the lobby stands in; {@code null} before startup reaches it. */
     public LobbyWorld lobbyWorld() {
         return lobbyWorld;
+    }
+
+    /**
+     * Who is in the lobby, and the way in and out of it for the features that send players
+     * there; {@code null} while the plugin is disabled.
+     */
+    public LobbyMembers lobbyMembers() {
+        return lobbyMembers;
     }
 
     /** Which match players NinjaArena's own teleports may move between the two worlds. */

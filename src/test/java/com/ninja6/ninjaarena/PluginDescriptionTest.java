@@ -99,7 +99,7 @@ class PluginDescriptionTest {
         Map<String, Object> command = description().getCommands().get("ninjaarena");
         assertNotNull(command, "ninjaarena is not declared");
         assertEquals(List.of("narena"), command.get("aliases"));
-        assertEquals("ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.spectate;"
+        assertEquals("ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.admin.lobby;ninjaarena.spectate;"
                 + "ninjaarena.leaderboard;ninjaarena.event.manage",
                 command.get("permission"));
     }
@@ -126,8 +126,10 @@ class PluginDescriptionTest {
                 nodes.get("ninjaarena.play").getChildren());
         assertEquals(Map.of("ninjaarena.play", true), nodes.get("ninjaarena.host").getChildren());
         assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.event.manage").getDefault());
-        assertEquals(Map.of("ninjaarena.host", true, "ninjaarena.event.manage", true),
+        assertEquals(Map.of("ninjaarena.host", true, "ninjaarena.event.manage", true, "ninjaarena.admin.lobby", true),
                 nodes.get("ninjaarena.admin").getChildren());
+        assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.admin.lobby").getDefault());
+        assertEquals(Map.of(), nodes.get("ninjaarena.admin.lobby").getChildren());
     }
 
     @Test
@@ -135,7 +137,8 @@ class PluginDescriptionTest {
         try (InputStream stream = pluginYml()) {
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(stream, StandardCharsets.UTF_8));
-            for (String tier : List.of("shop.use", "spectate", "leaderboard", "rewards.payout", "event.manage", "play", "host", "admin")) {
+            for (String tier : List.of("shop.use", "spectate", "leaderboard", "rewards.payout", "event.manage",
+                    "play", "host", "admin", "admin.lobby")) {
                 assertTrue(yaml.isConfigurationSection("permissions.ninjaarena." + tier + ".children"), tier);
             }
             assertTrue(yaml.getBoolean("permissions.ninjaarena.admin.children.ninjaarena.host"));
@@ -156,7 +159,7 @@ class PluginDescriptionTest {
         };
         root.setPermission((String) description().getCommands().get("ninjaarena").get("permission"));
         for (String granted : List.of("ninjaarena.play", "ninjaarena.host", "ninjaarena.admin",
-                "ninjaarena.spectate", "ninjaarena.leaderboard", "none")) {
+                "ninjaarena.admin.lobby", "ninjaarena.spectate", "ninjaarena.leaderboard", "none")) {
             CommandSender sender = (CommandSender) Proxy.newProxyInstance(CommandSender.class.getClassLoader(),
                     new Class<?>[] {CommandSender.class}, (proxy, method, args) -> {
                         if (method.getName().equals("hasPermission")) {

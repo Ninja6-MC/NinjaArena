@@ -107,3 +107,13 @@ tasks.register<Jar>("soakProbeJar") {
 tasks.check {
     dependsOn(soak.classesTaskName)
 }
+
+// Writes the bundled lobby structure from its readable spec. LobbyBuildTest fails while the
+// committed structure differs from what this writes.
+tasks.register<JavaExec>("generateLobbyBuild") {
+    group = "build"
+    description = "Writes src/main/resources/lobby/obsidian-lobby.nbt from obsidian-lobby.yml."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.ninja6.ninjaarena.lobby.LobbyBuildGenerator")
+    args(file("src/main/resources/lobby/obsidian-lobby.yml"), file("src/main/resources/lobby/obsidian-lobby.nbt"))
+}

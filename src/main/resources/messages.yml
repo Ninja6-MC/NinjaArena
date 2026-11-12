@@ -48,6 +48,7 @@ command:
   feature:
     textures: "Texture quality"
     reload: "Configuration reload"
+    lobby: "Lobby editing"
   usage-full: "<red>Usage: <usage>"
   unknown-subcommand: "<red>Unknown subcommand <subcommand>. Use one of: <subcommands>."
   error: "<red><message>"
@@ -73,7 +74,7 @@ help:
   director: "show the enemy director of a running match"
   event: "manage scheduled arena events"
   pack: "show Java and Bedrock resource pack state"
-  admin: "reload the Arena configuration, or reset a player's texture quality to Standard"
+  admin: "reload the Arena configuration, edit or reset the lobby, or reset a player's texture quality to Standard"
 
 # /ninjaarena arena: building and registering arenas. <cell>, <bounds> and <point> are
 # coordinates. invalid and error are refusals, shown through command.error; problem lists
@@ -398,6 +399,21 @@ waiting:
   count-short: "(<size>/<min>)"
   count-one: "(<size> player)"
   count: "(<size> players)"
+
+# The lobby world and /ninjaarena admin lobby. <label> is the command as typed.
+lobby:
+  joined: "<green>You are in the lobby."
+  join-failed: "<red>You could not join the lobby, so you were sent back."
+  left: "<yellow>You left the lobby."
+  edit-started: "<green>Lobby edit mode is on: you can change the lobby. Use /<label> admin lobby done to save and finish."
+  edit-already: "<yellow>You are already editing the lobby. Use /<label> admin lobby done to finish."
+  edit-busy: "<red>Leave your match, waiting room or the lobby before editing the lobby."
+  edit-failed: "<red>You could not be taken to the lobby."
+  edit-done: "<green>Lobby edit mode is off and the lobby is saved."
+  edit-ended: "<yellow>Lobby edit mode ended because you left the lobby world."
+  not-editing: "<red>You are not editing the lobby."
+  reset: "<green>The lobby is back to the bundled build. Changes made in edit mode are gone."
+  reset-failed: "<red>The lobby could not be reset: <reason>"
 
 # Spectating a match.
 spectate:

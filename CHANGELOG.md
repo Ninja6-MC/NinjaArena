@@ -19,6 +19,20 @@ Java 25, and does not run on Folia.
   `ninjaarena.shop.use` permission defaults to true and is a child of `ninjaarena.play`.
   Buying remains closed until the between-round shop phase is available.
 
+- A prebuilt obsidian lobby, placed in `ninjaarena_lobby` the first time the plugin
+  finds that world without it. Restarts and arena-world retirements leave the lobby
+  as it is. `/narena admin lobby edit` lets an admin change it, `done` saves it and
+  ends edit mode, and `reset` puts the bundled build back. These need the new
+  `ninjaarena.admin.lobby` permission, granted by `ninjaarena.admin`. The build is
+  generated from a readable spec with `./gradlew generateLobbyBuild`, and the spec
+  marks the spawn, room area, shop area and board positions.
+- Lobby membership, a player state like a waiting room, for rooms to use: members'
+  inventories are locked, the join restore and trophy delivery treat them as busy,
+  and members who leave the lobby area return to its spawn. Nothing takes damage in
+  the lobby world, a fall into its void returns the player to the lobby spawn, and
+  no death there counts in a match. A claimed trophy is never delivered while the
+  player is in the arena or lobby world.
+
 - A second void world, `ninjaarena_lobby`, created or loaded at startup beside the
   arena world. It is saved normally and never unloaded, keeps inventories, has no
   mobs, weather or day cycle, and blocks environmental block changes at all times.
