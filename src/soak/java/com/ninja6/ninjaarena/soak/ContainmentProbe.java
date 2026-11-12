@@ -100,17 +100,23 @@ final class ContainmentProbe implements Listener {
                 player.setLevel(7);
                 Location originalRespawn = player.getRespawnLocation();
                 player.setRespawnLocation(new Location(world, 500.5, 64, 500.5), true);
-                require(plugin.snapshots().captureAndPersist(player) == SnapshotService.CaptureResult.SAVED,
-                        "Configured-shrink snapshot was not captured");
+                require(plugin.snapshots().captureAndPersist(player) == SnapshotService.CaptureResult.PLUGIN_WORLD
+                        && !plugin.snapshots().hasPending(player.getUniqueId()),
+                        "A snapshot was taken in the arena world");
+                evidence.put("arena_world_snapshot_refused", true);
+                // The respawn point stays in the arena world: the restore must not land there.
                 player.teleport(Bukkit.getWorlds().getFirst().getSpawnLocation());
+                require(plugin.snapshots().captureAndPersist(player) == SnapshotService.CaptureResult.SAVED,
+                        "Home snapshot was not captured");
+                player.teleport(new Location(world, 500.5, 64, 500.5));
                 player.setLevel(0);
-                plugin.arenaWorld().setBorderSize(128);
                 require(plugin.restores().restore(player) == RestoreService.RestoreResult.RESTORED
                         && player.getWorld() != world && player.getLevel() == 7
                         && !plugin.snapshots().hasPending(player.getUniqueId()),
-                        "Configured border shrink left a snapshot stuck instead of restoring with fallback");
+                        "Restore landed in the arena world or left the snapshot stuck");
                 player.setRespawnLocation(originalRespawn, true);
-                evidence.put("configured_shrink_restore_fallback_and_cleanup", true);
+                evidence.put("restore_never_lands_in_arena_world", true);
+                plugin.arenaWorld().setBorderSize(128);
                 player.setAllowFlight(true);
                 player.setFlying(true);
                 plugin.arenaWorld().setDistances(2, 2);

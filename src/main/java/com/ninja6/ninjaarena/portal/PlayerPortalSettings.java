@@ -1,6 +1,6 @@
 package com.ninja6.ninjaarena.portal;
 
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -51,7 +51,7 @@ public record PlayerPortalSettings(Set<String> worlds, Material frame, int maxPe
 
     /** Whether players may build in the world. */
     public boolean allows(String world) {
-        return !world.equals(ArenaWorld.NAME) && worlds.contains(world);
+        return !PluginWorlds.isPluginWorld(world) && worlds.contains(world);
     }
 
     /** The frame block as stored with each portal. */
@@ -129,8 +129,8 @@ public record PlayerPortalSettings(Set<String> worlds, Material frame, int maxPe
                     || name.chars().anyMatch(Character::isISOControl)) {
                 return "expected a list of world names";
             }
-            if (name.equals(ArenaWorld.NAME)) {
-                return "the arena world cannot hold player-built portals";
+            if (PluginWorlds.isPluginWorld(name)) {
+                return "the arena and lobby worlds cannot hold player-built portals";
             }
         }
         return null;

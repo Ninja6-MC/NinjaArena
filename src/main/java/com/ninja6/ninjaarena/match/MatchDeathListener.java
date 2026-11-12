@@ -7,7 +7,7 @@ import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -254,8 +254,7 @@ public final class MatchDeathListener implements Listener {
     }
 
     private boolean inside(Location location, MatchView match) {
-        return location != null && location.getWorld() != null
-                && ArenaWorld.NAME.equals(location.getWorld().getName())
+        return PluginWorlds.isArena(location)
                 && arenas.get(match.arena()).filter(arena -> arena.bounds() != null
                         && arena.bounds().contains(location.getBlockX(), location.getBlockY(), location.getBlockZ()))
                         .isPresent();

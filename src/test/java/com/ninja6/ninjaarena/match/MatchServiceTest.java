@@ -14,9 +14,12 @@ import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
+import com.ninja6.ninjaarena.world.CrossWorldTransfers;
+import com.ninja6.ninjaarena.world.LobbyWorld;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.Location;
@@ -201,6 +204,56 @@ class MatchServiceTest extends MatchFixture {
         assertTrue(restored.isEmpty());
         runNextTick();
         assertEquals(List.of(ALICE), restored);
+    }
+
+    @Test
+    void anotherPluginTeleportingAMatchPlayerIntoTheLobbyWorldTakesThemOutOfTheMatch() {
+        startTwoOnTwo();
+        Fake alice = players.get(ALICE);
+        listener.onTeleport(new PlayerTeleportEvent(alice.proxy, alice.location.clone(),
+                new Location(world(LobbyWorld.NAME), 0.5, 64, 0.5)));
+        assertFalse(matches.isInMatch(ALICE));
+        runNextTick();
+        assertEquals(List.of(ALICE), restored);
+    }
+
+    @Test
+    void anOwnTeleportIntoTheLobbyWorldAlsoLeavesWhileNoPhaseAllowsCrossing() {
+        startTwoOnTwo();
+        Fake alice = players.get(ALICE);
+        Location lobby = new Location(world(LobbyWorld.NAME), 0.5, 64, 0.5);
+        OwnTeleports.during(ALICE, () -> {
+            listener.onTeleport(new PlayerTeleportEvent(alice.proxy, alice.location.clone(), lobby));
+            return true;
+        });
+        assertFalse(matches.isInMatch(ALICE));
+    }
+
+    @Test
+    void anAllowedOwnTransferCrossesToTheLobbyAndBackButAnotherPluginsDoesNot() {
+        startTwoOnTwo();
+        CrossWorldTransfers transfers = new CrossWorldTransfers();
+        transfers.allow(id -> true);
+        MatchListener crossing = new MatchListener(matches, deaths, transfers);
+        Fake alice = players.get(ALICE);
+        Location lobby = new Location(world(LobbyWorld.NAME), 0.5, 64, 0.5);
+        OwnTeleports.during(ALICE, () -> {
+            crossing.onTeleport(new PlayerTeleportEvent(alice.proxy, alice.location.clone(), lobby));
+            crossing.onTeleport(new PlayerTeleportEvent(alice.proxy, lobby, alice.location.clone()));
+            return true;
+        });
+        assertTrue(matches.isInMatch(ALICE));
+
+        crossing.onTeleport(new PlayerTeleportEvent(alice.proxy, lobby, new Location(arenaWorld, 30, 64, 30)));
+        assertFalse(matches.isInMatch(ALICE));
+
+        Fake bob = players.get(BOB);
+        OwnTeleports.during(BOB, () -> {
+            crossing.onTeleport(new PlayerTeleportEvent(bob.proxy, bob.location.clone(),
+                    new Location(overworld, 0, 64, 0)));
+            return true;
+        });
+        assertFalse(matches.isInMatch(BOB), "an allowed own teleport to any other world still leaves");
     }
 
     @Test

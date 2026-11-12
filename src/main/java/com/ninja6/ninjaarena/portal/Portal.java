@@ -3,7 +3,7 @@ package com.ninja6.ninjaarena.portal;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.message.KeyedArgumentException;
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -105,8 +105,11 @@ public record Portal(String name, String world, ArenaBounds region, String arena
         if (world.isBlank()) {
             throw new KeyedArgumentException("world must not be blank", "portal.invalid.world");
         }
-        if (world.equals(ArenaWorld.NAME)) {
+        if (PluginWorlds.isArena(world)) {
             throw new KeyedArgumentException("portals cannot be in the arena world", "portal.invalid.arena-world");
+        }
+        if (PluginWorlds.isLobby(world)) {
+            throw new KeyedArgumentException("portals cannot be in the lobby world", "portal.invalid.lobby-world");
         }
         if (arena == null ? built == null : !Arena.isValidName(arena)) {
             throw new KeyedArgumentException("invalid arena name " + arena, "arena.invalid.name", "name", arena);

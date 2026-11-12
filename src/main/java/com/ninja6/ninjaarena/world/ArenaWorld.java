@@ -87,22 +87,42 @@ public final class ArenaWorld {
     }
 
     private static World open() {
-        World world = Bukkit.getWorld(NAME);
+        return openVoid(NAME);
+    }
+
+    /** Loads a void world by name, creating it if it does not exist yet. */
+    static World openVoid(String name) {
+        World world = Bukkit.getWorld(name);
         if (world == null) {
-            world = new WorldCreator(NAME)
+            world = new WorldCreator(name)
                     .environment(World.Environment.NORMAL)
                     .generator(new VoidChunkGenerator())
                     .generateStructures(false)
                     .bonusChest(false)
                     .createWorld();
             if (world == null) {
-                throw new IllegalStateException("The server refused to create the world " + NAME);
+                throw new IllegalStateException("The server refused to create the world " + name);
             }
         }
         return world;
     }
 
     static void configure(World world, ArenaWorldSettings settings) {
+        configureRules(world);
+
+        world.setViewDistance(settings.viewDistance());
+        world.setSimulationDistance(settings.simulationDistance());
+
+        WorldBorder border = world.getWorldBorder();
+        border.setCenter(0, 0);
+        border.setSize(settings.borderSize());
+    }
+
+    /**
+     * The rules both plugin worlds share: inventories kept, a fixed noon with clear weather
+     * and no natural mob spawning.
+     */
+    static void configureRules(World world) {
         // A death here outside a match (an admin building, say) keeps the player's items.
         // Match and waiting-room deaths already keep the inventory themselves.
         setRule(world, GameRules.KEEP_INVENTORY, true);
@@ -118,18 +138,11 @@ public final class ArenaWorld {
         world.setTime(FIXED_TIME);
         world.setStorm(false);
         world.setThundering(false);
-
-        world.setViewDistance(settings.viewDistance());
-        world.setSimulationDistance(settings.simulationDistance());
-
-        WorldBorder border = world.getWorldBorder();
-        border.setCenter(0, 0);
-        border.setSize(settings.borderSize());
     }
 
     private static <T> void setRule(World world, GameRule<T> rule, T value) {
         if (!world.setGameRule(rule, value)) {
-            throw new IllegalStateException("Could not set " + rule.getKey() + " in " + NAME);
+            throw new IllegalStateException("Could not set " + rule.getKey() + " in " + world.getName());
         }
     }
 
@@ -228,6 +241,28 @@ public final class ArenaWorld {
                 operations.decrementAndGet();
             }
         };
+    }
+
+    /**
+     * Keeps the world open until the returned handle is run. A retired world is opened now,
+     * so the reset a reopen runs happens here rather than at the next match start, and it is
+     * not retired again while the hold lasts. Running the handle again does nothing.
+     *
+     * <p>Nothing takes a hold yet. Waiting rooms need none: their players stand in the world,
+     * which already keeps it open. A room that exists before anyone stands in the arena world
+     * takes a hold when the first one is created and runs it when the last one closes.
+     *
+     * @throws IllegalStateException if the world cannot be opened; no hold is kept then
+     */
+    public Runnable hold() {
+        Runnable release = acquire();
+        try {
+            world();
+        } catch (RuntimeException | Error failure) {
+            release.run();
+            throw failure;
+        }
+        return release;
     }
 
     /** Rejects reentrant arena mutations while Bukkit load/unload events are being dispatched. */

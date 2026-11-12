@@ -235,4 +235,47 @@ class ArenaWorldLifecycleTest {
             assertFalse(second.calls.contains("save"));
         }
     }
+
+    @Test
+    void aHoldOpensARetiredWorldInAdvanceAndKeepsItUntilReleased() {
+        Generation first = new Generation();
+        Generation second = new Generation();
+        int[] loads = {0};
+        int[] restores = {0};
+        var manager = new ArenaWorld(first.world, () -> { loads[0]++; return second.world; }, world -> true);
+        manager.onReopen(() -> restores[0]++);
+        assertTrue(manager.releaseIfIdle(() -> true));
+
+        Runnable release = manager.hold();
+        assertEquals(1, loads[0]);
+        assertEquals(1, restores[0], "the reopen reset runs when the hold is taken");
+        assertSame(second.world, manager.currentWorld().orElseThrow());
+        assertFalse(manager.releaseIfIdle(() -> true), "a held world is not retired");
+
+        release.run();
+        release.run();
+        assertTrue(manager.releaseIfIdle(() -> true), "a second release must not unbalance the count");
+    }
+
+    @Test
+    void aHoldOnAnOpenWorldDoesNotReopenIt() {
+        Generation first = new Generation();
+        int[] loads = {0};
+        var manager = new ArenaWorld(first.world, () -> { loads[0]++; return first.world; }, world -> true);
+        Runnable release = manager.hold();
+        assertEquals(0, loads[0]);
+        assertFalse(manager.releaseIfIdle(() -> true));
+        release.run();
+        assertTrue(manager.releaseIfIdle(() -> true));
+    }
+
+    @Test
+    void aHoldThatCannotOpenTheWorldKeepsNothing() {
+        Generation first = new Generation();
+        var manager = new ArenaWorld(first.world, () -> { throw new IllegalStateException("no world"); }, world -> true);
+        assertTrue(manager.releaseIfIdle(() -> true));
+        assertThrows(IllegalStateException.class, manager::hold);
+        assertThrows(IllegalStateException.class, manager::acquire,
+                "a failed reopen leaves the world refusing work, as a failed world() does");
+    }
 }

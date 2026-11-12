@@ -1,7 +1,8 @@
 package com.ninja6.ninjaarena.match;
 
 import com.ninja6.ninjaarena.match.MatchService.Exit;
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.restore.OwnTeleports;
+import com.ninja6.ninjaarena.world.CrossWorldTransfers;
 import java.util.Objects;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -19,8 +20,8 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
 /**
- * Feeds what happens to players in a match to {@link MatchService}: deaths, teleports out
- * of the arena world, and disconnects. Outside COMBAT and OVERRUN, players in a match take
+ * Feeds what happens to players in a match to {@link MatchService}: deaths, teleports that
+ * take them out of it ({@link CrossWorldTransfers}), and disconnects. Outside COMBAT and OVERRUN, players in a match take
  * no damage except from the void or {@code /kill}, so nobody falls forever.
  *
  * <p>Deaths eliminate players through the match engine; {@link MatchDeathListener} owns
@@ -30,10 +31,16 @@ public final class MatchListener implements Listener {
 
     private final MatchService matches;
     private final MatchDeathListener deaths;
+    private final CrossWorldTransfers transfers;
 
     public MatchListener(MatchService matches, MatchDeathListener deaths) {
+        this(matches, deaths, new CrossWorldTransfers());
+    }
+
+    public MatchListener(MatchService matches, MatchDeathListener deaths, CrossWorldTransfers transfers) {
         this.matches = Objects.requireNonNull(matches, "matches");
         this.deaths = Objects.requireNonNull(deaths, "deaths");
+        this.transfers = Objects.requireNonNull(transfers, "transfers");
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -74,8 +81,8 @@ public final class MatchListener implements Listener {
     public void onTeleport(PlayerTeleportEvent event) {
         Player player = event.getPlayer();
         Location to = event.getTo();
-        if (matches.isInMatch(player.getUniqueId())
-                && (to.getWorld() == null || !ArenaWorld.NAME.equals(to.getWorld().getName()))) {
+        if (matches.isInMatch(player.getUniqueId()) && !transfers.keepsMatch(player.getUniqueId(),
+                event.getFrom().getWorld(), to.getWorld(), OwnTeleports.isActive(player.getUniqueId()))) {
             matches.leave(player, Exit.TELEPORTED);
         }
     }

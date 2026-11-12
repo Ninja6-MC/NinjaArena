@@ -19,6 +19,7 @@ import com.ninja6.ninjaarena.spectate.Spectators;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
+import com.ninja6.ninjaarena.world.LobbyWorld;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -122,6 +123,17 @@ class SpectatorLifecycleTest extends MatchFixture {
         assertEquals(List.of(DAVE), restored);
         assertEquals(GameMode.SURVIVAL, players.get(DAVE).gameMode);
         assertFalse(snapshots.exists(DAVE));
+    }
+
+    @Test
+    void aSpectatorSeatIsInTheArenaWorldOnlySoNoTeleportReachesTheLobbyWorld() throws Exception {
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        snapshots.save(snapshot(DAVE));
+        viewers.arrived(player(DAVE), "dojo");
+        assertTrue(player(DAVE).teleport(new Location(arenaWorld, 20, 64, 20), PlayerTeleportEvent.TeleportCause.PLUGIN));
+        assertFalse(player(DAVE).teleport(new Location(world(LobbyWorld.NAME), 20, 64, 20),
+                PlayerTeleportEvent.TeleportCause.PLUGIN));
+        assertTrue(viewers.contains(DAVE));
     }
 
     /** Joins and lets the restore run, which opens the window in which a competing teleport is undone. */

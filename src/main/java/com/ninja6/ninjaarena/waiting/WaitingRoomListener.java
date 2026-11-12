@@ -1,7 +1,7 @@
 package com.ninja6.ninjaarena.waiting;
 
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.Objects;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -60,7 +60,7 @@ public final class WaitingRoomListener implements Listener {
         }
         // Ignored only when it started outside the arena world and the player is in the room
         // now. A waiting player found anywhere else is still taken out.
-        boolean startedOutside = from.getWorld() == null || !ArenaWorld.NAME.equals(from.getWorld().getName());
+        boolean startedOutside = !PluginWorlds.isArena(from);
         return !(startedOutside && rooms.inRoom(player.getUniqueId(), player.getLocation()));
     }
 

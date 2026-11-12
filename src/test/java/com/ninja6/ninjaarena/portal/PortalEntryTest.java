@@ -255,4 +255,13 @@ class PortalEntryTest {
         assertEquals("Your belongings could not be saved, so you were not sent to the arena.",
                 refusal.get().message());
     }
+
+    @Test
+    void anEntryFromAPluginWorldIsRefusedWithoutASnapshot() {
+        captureResult = CaptureResult.PLUGIN_WORLD;
+        Optional<Refusal> refusal = entry.admit(player(true), LOBBY);
+        assertEquals(Reason.PLUGIN_WORLD, reason(refusal));
+        assertEquals("You cannot enter an arena from the arena or lobby world. Go to another world first.",
+                refusal.get().message());
+    }
 }

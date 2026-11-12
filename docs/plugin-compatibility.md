@@ -28,13 +28,26 @@ worlds. Allowlist the disposable worlds instead. A resetter that cannot
 exclude this world is unsuitable on the same backend. See [arena world
 retirement][lifecycle] and [CyberWorldReset][world-reset].
 
+### World managers and both NinjaArena worlds
+
+**Code review.** NinjaArena creates or loads two worlds at startup and owns
+both. `ninjaarena_arenas` is disposable: saving is off and NinjaArena unloads
+and resets it itself. `ninjaarena_lobby` is saved normally and stays loaded
+while the plugin is enabled. World-manager, reset, backup-restore and
+pregeneration plugins must leave both alone: do not import, unload, reset,
+delete, regenerate or change the rules of either. Keep them out of spawn,
+portal-link and teleport targets. A teleport into the lobby world by another
+plugin takes a match player out of the match, and neither world is used as a
+landing for a restore.
+
 ### Multiverse-Core 5 and NetherPortals
 
 **Code review and recorded live.** Multiverse can import and manage existing
 worlds. The test server reported no interaction with NinjaArena's plugin-created
-world or region portals. Keep `ninjaarena_arenas` unimported and out of spawn,
-portal link and teleport targets managed by Multiverse. NinjaArena handles its
-own entry and exit. See [Multiverse world management][multiverse].
+world or region portals. Keep `ninjaarena_arenas` and `ninjaarena_lobby`
+unimported and out of spawn, portal link and teleport targets managed by
+Multiverse. NinjaArena handles its own entry and exit. See [Multiverse world
+management][multiverse].
 
 ### EssentialsX flight
 

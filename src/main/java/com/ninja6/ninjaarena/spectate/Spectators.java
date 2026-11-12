@@ -14,6 +14,7 @@ import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -189,7 +190,7 @@ public final class Spectators implements Listener {
     }
 
     private boolean inside(Seat seat, Location to) {
-        return to != null && to.getWorld() == world.get() && contains(seat.bounds(), to.getX(), to.getY(), to.getZ());
+        return PluginWorlds.isArena(to) && contains(seat.bounds(), to.getX(), to.getY(), to.getZ());
     }
 
     static boolean contains(ArenaBounds bounds, double x, double y, double z) {

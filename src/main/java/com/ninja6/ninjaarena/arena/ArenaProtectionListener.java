@@ -1,6 +1,6 @@
 package com.ninja6.ninjaarena.arena;
 
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
@@ -26,7 +26,8 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 
 /**
- * Environmental changes are blocked throughout the arena world, except during editing.
+ * Environmental changes are blocked throughout the arena world, except during editing, and
+ * throughout the lobby world at all times.
  *
  * <p>Only the blocks inside an arena's bounds are copied and put back, so nothing a match
  * sets off may change a block outside them: explosions, mobs, fire, fluids, growth, decay
@@ -146,6 +147,6 @@ public final class ArenaProtectionListener implements Listener {
     }
 
     private boolean protectedWorld(World world) {
-        return world != null && ArenaWorld.NAME.equals(world.getName()) && protectionEnabled.getAsBoolean();
+        return PluginWorlds.isLobby(world) || PluginWorlds.isArena(world) && protectionEnabled.getAsBoolean();
     }
 }
