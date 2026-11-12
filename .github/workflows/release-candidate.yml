@@ -95,7 +95,7 @@ jobs:
 
       - name: Retain Candidate
         id: candidate
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-candidate
           path: candidate/*
@@ -112,7 +112,7 @@ jobs:
             --directory candidate --output candidate-manifest.json
 
       - name: Retain Manifest
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-candidate-manifest
           path: candidate-manifest.json
@@ -133,13 +133,13 @@ jobs:
           persist-credentials: false
 
       - name: Download Retained Candidate
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-candidate
           path: candidate
 
       - name: Download Retained Manifest
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-candidate-manifest
 
@@ -179,7 +179,7 @@ jobs:
             --test-results build/test-results/test --output candidate-evidence.json
 
       - name: Retain Evidence
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-candidate-evidence
           path: candidate-evidence.json
