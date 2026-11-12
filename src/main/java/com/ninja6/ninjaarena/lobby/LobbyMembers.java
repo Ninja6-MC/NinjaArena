@@ -55,6 +55,7 @@ public final class LobbyMembers {
     private final Supplier<World> world;
     private final Predicate<UUID> elsewhere;
     private final Consumer<Player> empty;
+    private Consumer<Player> arrival = player -> { };
     private final Function<Player, RestoreResult> home;
     private final Set<UUID> members = new LinkedHashSet<>();
     private final Set<UUID> homeBound = new HashSet<>();
@@ -74,6 +75,11 @@ public final class LobbyMembers {
         this.elsewhere = Objects.requireNonNull(elsewhere, "elsewhere");
         this.empty = Objects.requireNonNull(empty, "empty");
         this.home = Objects.requireNonNull(home, "home");
+    }
+
+    /** Runs after a successful entry; by default nothing is shown. */
+    public void setArrival(Consumer<Player> arrival) {
+        this.arrival = Objects.requireNonNull(arrival, "arrival");
     }
 
     public LobbyLayout layout() {
@@ -112,6 +118,7 @@ public final class LobbyMembers {
         homeBound.remove(id);
         members.add(id);
         player.sendMessage(msg("lobby.joined"));
+        arrival.accept(player);
         return true;
     }
 

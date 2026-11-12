@@ -19,6 +19,9 @@ Java 25, and does not run on Folia.
   arenas with `/narena arena pickable <arena> <on|off>`, stored as optional
   `pickable: true` in `arenas.yml` format 1. Map changes move the room's slot lease,
   adjust its team count and tell every member who changed it and its queue position.
+- First-time lobby help covering tools, the shop and arena hazards, remembered across
+  restarts. `/narena intro` shows it again in the lobby; servers using chest menus get
+  the same help in chat.
 - Host-started rooms. `/narena room create` opens a room in the lobby; its host sets the
   required player count, teams, team size and privacy with `/narena room settings`,
   invites with a clickable join button, removes players with a button or

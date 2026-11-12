@@ -131,6 +131,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private volatile ArenaWorld arenaWorld;
     private LobbyWorld lobbyWorld;
     private LobbyMembers lobbyMembers;
+    private com.ninja6.ninjaarena.lobby.LobbyIntro lobbyIntro;
     private LobbyEditing lobbyEditing;
     /** In a match, a waiting room, the hub or the lobby, or spectating. */
     private final ArenaBusy busy = new ArenaBusy(() -> this.matches, () -> this.waitingRooms, () -> this.spectators,
@@ -530,6 +531,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         command.setPackStatus(this::packStatus);
         command.setTextures(textureCommands);
         command.setLobby(lobbyEditing);
+        command.setIntro(lobbyIntro::open);
         command.setRooms(roomList);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
@@ -752,6 +754,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         || spectators != null && spectators.contains(id),
                 KitInventory::emptyForWaiting, player -> restores.restore(player));
         LobbyMembers members = lobbyMembers;
+        lobbyIntro = new com.ninja6.ninjaarena.lobby.LobbyIntro(() -> activePackSettings.textureMenu(),
+                com.ninja6.ninjaarena.lobby.LobbyIntro::showDialog, player -> members.isMember(player.getUniqueId()));
+        members.setArrival(lobbyIntro::arrived);
         lobbyEditing = new LobbyEditing(build, members::spawn, busy, world::save, () -> {
             for (Player player : world.getPlayers()) {
                 members.returnToSpawn(player);
