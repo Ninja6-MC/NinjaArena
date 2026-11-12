@@ -149,13 +149,18 @@ plateau in both measured passes. Saving must stay off, and gameplay save hashes 
 remain identical from before traversal. This is a spatial-bound regression, not a
 maximum-2048-diameter heap-capacity measurement.
 
-An additional snapshot control captures an arena origin before shrinking the
-configured border, then requires restoration of the player's state at a safe
-fallback and deletion of the pending snapshot. Ordinary in-bounds arena origins
-still use the exact-location reconnect checks below.
+An additional snapshot control requires that no snapshot is taken while the
+player stands in the arena world. It then captures one at the default world's
+spawn, moves the player back into the arena world with their respawn point there,
+and requires restoration of the player's state outside the arena world and
+deletion of the pending snapshot. The border is shrunk afterwards for traversal.
 
 Real clients exercise ordinary match start/end, snapshot restoration, and an
-outside player's preservation. A real Paper ignition event is dispatched to the
+outside player's preservation. Before the reconnect, the fixture again requires
+that a snapshot in the arena world is refused, captures one at the default world's
+spawn, and disconnects the player from inside the arena world. After the world
+retires, the player reconnects and must be restored at that spawn without the
+restore reopening the arena world. A real Paper ignition event is dispatched to the
 installed protection listener; this is event-level integration evidence, not a
 claim that a client sent a fire-use packet. The fixture retires the world through
 the production public API, requires unregistering and eventual weak collection,

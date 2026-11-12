@@ -82,9 +82,38 @@ class CrossWorldTransfersTest {
     }
 
     @Test
-    void switchingTheAllowanceOffAgainEndsCrossing() {
-        transfers.allow(player -> true);
-        transfers.allow(player -> false);
+    void releasingARuleEndsItsCrossingAndASecondReleaseDoesNothing() {
+        Runnable release = transfers.allow(player -> true);
+        assertTrue(transfers.keepsMatch(ALICE, arena, lobby, true));
+        release.run();
+        assertFalse(transfers.keepsMatch(ALICE, arena, lobby, true));
+        release.run();
+        assertFalse(transfers.keepsMatch(ALICE, arena, lobby, true));
+    }
+
+    @Test
+    void rulesFromSeparateFeaturesDoNotReplaceEachOther() {
+        Runnable shop = transfers.allow(ALICE::equals);
+        Runnable preview = transfers.allow(BOB::equals);
+        assertTrue(transfers.keepsMatch(ALICE, arena, lobby, true));
+        assertTrue(transfers.keepsMatch(BOB, arena, lobby, true));
+
+        preview.run();
+        assertTrue(transfers.keepsMatch(ALICE, arena, lobby, true), "the other rule still holds");
+        assertFalse(transfers.keepsMatch(BOB, arena, lobby, true));
+        shop.run();
+        assertFalse(transfers.keepsMatch(ALICE, arena, lobby, true));
+    }
+
+    @Test
+    void theSamePredicateRegisteredTwiceIsReleasedSeparately() {
+        java.util.function.Predicate<UUID> everyone = player -> true;
+        Runnable first = transfers.allow(everyone);
+        Runnable second = transfers.allow(everyone);
+        first.run();
+        first.run();
+        assertTrue(transfers.keepsMatch(ALICE, arena, lobby, true));
+        second.run();
         assertFalse(transfers.keepsMatch(ALICE, arena, lobby, true));
     }
 }

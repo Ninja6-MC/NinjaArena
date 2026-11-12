@@ -147,9 +147,9 @@ player-portals:
   color: '#40E0D0'            # the particle curtain
 ```
 
-Neither the arena world nor the lobby world is allowed. Each portal keeps the frame block it was built from, so
-changing `frame-material` affects only new portals. The curtain is a vanilla dust
-particle, which needs no resource pack on Java or Bedrock.
+Neither the arena world nor the lobby world is allowed. Each portal keeps the frame
+block it was built from, so changing `frame-material` affects only new portals. The
+curtain is a vanilla dust particle, which needs no resource pack on Java or Bedrock.
 
 ## Commands and permissions
 
