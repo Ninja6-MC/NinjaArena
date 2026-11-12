@@ -119,6 +119,11 @@ match:
   # Extra rounds played, one at a time, while the lead is tied after the last round. Still
   # tied after them, the leading teams share the win (0 to 10).
   extra-rounds: 1
+  # How long a player who disconnects mid-match may take to rejoin it. Meanwhile they stay
+  # on their team and in their room, out of the round, and their team does not forfeit;
+  # back in time, they spectate until the next round (or play at once during prep). When it
+  # runs out they leave the match as before. 0 makes a disconnect a leave (0 to 600).
+  rejoin-grace-seconds: 60
 
 scoring:
   # Points awarded to the winning team of a round. Draws award nothing; 0 disables it.

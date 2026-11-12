@@ -218,6 +218,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 getServer().getPluginManager()::callEvent, MatchService::readyForRound);
         // The shop phase between rounds, in the lobby's shop area; its moves keep the match.
         matches.setShopSettings(ShopSettings.from(getConfig().getConfigurationSection("shop")));
+        // A disconnected player may rejoin their match for this long.
+        matches.setRejoinGraceSeconds(MatchSettings.rejoinGraceSeconds(getConfig().getConfigurationSection("match")));
         LobbyMembers shopLobby = lobbyMembers;
         matches.setShopArea(() -> shopLobby.layout().shop(lobbyWorld.world()));
         shopCrossing = transfers.allow(matches::crossesWorlds);
@@ -444,6 +446,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         protection.setFriendlyFire(friendlyFire);
                         scoring.setSettings(awards, inMatch.matches());
                         inMatch.setSettings(settings);
+                    }
+
+                    @Override
+                    public void rejoinGrace(int seconds) {
+                        inMatch.setRejoinGraceSeconds(seconds);
                     }
 
                     @Override

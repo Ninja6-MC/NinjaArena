@@ -40,6 +40,7 @@ class ToolVisualsTest {
     private final MatchView match = proxy(MatchView.class, (name, args) -> switch (name) {
         case "arena" -> "dojo";
         case "players" -> List.of(thrower, rival);
+        case "disconnectedPlayers" -> List.of();
         case "teamOf" -> args[0].equals(thrower) ? 2 : 1;
         default -> throw new UnsupportedOperationException(name);
     });

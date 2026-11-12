@@ -159,6 +159,32 @@ class MatchHudTest extends MatchFixture {
     }
 
     @Test
+    void aPlayerAwayWithinTheRejoinGraceIsLeftOutOfTheReadyCountAndGetsTheBarBack() {
+        useHud(SETTINGS);
+        matches.setShopSettings(new ShopSettings(true, 30, 2, 3));
+        matches.setRejoinGraceSeconds(20);
+        startTwoOnTwo();
+        advance(2);
+        matches.died(player(BOB), player(ALICE));
+        matches.died(player(DAVE), player(ALICE));
+        runNextTick();
+        advance(1);
+        matches.ready(player(ALICE));
+        matches.disconnect(player(BOB));
+        players.get(BOB).online = false;
+        hud.tick();
+        assertEquals("Shop - next round in 0:30 - ready 1/3", text(bar().name()));
+        assertTrue(players.get(BOB).bossBars.isEmpty());
+
+        players.get(BOB).online = true;
+        assertTrue(matches.rejoin(player(BOB)));
+        runNextTick();
+        hud.tick();
+        assertEquals("Shop - next round in 0:30 - ready 1/4", text(bar().name()));
+        assertEquals(1, players.get(BOB).bossBars.size(), "the bar is shown again");
+    }
+
+    @Test
     void unlimitedOverrunKeepsAFullBarAndExtraRoundsHaveTheirOwnLabel() {
         useHud(new MatchSettings(1, 1, 0, 1, 1, 1, 1));
         startTwoOnTwo();

@@ -469,6 +469,12 @@ match:
   left: "<yellow>You left the match."
   player-out: "<gray><player> is out for this round."
   player-left: "<gray><player> left the match."
+  # Within match.rejoin-grace-seconds a disconnected player is still in the match.
+  player-disconnected: "<gray><player> disconnected; they have <seconds> seconds to rejoin."
+  player-rejoined: "<gray><player> rejoined the match."
+  rejoined: "<green>You are back in the match, at your team spawn."
+  rejoined-shop: "<green>You are back in the match, in the shop."
+  rejoined-spectating: "<yellow>You are back in the match and play again from the next round."
   prep: "<gold>Round <round> of <rounds>. The fight starts in <seconds> seconds."
   prep-extra: "<gold>Extra round! The fight starts in <seconds> seconds."
   fight: "<red>Fight!"

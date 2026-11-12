@@ -6,9 +6,9 @@ import org.bukkit.event.HandlerList;
 
 /**
  * A player left the match: by the leave command, by being teleported out of the arena
- * world, or by disconnecting. They are no longer in {@link MatchView#players()}. Unless they
- * disconnected, they are sent home after this event; a disconnected player is sent home
- * when they next join.
+ * world, or by disconnecting, once any rejoin grace has run out without them. They are no
+ * longer in {@link MatchView#players()}. Unless they disconnected, they are sent home after
+ * this event; a disconnected player is sent home when they next join.
  */
 public final class PlayerLeaveMatchEvent extends MatchEvent {
 

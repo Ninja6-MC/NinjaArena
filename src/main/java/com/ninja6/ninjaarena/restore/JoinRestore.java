@@ -34,7 +34,9 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
  *
  * <p>A player who quit from the lobby, a room, a match or spectating ({@link Rejoin}) is put
  * back in the lobby instead, with their snapshot kept for when they leave it. Only when the
- * lobby cannot take them are they restored as above. Server thread only.
+ * lobby cannot take them are they restored as above. A player who is busy when the first
+ * attempt is due, back in the match they disconnected from within its rejoin grace, is left
+ * alone: their snapshot stays for when they leave it. Server thread only.
  */
 public final class JoinRestore {
 
@@ -115,6 +117,10 @@ public final class JoinRestore {
         int generation = next(playerId);
         boolean lobby = rejoin.claim(playerId);
         delayer.later(FIRST_DELAY, () -> {
+            if (busy.test(playerId)) {
+                // Back in their match within the rejoin grace: the snapshot waits for their exit.
+                return;
+            }
             if (lobby && current(playerId, generation)) {
                 Player player = online.apply(playerId);
                 if (player != null && player.isOnline() && !player.isDead() && rejoin.enter(player)) {

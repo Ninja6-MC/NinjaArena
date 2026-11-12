@@ -4,6 +4,7 @@ import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
+import com.ninja6.ninjaarena.match.event.PlayerRejoinMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import java.util.IdentityHashMap;
@@ -74,6 +75,15 @@ public final class RoundKitListener implements Listener {
             if (player != null) {
                 apply(player);
             }
+        }
+    }
+
+    /** A player back in their match during PREP is alive in the round and gets its kit. */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onRejoin(PlayerRejoinMatchEvent event) {
+        Player player = players.apply(event.player());
+        if (player != null) {
+            apply(player);
         }
     }
 

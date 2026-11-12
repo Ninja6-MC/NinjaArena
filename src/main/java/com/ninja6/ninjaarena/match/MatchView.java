@@ -13,8 +13,9 @@ import java.util.UUID;
  * match end.
  *
  * <p>Team numbers start at 1, as in the arena's team spawns. A player is <i>in the match</i>
- * from its start until they leave it or it closes; they are <i>alive</i> while in a round
- * that they have not been eliminated from.
+ * from its start until they leave it or it closes, including while they are disconnected
+ * within the rejoin grace period; they are <i>alive</i> while in a round that they have not
+ * been eliminated from.
  */
 public interface MatchView {
 
@@ -83,6 +84,20 @@ public interface MatchView {
 
     /** The player's team while they are in the match, otherwise 0. */
     int teamOf(UUID player);
+
+    /**
+     * Whether the player is in the match but disconnected, within the grace period in which
+     * they may rejoin. They stay on their team and in {@link #players()}, but are alive in no
+     * round until they are back.
+     */
+    default boolean isDisconnected(UUID player) {
+        return false;
+    }
+
+    /** The players in the match who are disconnected and may rejoin, team 1 first. */
+    default List<UUID> disconnectedPlayers() {
+        return List.of();
+    }
 
     /** Whether the player is in the current round and has not been eliminated from it. */
     boolean isAlive(UUID player);

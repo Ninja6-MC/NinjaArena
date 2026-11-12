@@ -66,7 +66,9 @@ import org.bukkit.scheduler.BukkitTask;
  * {@code /narena leave}, by being removed, or by leaving the lobby and match world some
  * other way, is out of the room. When the host goes, the longest-waiting member who may
  * create rooms becomes the host; when there is none, the room closes and its players stay in
- * the lobby. A match that is running goes on either way.
+ * the lobby. A match that is running goes on either way. A member who disconnects while their
+ * match holds them for its rejoin grace stays in the room, as host if they were, until they
+ * are no longer held; the usual hand-off follows if they have not come back by then.
  *
  * <p><b>Worlds.</b> While any room is open the arena world is held open, and room players
  * may be moved between the lobby and arena worlds by the plugin's own teleports without
@@ -661,11 +663,15 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     // ---- Events ----
 
+    /**
+     * A member who disconnects leaves the room, unless their match holds them for the rejoin
+     * grace; they stay a member, and the host stays the host, until they are no longer held.
+     */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         Room room = roomOf.get(id);
-        if (room != null) {
+        if (room != null && !matches.isHeld(id)) {
             remove(room, id);
         }
     }
@@ -810,6 +816,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     public void tick() {
         for (Room room : List.copyOf(rooms)) {
             for (UUID member : room.members()) {
+                if (matches.isHeld(member)) {
+                    continue;
+                }
                 Player online = plugin.getServer().getPlayer(member);
                 if (online == null || !online.isOnline() || !lobby.isMember(member) && !matches.isInMatch(member)) {
                     remove(room, member);

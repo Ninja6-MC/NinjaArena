@@ -47,6 +47,20 @@ public record MatchSettings(int prepSeconds, int roundSeconds, int overrunLimitS
         extraRounds = Math.clamp(extraRounds, 0, MAX_EXTRA_ROUNDS);
     }
 
+    /** Seconds a disconnected player is held in their match by default. */
+    public static final int DEFAULT_REJOIN_GRACE_SECONDS = 60;
+
+    /**
+     * Reads {@code rejoin-grace-seconds} from the {@code match} section, the default for a
+     * missing section or key, clamped to 0 to {@link MatchService#MAX_REJOIN_GRACE_SECONDS}. It
+     * is not part of the record: it applies to disconnects from now on, not per match.
+     */
+    public static int rejoinGraceSeconds(ConfigurationSection section) {
+        int seconds = section == null ? DEFAULT_REJOIN_GRACE_SECONDS
+                : section.getInt("rejoin-grace-seconds", DEFAULT_REJOIN_GRACE_SECONDS);
+        return Math.clamp(seconds, 0, MatchService.MAX_REJOIN_GRACE_SECONDS);
+    }
+
     /**
      * Reads the settings from a config section, falling back to the defaults for a missing
      * section or key.

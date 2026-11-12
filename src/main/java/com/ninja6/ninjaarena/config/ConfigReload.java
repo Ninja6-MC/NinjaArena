@@ -34,6 +34,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
  */
 public final class ConfigReload {
 
+    private static final String REJOIN_GRACE = "match.rejoin-grace-seconds";
+
     public interface Target {
         boolean canResize();
         /** View and simulation distances only; border changes belong to the guarded grid update. */
@@ -47,6 +49,9 @@ public final class ConfigReload {
         default void arenas(int maxActive) {
         }
         void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring);
+        /** A new {@code match.rejoin-grace-seconds}, for disconnects from now on. */
+        default void rejoinGrace(int seconds) {
+        }
         default void points(PointsSettings settings) {
         }
         /** New {@code shop} phase settings, for matches started from now on. */
@@ -165,6 +170,9 @@ public final class ConfigReload {
                     refused.add(text("reload.resize-refused", "path", path));
                     next.set(path, effective.get(path));
                 }
+            } else if (path.equals(REJOIN_GRACE)) {
+                // Applies to disconnects from now on, running matches included.
+                changed.add(path);
             } else if (path.startsWith("match.") || path.startsWith("scoring.") || path.startsWith("points.")
                     || path.startsWith("shop.")) {
                 postponed.add(text("reload.next-match", "path", path));
@@ -221,6 +229,9 @@ public final class ConfigReload {
         if (differs("match.", next) || differs("scoring.", next)) {
             target.match(MatchSettings.from(next.getConfigurationSection("match")), next.getBoolean("match.friendly-fire"),
                     ScoringSettings.from(next.getConfigurationSection("scoring")));
+        }
+        if (!same(effective.get(REJOIN_GRACE), next.get(REJOIN_GRACE))) {
+            target.rejoinGrace(MatchSettings.rejoinGraceSeconds(next.getConfigurationSection("match")));
         }
         if (differs("points.", next)) {
             target.points(PointsSettings.from(next.getConfigurationSection("points")));

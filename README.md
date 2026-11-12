@@ -284,11 +284,48 @@ enough are given up.
 | The lobby | `/narena leave` | Home, restoring the snapshot |
 | Spectating | `/narena leave`, or the match ends | The lobby |
 | Anywhere in the plugin's worlds | A teleport out of them | Home, restoring the snapshot |
+| A match | Quit, then rejoin within `match.rejoin-grace-seconds` | Back in the match (see below) |
 | A room, a match, the lobby or spectating | Quit, then rejoin | The lobby, with the snapshot kept |
 
 A player the lobby cannot take is sent home instead. Rejoining puts a player in the lobby
 only while the server keeps running; after a restart they are restored home on joining, as
 before.
+
+### Rejoining a match
+
+A player who disconnects from a match before it ends is held in it for
+`match.rejoin-grace-seconds` (default 60, 0 to 600). Everyone in the match is told how long
+they have. While held, they:
+
+* stay in the match, on their team and in their room; a host stays the host;
+* are out of the current round, as if eliminated, and out of every round that starts while
+  they are away, so their team can lose rounds without them;
+* keep their team in the match: a team does not forfeit while any member is held, even if
+  nobody on it is connected;
+* keep their points and any shop purchase not yet delivered. A purchase still pending at
+  the next round start is refunded to their points, as for a player on the death screen;
+* are left out of the shop's ready check, so the others can still cut the shop short.
+
+Like every exit, the disconnect clears their kit and spectator mode before player data is
+saved; their snapshot stays on disk for the final restore. Rejoining within the grace puts
+them back:
+
+| Phase when they rejoin | Where they go |
+| :--- | :--- |
+| PREP | Their team spawn, alive in the round, with the round kit |
+| COMBAT, OVERRUN or ROUND_END, extra rounds included | Spectating their team until the next round's PREP |
+| SHOP | The shop area, able to buy and run `/narena shop ready` |
+
+Every round's PREP places all players at once when it begins, so a rejoin during PREP
+counts as that placement. When the grace runs out, the player leaves the match exactly as a
+disconnect did before: their points are dropped, pending purchases are refunded into
+nothing, a team with nobody left forfeits, and their next join takes them to the lobby with
+their snapshot kept, or home after a restart. A match that ends or closes first lets them
+go the same way; their result counts with their team. A host held past the grace, or past
+the end of the match, hands the room on by the usual rules. While nobody in a match is
+connected, its timers wait, and the match is abandoned once the last grace runs out.
+Disabling the plugin ends every grace as a leave. `match.rejoin-grace-seconds: 0` keeps a
+disconnect a leave, as before.
 
 ## Watching live matches
 
@@ -357,11 +394,12 @@ seconds caps the whole pause between rounds at well over a minute without leavin
 waiting on a map that is stuck; 0 replays at the time limit.
 
 Leaving during the shop works as in a round: `/narena leave` goes to the lobby, a
-teleport by another plugin or a disconnect takes the player out of the match, and
-leaving drops their points and refunds nothing into a ledger they no longer have. When
-only one team is left, the match ends at once as a forfeit. A room keeps its arena slot
-lease through the shop until its match closes. `shop.enabled: false` goes straight from
-one round to the next as before, and buying never opens.
+teleport by another plugin takes the player out of the match, and so does a disconnect
+once its [rejoin grace](#rejoining-a-match) runs out; leaving drops their points and
+refunds nothing into a ledger they no longer have. When only one team is left, the match
+ends at once as a forfeit. A room keeps its arena slot lease through the shop until its
+match closes. `shop.enabled: false` goes straight from one round to the next as before,
+and buying never opens.
 
 Other plugins see the phase as `MatchPhase.SHOP` in `MatchPhaseChangeEvent`: ROUND_END
 to SHOP, with the players already in the shop area, then SHOP to PREP.
@@ -388,6 +426,7 @@ match players or restarts a match.
 | `waiting-room.min-players` and `team-size` | Apply to the next room opened; rooms already open keep their settings. |
 | Deprecated `waiting-room.lobby` | Applies to the next portal entry. It and the unused `max-players`, `countdown-seconds` and `radius` are accepted with a warning in the reply and the log (see [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms)). |
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
 | Player-built portals | Apply to the next portal lit; the curtain colour changes immediately. Portals already built stay, with their own frame block. |
@@ -768,8 +807,8 @@ The next round returns spectators to Adventure mode at their team base; with the
 [shop phase](#shop-phase) on, that happens when the shop opens, in its area. A player
 still on the death screen at round start is placed and readied when they respawn. Use
 `/narena leave` to leave while spectating for the lobby; leaving the lobby then returns the
-saved belongings, game mode and location. Quitting puts the player back in the lobby on
-their next join.
+saved belongings, game mode and location. Quitting holds their place for the
+[rejoin grace](#rejoining-a-match); after it, their next join puts them back in the lobby.
 A join restore that another plugin cancels (for example a login plugin) is retried for about a minute, and the player is told if it still fails (a player who joins dead is restored on respawn instead, without retries, a failure message or the window below). For 5 seconds after a restore, any other plugin's teleport (a plot placement, but also a spawn or hub command) is reverted once; NinjaArena's own teleports and players in a match or the lobby are never reverted; see [plugin compatibility](docs/plugin-compatibility.md).
 Every exit first clears spectator mode, so an unsuccessful restore leaves the player in
 Adventure mode while their snapshot remains available for a retry.
