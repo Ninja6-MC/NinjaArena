@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- First-time lobby help covering tools, the shop and arena hazards, remembered across
+  restarts. `/narena intro` shows it again in the lobby; servers using chest menus get
+  the same help in chat.
 - Host-started rooms. `/narena room create` opens a room in the lobby; its host sets the
   required player count, teams, team size and privacy with `/narena room settings`,
   invites with a clickable join button, removes players with a button or

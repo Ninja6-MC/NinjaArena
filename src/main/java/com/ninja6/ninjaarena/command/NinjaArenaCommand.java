@@ -50,6 +50,7 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route("spectate", PortalEntry.SPECTATE, "spectate <arena>"),
             new Route(LeaderboardCommand.NAME, LeaderboardCommand.PERMISSION, LeaderboardCommand.USAGE),
             new Route(TEXTURES, PLAY, TEXTURES),
+            new Route("intro", PLAY, "intro"),
             new Route("accept", PLAY, "accept <host>"),
             new Route(ROOM, PLAY, ROOM_USAGE),
             new Route("host", HOST, "host <arena>"),
@@ -76,6 +77,11 @@ public final class NinjaArenaCommand implements TabExecutor {
     private TextureCommands textures;
     private LobbyCommands lobby;
     private RoomCommands rooms;
+    private Consumer<Player> intro;
+
+    public void setIntro(Consumer<Player> intro) {
+        this.intro = Objects.requireNonNull(intro, "intro");
+    }
 
     /** Without it the room subcommands say the feature is unavailable. */
     public void setRooms(RoomCommands rooms) {
@@ -226,6 +232,17 @@ public final class NinjaArenaCommand implements TabExecutor {
                         sender.sendMessage(msg("pack.status", "status", packStatus.get()));
                     } else {
                         usage(sender, label, route.usage());
+                    }
+                }
+                case "intro" -> {
+                    if (args.length != 1) {
+                        usage(sender, label, route.usage());
+                    } else if (!(sender instanceof Player player)) {
+                        sender.sendMessage(msg("command.players-only"));
+                    } else if (intro == null) {
+                        sender.sendMessage(msg("intro.lobby-only"));
+                    } else {
+                        intro.accept(player);
                     }
                 }
                 case TEXTURES -> {

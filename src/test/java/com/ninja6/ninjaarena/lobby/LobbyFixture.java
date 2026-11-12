@@ -51,6 +51,17 @@ abstract class LobbyFixture {
         boolean refuseTeleport;
         float fallDistance = 12;
         final List<String> messages = new ArrayList<>();
+        final Map<org.bukkit.NamespacedKey, Object> tags = new HashMap<>();
+        final org.bukkit.persistence.PersistentDataContainer data =
+                (org.bukkit.persistence.PersistentDataContainer) Proxy.newProxyInstance(
+                        org.bukkit.persistence.PersistentDataContainer.class.getClassLoader(),
+                        new Class<?>[] {org.bukkit.persistence.PersistentDataContainer.class},
+                        (proxy, method, args) -> switch (method.getName()) {
+                            case "has" -> tags.containsKey(args[0]);
+                            case "get" -> tags.get(args[0]);
+                            case "set" -> { tags.put((org.bukkit.NamespacedKey) args[0], args[2]); yield null; }
+                            default -> throw new UnsupportedOperationException(method.getName());
+                        });
         /** Whether each teleport was marked as NinjaArena's own. */
         final List<Boolean> ownTeleports = new ArrayList<>();
         Player proxy;
@@ -130,6 +141,7 @@ abstract class LobbyFixture {
         fake.proxy = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "getUniqueId" -> fake.id;
+                    case "getPersistentDataContainer" -> fake.data;
                     case "getName" -> fake.name;
                     case "getLocation" -> fake.location.clone();
                     case "getWorld" -> fake.location.getWorld();

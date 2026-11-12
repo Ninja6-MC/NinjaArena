@@ -25,6 +25,29 @@ class LobbyEntryTest extends LobbyFixture {
     }, discarded::add);
 
     @Test
+    void lobbyAdmissionShowsTheIntroOnlyOnTheFirstArrival() {
+        Player alice = add(ALICE, "Alice", new Location(overworld, 5, 70, 5));
+        List<Player> shown = new ArrayList<>();
+        LobbyIntro intro = new LobbyIntro(() -> com.ninja6.ninjaarena.resourcepack.TextureMenuMode.DIALOG,
+                shown::add, player -> members.isMember(player.getUniqueId()));
+        members.setArrival(intro::arrived);
+
+        assertEquals(Optional.empty(), entry.join(alice));
+        assertTrue(entry.isMember(ALICE));
+        assertEquals(List.of(ALICE), captured);
+        assertEquals(List.of(alice), shown);
+        assertTrue(alice.getPersistentDataContainer().has(
+                new org.bukkit.NamespacedKey("ninjaarena", "intro_seen"),
+                org.bukkit.persistence.PersistentDataType.BYTE));
+
+        assertEquals(Optional.empty(), entry.join(alice), "already in the lobby");
+        assertTrue(members.leave(alice, LobbyMembers.Exit.COMMAND));
+        assertEquals(Optional.empty(), entry.join(alice), "arrives from outside again");
+        assertEquals(List.of(ALICE, ALICE), captured);
+        assertEquals(List.of(alice), shown, "later lobby admission does not repeat the intro");
+    }
+
+    @Test
     void aPlayerFromOutsideHasTheirSnapshotSavedAndBecomesAMember() {
         Player alice = add(ALICE, "Alice", new Location(overworld, 5, 70, 5));
         assertEquals(Optional.empty(), entry.join(alice));
