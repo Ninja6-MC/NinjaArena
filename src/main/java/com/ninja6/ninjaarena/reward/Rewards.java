@@ -6,6 +6,7 @@ import com.ninja6.ninjaarena.NinjaArenaPlugin;
 import com.ninja6.ninjaarena.match.MatchResult;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.stats.MatchRecord;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -14,11 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
@@ -34,7 +33,6 @@ import org.bukkit.scheduler.BukkitTask;
 public final class Rewards implements Listener {
 
     private final NinjaArenaPlugin plugin;
-    private final Supplier<World> arenaWorld;
     private final Set<UUID> checking = new HashSet<>();
     private final BukkitTask refresh;
     private final NamespacedKey trophyKey;
@@ -43,9 +41,8 @@ public final class Rewards implements Listener {
     private RewardSettings settings;
     private boolean placing;
 
-    public Rewards(NinjaArenaPlugin plugin, Supplier<World> arenaWorld, RewardSettings settings) {
+    public Rewards(NinjaArenaPlugin plugin, RewardSettings settings) {
         this.plugin = plugin;
-        this.arenaWorld = arenaWorld;
         this.settings = settings;
         trophyKey = new NamespacedKey(plugin, "season_trophy");
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
@@ -138,7 +135,7 @@ public final class Rewards implements Listener {
 
     private boolean canDeliver(UUID id) {
         Player player = plugin.getServer().getPlayer(id);
-        return player != null && !player.isDead() && player.getWorld() != arenaWorld.get() && !plugin.restores().shouldRestoreOnJoin(id)
+        return player != null && !player.isDead() && !PluginWorlds.isPluginWorld(player.getWorld()) && !plugin.restores().shouldRestoreOnJoin(id)
                 && player.getInventory().firstEmpty() >= 0;
     }
 

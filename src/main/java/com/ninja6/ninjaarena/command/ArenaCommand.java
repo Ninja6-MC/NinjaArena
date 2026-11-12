@@ -12,6 +12,7 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.arena.GridCell;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -475,7 +476,7 @@ public final class ArenaCommand {
      * {@code null} for the console or a player in another world.
      */
     private static Location baseLocation(CommandSender sender) {
-        if (sender instanceof Player player && player.getWorld().getName().equals(ArenaWorld.NAME)) {
+        if (sender instanceof Player player && PluginWorlds.isArena(player.getWorld())) {
             return player.getLocation();
         }
         return null;

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
+import com.ninja6.ninjaarena.world.LobbyWorld;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -124,6 +125,15 @@ class ArenaProtectionTest extends MatchFixture {
         assertTrue(matches.matches().isEmpty());
         assertProtection(arenaWorld, true);
         assertProtection(overworld, false);
+    }
+
+    @Test
+    void theLobbyWorldIsProtectedAtAllTimesEvenWhileArenasAreEdited() throws Exception {
+        World lobby = world(LobbyWorld.NAME);
+        assertProtection(lobby, true);
+        arenas.startEdit("dojo");
+        assertProtection(lobby, true);
+        assertProtection(arenaWorld, false);
     }
 
     @Test

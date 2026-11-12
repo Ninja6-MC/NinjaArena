@@ -9,6 +9,7 @@ import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.LobbyWorld;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -151,6 +152,8 @@ class PortalRegistryTest {
         assertThrows(ArenaException.class, () -> registry.createBuilt("world", new ArenaBounds(11, 64, 10, 11, 66, 10),
                 new Portal.Built(bob, "crying_obsidian")), "overlaps the admin portal");
         assertThrows(ArenaException.class, () -> registry.createBuilt(ArenaWorld.NAME,
+                new ArenaBounds(0, 64, 0, 1, 66, 0), new Portal.Built(bob, "crying_obsidian")));
+        assertThrows(ArenaException.class, () -> registry.createBuilt(LobbyWorld.NAME,
                 new ArenaBounds(0, 64, 0, 1, 66, 0), new Portal.Built(bob, "crying_obsidian")));
         assertThrows(ArenaException.class, () -> registry.setLobby("built-1", LobbyMode.SHARED));
 

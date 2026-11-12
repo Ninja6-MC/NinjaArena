@@ -14,9 +14,11 @@ import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
 import com.ninja6.ninjaarena.arena.MemoryCopies;
 import com.ninja6.ninjaarena.portal.LobbyMode;
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
 import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.LobbyWorld;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -370,6 +372,20 @@ class WaitingRoomServiceTest {
 
         listener.onTeleport(new PlayerTeleportEvent(alice.proxy, alice.location.clone(),
                 new Location(overworld, 50.5, 64, 50.5)));
+        assertFalse(rooms.isWaiting(ALICE));
+        runNextTick();
+        assertEquals(List.of(ALICE), restored);
+    }
+
+    @Test
+    void anyTeleportIntoTheLobbyWorldTakesAWaitingPlayerOut() {
+        rooms.join(player(ALICE), "dojo");
+        Fake alice = players.get(ALICE);
+        OwnTeleports.during(ALICE, () -> {
+            listener.onTeleport(new PlayerTeleportEvent(alice.proxy, alice.location.clone(),
+                    new Location(world(LobbyWorld.NAME), 50.5, 64, 50.5)));
+            return true;
+        });
         assertFalse(rooms.isWaiting(ALICE));
         runNextTick();
         assertEquals(List.of(ALICE), restored);

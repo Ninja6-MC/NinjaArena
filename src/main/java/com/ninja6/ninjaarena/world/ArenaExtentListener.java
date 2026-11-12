@@ -25,8 +25,7 @@ public final class ArenaExtentListener implements Listener {
     }
 
     private boolean outside(Location location) {
-        return location != null && location.getWorld() != null
-                && ArenaWorld.NAME.equals(location.getWorld().getName())
+        return PluginWorlds.isArena(location)
                 && !ArenaExtent.contains(location.getX(), location.getZ(), diameter.getAsDouble());
     }
 

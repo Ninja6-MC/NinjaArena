@@ -19,7 +19,8 @@ latest distances and border, and restores every authoritative arena copy before
 publishing the world. Missing copies are failures, never adopted from potentially
 dirty world-save blocks. Load, configuration or copy failures leave the generation
 unavailable; failed cleanup remains diagnosable and requires a restart after repair.
-Arena-origin player snapshots also use this lazy resolver before finding a landing.
+Restores never reopen the world: a saved spot or respawn point in the arena world
+is skipped before any world is resolved, and no new snapshot is taken there.
 
 Portal entry, accepted invitations and admin teleports hold an operation lease from
 before their asynchronous work through its server-thread completion. Cancelling a
@@ -48,9 +49,7 @@ The arena world's diameter is now limited to 16 through 2048 blocks. Its default
 remains 2048. Player movement, teleports, portals, login and respawn destinations
 enforce the configured extent, including administrators and spectators. Admin
 arena teleports validate their target before asynchronous chunk work. Saved-copy
-coordinates and sizes are checked before chunk access; saved snapshot destinations
-outside the current extent use the existing safe fallback before any arena terrain
-search. Terrain searches cannot read outside the hard extent. Ordinary entity
+coordinates and sizes are checked before chunk access. Ordinary entity
 teleports and portals are checked too. These restrictions also apply while editing.
 
 There are at most 128 by 128 source chunk coordinates inside the hard extent.

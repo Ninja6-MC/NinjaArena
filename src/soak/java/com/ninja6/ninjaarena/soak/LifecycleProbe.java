@@ -52,6 +52,7 @@ final class LifecycleProbe {
     private Map<String, String> before;
     private int rejoinStep;
     private long rejoinStarted;
+    private Location rejoinHome;
     private boolean failed;
     private boolean dirtyReopenWaiting;
     private boolean containmentStarted;
@@ -367,13 +368,24 @@ final class LifecycleProbe {
     private void startPendingRejoin(World reopened) throws Exception {
         Player player = Bukkit.getPlayerExact("Soak2");
         if (player == null) {
-            throw new IllegalStateException("Outside client missing before arena-origin snapshot test");
+            throw new IllegalStateException("Outside client missing before the pending-snapshot reconnect test");
         }
         player.teleport(new Location(reopened, 28.5, 64, 46.5));
-        if (plugin.snapshots().captureAndPersist(player) != SnapshotService.CaptureResult.SAVED) {
-            throw new IllegalStateException("Could not persist arena-origin snapshot");
+        if (plugin.snapshots().captureAndPersist(player) != SnapshotService.CaptureResult.PLUGIN_WORLD
+                || plugin.snapshots().hasPending(player.getUniqueId())) {
+            throw new IllegalStateException("A snapshot was taken in the arena world");
         }
-        evidence.put("rejoin_origin", Map.of("uid", uid.toString(), "x", 28.5, "y", 64, "z", 46.5));
+        evidence.put("arena_world_snapshot_refused", true);
+        // Taken at home, then the player disconnects from inside the arena world.
+        Location home = Bukkit.getWorlds().getFirst().getSpawnLocation();
+        player.teleport(home);
+        if (plugin.snapshots().captureAndPersist(player) != SnapshotService.CaptureResult.SAVED) {
+            throw new IllegalStateException("Could not persist the home snapshot");
+        }
+        rejoinHome = player.getLocation();
+        player.teleport(new Location(reopened, 28.5, 64, 46.5));
+        evidence.put("rejoin_origin", Map.of("world", rejoinHome.getWorld().getName(), "x", rejoinHome.getX(),
+                "y", rejoinHome.getY(), "z", rejoinHome.getZ()));
         rejoinStarted = System.nanoTime();
         rejoinStep = 1;
         checkpoint("lifecycle-rejoin-requested");
@@ -382,7 +394,7 @@ final class LifecycleProbe {
 
     private void rejoin() throws Exception {
         if (System.nanoTime() - rejoinStarted > 60_000_000_000L) {
-            throw new IllegalStateException("Arena-origin reconnect fixture exceeded 60 seconds");
+            throw new IllegalStateException("Pending-snapshot reconnect fixture exceeded 60 seconds");
         }
         if (rejoinStep == 1) {
             if (Bukkit.getPlayerExact("Soak2") != null) {
@@ -392,7 +404,7 @@ final class LifecycleProbe {
             boolean unloaded = (Boolean) manager.getClass().getMethod("releaseIfIdle", BooleanSupplier.class)
                     .invoke(manager, (BooleanSupplier) this::registryIdle);
             if (!unloaded || Bukkit.getWorld(uid) != null || current().isPresent()) {
-                throw new IllegalStateException("Arena-origin snapshot world did not retire before reconnect");
+                throw new IllegalStateException("Arena world did not retire before reconnect");
             }
             evidence.put("pending_origin_world_absent_before_rejoin", true);
             evidence.put("hashes_after_pending_unload", hashes());
@@ -433,12 +445,13 @@ final class LifecycleProbe {
             return;
         }
         var at = player.getLocation();
-        if (!uid.equals(player.getWorld().getUID()) || Math.abs(at.getX() - 28.5) > .01
-                || Math.abs(at.getY() - 64) > .01 || Math.abs(at.getZ() - 46.5) > .01) {
-            throw new IllegalStateException("Arena-origin snapshot fell back or lost exact coordinates: " + at);
+        if (at.getWorld() != rejoinHome.getWorld() || at.distanceSquared(rejoinHome) > .01) {
+            throw new IllegalStateException("Pending snapshot did not restore at home: " + at);
         }
-        assertCanonical(player.getWorld());
-        evidence.put("pending_origin_restored_exactly", true);
+        if (Bukkit.getWorld(uid) != null || current().isPresent()) {
+            throw new IllegalStateException("Restoring a player who left from the arena world reopened it");
+        }
+        evidence.put("pending_restored_home_without_reopen", true);
         evidence.put("pending_snapshot_cleared", true);
         evidence.put("pending_rejoin_ms", (System.nanoTime() - rejoinStarted) / 1_000_000);
         evidence.put("hashes_after_pending_rejoin", hashes());

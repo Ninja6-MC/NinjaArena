@@ -1,6 +1,6 @@
 package com.ninja6.ninjaarena.portal;
 
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -96,7 +96,7 @@ public final class PortalCurtains implements Runnable {
             }
             Location location = player.getLocation();
             World world = location.getWorld();
-            if (world == null || world.getName().equals(ArenaWorld.NAME)) {
+            if (world == null || PluginWorlds.isPluginWorld(world)) {
                 continue;
             }
             portals.near(world.getName(), location.getBlockX() >> 4, location.getBlockZ() >> 4, RANGE_CHUNKS, portal -> {

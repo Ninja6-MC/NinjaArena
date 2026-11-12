@@ -1,6 +1,6 @@
 package com.ninja6.ninjaarena.restore;
 
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -68,7 +68,7 @@ public final class ArenaCombatCleanup implements Consumer<Player> {
     }
 
     private static boolean arenaWorld(World world) {
-        return world != null && ArenaWorld.NAME.equals(world.getName());
+        return PluginWorlds.isArena(world);
     }
 
     /** Paper 26.3's expiry getter hides this field without clearing its strong entity references. */

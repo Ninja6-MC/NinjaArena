@@ -8,7 +8,7 @@ import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
-import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -433,7 +433,7 @@ public final class WaitingRoomService {
             }
             point = rooms.get(arena).point();
         }
-        if (location.getWorld() == null || !ArenaWorld.NAME.equals(location.getWorld().getName())) {
+        if (!PluginWorlds.isArena(location)) {
             return false;
         }
         return settings.inRoom(point, location.getBlockX(), location.getBlockY(), location.getBlockZ());

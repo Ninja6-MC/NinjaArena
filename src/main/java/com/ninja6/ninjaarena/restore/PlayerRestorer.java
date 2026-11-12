@@ -3,12 +3,9 @@ package com.ninja6.ninjaarena.restore;
 import com.ninja6.ninjaarena.snapshot.PlayerSnapshot;
 import com.ninja6.ninjaarena.snapshot.SnapshotEffect;
 import com.ninja6.ninjaarena.snapshot.SnapshotLocation;
-import com.ninja6.ninjaarena.world.ArenaWorld;
-import com.ninja6.ninjaarena.world.ArenaExtent;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Supplier;
-import java.util.function.BiPredicate;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -32,26 +29,18 @@ import org.bukkit.util.Vector;
  * <p>The landing is the saved spot if it is safe, else the nearest safe spot around it (see
  * {@link SafeLanding}), else the player's respawn point if that is safe, else the spawn of
  * the main world.
+ *
+ * <p>Neither plugin world is ever a landing: a saved spot or respawn point in the arena or
+ * lobby world is skipped without loading the world, so the player lands at the next step.
+ * Snapshots are not taken in either world, so a saved spot there can only come from an
+ * older version.
  */
 public final class PlayerRestorer implements RestoreService.Applier {
 
     private final Logger logger;
-    private final Supplier<World> arenaWorld;
-    private final BiPredicate<Double, Double> arenaLocation;
 
     public PlayerRestorer(Logger logger) {
-        this(logger, null);
-    }
-
-    /** Arena-origin snapshots reopen the managed world before resolving their saved landing. */
-    public PlayerRestorer(Logger logger, Supplier<World> arenaWorld) {
-        this(logger, arenaWorld, (x, z) -> true);
-    }
-
-    public PlayerRestorer(Logger logger, Supplier<World> arenaWorld, BiPredicate<Double, Double> arenaLocation) {
         this.logger = logger;
-        this.arenaWorld = arenaWorld;
-        this.arenaLocation = arenaLocation;
     }
 
     @Override
@@ -84,7 +73,7 @@ public final class PlayerRestorer implements RestoreService.Applier {
         World world = savedWorld(saved);
         if (world != null) {
             Optional<SafeLanding.Spot> spot = SafeLanding.find(
-                    new WorldTerrain(world, arenaLocation), saved.x(), saved.y(), saved.z());
+                    new WorldTerrain(world), saved.x(), saved.y(), saved.z());
             if (spot.isPresent()) {
                 SafeLanding.Spot found = spot.get();
                 return new Landing(
@@ -93,29 +82,26 @@ public final class PlayerRestorer implements RestoreService.Applier {
             }
         }
         Location respawn = player.getRespawnLocation();
-        if (respawn != null && respawn.getWorld() != null
-                && allowed(respawn.getWorld(), respawn.getX(), respawn.getZ()) && SafeLanding.isSafe(
-                new WorldTerrain(respawn.getWorld(), arenaLocation), respawn.getX(), respawn.getY(), respawn.getZ())) {
+        if (respawn != null && respawn.getWorld() != null && !PluginWorlds.isPluginWorld(respawn.getWorld())
+                && SafeLanding.isSafe(new WorldTerrain(respawn.getWorld()), respawn.getX(), respawn.getY(), respawn.getZ())) {
             return new Landing(respawn, Landing.Source.RESPAWN);
         }
         return new Landing(Bukkit.getWorlds().getFirst().getSpawnLocation(), Landing.Source.WORLD_SPAWN);
     }
 
-    /** By UID first; by name if the world was recreated under a new UID. */
-    World savedWorld(SnapshotLocation saved) {
-        if (ArenaWorld.NAME.equals(saved.worldName())
-                && (!ArenaExtent.contains(saved.x(), saved.z()) || !arenaLocation.test(saved.x(), saved.z()))) {
+    /**
+     * By UID first; by name if the world was recreated under a new UID. {@code null} for a
+     * plugin world, by its saved name or by the world the UID finds, and for a missing world.
+     */
+    static World savedWorld(SnapshotLocation saved) {
+        if (PluginWorlds.isPluginWorld(saved.worldName())) {
             return null;
         }
-        if (arenaWorld != null && ArenaWorld.NAME.equals(saved.worldName())) {
-            return arenaWorld.get();
-        }
         World world = Bukkit.getWorld(saved.worldId());
-        return world != null ? world : Bukkit.getWorld(saved.worldName());
-    }
-
-    private boolean allowed(World world, double x, double z) {
-        return !ArenaWorld.NAME.equals(world.getName()) || ArenaExtent.contains(x, z) && arenaLocation.test(x, z);
+        if (world == null) {
+            world = Bukkit.getWorld(saved.worldName());
+        }
+        return PluginWorlds.isPluginWorld(world) ? null : world;
     }
 
     private void restoreState(Player player, PlayerSnapshot snapshot) {

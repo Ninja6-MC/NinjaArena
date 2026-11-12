@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.LobbyWorld;
 import java.util.List;
 import java.util.Set;
 import org.bukkit.Material;
@@ -51,6 +52,7 @@ class PlayerPortalSettingsTest {
         List<String> bad = List.of(
                 "worlds: world",
                 "worlds: [world, " + ArenaWorld.NAME + "]",
+                "worlds: [world, " + LobbyWorld.NAME + "]",
                 "worlds: [world, 5]",
                 "frame-material: obsidian",
                 "frame-material: water",
@@ -72,12 +74,14 @@ class PlayerPortalSettingsTest {
     }
 
     @Test
-    void theArenaWorldIsNeverAllowed() {
+    void neitherPluginWorldIsEverAllowed() {
         assertThrows(IllegalArgumentException.class, () -> new PlayerPortalSettings(Set.of("world"),
                 Material.CRYING_OBSIDIAN, 2, 32, 0x1000000));
         PlayerPortalSettings settings = new PlayerPortalSettings(Set.of(ArenaWorld.NAME), Material.CRYING_OBSIDIAN, 2,
                 32, 0);
         assertFalse(settings.allows(ArenaWorld.NAME));
+        assertFalse(new PlayerPortalSettings(Set.of(LobbyWorld.NAME), Material.CRYING_OBSIDIAN, 2, 32, 0)
+                .allows(LobbyWorld.NAME));
         assertFalse(PlayerPortalSettings.OFF.allows("world"));
     }
 }

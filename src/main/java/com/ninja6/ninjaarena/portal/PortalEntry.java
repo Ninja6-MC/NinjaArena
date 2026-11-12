@@ -54,7 +54,9 @@ public final class PortalEntry {
         /** The player has a snapshot from an earlier visit that has not been restored. */
         SNAPSHOT_PENDING,
         /** The snapshot could not be written. */
-        SNAPSHOT_FAILED
+        SNAPSHOT_FAILED,
+        /** The player stands in the arena or lobby world, where no snapshot is taken. */
+        PLUGIN_WORLD
     }
 
     public static final String SPECTATE = "ninjaarena.spectate";
@@ -216,6 +218,7 @@ public final class PortalEntry {
             case SAVED -> Optional.empty();
             case ALREADY_PENDING -> pending();
             case WRITE_FAILED -> refuse(Reason.SNAPSHOT_FAILED, text("entry.snapshot-failed"));
+            case PLUGIN_WORLD -> refuse(Reason.PLUGIN_WORLD, text("entry.plugin-world"));
         };
     }
 

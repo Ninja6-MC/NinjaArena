@@ -91,8 +91,9 @@ import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaChunkUnloader;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
+import com.ninja6.ninjaarena.world.CrossWorldTransfers;
+import com.ninja6.ninjaarena.world.LobbyWorld;
 import com.ninja6.ninjaarena.world.ArenaExtentListener;
-import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -115,6 +116,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     private SnapshotService snapshots;
     private volatile ArenaWorld arenaWorld;
+    private LobbyWorld lobbyWorld;
+    private final CrossWorldTransfers transfers = new CrossWorldTransfers();
     private ArenaChunkUnloader chunkUnloader;
     private RestoreService restores;
     private Spectators spectators;
@@ -157,8 +160,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        restores = new RestoreService(snapshots, new PlayerRestorer(getLogger(), () -> arenaWorld.world(),
-                (x, z) -> arenaWorld != null && ArenaExtent.contains(x, z, arenaWorld.borderSize())), getLogger(),
+        restores = new RestoreService(snapshots, new PlayerRestorer(getLogger()), getLogger(),
                 new ArenaCombatCleanup(getLogger()));
         restores.markPendingOnStartup();
         getServer().getPluginManager().registerEvents(new RestoreListener(this, restores, new ArenaBusy(() -> matches, () -> waitingRooms, () -> spectators)), this);
@@ -168,6 +170,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ArenaProtectionListener(
                 () -> arenas == null || arenas.editing().isEmpty()), this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
+        lobbyWorld = LobbyWorld.load(getLogger());
         arenas = ArenaRegistry.open(this, arenaWorld);
         chunkUnloader = new ArenaChunkUnloader(arenaWorld::currentWorld, arenaWorld::isSavingEnabled,
                 () -> arenaWorld.releaseIfIdle(arenas::canReleaseWorld), getLogger());
@@ -178,7 +181,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 getServer().getPluginManager()::callEvent, MatchService::readyForRound);
         deaths = new MatchDeathListener(this, matches, arenas);
         getServer().getPluginManager().registerEvents(deaths, this);
-        getServer().getPluginManager().registerEvents(new MatchListener(matches, deaths), this);
+        getServer().getPluginManager().registerEvents(new MatchListener(matches, deaths, transfers), this);
         MatchProtectionListener protection = new MatchProtectionListener(matches,
                 getServer()::getPlayer, getConfig().getBoolean("match.friendly-fire", false), deaths::isSpectating);
         getServer().getPluginManager().registerEvents(protection, this);
@@ -547,7 +550,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getLogger().warning("Reward configuration ignored: " + e.getMessage());
             rewardSettings = RewardSettings.OFF;
         }
-        rewards = new Rewards(this, arenaWorld::world, rewardSettings);
+        rewards = new Rewards(this, rewardSettings);
     }
 
     /**
@@ -771,6 +774,16 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     public ArenaWorld arenaWorld() {
         return arenaWorld;
+    }
+
+    /** The saved world the lobby stands in; {@code null} before startup reaches it. */
+    public LobbyWorld lobbyWorld() {
+        return lobbyWorld;
+    }
+
+    /** Which match players NinjaArena's own teleports may move between the two worlds. */
+    public CrossWorldTransfers transfers() {
+        return transfers;
     }
 
     /** Registered arenas; {@code null} while the plugin is disabled. */

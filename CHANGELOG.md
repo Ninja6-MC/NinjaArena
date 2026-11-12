@@ -13,6 +13,13 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- A second void world, `ninjaarena_lobby`, created or loaded at startup beside the
+  arena world. It is saved normally and never unloaded, keeps inventories, has no
+  mobs, weather or day cycle, and blocks environmental block changes at all times.
+  Nothing sends players there yet. A teleport into it takes a match player out of the
+  match. Portals cannot be created in it. World-manager plugins must leave both worlds
+  alone (see the plugin compatibility audit).
+
 - Separate shuriken and smoke bomb cooldown groups and configurable per-round limits.
   Both tools default to unlimited, non-consuming throws. Each has `cooldown-seconds`
   (0-60, default 0) and `uses-per-round` (0-64, default 0) under `tools`; kit amounts
@@ -66,6 +73,10 @@ Java 25, and does not run on Folia.
   rejecting `config.yml` or `kits.yml` stay in English.
 
 ### Changed
+- No snapshot is taken in the arena or lobby world, and a restore never lands in either:
+  entering an arena from them is refused, and a saved spot or respawn point there is
+  skipped for the next fallback without reopening the arena world.
+
 - Each Java connection gets one Detailed overlay request through `ResourcePacks`;
   `overlay(UUID)` reports its state.
 

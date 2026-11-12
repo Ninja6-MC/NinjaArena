@@ -145,11 +145,11 @@ class HostingServiceTest extends MatchFixture {
                 });
     }
 
+    /** The fixture players stand in the arena world; their snapshots are taken from home. */
     private PlayerSnapshot snapshot(Player player) {
-        var at = player.getLocation();
         return new PlayerSnapshot(player.getUniqueId(), player.getName(), Instant.EPOCH,
-                new SnapshotLocation(at.getWorld().getUID(), at.getWorld().getName(), at.getX(), at.getY(), at.getZ(),
-                        at.getYaw(), at.getPitch()), new byte[] {1}, new byte[] {2}, new byte[] {3},
+                new SnapshotLocation(overworld.getUID(), overworld.getName(), 0.5, 64, 0.5, 0, 0),
+                new byte[] {1}, new byte[] {2}, new byte[] {3},
                 2, 0.5f, 10, 20, 20, 5, 0, List.of(), GameMode.SURVIVAL, 0, 0);
     }
 

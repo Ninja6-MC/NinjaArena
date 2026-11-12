@@ -12,6 +12,7 @@ import com.ninja6.ninjaarena.portal.Portal;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
 import com.ninja6.ninjaarena.world.ArenaExtent;
 import com.ninja6.ninjaarena.world.ArenaWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -133,8 +134,11 @@ public final class PortalCommand {
         }
         Location base = player.getLocation();
         String world = base.getWorld().getName();
-        if (world.equals(ArenaWorld.NAME)) {
+        if (PluginWorlds.isArena(world)) {
             throw new ArenaException("portal.invalid.arena-world");
+        }
+        if (PluginWorlds.isLobby(world)) {
+            throw new ArenaException("portal.invalid.lobby-world");
         }
         int[] block = {base.getBlockX(), base.getBlockY(), base.getBlockZ()};
         if (args.length == 4) {

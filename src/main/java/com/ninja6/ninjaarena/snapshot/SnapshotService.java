@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.snapshot;
 
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.io.IOException;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -21,6 +22,9 @@ import org.bukkit.potion.PotionEffect;
  * {@link CaptureResult#SAVED}; the restore path reads the snapshot back with
  * {@link #load(UUID)} and calls {@link #delete(UUID)} once the player is home.
  *
+ * <p>No snapshot is taken in the arena or lobby world: the restore never lands there, so a
+ * player standing in either is refused with {@link CaptureResult#PLUGIN_WORLD}.
+ *
  * <p>All methods are meant for the server thread: the write is synchronous because the
  * teleport must not happen before the snapshot is on disk.
  */
@@ -36,7 +40,9 @@ public final class SnapshotService {
          */
         ALREADY_PENDING,
         /** The snapshot could not be written; nothing on disk changed. */
-        WRITE_FAILED
+        WRITE_FAILED,
+        /** The player stands in the arena or lobby world; nothing was written. */
+        PLUGIN_WORLD
     }
 
     private final SnapshotStore store;
@@ -55,6 +61,9 @@ public final class SnapshotService {
 
     /** Snapshots the player as they are now and writes it to disk. */
     public CaptureResult captureAndPersist(Player player) {
+        if (PluginWorlds.isPluginWorld(player.getLocation())) {
+            return refusePluginWorld(player.getName(), player.getLocation().getWorld().getName());
+        }
         PlayerSnapshot snapshot;
         try {
             snapshot = capture(player);
@@ -67,6 +76,9 @@ public final class SnapshotService {
 
     /** Writes an already captured snapshot, with the same rules as {@link #captureAndPersist}. */
     public CaptureResult persist(PlayerSnapshot snapshot) {
+        if (PluginWorlds.isPluginWorld(snapshot.location().worldName())) {
+            return refusePluginWorld(snapshot.playerName(), snapshot.location().worldName());
+        }
         if (store.exists(snapshot.playerId())) {
             return refusePending(snapshot.playerId());
         }
@@ -141,6 +153,12 @@ public final class SnapshotService {
                 player.getGameMode(),
                 player.getFireTicks(),
                 player.getFallDistance());
+    }
+
+    private CaptureResult refusePluginWorld(String playerName, String world) {
+        logger.warning("Not taking a snapshot of " + playerName + " in " + world
+                + "; a restore never lands in a NinjaArena world.");
+        return CaptureResult.PLUGIN_WORLD;
     }
 
     private CaptureResult refusePending(UUID playerId) {

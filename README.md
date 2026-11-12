@@ -147,7 +147,7 @@ player-portals:
   color: '#40E0D0'            # the particle curtain
 ```
 
-The arena world is never allowed. Each portal keeps the frame block it was built from, so
+Neither the arena world nor the lobby world is allowed. Each portal keeps the frame block it was built from, so
 changing `frame-material` affects only new portals. The curtain is a vanilla dust
 particle, which needs no resource pack on Java or Bedrock.
 
@@ -348,6 +348,21 @@ visits and chunk-producing operations enforce that extent even while continuousl
 busy. Gameplay freezes redstone and piston physics; editing restores their normal
 behavior. See [arena world retirement](docs/arena-world-lifecycle.md)
 for save behavior, failure handling and the remaining continuous-use limitation.
+
+## The lobby world
+
+Startup also creates or loads a second void world, `ninjaarena_lobby`. Unlike the arena
+world it is saved normally and never unloaded. It has the same rules: inventories are
+kept on death, time stays at noon, the weather stays clear, no mobs spawn and fire,
+explosions, fluids and other environmental block changes are blocked at all times. It
+is empty for now; nothing sends players there yet.
+
+Neither world is a home. No snapshot is taken in either: entering an arena from the arena
+or lobby world is refused, so leave it first. A restore never lands in either: a saved
+spot there is skipped for the player's respawn point, and a respawn point there for the
+main world's spawn. A match player teleported into the lobby world, by NinjaArena or by
+any other plugin, leaves the match and is restored, as with a teleport to any other
+world. Portals cannot be created in either world.
 
 See the [plugin compatibility audit](docs/plugin-compatibility.md) for setup and
 exclusions when running NinjaArena alongside other server plugins.
