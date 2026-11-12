@@ -64,6 +64,38 @@ The height of 64 leaves the ground between `y = 2` and `y = 51`, around a base l
 24, with 12 blocks above it for platforms. That is a sixth of the 384-block world
 height.
 
+## Full-map layout
+
+`new ArenaLayout(side, teamCount)` is an immutable view for 2 or 4 teams; other counts
+are refused. It retains the original side and transforms indices rather than copying
+cells. Every kind passes through unchanged, including future hazard kinds. The centre
+is a flat square at `side.centreSurfaceY()`, extending the centre ledge's column of
+rock, soil, surface and air. Centre features can later replace this centre lookup.
+
+Map coordinates start at `(0, 0, 0)` in the overall bounding box. Team numbers start at
+1. Team 1 is north of the centre facing positive z. For two teams, team 2 is south facing
+negative z, a 180-degree turn rather than a reflection. Turning preserves the original
+left-to-right order for each player facing the centre, including asymmetric obstacles.
+For four teams, teams 2, 3 and 4 are east, south and west, facing negative x, negative z
+and positive x respectively: successive clockwise quarter-turns in the x/z plane.
+
+* `toMap(team, x, y, z)` and `toSide(team, mapX, y, mapZ)` are inverse integer
+  transforms. They preserve y and also accept coordinates outside the side, so a solver
+  can step from its centre edge into the square without redoing the frame arithmetic.
+* `sideBounds(team)` covers the whole side volume. `spawnArea(team)` covers the flat
+  spawn pad's surface blocks; player positions above them are chosen by the later solver.
+  `facing(team)` gives a unit `(dx, dz)` towards the centre.
+* `bounds()` and `centreBounds()` use inclusive minima and exclusive maxima.
+  `width()`, `length()` and `height()` give the overall size; `side()` supplies the
+  original model, theme and flat-zone heights. `at(mapX, y, mapZ)` returns air outside
+  every part, including the empty corners and coordinates outside the height.
+
+At the default cell size, the two-team bounding box is 96 x 240 x 64 (1,474,560
+cells); the four-team bounding box is 240 x 240 x 64 (3,686,400 cells), with empty
+corners. Both retain only the side's 432 KiB cell array (442,368 bytes), plus constant
+object metadata. Neither allocates centre cells or per-team cell arrays. All grid-sized
+layouts fit their cell, with the existing sizing margin.
+
 ## Features and difficulty
 
 Each feature is a separate pass over the side:
