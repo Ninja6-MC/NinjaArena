@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.command;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
@@ -21,7 +23,6 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -98,7 +99,7 @@ public final class PortalCommand {
     void execute(CommandSender sender, String label, String[] args) {
         String usagePrefix = "/" + label + " " + NAME + " ";
         if (args.length == 0) {
-            error(sender, "Usage: " + usagePrefix + "<" + String.join("|", SUBCOMMANDS) + ">");
+            tell(sender, "command.usage-full", "usage", usagePrefix + "<" + String.join("|", SUBCOMMANDS) + ">");
             return;
         }
         String sub = args[0].toLowerCase(Locale.ROOT);
@@ -113,21 +114,21 @@ public final class PortalCommand {
                 case "lobby" -> lobby(sender, rest, usagePrefix);
                 case "sethub" -> setHub(sender, rest, usagePrefix);
                 case "removehub" -> removeHub(sender, rest, usagePrefix);
-                default -> error(sender, "Unknown subcommand " + args[0] + ". Use one of: "
-                        + String.join(", ", SUBCOMMANDS) + ".");
+                default -> tell(sender, "command.unknown-subcommand", "subcommand", args[0],
+                        "subcommands", String.join(", ", SUBCOMMANDS));
             }
         } catch (ArenaException e) {
-            error(sender, e.getMessage());
+            tell(sender, "command.error", "message", e.getMessage());
         }
     }
 
     private void setCorner(CommandSender sender, String[] args, String usage) throws ArenaException {
         if ((args.length != 1 && args.length != 4) || !(args[0].equals("1") || args[0].equals("2"))) {
-            error(sender, "Usage: " + usage + "setcorner <1|2> [<x> <y> <z>]");
+            tell(sender, "command.usage-full", "usage", usage + "setcorner <1|2> [<x> <y> <z>]");
             return;
         }
         if (!(sender instanceof Player player)) {
-            error(sender, "Only a player can select a portal region.");
+            tell(sender, "portal.corner-players-only");
             return;
         }
         Location base = player.getLocation();
@@ -145,7 +146,7 @@ public final class PortalCommand {
         int corner = Integer.parseInt(args[0]);
         Selection selection = selections.get(player.getUniqueId());
         if (selection != null && !selection.world().equals(world)) {
-            warn(sender, "Your other corner was in " + selection.world() + " and has been cleared.");
+            tell(sender, "portal.corner-cleared", "world", selection.world());
             selection = null;
         }
         if (selection == null) {
@@ -153,17 +154,16 @@ public final class PortalCommand {
         }
         selection = selection.with(corner, block);
         selections.put(player.getUniqueId(), selection);
-        success(sender, "Corner " + corner + " set to " + block[0] + ", " + block[1] + ", " + block[2] + " in "
-                + world + ".");
+        tell(sender, "portal.corner-set", "corner", corner, "x", block[0], "y", block[1], "z", block[2],
+                "world", world);
         if (selection.complete()) {
             ArenaBounds bounds = selection.bounds();
-            info(sender, "Selected " + bounds.describe() + ".");
+            tell(sender, "portal.selected", "bounds", bounds.describe());
             if (!fits(bounds)) {
-                warn(sender, "That is more than " + Portal.MAX_SPAN + " blocks along an axis; create will refuse it.");
+                tell(sender, "portal.too-large", "max", Portal.MAX_SPAN);
             }
             if (bounds.minY() == bounds.maxY()) {
-                warn(sender, "The selection is one block tall, so the portal would be a flat pad. For a doorway,"
-                        + " stand in it and use setcorner " + corner + " ~ ~2 ~.");
+                tell(sender, "portal.flat", "corner", corner);
             }
         }
     }
@@ -171,11 +171,11 @@ public final class PortalCommand {
     private void create(CommandSender sender, String[] args, String usage) throws ArenaException {
         String kind = args.length == 3 ? args[2].toLowerCase(Locale.ROOT) : null;
         if (args.length != 2 && (args.length != 3 || !List.of("spectator", "dedicated", "shared").contains(kind))) {
-            error(sender, "Usage: " + usage + "create <name> <arena> [spectator|dedicated|shared]");
+            tell(sender, "command.usage-full", "usage", usage + "create <name> <arena> [spectator|dedicated|shared]");
             return;
         }
         if (!(sender instanceof Player player)) {
-            error(sender, "Only a player can create a portal from their selection.");
+            tell(sender, "portal.create-players-only");
             return;
         }
         Selection selection = selections.get(player.getUniqueId());
@@ -188,23 +188,23 @@ public final class PortalCommand {
         Portal portal = portals.create(args[0], selection.world(), selection.bounds(), arena.name(), spectator, lobby);
         selections.remove(player.getUniqueId());
         if (portal.spectator()) {
-            success(sender, "Portal " + portal.name() + " created in " + portal.world() + " ("
-                    + portal.region().describe() + "), leading to arena " + arena.name() + " for spectating.");
+            tell(sender, "portal.created-spectator", "portal", portal.name(), "world", portal.world(),
+                    "region", portal.region().describe(), "arena", arena.name());
             return;
         }
-        success(sender, "Portal " + portal.name() + " created in " + portal.world() + " ("
-                + portal.region().describe() + "), leading to " + destination(portal) + ".");
+        tell(sender, "portal.created", "portal", portal.name(), "world", portal.world(),
+                "region", portal.region().describe(), "destination", destination(portal));
         warnUnavailable(sender, portal);
     }
 
     private void lobby(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 2 || !LOBBIES.contains(args[1].toLowerCase(Locale.ROOT))) {
-            error(sender, "Usage: " + usage + "lobby <name> <" + String.join("|", LOBBIES) + ">");
+            tell(sender, "command.usage-full", "usage", usage + "lobby <name> <" + String.join("|", LOBBIES) + ">");
             return;
         }
         LobbyMode lobby = LobbyMode.parse(args[1]).orElse(null);
         Portal portal = portals.setLobby(args[0], lobby);
-        success(sender, "Portal " + portal.name() + " now leads to " + destination(portal) + ".");
+        tell(sender, "portal.lobby-set", "portal", portal.name(), "destination", destination(portal));
         warnUnavailable(sender, portal);
     }
 
@@ -219,127 +219,126 @@ public final class PortalCommand {
             }
         }
         portals.setHub(point);
-        success(sender, "Shared hub set to " + point.describe() + " in " + ArenaWorld.NAME + ". Anyone waiting at"
-                + " the old point is sent home.");
+        tell(sender, "portal.hub-set", "point", point.describe(), "world", ArenaWorld.NAME);
         if (defaultLobby.get() != LobbyMode.SHARED
                 && portals.all().stream().noneMatch(portal -> portal.lobby() == LobbyMode.SHARED)) {
-            warn(sender, "No portal leads there yet. Use lobby <portal> shared, or set waiting-room.lobby to shared"
-                    + " in config.yml.");
+            tell(sender, "portal.hub-unused");
         }
     }
 
     private void removeHub(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 0) {
-            error(sender, "Usage: " + usage + "removehub");
+            tell(sender, "command.usage-full", "usage", usage + "removehub");
             return;
         }
         if (portals.hub().isEmpty()) {
             throw new ArenaException("No shared hub is set.");
         }
         portals.setHub(null);
-        success(sender, "Shared hub removed. Portals that lead there turn players away until a hub is set.");
+        tell(sender, "portal.hub-removed");
     }
 
     /** Where a non-spectator portal sends players now, for chat. */
-    private String destination(Portal portal) {
-        String choice = portal.lobby() == null ? " (server default)" : "";
-        if (portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
-            return "the shared hub" + choice;
-        }
-        if (portal.arena() == null) {
-            return "a waiting room that is filling, else a free arena" + choice;
-        }
-        return "arena " + portal.arena() + choice;
+    private Component destination(Portal portal) {
+        Component destination = portal.lobby(defaultLobby.get()) == LobbyMode.SHARED ? msg("portal.destination.hub")
+                : portal.arena() == null ? msg("portal.destination.any")
+                : msg("portal.destination.arena", "arena", portal.arena());
+        return portal.lobby() == null ? msg("portal.destination.server-default", "destination", destination)
+                : destination;
     }
 
     private void warnUnavailable(CommandSender sender, Portal portal) {
         if (portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
             if (portals.hub().isEmpty()) {
-                warn(sender, "No shared hub is set, so the portal turns players away until one is. Stand there and"
-                        + " use sethub.");
+                tell(sender, "portal.no-hub");
             }
         } else if (portal.arena() == null) {
             // A player-built portal is routed per entry; status says whether any arena is open.
             return;
         } else if (!arenas.isAvailable(portal.arena())) {
-            warn(sender, "Arena " + portal.arena() + " is not available right now, so the portal turns players away"
-                    + " until it is.");
+            tell(sender, "portal.arena-unavailable", "arena", portal.arena());
         }
     }
 
     private void delete(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 1) {
-            error(sender, "Usage: " + usage + "delete <name>");
+            tell(sender, "command.usage-full", "usage", usage + "delete <name>");
             return;
         }
         String name = portals.get(args[0]).map(Portal::name).orElse(args[0]);
         portals.delete(args[0]);
-        success(sender, "Portal " + name + " removed. Blocks built around it are still in the world.");
+        tell(sender, "portal.deleted", "portal", name);
     }
 
     private void list(CommandSender sender) {
-        info(sender, "Shared hub: " + portals.hub().map(ArenaPoint::describe).orElse("not set")
-                + ". Portals with no lobby of their own lead to " + (defaultLobby.get() == LobbyMode.SHARED
-                ? "the shared hub." : "their arena's waiting room."));
+        tell(sender, defaultLobby.get() == LobbyMode.SHARED ? "portal.list-header-shared"
+                : "portal.list-header-dedicated", "hub", portals.hub().<Object>map(ArenaPoint::describe)
+                .orElseGet(() -> msg("arena.not-set")));
         if (portals.all().isEmpty()) {
-            info(sender, "No portals are registered.");
+            tell(sender, "portal.list-empty");
             return;
         }
         for (Portal portal : portals.all()) {
-            info(sender, portal.name() + " (" + portal.world() + ") to "
-                    + (portal.playerBuilt() ? "any arena, player-built" : portal.arena()) + ": " + status(portal));
+            tell(sender, "portal.list-line", "portal", portal.name(), "world", portal.world(),
+                    "target", portal.playerBuilt() ? msg("portal.player-built-target") : portal.arena(),
+                    "status", status(portal));
         }
     }
 
     private void info(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 1) {
-            error(sender, "Usage: " + usage + "info <name>");
+            tell(sender, "command.usage-full", "usage", usage + "info <name>");
             return;
         }
         Portal portal = portals.get(args[0]).orElseThrow(() -> new ArenaException("No portal called " + args[0]
                 + "."));
-        info(sender, "Portal " + portal.name() + ": " + status(portal));
-        info(sender, "World: " + portal.world() + (worldLoaded.test(portal.world()) ? "" : " (not loaded)"));
-        info(sender, "Region: " + portal.region().describe());
+        tell(sender, "portal.info.header", "portal", portal.name(), "status", status(portal));
+        tell(sender, worldLoaded.test(portal.world()) ? "portal.info.world" : "portal.info.world-unloaded",
+                "world", portal.world());
+        tell(sender, "portal.info.region", "region", portal.region().describe());
         if (portal.playerBuilt()) {
-            info(sender, "Built by player " + portal.built().owner() + " from " + portal.built().frame()
-                    + ". Breaking a frame block removes it.");
+            tell(sender, "portal.info.built", "owner", portal.built().owner(), "frame", portal.built().frame());
         } else {
-            info(sender, "Arena: " + portal.arena() + (portal.spectator() ? " (spectator portal)" : ""));
+            tell(sender, portal.spectator() ? "portal.info.arena-spectator" : "portal.info.arena",
+                    "arena", portal.arena());
         }
         if (!portal.spectator()) {
-            info(sender, "Leads to: " + destination(portal));
+            tell(sender, "portal.info.leads-to", "destination", destination(portal));
         }
     }
 
     /** What a player walking in now would meet. */
-    private String status(Portal portal) {
+    private Component status(Portal portal) {
+        return msg("portal.status." + statusKey(portal));
+    }
+
+    private String statusKey(Portal portal) {
         if (!worldLoaded.test(portal.world())) {
-            return "world not loaded";
+            return "world-unloaded";
         }
         if (!portal.spectator() && portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
-            return portals.hub().isPresent() ? "open, to the shared hub" : "closed, no shared hub is set";
+            return portals.hub().isPresent() ? "hub-open" : "hub-closed";
         }
         if (portal.arena() == null) {
-            return "open, to whichever arena takes players when someone walks in";
+            return "any";
         }
         Arena arena = arenas.get(portal.arena()).orElse(null);
         if (arena == null) {
-            return "arena missing";
+            return "arena-missing";
         }
         if (portal.spectator()) {
-            return "spectator portal, requires a live match with space";
+            return "spectator";
         }
         if (arenas.isAvailable(arena.name())) {
             return "open";
         }
         if (arenas.isHeld(arena.name())) {
-            return "closed, arena in use by a match";
+            return "in-use";
         }
         if (!arenas.editing().isEmpty()) {
-            return "closed while arenas are in edit mode";
+            return "editing";
         }
-        return "closed, arena not ready";
+        return "not-ready";
     }
 
     List<String> complete(CommandSender sender, String[] args) {
@@ -405,19 +404,7 @@ public final class PortalCommand {
                 && (long) bounds.maxZ() - bounds.minZ() < Portal.MAX_SPAN;
     }
 
-    private static void success(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.GREEN));
-    }
-
-    private static void info(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.GRAY));
-    }
-
-    private static void warn(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.YELLOW));
-    }
-
-    private static void error(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.RED));
+    private static void tell(CommandSender sender, String key, Object... placeholders) {
+        sender.sendMessage(msg(key, placeholders));
     }
 }

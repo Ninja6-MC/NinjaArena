@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.command;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.ninja6.ninjaarena.world.ArenaExtent;
 
 import com.ninja6.ninjaarena.arena.Arena;
@@ -20,7 +22,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -81,7 +82,7 @@ public final class ArenaCommand {
     void execute(CommandSender sender, String label, String[] args) {
         String usagePrefix = "/" + label + " " + NAME + " ";
         if (args.length == 0) {
-            error(sender, "Usage: " + usagePrefix + "<" + String.join("|", SUBCOMMANDS) + ">");
+            tell(sender, "command.usage-full", "usage", usagePrefix + "<" + String.join("|", SUBCOMMANDS) + ">");
             return;
         }
         String sub = args[0].toLowerCase(Locale.ROOT);
@@ -100,17 +101,17 @@ public final class ArenaCommand {
                 case "removeteamspawn" -> removeTeamSpawn(sender, rest, usagePrefix);
                 case "addenemyspawn" -> addEnemySpawn(sender, rest, usagePrefix);
                 case "removeenemyspawn" -> removeEnemySpawn(sender, rest, usagePrefix);
-                default -> error(sender, "Unknown subcommand " + args[0] + ". Use one of: "
-                        + String.join(", ", SUBCOMMANDS) + ".");
+                default -> tell(sender, "command.unknown-subcommand", "subcommand", args[0],
+                        "subcommands", String.join(", ", SUBCOMMANDS));
             }
         } catch (ArenaException e) {
-            error(sender, e.getMessage());
+            tell(sender, "command.error", "message", e.getMessage());
         }
     }
 
     private void create(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 1 && args.length != 3) {
-            error(sender, "Usage: " + usage + "create <name> [<cell x> <cell z>]");
+            tell(sender, "command.usage-full", "usage", usage + "create <name> [<cell x> <cell z>]");
             return;
         }
         GridCell cell = null;
@@ -118,84 +119,84 @@ public final class ArenaCommand {
             cell = new GridCell(parseInt(args[1], "cell x"), parseInt(args[2], "cell z"));
         }
         Arena arena = registry.create(args[0], cell);
-        success(sender, "Arena " + arena.name() + " created in cell " + arena.cell().describe() + " ("
-                + registry.grid().cellBounds(arena.cell()).describe() + ") and put in edit mode.");
+        tell(sender, "arena.created", "arena", arena.name(), "cell", arena.cell().describe(),
+                "cell-bounds", registry.grid().cellBounds(arena.cell()).describe());
     }
 
     private void delete(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 1) {
-            error(sender, "Usage: " + usage + "delete <name>");
+            tell(sender, "command.usage-full", "usage", usage + "delete <name>");
             return;
         }
         String name = registry.get(args[0]).map(Arena::name).orElse(args[0]);
         registry.delete(args[0]);
-        success(sender, "Arena " + name + " removed from the registry. Its blocks are still in the world.");
+        tell(sender, "arena.deleted", "arena", name);
     }
 
     private void list(CommandSender sender) {
         if (registry.all().isEmpty()) {
-            info(sender, "No arenas are registered.");
+            tell(sender, "arena.list-empty");
             return;
         }
         for (Arena arena : registry.all()) {
-            info(sender, arena.name() + " (cell " + arena.cell().describe() + "): " + status(arena));
+            tell(sender, "arena.list-line", "arena", arena.name(), "cell", arena.cell().describe(),
+                    "status", status(arena));
         }
     }
 
     private void info(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 1) {
-            error(sender, "Usage: " + usage + "info <name>");
+            tell(sender, "command.usage-full", "usage", usage + "info <name>");
             return;
         }
         Arena arena = require(args[0]);
-        info(sender, "Arena " + arena.name() + ": " + status(arena));
-        info(sender, "Cell " + arena.cell().describe() + " (" + registry.grid().cellBounds(arena.cell()).describe()
-                + ")");
-        info(sender, "Bounds: " + (arena.bounds() == null ? "not set" : arena.bounds().describe()));
-        info(sender, "Waiting room: " + (arena.waitingRoom() == null ? "not set" : arena.waitingRoom().describe()));
+        tell(sender, "arena.info.header", "arena", arena.name(), "status", status(arena));
+        tell(sender, "arena.info.cell", "cell", arena.cell().describe(),
+                "cell-bounds", registry.grid().cellBounds(arena.cell()).describe());
+        tell(sender, "arena.info.bounds", "bounds", bounds(arena));
+        tell(sender, "arena.info.waiting-room", "point", arena.waitingRoom() == null ? msg("arena.not-set")
+                : arena.waitingRoom().describe());
         for (int i = 0; i < arena.teamSpawns().size(); i++) {
-            info(sender, "Team " + (i + 1) + " spawn: " + arena.teamSpawns().get(i).describe());
+            tell(sender, "arena.info.team-spawn", "team", i + 1, "point", arena.teamSpawns().get(i).describe());
         }
         for (int i = 0; i < arena.enemySpawns().size(); i++) {
-            info(sender, "Enemy spawn " + (i + 1) + ": " + arena.enemySpawns().get(i).describe());
+            tell(sender, "arena.info.enemy-spawn", "number", i + 1, "point", arena.enemySpawns().get(i).describe());
         }
         for (String problem : registry.problems(arena.name())) {
-            warn(sender, problem);
+            tell(sender, "command.warning", "message", problem);
         }
     }
 
     private void edit(CommandSender sender, String label, String[] args, String usage) throws ArenaException {
         if (args.length != 2 || !(args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("off"))) {
-            error(sender, "Usage: " + usage + "edit <name> <on|off>");
+            tell(sender, "command.usage-full", "usage", usage + "edit <name> <on|off>");
             return;
         }
         Arena arena = require(args[0]);
         if (args[1].equalsIgnoreCase("on")) {
             registry.startEdit(arena.name());
-            success(sender, "Arena " + arena.name() + " is in edit mode: the arena world saves and the arena"
-                    + " takes no matches.");
+            tell(sender, "arena.edit-on", "arena", arena.name());
             return;
         }
         List<String> problems = registry.finishEdit(arena.name());
         if (problems.isEmpty()) {
-            success(sender, "Arena " + arena.name() + " saved and ready for matches.");
+            tell(sender, "arena.edit-saved", "arena", arena.name());
             return;
         }
-        warn(sender, "Arena " + arena.name() + " saved and left edit mode, but it cannot host a match yet:");
+        tell(sender, "arena.edit-incomplete", "arena", arena.name());
         for (String problem : problems) {
-            warn(sender, problem);
+            tell(sender, "command.warning", "message", problem);
         }
-        warn(sender, "Turn edit mode back on with /" + label + " " + NAME + " edit " + arena.name()
-                + " on to fix them.");
+        tell(sender, "arena.edit-fix", "command", "/" + label + " " + NAME + " edit " + arena.name() + " on");
     }
 
     private void teleport(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 1) {
-            error(sender, "Usage: " + usage + "tp <name>");
+            tell(sender, "command.usage-full", "usage", usage + "tp <name>");
             return;
         }
         if (!(sender instanceof Player player)) {
-            error(sender, "Only a player can be teleported.");
+            tell(sender, "arena.tp-players-only");
             return;
         }
         Arena arena = require(args[0]);
@@ -215,9 +216,8 @@ public final class ArenaCommand {
             if (!ArenaExtent.contains(target.getX(), target.getZ(), registry.grid().borderSize())) {
                 throw new ArenaException("The arena teleport target is outside the supported world border.");
             }
-            success(sender, "Teleporting to arena " + arena.name() + " in cell " + arena.cell().describe() + " ("
-                    + cell.describe() + "). Bounds: " + (arena.bounds() == null ? "not set" : arena.bounds().describe())
-                    + ".");
+            tell(sender, "arena.teleporting", "arena", arena.name(), "cell", arena.cell().describe(),
+                    "cell-bounds", cell.describe(), "bounds", bounds(arena));
             OwnTeleports.begin(player.getUniqueId());
             CompletableFuture<Boolean> teleporting;
             try {
@@ -232,7 +232,7 @@ public final class ArenaCommand {
                     completeOnServer.accept(() -> {
                         try {
                             if (error != null || !Boolean.TRUE.equals(moved)) {
-                                error(sender, "The teleport to arena " + arena.name() + " failed.");
+                                tell(sender, "arena.teleport-failed", "arena", arena.name());
                             } else if (hover) {
                                 hover(player);
                             }
@@ -266,18 +266,16 @@ public final class ArenaCommand {
             player.setAllowFlight(true);
         }
         player.setFlying(true);
-        warn(player, "The arena world is empty until you build: there is nothing under you yet. Use creative"
-                + " or flight while building.");
+        tell(player, "arena.empty-world");
         if (granted) {
             // Not undone automatically: the admin may still be building when they leave.
-            warn(player, "Flight was turned on because the arena has no waiting room yet. It stays on until"
-                    + " your game mode changes.");
+            tell(player, "arena.flight-on");
         }
     }
 
     private void setBounds(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 7) {
-            error(sender, "Usage: " + usage + "setbounds <name> <x1> <y1> <z1> <x2> <y2> <z2>");
+            tell(sender, "command.usage-full", "usage", usage + "setbounds <name> <x1> <y1> <z1> <x2> <y2> <z2>");
             return;
         }
         Location base = baseLocation(sender);
@@ -299,66 +297,66 @@ public final class ArenaCommand {
                     + enclosed.get().describe() + ". Move it first with portal sethub.");
         }
         Arena arena = registry.update(args[0], a -> a.withBounds(bounds));
-        success(sender, "Bounds of " + arena.name() + " set to " + bounds.describe() + ".");
+        tell(sender, "arena.bounds-set", "arena", arena.name(), "bounds", bounds.describe());
         warnOutside(sender, arena);
     }
 
     private void setWaitingRoom(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length < 1) {
-            error(sender, "Usage: " + usage + "setwaitingroom <name> " + POSITION);
+            tell(sender, "command.usage-full", "usage", usage + "setwaitingroom <name> " + POSITION);
             return;
         }
         ArenaPoint point = position(sender, Arrays.copyOfRange(args, 1, args.length),
                 usage + "setwaitingroom <name> " + POSITION);
         Arena arena = registry.update(args[0], a -> a.withWaitingRoom(point));
-        success(sender, "Waiting room of " + arena.name() + " set to " + point.describe() + ".");
+        tell(sender, "arena.waiting-room-set", "arena", arena.name(), "point", point.describe());
         warnOutside(sender, arena);
     }
 
     private void setTeamSpawn(CommandSender sender, String[] args, String usage) throws ArenaException {
         String full = usage + "setteamspawn <name> <team> " + POSITION;
         if (args.length < 2) {
-            error(sender, "Usage: " + full);
+            tell(sender, "command.usage-full", "usage", full);
             return;
         }
         int team = parseInt(args[1], "team");
         ArenaPoint point = position(sender, Arrays.copyOfRange(args, 2, args.length), full);
         Arena arena = registry.update(args[0], a -> a.withTeamSpawn(team, point));
-        success(sender, "Team " + team + " spawn of " + arena.name() + " set to " + point.describe() + ".");
+        tell(sender, "arena.team-spawn-set", "team", team, "arena", arena.name(), "point", point.describe());
         warnOutside(sender, arena);
     }
 
     private void removeTeamSpawn(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 1) {
-            error(sender, "Usage: " + usage + "removeteamspawn <name>");
+            tell(sender, "command.usage-full", "usage", usage + "removeteamspawn <name>");
             return;
         }
         int team = require(args[0]).teamSpawns().size();
         Arena arena = registry.update(args[0], Arena::withoutLastTeamSpawn);
-        success(sender, "Team " + team + " spawn of " + arena.name() + " removed.");
+        tell(sender, "arena.team-spawn-removed", "team", team, "arena", arena.name());
     }
 
     private void addEnemySpawn(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length < 1) {
-            error(sender, "Usage: " + usage + "addenemyspawn <name> " + POSITION);
+            tell(sender, "command.usage-full", "usage", usage + "addenemyspawn <name> " + POSITION);
             return;
         }
         ArenaPoint point = position(sender, Arrays.copyOfRange(args, 1, args.length),
                 usage + "addenemyspawn <name> " + POSITION);
         Arena arena = registry.update(args[0], a -> a.withEnemySpawn(point));
-        success(sender, "Enemy spawn " + arena.enemySpawns().size() + " of " + arena.name() + " added at "
-                + point.describe() + ".");
+        tell(sender, "arena.enemy-spawn-added", "number", arena.enemySpawns().size(), "arena", arena.name(),
+                "point", point.describe());
         warnOutside(sender, arena);
     }
 
     private void removeEnemySpawn(CommandSender sender, String[] args, String usage) throws ArenaException {
         if (args.length != 2) {
-            error(sender, "Usage: " + usage + "removeenemyspawn <name> <number>");
+            tell(sender, "command.usage-full", "usage", usage + "removeenemyspawn <name> <number>");
             return;
         }
         int number = parseInt(args[1], "number");
         Arena arena = registry.update(args[0], a -> a.withoutEnemySpawn(number));
-        success(sender, "Enemy spawn " + number + " of " + arena.name() + " removed; later ones moved up.");
+        tell(sender, "arena.enemy-spawn-removed", "number", number, "arena", arena.name());
     }
 
     List<String> complete(CommandSender sender, String[] args) {
@@ -442,19 +440,24 @@ public final class ArenaCommand {
         return registry.get(name).orElseThrow(() -> new ArenaException("No arena called " + name + "."));
     }
 
-    private String status(Arena arena) {
+    private Component status(Arena arena) {
         if (registry.isHeld(arena.name())) {
-            return "in use by a match";
+            return msg("arena.status.in-use");
         }
         if (registry.isEditing(arena.name())) {
-            return "in edit mode";
+            return msg("arena.status.editing");
         }
         try {
             int problems = registry.problems(arena.name()).size();
-            return problems == 0 ? "ready" : "incomplete (" + problems + (problems == 1 ? " problem)" : " problems)");
+            return problems == 0 ? msg("arena.status.ready") : problems == 1 ? msg("arena.status.incomplete-one")
+                    : msg("arena.status.incomplete", "problems", problems);
         } catch (ArenaException e) {
-            return "unknown";
+            return msg("arena.status.unknown");
         }
+    }
+
+    private static Object bounds(Arena arena) {
+        return arena.bounds() == null ? msg("arena.not-set") : arena.bounds().describe();
     }
 
     /** Flags a point that is outside bounds already set, so a mistake shows up straight away. */
@@ -464,7 +467,7 @@ public final class ArenaCommand {
         }
         for (String problem : registry.problems(arena.name())) {
             if (problem.contains("outside the bounds")) {
-                warn(sender, problem);
+                tell(sender, "command.warning", "message", problem);
             }
         }
     }
@@ -568,19 +571,7 @@ public final class ArenaCommand {
         return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
-    private static void success(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.GREEN));
-    }
-
-    private static void info(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.GRAY));
-    }
-
-    private static void warn(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.YELLOW));
-    }
-
-    private static void error(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.RED));
+    private static void tell(CommandSender sender, String key, Object... placeholders) {
+        sender.sendMessage(msg(key, placeholders));
     }
 }

@@ -158,7 +158,8 @@ class TextureDialogTest {
 
     private static TextureService.View storageView(String storage) {
         return new TextureService.View(java.util.Optional.of(PlayerKey.java(ALICE)), false,
-                java.util.Optional.empty(), Quality.STANDARD, true, "Standard", storage, false, "Standard active.");
+                java.util.Optional.empty(), Quality.STANDARD, true, "Standard", storage, false, "Standard active.",
+                storage.startsWith("Storage is unsupported"));
     }
 
     @Test
@@ -410,7 +411,7 @@ class TextureDialogTest {
         inMatch.add(ALICE);
         dialog.open(chest.player(ALICE));
         assertTrue(fake.shown.isEmpty());
-        assertEquals(TextureMenu.LOCKED, told.getLast());
+        assertEquals(com.ninja6.ninjaarena.message.Messages.text("texture.locked"), told.getLast());
         assertEquals("The texture menu cannot be opened right now. Leave your match and try again.", told.getLast());
         inMatch.clear();
         dialog.open(chest.player(ALICE));
@@ -429,7 +430,7 @@ class TextureDialogTest {
         assertTrue(fixture.backend.rows.isEmpty());
         assertEquals(0, fixture.backend.writes.get());
         assertEquals(1, fake.closes.get(ALICE));
-        assertEquals(TextureMenu.LOCKED, told.getLast());
+        assertEquals(com.ninja6.ninjaarena.message.Messages.text("texture.locked"), told.getLast());
         inMatch.clear();
         press(shown, alice, TextureDialog.Button.DETAILED);
         assertTrue(told.getLast().contains("out of date"));

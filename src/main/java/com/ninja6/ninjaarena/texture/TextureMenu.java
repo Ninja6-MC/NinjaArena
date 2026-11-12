@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.texture;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.resourcepack.BedrockSelections.Quality;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -22,10 +24,7 @@ import org.bukkit.inventory.ItemStack;
  */
 public final class TextureMenu {
 
-    public static final String TITLE = "Arena Texture Quality";
     public static final String PERMISSION = "ninjaarena.play";
-    public static final String LOCKED =
-            "The texture menu cannot be opened right now. Leave your match and try again.";
     public static final int SIZE = 27;
     public static final int STANDARD_SLOT = 10;
     public static final int DETAILED_SLOT = 12;
@@ -93,18 +92,18 @@ public final class TextureMenu {
     public void open(Player player) {
         UUID id = player.getUniqueId();
         if (!player.hasPermission(PERMISSION)) {
-            notifier.tell(id, "You do not have permission to use this command.");
+            notifier.tell(id, text("command.no-permission"));
             return;
         }
         Holder holder = new Holder(id, ++tokens);
-        holder.inventory = screens.create(holder, SIZE, TITLE);
+        holder.inventory = screens.create(holder, SIZE, text("texture.title"));
         Active active = new Active(holder);
         open.put(id, active);
         render(active);
         if (player.openInventory(holder.inventory) == null) {
             // Another rule, such as a match's inventory lockdown, refused the window.
             open.remove(id, active);
-            notifier.tell(id, LOCKED);
+            notifier.tell(id, text("texture.locked"));
         }
     }
 
@@ -120,13 +119,13 @@ public final class TextureMenu {
         Active active = open.get(id);
         if (active == null || active.holder != holder || !holder.owner.equals(id)) {
             player.closeInventory();
-            notifier.tell(id, "That menu is out of date. Reopen it with /ninjaarena textures.");
+            notifier.tell(id, text("texture.menu-stale"));
             return;
         }
         if (!player.hasPermission(PERMISSION)) {
             open.remove(id);
             player.closeInventory();
-            notifier.tell(id, "You do not have permission to use this menu.");
+            notifier.tell(id, text("texture.menu-no-permission"));
             return;
         }
         switch (slot) {
@@ -143,7 +142,7 @@ public final class TextureMenu {
 
     private void choose(UUID id, Active active, Quality quality) {
         if (active.saving != null) {
-            notifier.tell(id, "Still saving your last choice. Wait for it to finish.");
+            notifier.tell(id, text("texture.still-saving"));
             return;
         }
         active.saving = quality;
@@ -193,69 +192,67 @@ public final class TextureMenu {
         items.put(STANDARD_SLOT, standard(view, saving));
         items.put(DETAILED_SLOT, detailed(view, saving));
         items.put(STATUS_SLOT, status(view, note));
-        items.put(CLOSE_SLOT, new Item(Material.OAK_DOOR, "Close", NamedTextColor.WHITE,
-                List.of("Close this menu."), false));
+        items.put(CLOSE_SLOT, new Item(Material.OAK_DOOR, text("texture.menu.close"), NamedTextColor.WHITE,
+                List.of(text("texture.menu.close-lore")), false));
         return items;
     }
 
     private static Item standard(TextureService.View view, Quality saving) {
         boolean selected = view.saved() == Quality.STANDARD;
-        String line = saving == Quality.STANDARD ? "Saving..."
-                : selected ? selectedLine(view) : "Click to choose Standard.";
-        return new Item(Material.PAPER, "Standard 16x16", selected ? NamedTextColor.GREEN : NamedTextColor.WHITE,
-                List.of("The default 16x16 ninja tool textures.", line), selected);
+        String line = saving == Quality.STANDARD ? text("texture.menu.saving")
+                : selected ? selectedLine(view) : text("texture.menu.choose-standard");
+        return new Item(Material.PAPER, text("texture.menu.standard"),
+                selected ? NamedTextColor.GREEN : NamedTextColor.WHITE,
+                List.of(text("texture.menu.standard-lore"), line), selected);
     }
 
     private static Item detailed(TextureService.View view, Quality saving) {
         boolean selected = view.saved() == Quality.DETAILED;
         if (!view.detailedAvailable()) {
-            return new Item(Material.BARRIER, "Detailed 32x32 (unavailable)", NamedTextColor.GRAY,
+            return new Item(Material.BARRIER, text("texture.menu.detailed-unavailable"), NamedTextColor.GRAY,
                     selected
-                            ? List.of("Unavailable: Detailed is not set up on this server.",
-                                    "[SELECTED] Your saved choice is Detailed, but Standard is used until it is set up.")
-                            : List.of("Unavailable: Detailed is not set up on this server."),
+                            ? List.of(text("texture.menu.unavailable-lore"), text("texture.menu.selected-unavailable"))
+                            : List.of(text("texture.menu.unavailable-lore")),
                     false);
         }
-        String line = saving == Quality.DETAILED ? "Saving..."
-                : selected ? selectedLine(view) : "Click to choose Detailed.";
-        return new Item(Material.DIAMOND, "Detailed 32x32", selected ? NamedTextColor.GREEN : NamedTextColor.WHITE,
-                List.of("Sharper 32x32 textures with the same gameplay.",
-                        view.bedrock() ? "Applies on your next connection."
+        String line = saving == Quality.DETAILED ? text("texture.menu.saving")
+                : selected ? selectedLine(view) : text("texture.menu.choose-detailed");
+        return new Item(Material.DIAMOND, text("texture.menu.detailed"),
+                selected ? NamedTextColor.GREEN : NamedTextColor.WHITE,
+                List.of(text("texture.menu.detailed-lore"),
+                        view.bedrock() ? text("texture.menu.detailed-bedrock")
                                 : view.sessionOnly()
-                                        ? "Loads on top of Standard for this connection only. "
-                                                + TextureService.SESSION_ONLY_NOTE
-                                        : "Loads on top of Standard. You can decline it and keep Standard.",
+                                        ? text("texture.menu.detailed-session", "note", text("texture.session-note"))
+                                        : text("texture.menu.detailed-java"),
                         line),
                 selected);
     }
 
     private static String selectedLine(TextureService.View view) {
-        return view.sessionOnly() ? "[SELECTED] This is your choice for this connection only. "
-                + TextureService.SESSION_ONLY_NOTE : view.explicit().isPresent()
-                        ? "[SELECTED] This is your saved choice."
-                        : "[SELECTED] Standard (default, not saved yet).";
+        return view.sessionOnly() ? text("texture.menu.selected-session", "note", text("texture.session-note"))
+                : text(view.explicit().isPresent() ? "texture.menu.selected-saved" : "texture.menu.selected-default");
     }
 
     static String choiceLine(TextureService.View view) {
-        String quality = view.saved() == Quality.DETAILED ? "Detailed" : "Standard";
+        String quality = TextureService.display(view.saved());
         if (view.sessionOnly()) {
-            return "This connection only (not saved): " + quality;
+            return text("texture.choice.session", "quality", quality);
         }
-        return view.explicit().isPresent() ? "Saved choice: " + quality
-                : "Standard (default, not saved yet)";
+        return view.explicit().isPresent() ? text("texture.choice.saved", "quality", quality)
+                : text("texture.choice.default");
     }
 
     private static Item status(TextureService.View view, String note) {
         List<String> lore = new java.util.ArrayList<>();
         lore.add(choiceLine(view));
-        lore.add("Right now: " + view.delivery());
+        lore.add(text("texture.menu.right-now", "delivery", view.delivery()));
         if (!view.storage().isEmpty()) {
             lore.add(view.storage());
         }
         if (!note.isEmpty()) {
             lore.add(note);
         }
-        return new Item(Material.BOOK, "Status", NamedTextColor.YELLOW, List.copyOf(lore), false);
+        return new Item(Material.BOOK, text("texture.menu.status"), NamedTextColor.YELLOW, List.copyOf(lore), false);
     }
 
     /** Splits a line at spaces so item text stays inside the tooltip. */

@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.restore;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import java.util.HashMap;
 import java.util.Map;
@@ -7,8 +9,6 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
@@ -108,8 +108,7 @@ public final class JoinRestore {
                 if (attempt < RETRY_DELAYS.length) {
                     delayer.later(RETRY_DELAYS[attempt], () -> attempt(playerId, generation, attempt + 1));
                 } else {
-                    player.sendMessage(Component.text("Your inventory and location could not be restored yet."
-                            + " Rejoin the server, or ask staff for help.", NamedTextColor.RED));
+                    player.sendMessage(msg("restore.failed"));
                 }
             }
             // Nothing left to do, the respawn listener takes over, or the next join retries.

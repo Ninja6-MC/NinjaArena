@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
@@ -39,7 +40,7 @@ class ConfigReloadTest {
     private final Runtime target = new Runtime();
     private ConfigReload reload;
 
-    private static final class Runtime implements ConfigReload.Target {
+    private static class Runtime implements ConfigReload.Target {
         final List<String> calls = new ArrayList<>();
         boolean empty = true;
         boolean failWorld;
@@ -639,5 +640,33 @@ class ConfigReloadTest {
         assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage().contains("stack limit of 1"));
         write("", "format: 1\nitems:\n  - slot: 1\n    material: WOODEN_SWORD\n");
         assertEquals(1, candidate().kit().items().getFirst().amount());
+    }
+
+    @Test
+    void reloadPicksUpAChangedMessagesFileAndRejectsABrokenOne() throws Exception {
+        List<String> warnings = new ArrayList<>();
+        ConfigReload withWarnings = new ConfigReload(dir, ReloadFiles.defaults(), KitDefinition.EMPTY, items,
+                new Runtime() {
+                    @Override public void warning(String message) { warnings.add(message); }
+                });
+        try {
+            Files.writeString(dir.resolve("messages.yml"), "match:\n  fight: \"<aqua>Go, ninjas!\"\n");
+            var report = withWarnings.reload();
+            assertTrue(report.getFirst().contains("complete"), report.toString());
+            assertTrue(report.get(1).contains("messages.yml"), report.toString());
+            assertEquals("Go, ninjas!", Messages.text("match.fight"));
+            // Keys the server file leaves out keep their default, with one warning each.
+            assertEquals("You left the match.", Messages.text("match.left"));
+            assertEquals(1, warnings.stream()
+                    .filter("messages.yml: match.left is missing; using the default."::equals).count());
+            assertEquals("Changed: none.", withWarnings.reload().get(1));
+
+            Files.writeString(dir.resolve("messages.yml"), "match:\n  fight: [\n");
+            String rejected = withWarnings.reload().getFirst();
+            assertTrue(rejected.contains("rejected") && rejected.contains("messages.yml: line"), rejected);
+            assertEquals("Go, ninjas!", Messages.text("match.fight"));
+        } finally {
+            Messages.use(Messages.bundled());
+        }
     }
 }

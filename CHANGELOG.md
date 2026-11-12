@@ -44,6 +44,13 @@ Java 25, and does not run on Folia.
   value uses `dialog` with a warning. Set `chest` if the dialog does not show. `/narena
   pack status` reports the menu in use.
 
+- `messages.yml` holds every player-facing text in MiniMessage format with named
+  placeholders such as `<arena>` and `<player>`, so server owners can reword or translate
+  the plugin. It is saved on first start and reloaded by `/narena admin reload`. Typed
+  input is inserted as plain text. A missing key, or one MiniMessage cannot read, uses
+  the bundled default with one warning per key. Customised `events.messages` texts in
+  `config.yml` are moved into it on first start; those keys are now deprecated.
+
 ### Changed
 - Each Java connection gets one Detailed overlay request through `ResourcePacks`;
   `overlay(UUID)` reports its state.

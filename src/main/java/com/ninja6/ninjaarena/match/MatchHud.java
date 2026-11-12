@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.match;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.director.EnemyKind;
 import com.ninja6.ninjaarena.director.SpawnGate;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
@@ -24,7 +27,6 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -91,23 +93,24 @@ public final class MatchHud implements Listener {
         }
         refresh(event.match());
         if (event.to() == MatchPhase.COMBAT) {
-            title(event.match(), "Fight!", "Round " + event.match().round(), NamedTextColor.RED);
+            title(event.match(), msg("hud.fight-title"), msg("hud.fight-subtitle", "round", event.match().round()));
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onRoundStart(RoundStartEvent event) {
         if (!closed) {
-            title(event.match(), (event.isExtra() ? "Extra round " : "Round ") + event.round(),
-                    "Prepare for the fight", NamedTextColor.GOLD);
+            title(event.match(), msg(event.isExtra() ? "hud.extra-round-title" : "hud.round-title",
+                    "round", event.round()), msg("hud.round-subtitle"));
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onRoundEnd(RoundEndEvent event) {
         if (!closed) {
-            title(event.match(), event.result().isDraw() ? "Round drawn" : "Team " + event.result().winner() + " wins!",
-                    "Round " + event.result().round() + " complete", NamedTextColor.GOLD);
+            title(event.match(), event.result().isDraw() ? msg("hud.draw-title")
+                    : msg("hud.won-title", "team", event.result().winner()),
+                    msg("hud.round-end-subtitle", "round", event.result().round()));
             each(event.match(), player -> player.playSound(ROUND_END));
             refresh(event.match());
         }
@@ -166,7 +169,8 @@ public final class MatchHud implements Listener {
             return;
         }
         Display display = displays.computeIfAbsent(match, ignored -> new Display());
-        String round = (match.isExtraRound() ? "Extra round " : "Round ") + match.round();
+        Component round = msg(match.isExtraRound() ? "hud.extra-round-label" : "hud.round-label",
+                "round", match.round());
         int duration = switch (match.phase()) {
             case PREP -> match.settings().prepSeconds();
             case COMBAT -> match.settings().roundSeconds();
@@ -174,14 +178,16 @@ public final class MatchHud implements Listener {
             case ROUND_END -> match.settings().roundEndSeconds();
             default -> 0;
         };
-        String label = switch (match.phase()) {
-            case PREP -> round + " - Prep " + clock(match.secondsLeft());
-            case COMBAT -> round + " - " + clock(match.secondsLeft());
-            case OVERRUN -> round + " - OVERRUN" + (duration > 0 ? " " + clock(match.secondsLeft()) : "");
-            case ROUND_END -> "Next round in " + match.secondsLeft() + "s";
-            default -> "";
+        Component label = switch (match.phase()) {
+            case PREP -> msg("hud.bar-prep", "round", round, "time", clock(match.secondsLeft()));
+            case COMBAT -> msg("hud.bar-combat", "round", round, "time", clock(match.secondsLeft()));
+            case OVERRUN -> duration > 0
+                    ? msg("hud.bar-overrun-timed", "round", round, "time", clock(match.secondsLeft()))
+                    : msg("hud.bar-overrun", "round", round);
+            case ROUND_END -> msg("hud.bar-round-end", "seconds", match.secondsLeft());
+            default -> Component.empty();
         };
-        display.bar.name(Component.text(label));
+        display.bar.name(label);
         display.bar.color(match.phase() == MatchPhase.OVERRUN ? BossBar.Color.RED : BossBar.Color.YELLOW);
         display.bar.progress(duration == 0 ? 1 : Math.clamp((float) match.secondsLeft() / duration, 0, 1));
         for (UUID id : new ArrayList<>(display.viewers.keySet())) {
@@ -192,10 +198,10 @@ public final class MatchHud implements Listener {
         }
         List<String> totals = new ArrayList<>();
         for (int team : match.startingTeams()) {
-            totals.add("T" + team + ": " + scores.score(match, team));
+            totals.add(text("hud.team-score", "team", team, "score", scores.score(match, team)));
         }
-        Component status = Component.text(String.join("  ", totals) + "  |  Enemies left: "
-                + Math.max(0, enemies.applyAsInt(match)), NamedTextColor.YELLOW);
+        Component status = msg("hud.status", "scores", String.join("  ", totals),
+                "enemies", Math.max(0, enemies.applyAsInt(match)));
         each(match, player -> {
             if (display.viewers.putIfAbsent(player.getUniqueId(), player) == null) {
                 player.showBossBar(display.bar);
@@ -204,8 +210,8 @@ public final class MatchHud implements Listener {
         });
     }
 
-    private void title(MatchView match, String title, String subtitle, NamedTextColor color) {
-        Title message = Title.title(Component.text(title, color), Component.text(subtitle), TITLE_TIMES);
+    private void title(MatchView match, Component title, Component subtitle) {
+        Title message = Title.title(title, subtitle, TITLE_TIMES);
         each(match, player -> player.showTitle(message));
     }
 
