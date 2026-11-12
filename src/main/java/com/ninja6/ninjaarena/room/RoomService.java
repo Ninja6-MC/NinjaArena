@@ -678,6 +678,10 @@ public final class RoomService implements RoomCommands, Listener {
             tell(player, "room.map-unknown", "arena", arena);
             return;
         }
+        if (target.name().equals(room.arena())) {
+            tell(player, "room.map-already", "arena", room.arena());
+            return;
+        }
         if (!target.pickable()) {
             tell(player, "room.map-not-pickable", "arena", target.name());
             return;
@@ -704,6 +708,9 @@ public final class RoomService implements RoomCommands, Listener {
     public void setArena(Room room, String arena) {
         if (room.isPlaying()) {
             throw new IllegalStateException("the room is playing");
+        }
+        if (room.arena().equals(Arena.normalizeName(arena))) {
+            return;
         }
         Arena target = arenas.get(arena).orElseThrow(() -> new IllegalArgumentException("unknown arena " + arena));
         room.setArena(target.name());

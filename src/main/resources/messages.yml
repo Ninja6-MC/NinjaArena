@@ -441,6 +441,7 @@ room:
   map-unknown: "<red>No arena called <arena>."
   map-not-pickable: "<red>Arena <arena> is not pickable."
   map-too-few-teams: "<red>Arena <arena> needs at least two team spawns to be chosen."
+  map-already: "<yellow>The room is already on map <arena>."
   map-changed: "<green><player> changed the room's map from <old> to <arena>."
   map-list-header: "<gold>Pickable maps:"
   map-list-empty: "<yellow>No maps are pickable."

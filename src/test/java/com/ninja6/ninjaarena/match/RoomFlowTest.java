@@ -186,6 +186,58 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void choosingTheCurrentMapKeepsTheLeaseAndQueueAndOnlyTellsTheSender() throws Exception {
+        arenas.setPickable("dojo", true);
+        Room first = openWith(ALICE, BOB);
+        Room second = openWith(CAROL, DAVE);
+        rooms.setArena(second, "dojo");
+        Room third = openWith(EVE, FRANK);
+        rooms.setArena(third, "dojo");
+        players.get(ALICE).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+        players.get(CAROL).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+
+        for (UUID sender : List.of(ALICE, CAROL)) {
+            players.values().forEach(fake -> fake.messages.clear());
+            rooms.mapSet(player(sender), "DOJO");
+
+            assertTrue(rooms.hasLease(first));
+            assertTrue(rooms.position(first).isEmpty());
+            assertFalse(rooms.hasLease(second));
+            assertFalse(rooms.hasLease(third));
+            assertEquals(1, rooms.position(second).orElseThrow());
+            assertEquals(2, rooms.position(third).orElseThrow());
+            for (UUID member : players.keySet()) {
+                assertEquals(member.equals(sender) ? List.of("The room is already on map dojo.") : List.of(),
+                        players.get(member).messages);
+            }
+        }
+    }
+
+    @Test
+    void settingTheCurrentArenaDirectlyKeepsBothTheLeaseAndQueuedRoomsInPlace() {
+        Room first = openWith(ALICE, BOB);
+        Room second = openWith(CAROL, DAVE);
+        rooms.setArena(second, "dojo");
+        Room third = openWith(EVE, FRANK);
+        rooms.setArena(third, "dojo");
+        var settings = first.settings();
+        players.values().forEach(fake -> fake.messages.clear());
+
+        rooms.setArena(first, "DOJO");
+        rooms.setArena(second, "DOJO");
+
+        assertEquals("dojo", first.arena());
+        assertEquals(settings, first.settings());
+        assertTrue(rooms.hasLease(first));
+        assertTrue(rooms.position(first).isEmpty());
+        assertFalse(rooms.hasLease(second));
+        assertFalse(rooms.hasLease(third));
+        assertEquals(1, rooms.position(second).orElseThrow());
+        assertEquals(2, rooms.position(third).orElseThrow());
+        players.values().forEach(fake -> assertTrue(fake.messages.isEmpty()));
+    }
+
+    @Test
     void choosingABusyMapQueuesTheRoomAndGrantsItsOldSlotToTheNextRoom() throws Exception {
         arenas.setPickable("garden", true);
         Room first = openWith(ALICE, BOB);
