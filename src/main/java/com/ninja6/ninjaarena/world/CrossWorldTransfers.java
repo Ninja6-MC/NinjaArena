@@ -16,11 +16,12 @@ import org.bukkit.World;
  * NinjaArena's own ({@code OwnTeleports}) and a registered rule accepts the player. A
  * teleport to any other world, or to no world, never keeps it.
  *
- * <p>No rule is registered yet, so every teleport into the lobby world takes the player out
- * of their match. A feature that moves match players to the lobby world and back, such as a
- * shop phase or a map preview, registers its own rule with {@link #allow} for the players it
- * moves and runs the returned handle when it ends. Rules do not replace each other: a
- * player crosses while any registered rule accepts them.
+ * <p>Rooms register a rule for their members, whose match starts with a move from the lobby
+ * world. Any other teleport into the lobby world takes the player out of their match. A
+ * feature that moves match players to the lobby world and back, such as a shop phase or a
+ * map preview, registers its own rule with {@link #allow} for the players it moves and runs
+ * the returned handle when it ends. Rules do not replace each other: a player crosses while
+ * any registered rule accepts them.
  */
 public final class CrossWorldTransfers {
 

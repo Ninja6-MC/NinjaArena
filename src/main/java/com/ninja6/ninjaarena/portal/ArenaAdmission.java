@@ -122,7 +122,7 @@ public final class ArenaAdmission {
     }
 
     /** Whether the player holds items on the cursor or in a crafting grid. */
-    static boolean holdsLooseItems(Player player) {
+    public static boolean holdsLooseItems(Player player) {
         ItemStack cursor = player.getItemOnCursor();
         if (cursor != null && !cursor.isEmpty()) {
             return true;

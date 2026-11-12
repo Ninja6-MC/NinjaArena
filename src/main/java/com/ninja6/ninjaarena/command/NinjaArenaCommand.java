@@ -25,8 +25,18 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String PLAY = "ninjaarena.play";
     /** Lobby edit mode and reset; a child of {@link #ADMIN}. */
     public static final String LOBBY = "ninjaarena.admin.lobby";
-    /** Leaves the waiting room or match the player is in and sends them home. */
+    /**
+     * Leaves the room, match or spectating for the lobby, a waiting room or the lobby for
+     * home.
+     */
     public static final String LEAVE = "leave";
+    /** Rooms: open, set up, invite, start and leave. */
+    public static final String ROOM = "room";
+    private static final String ROOM_USAGE = "room [create|settings|invite|accept|kick|start|leave]";
+    private static final String ROOM_SETTINGS_USAGE = "room settings [players|teams|team-size|privacy <value>]";
+    private static final List<String> ROOM_ACTIONS = List.of("create", "settings", "invite", "accept", "kick",
+            "start", "leave");
+    private static final List<String> ROOM_SETTINGS = List.of("players", "teams", "team-size", "privacy");
     public static final String TEXTURES = "textures";
     public static final String ADMIN_ROUTE = "admin";
     private static final String LOBBY_USAGE = "admin lobby <edit|done|reset>";
@@ -42,6 +52,7 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route(TEXTURES, PLAY, TEXTURES),
             new Route("intro", PLAY, "intro"),
             new Route("accept", PLAY, "accept <host>"),
+            new Route(ROOM, PLAY, ROOM_USAGE),
             new Route("host", HOST, "host <arena>"),
             new Route("invite", HOST, "invite <player>"),
             new Route(ArenaCommand.NAME, ADMIN, ArenaCommand.NAME + " <subcommand>"),
@@ -65,10 +76,16 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     private TextureCommands textures;
     private LobbyCommands lobby;
+    private RoomCommands rooms;
     private Consumer<Player> intro;
 
     public void setIntro(Consumer<Player> intro) {
         this.intro = Objects.requireNonNull(intro, "intro");
+    }
+
+    /** Without it the room subcommands say the feature is unavailable. */
+    public void setRooms(RoomCommands rooms) {
+        this.rooms = rooms;
     }
 
     public void setPackStatus(java.util.function.Supplier<String> status) {
@@ -209,6 +226,7 @@ public final class NinjaArenaCommand implements TabExecutor {
                         }
                     }
                 }
+                case ROOM -> room(sender, label, args);
                 case "pack" -> {
                     if (args.length == 2 && args[1].equalsIgnoreCase("status")) {
                         sender.sendMessage(msg("pack.status", "status", packStatus.get()));
@@ -261,6 +279,68 @@ public final class NinjaArenaCommand implements TabExecutor {
             }
         }
         return true;
+    }
+
+    private void room(CommandSender sender, String label, String[] args) {
+        String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "";
+        if (!action.isEmpty() && !ROOM_ACTIONS.contains(action)) {
+            usage(sender, label, ROOM_USAGE);
+            return;
+        }
+        if (rooms == null) {
+            unavailable(sender, msg("command.feature.rooms"));
+            return;
+        }
+        if (action.equals("start")) {
+            if (args.length > 3) {
+                usage(sender, label, "room start [host]");
+            } else {
+                rooms.start(sender, args.length == 3 ? args[2] : null);
+            }
+            return;
+        }
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(msg("command.players-only"));
+            return;
+        }
+        switch (action) {
+            case "" -> rooms.show(player);
+            case "create", "leave" -> {
+                if (args.length != 2) {
+                    usage(sender, label, "room " + action);
+                } else if (action.equals("create")) {
+                    rooms.create(player);
+                } else {
+                    rooms.leave(player);
+                }
+            }
+            case "settings" -> {
+                if (args.length == 2) {
+                    rooms.settings(player, null, null);
+                } else if (args.length == 4) {
+                    rooms.settings(player, args[2], args[3]);
+                } else {
+                    usage(sender, label, ROOM_SETTINGS_USAGE);
+                }
+            }
+            case "invite" -> {
+                if (args.length > 3) {
+                    usage(sender, label, "room invite [player]");
+                } else {
+                    rooms.invite(player, args.length == 3 ? args[2] : null);
+                }
+            }
+            case "accept", "kick" -> {
+                if (args.length != 3) {
+                    usage(sender, label, "room " + action + (action.equals("accept") ? " <host>" : " <player>"));
+                } else if (action.equals("accept")) {
+                    rooms.accept(player, args[2]);
+                } else {
+                    rooms.kick(player, args[2]);
+                }
+            }
+            default -> throw new IllegalStateException(action);
+        }
     }
 
     private void lobby(CommandSender sender, String label, String[] args) {
@@ -390,6 +470,22 @@ public final class NinjaArenaCommand implements TabExecutor {
         }
         if (args[0].equalsIgnoreCase(ADMIN_ROUTE)) {
             return completeAdmin(sender, args);
+        }
+        if (args[0].equalsIgnoreCase(ROOM)) {
+            if (!sender.hasPermission(PLAY)) {
+                return List.of();
+            }
+            String last = args[args.length - 1].toLowerCase(Locale.ROOT);
+            List<String> options = args.length == 2 ? ROOM_ACTIONS
+                    : args.length == 3 && args[1].equalsIgnoreCase("settings") ? ROOM_SETTINGS
+                    : args.length == 4 && args[1].equalsIgnoreCase("settings") && args[2].equalsIgnoreCase("privacy")
+                            ? List.of("public", "invite") : null;
+            if (options == null) {
+                // Bukkit offers online player names for invite, accept, kick and start.
+                return args.length == 3 && List.of("invite", "accept", "kick", "start")
+                        .contains(args[1].toLowerCase(Locale.ROOT)) ? null : List.of();
+            }
+            return options.stream().filter(option -> option.startsWith(last)).toList();
         }
         if (!sender.hasPermission(ADMIN)) {
             return List.of();

@@ -189,7 +189,7 @@ class StabilityGateTest {
 
     @Test
     void noRecoveryPeriodLiftsTheTierWithThePause() {
-        var gate = gate(new StabilitySettings(4, 25, 80, 4, 40, 45, 35, 0.25, 0));
+        var gate = gate(new StabilitySettings(25, 80, 4, 40, 45, 35, 0.25, 0));
         mspt = 50;
         gate.maySpawn(dojo);
         mspt = 30;
@@ -308,7 +308,7 @@ class StabilityGateTest {
 
     @Test
     void customLimitsApply() {
-        var gate = gate(new StabilitySettings(2, 3, 5, 1, 30, 50, 20, 0.5, 30));
+        var gate = gate(new StabilitySettings(3, 5, 1, 30, 50, 20, 0.5, 30));
         alive.put(dojo, 3);
         assertFalse(gate.maySpawn(dojo));
         alive.put(dojo, 2);

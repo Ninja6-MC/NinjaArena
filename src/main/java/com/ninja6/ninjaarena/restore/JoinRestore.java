@@ -30,7 +30,11 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
  * that lands within {@link #SETTLE_TICKS} after it is undone once by moving the player back
  * to the restored spot, whatever the plugin and whatever the reason (a plot placement, but
  * also a spawn or hub command). The other plugin's own state, such as an assigned plot or respawn
- * point, is not touched. Server thread only.
+ * point, is not touched.
+ *
+ * <p>A player who quit from the lobby, a room, a match or spectating ({@link Rejoin}) is put
+ * back in the lobby instead, with their snapshot kept for when they leave it. Only when the
+ * lobby cannot take them are they restored as above. Server thread only.
  */
 public final class JoinRestore {
 
@@ -47,12 +51,36 @@ public final class JoinRestore {
         void later(long ticks, Runnable task);
     }
 
+    /** Players who go back to the lobby on joining, rather than home. */
+    public interface Rejoin {
+
+        /** Nobody goes back to the lobby. */
+        Rejoin NONE = new Rejoin() {
+            @Override
+            public boolean claim(UUID player) {
+                return false;
+            }
+
+            @Override
+            public boolean enter(Player player) {
+                return false;
+            }
+        };
+
+        /** Whether the player should go back to the lobby; asked once per join. */
+        boolean claim(UUID player);
+
+        /** Puts the player in the lobby with their snapshot kept; false if it could not. */
+        boolean enter(Player player);
+    }
+
     private record Settle(Location landing, int generation) { }
 
     private final RestoreService restores;
     private final Delayer delayer;
     private final Function<UUID, Player> online;
     private final Predicate<UUID> busy;
+    private final Rejoin rejoin;
     private final Map<UUID, Integer> generations = new HashMap<>();
     private final Map<UUID, Settle> settling = new HashMap<>();
 
@@ -66,6 +94,13 @@ public final class JoinRestore {
      */
     public JoinRestore(RestoreService restores, Delayer delayer, Function<UUID, Player> online,
             Predicate<UUID> busy) {
+        this(restores, delayer, online, busy, Rejoin.NONE);
+    }
+
+    /** @param rejoin who goes back to the lobby rather than home */
+    public JoinRestore(RestoreService restores, Delayer delayer, Function<UUID, Player> online,
+            Predicate<UUID> busy, Rejoin rejoin) {
+        this.rejoin = Objects.requireNonNull(rejoin, "rejoin");
         this.busy = Objects.requireNonNull(busy, "busy");
         this.restores = Objects.requireNonNull(restores, "restores");
         this.delayer = Objects.requireNonNull(delayer, "delayer");
@@ -78,7 +113,16 @@ public final class JoinRestore {
             return;
         }
         int generation = next(playerId);
-        delayer.later(FIRST_DELAY, () -> attempt(playerId, generation, 0));
+        boolean lobby = rejoin.claim(playerId);
+        delayer.later(FIRST_DELAY, () -> {
+            if (lobby && current(playerId, generation)) {
+                Player player = online.apply(playerId);
+                if (player != null && player.isOnline() && !player.isDead() && rejoin.enter(player)) {
+                    return;
+                }
+            }
+            attempt(playerId, generation, 0);
+        });
     }
 
     /** A player left; drops anything scheduled for their connection. */

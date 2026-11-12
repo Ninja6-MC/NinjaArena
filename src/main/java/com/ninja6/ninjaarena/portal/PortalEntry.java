@@ -69,6 +69,12 @@ public final class PortalEntry {
     private Supplier<Optional<ArenaPoint>> hub = Optional::empty;
     private Function<String, Optional<String>> roomFull = arena -> Optional.empty();
     private Supplier<Optional<String>> openArena = Optional::empty;
+    private Predicate<String> roomClaimed = arena -> false;
+
+    /** Arenas rooms hold or wait for; portals into them turn players away meanwhile. */
+    public void setRoomClaims(Predicate<String> roomClaimed) {
+        this.roomClaimed = Objects.requireNonNull(roomClaimed, "roomClaimed");
+    }
 
     /**
      * @param pendingSnapshot {@code SnapshotService#hasPending}
@@ -172,6 +178,9 @@ public final class PortalEntry {
                 return refuse(Reason.UNAVAILABLE, text("entry.editing"));
             }
             return refuse(Reason.UNAVAILABLE, text("entry.not-ready", "arena", name));
+        }
+        if (roomClaimed.test(name)) {
+            return refuse(Reason.UNAVAILABLE, text("entry.room-claimed", "arena", name));
         }
         Optional<String> full = roomFull.apply(name);
         if (full.isPresent()) {

@@ -160,17 +160,25 @@ curtain is a vanilla dust particle, which needs no resource pack on Java or Bedr
 
 `/ninjaarena` is the registered root; `/narena` is its permanent short alias. Run either
 root on its own, or add `help`, to list the commands your permissions allow. Replies use
-plain text, with no clickable chat. Existing `arena`, `portal` and `director` paths stay
-under the root.
+plain text; the only clickable chat is the room buttons described under [Rooms](#rooms).
+Existing `arena`, `portal` and `director` paths stay under the root.
 
 | Command | Permission | Behavior |
 | :--- | :--- | :--- |
 | `help` | Any tier below | List permitted commands |
 | `intro` | `ninjaarena.play` | Show the introduction again in the lobby |
-| `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Return home and restore your snapshot |
+| `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Leave your room, match or spectating for the lobby; from the lobby or a waiting room, return home and restore your snapshot |
 | `leaderboard <stat> [all_time\|season]` | `ninjaarena.leaderboard` | Show the [top ten for a stat](docs/leaderboards.md) |
 | `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from a waiting room |
 | `accept <host>` | `ninjaarena.play` | Accept an invitation and enter the waiting room |
+| `room` | `ninjaarena.play` | Show your room, with remove buttons for its host |
+| `room create` | `ninjaarena.room.create` | Open a room in the lobby and become its host |
+| `room settings [players\|teams\|team-size\|privacy <value>]` | Host | Show or change the room's settings |
+| `room invite [player]` | Host | Invite a player with a join button, or list lobby players with invite buttons |
+| `room accept <host>` | `ninjaarena.play` | Join a host's room: a public one, or one that invited you |
+| `room kick <player>` | Host | Remove a player from the room to the lobby |
+| `room start [host]` | Host, or `ninjaarena.admin` for any room | Start the room's match |
+| `room leave` | `ninjaarena.play` | Leave the room and stay in the lobby |
 | `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
 | `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
@@ -180,12 +188,15 @@ under the root.
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration, kits and messages |
 | `admin lobby <edit\|done\|reset>` | `ninjaarena.admin.lobby` | Change the lobby in edit mode, or put the bundled lobby back |
 
-Enter the Arena by walking through a portal or explicitly accepting an invitation.
-Leaderboard, event management, admin reload and lobby reset also work from the console.
+Enter the Arena by walking through a portal, explicitly accepting an invitation, or
+opening or joining a room. Leaderboard, event management, admin reload, lobby reset and
+`room start <host>` also work from the console.
 
-`ninjaarena.play`, `ninjaarena.spectate` and `ninjaarena.leaderboard` default to everyone.
-`ninjaarena.host`, `ninjaarena.admin` and `ninjaarena.admin.lobby` default to operators.
-Play grants spectate and leaderboard. Host grants play, and admin grants host and
+`ninjaarena.play`, `ninjaarena.spectate`, `ninjaarena.leaderboard` and
+`ninjaarena.room.create` default to everyone, so a server where nobody has op can open
+rooms and play. `ninjaarena.host`, `ninjaarena.admin` and `ninjaarena.admin.lobby` default
+to operators. Play grants spectate, leaderboard and `ninjaarena.room.create`, which can be
+taken away on its own to stop a group opening rooms. Host grants play, and admin grants host and
 `ninjaarena.admin.lobby`, which can also be given on its own to someone who only edits
 the lobby. The root accepts any of these permissions.
 Dispatch, help and tab completion check the permissions for each route.
@@ -217,6 +228,71 @@ unaccepted invitations. Losing the host permission also invalidates it at the ne
 operation or pending entry check. Players already in the waiting room remain there and
 can leave through the normal snapshot restore.
 
+## Rooms
+
+Rooms are how players start matches themselves. `/narena room create` takes the player to
+the lobby, saving their snapshot as a portal does, and opens a room there with them as its
+host. The room plays on a hand-built arena: the first by name that is ready and that no
+other room or waiting room holds. Nothing in a room counts down. The host, or an admin,
+presses start with `/narena room start` once the room has its required player count;
+below it the start is refused.
+
+The host sets the room up with `/narena room settings`:
+
+- `players`: the players needed to start (1 to 64; by default `waiting-room.min-players`).
+- `teams`: how many teams (1 to the arena's team spawns; by default all of them).
+- `team-size`: the most players on one team (0 for no limit; by default
+  `waiting-room.team-size`). The room is full at the team size times the team count.
+- `privacy`: `public`, which anyone may join, or `invite`, which only invited players may.
+
+`/narena room invite Bob` sends Bob a **[Join]** button; `/narena room invite` on its own
+lists the lobby players in no room, each with an **[Invite]** button. A player joins with
+the button or `/narena room accept <host>`; a public room needs no invitation. In
+`/narena room` the host sees a **[Remove]** button beside each player, the same as
+`/narena room kick <player>`. A removed player goes back to the lobby and cannot rejoin a
+public room unless invited again. Players are put on the smallest team and kept within one
+player of each other, as in a waiting room. Settings and removals wait until the room is
+back in the lobby.
+
+When the host leaves, the room passes to the player who has waited in it longest and has
+`ninjaarena.room.create`. When nobody left has it, the room closes and its players stay in
+the lobby. A running match goes on either way.
+
+### Arena slots
+
+A room leases an arena slot as soon as it has its arena, which for now is when it is
+created. The lease lasts through the start, every round and the end of the match, and is
+given up when the room is back in the lobby, where it queues again for its next match, or
+when it closes. `arenas.max-active` in `config.yml` (default 4) caps the slots in use at
+once, matches started from waiting rooms included; it is also never more than the cells
+of the arena grid. While every slot is leased, more rooms queue, and their players see
+their place in the queue. A hand-built arena holds one match at a time, so a room whose
+arena is in use queues for that arena; rooms behind it that want a free arena go first.
+Portals, the shared hub and `/narena host` leave the arenas rooms hold or wait for alone.
+
+`arenas.max-active` was called `stability.max-concurrent-matches`. The old name is still
+read, with a warning at startup and on reload, when the new one is not set; set beside
+it, the old name is ignored. It applies on reload, and a lower value never ends a lease
+already granted: the rooms above it keep their slots, and no new room is let in until
+enough are given up.
+
+### Where players go
+
+| From | How | To |
+| :--- | :--- | :--- |
+| A room's match | The match ends | The lobby, still in the room |
+| A room or a match | `/narena leave` | The lobby, out of the room |
+| A room | `/narena room leave` | The lobby, out of the room |
+| The lobby | `/narena leave` | Home, restoring the snapshot |
+| Spectating | `/narena leave`, or the match ends | The lobby |
+| Anywhere in the plugin's worlds | A teleport out of them | Home, restoring the snapshot |
+| A room, a match, the lobby or spectating | Quit, then rejoin | The lobby, with the snapshot kept |
+
+A player the lobby cannot take is sent home instead. Rejoining puts a player in the lobby
+only while the server keeps running; after a restart they are restored home on joining, as
+before. Waiting rooms and the shared hub keep their own countdown and still send players
+home when they leave them; matches from them end in the lobby like any other.
+
 ## Watching live matches
 
 From any waiting room, run `/narena spectate <arena>` to watch an in-progress match.
@@ -227,9 +303,9 @@ the named match is open to spectators. Ordinary portals still lead to the waitin
 
 Viewers can fly within the arena's three-dimensional bounds. Entity cameras, arena
 interactions, and teleports outside the bounds are blocked. Viewers are outside the
-team rosters, countdown minimum, scoring, and enemy director. Use `/narena leave` to
-return home, or wait for the match to end. Disconnecting frees the spectator slot
-immediately and restores your snapshot on the next join.
+team rosters, countdown minimum, scoring, and enemy director. Use `/narena leave` to go
+to the lobby, or wait for the match to end, which takes you there too. Disconnecting frees
+the spectator slot immediately and puts you in the lobby on your next join.
 
 Set `spectating.enabled` to control admission and `spectating.max-per-match` to set the
 number of viewers per match (1 to 64, default 16). Both options apply to new admissions
@@ -276,6 +352,7 @@ match players or restarts a match.
 
 | Settings | Reload behavior |
 | :--- | :--- |
+| `arenas.max-active` | Applies immediately. A higher value lets queued rooms in; a lower one never ends a lease already granted. The old name `stability.max-concurrent-matches` is read with a warning when the new one is not set. |
 | Waiting-room minimum, countdown and radius | Apply immediately to waiting rooms and the hub; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
 | Default lobby and player caps | Apply immediately. The lobby applies to the next portal entry; players already waiting stay where they are. A lower cap turns away later arrivals but never removes waiting players. |
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
@@ -392,7 +469,6 @@ for save behavior, failure handling and the remaining continuous-use limitation.
 The first successful lobby entry shows a short introduction to tools, the shop and
 arena hazards. It is remembered in player data across restarts and reloads. Use
 `/narena intro` in the lobby to read it again; `texture-menu: chest` sends it in chat.
-Automatic help begins once room admission calls `LobbyMembers.enter` (#143).
 
 Startup also creates or loads a second void world, `ninjaarena_lobby`. Unlike the arena
 world it is saved normally and never unloaded. It has the same rules: inventories are
@@ -420,15 +496,17 @@ death there counts in a match.
 Lobby membership is a player state like a waiting room. A member's inventory is locked
 as in a waiting room, the join restore treats them as busy, and a member who walks or
 falls out of the lobby area is put back at the spawn. That area takes the place of the
-waiting-room radius for members; waiting rooms keep their radius. Nothing sends players
-to the lobby yet: rooms and the move of waiting rooms to the lobby will use it.
+waiting-room radius for members; waiting rooms keep their radius. Rooms bring their
+players here, and the end of a match, leaving a room, match or spectating, and rejoining
+after a quit from any of them lead back here (see [Rooms](#rooms)).
 
 Neither world is a home. No snapshot is taken in either: entering an arena from the arena
 or lobby world is refused, so leave it first. A restore never lands in either: a saved
 spot there is skipped for the player's respawn point, and a respawn point there for the
 main world's spawn. A match player teleported into the lobby world, by NinjaArena or by
 any other plugin, leaves the match and is restored, as with a teleport to any other
-world. Portals cannot be created in either world. A claimed season trophy is delivered
+world; only a room's own players are moved between the two worlds without leaving their
+match. Portals cannot be created in either world. A claimed season trophy is delivered
 only once the player is outside both worlds and not a lobby member.
 
 See the [plugin compatibility audit](docs/plugin-compatibility.md) for setup and
@@ -641,8 +719,9 @@ the tether reattaches only after an invalid target or movement outside the allow
 
 The next round returns spectators to Adventure mode at their team base. A player still
 on the death screen at round start is placed and readied when they respawn. Use
-`/narena leave` to leave while spectating: the existing restore returns the saved
-belongings, game mode and location. Quitting leaves the restore to the next join.
+`/narena leave` to leave while spectating for the lobby; leaving the lobby then returns the
+saved belongings, game mode and location. Quitting puts the player back in the lobby on
+their next join.
 A join restore that another plugin cancels (for example a login plugin) is retried for about a minute, and the player is told if it still fails (a player who joins dead is restored on respawn instead, without retries, a failure message or the window below). For 5 seconds after a restore, any other plugin's teleport (a plot placement, but also a spawn or hub command) is reverted once; NinjaArena's own teleports and players in a match, waiting room or hub are never reverted; see [plugin compatibility](docs/plugin-compatibility.md).
 Every exit first clears spectator mode, so an unsuccessful restore leaves the player in
 Adventure mode while their snapshot remains available for a retry.
@@ -668,7 +747,7 @@ match. Configure these awards with `scoring.round-win-points` and
 `scoring.player-kill-points`; zero disables an award and negative values become zero.
 Teamkills, suicides, environmental deaths, leaving and drawn rounds award nothing.
 Points decide the match standings and whether an extra round is needed. The final points
-table is shown to the match's online players before they return home.
+table is shown to the match's online players before they go back to the lobby.
 
 Other features can award team points on the server thread through
 `plugin.scores().addPoints(match, team, points)`, using the live `MatchView` from

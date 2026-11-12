@@ -38,6 +38,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -55,20 +56,22 @@ import org.bukkit.scheduler.BukkitTask;
 /**
  * Runs every match: takes over the players of a finished waiting-room countdown
  * ({@link MatchStart}), ticks each {@link Match} once a second, teleports teams to their
- * spawns at the start of every round, and sends everyone home through the restore flow when
- * the match closes. The round rules are in {@link Match}.
+ * spawns at the start of every round, and sends everyone to the lobby when the match closes
+ * ({@link #setLobby}). The round rules are in {@link Match}.
  *
  * <p><b>Arena.</b> A match holds its arena from start to close, so no other match, waiting
  * room or edit can use it. The arena is reset from its saved copy before the players arrive
  * and again when the match closes. If it cannot be held or the first reset fails, the
- * match does not start and its players are sent home; a failed reset at the close is logged,
+ * match does not start and its players go back; a failed reset at the close is logged,
  * and the registry keeps the arena unavailable until a reset succeeds.
  *
  * <p><b>Leaving.</b> A player leaves the match by the leave command, by being teleported out
- * of the arena world for any reason, or by disconnecting. Each of these restores them from
- * their snapshot, except a disconnect: that snapshot is restored when they next join. A
- * player is taken out of the match before the restore runs, so the restore's own teleport is
- * not seen as another exit. Disabling the plugin stops every match and sends everyone home.
+ * of the arena world for any reason, or by disconnecting. The leave command, like the end of
+ * the match, takes them to the lobby with their snapshot kept; a teleport out restores them
+ * home from it; a disconnect leaves it for their next join. Where the lobby cannot take a
+ * player, they are sent home. A player is taken out of the match before they are moved, so
+ * that teleport is not seen as another exit. Disabling the plugin stops every match and
+ * sends everyone home.
  *
  * <p><b>Elimination.</b> Dying in a round takes the player out of that round. Death handling
  * builds on {@link PlayerEliminatedEvent} and {@link #respawnPoint(UUID)} to retain their
@@ -99,6 +102,31 @@ public final class MatchService implements MatchStart {
     }
 
     private Function<String, Bonus> eventBonus = arena -> Bonus.NONE;
+    private Predicate<Player> lobby = player -> false;
+    private Consumer<String> closed = arena -> { };
+    private boolean closing;
+
+    /**
+     * Where players go when the match ends or they leave it with the command: the lobby,
+     * {@code RoomService#enterLobby} on a server. When it answers false they are sent home
+     * from their snapshot; by default everyone is.
+     */
+    public void setLobby(Predicate<Player> lobby) {
+        this.lobby = Objects.requireNonNull(lobby, "lobby");
+    }
+
+    /**
+     * Told an arena's name once its match has closed, its players have gone back and the
+     * arena is reset and released.
+     */
+    public void onClose(Consumer<String> closed) {
+        Consumer<String> earlier = this.closed;
+        Objects.requireNonNull(closed, "closed");
+        this.closed = arena -> {
+            earlier.accept(arena);
+            closed.accept(arena);
+        };
+    }
 
     public void setEventBonus(Function<String, Bonus> eventBonus) {
         this.eventBonus = Objects.requireNonNull(eventBonus, "eventBonus");
@@ -178,10 +206,11 @@ public final class MatchService implements MatchStart {
     }
 
     /**
-     * Starts a match with the players of a finished countdown: holds the arena, resets it,
-     * and starts round 1, which teleports every team to its spawn. If the arena cannot be held
-     * or reset, the players are told and sent home and nothing is thrown. Anything else that
-     * goes wrong releases the arena and is thrown, so the waiting room sends the players home.
+     * Starts a match with the players of a finished countdown or a room's start: holds the
+     * arena, resets it, and starts round 1, which teleports every team to its spawn. If the
+     * arena cannot be held or reset, the players are told and sent to the lobby, or home, and
+     * nothing is thrown. Anything else that goes wrong releases the arena and is thrown, so the
+     * caller can deal with its players.
      */
     @Override
     public void start(String arenaName, List<List<UUID>> teams) {
@@ -308,7 +337,8 @@ public final class MatchService implements MatchStart {
     }
 
     /**
-     * Takes a player out of their match and, unless they quit, sends them home.
+     * Takes a player out of their match. The command takes them to the lobby, a teleport
+     * sends them home, and a quit leaves them for their next join.
      *
      * @return false if they were not in a match
      */
@@ -327,7 +357,7 @@ public final class MatchService implements MatchStart {
             }
             case COMMAND -> {
                 player.sendMessage(msg("match.left"));
-                sendHome(player);
+                sendBack(player);
             }
             case TELEPORTED -> {
                 player.sendMessage(msg("match.left"));
@@ -360,6 +390,7 @@ public final class MatchService implements MatchStart {
             ticker.cancel();
             ticker = null;
         }
+        closing = true;
         for (Running running : new ArrayList<>(matches.values())) {
             apply(running, running.match().stop());
         }
@@ -455,7 +486,10 @@ public final class MatchService implements MatchStart {
         }
     }
 
-    /** Sends everyone still in the match home, resets the arena and releases it. */
+    /**
+     * Sends everyone still in the match to the lobby, or home on plugin disable, resets the
+     * arena and releases it.
+     */
     private void close(Running running) {
         Match match = running.match();
         if (!matches.remove(match.arena(), running)) {
@@ -468,7 +502,11 @@ public final class MatchService implements MatchStart {
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null && player.isOnline()) {
                 player.sendActionBar(Component.empty());
-                sendHome(player);
+                if (closing) {
+                    sendHome(player);
+                } else {
+                    sendBack(player);
+                }
             }
         }
         try {
@@ -478,6 +516,7 @@ public final class MatchService implements MatchStart {
                     + " stays unavailable until a reset succeeds or an edit finishes.", e);
         }
         arenas.release(match.arena());
+        closed.accept(match.arena());
     }
 
     private void forget(Running running) {
@@ -507,7 +546,7 @@ public final class MatchService implements MatchStart {
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null && player.isOnline()) {
                 player.sendMessage(message);
-                sendHome(player);
+                sendBack(player);
             }
         }
     }
@@ -562,6 +601,20 @@ public final class MatchService implements MatchStart {
     private String name(UUID playerId) {
         Player player = plugin.getServer().getPlayer(playerId);
         return player != null ? player.getName() : playerId.toString();
+    }
+
+    /** To the lobby, or home when the lobby cannot take the player. */
+    private void sendBack(Player player) {
+        boolean placed;
+        try {
+            placed = lobby.test(player);
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(Level.SEVERE, "Could not send " + player.getName() + " to the lobby.", e);
+            placed = false;
+        }
+        if (!placed) {
+            sendHome(player);
+        }
     }
 
     private void sendHome(Player player) {

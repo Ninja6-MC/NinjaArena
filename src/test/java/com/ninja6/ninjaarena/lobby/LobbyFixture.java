@@ -159,7 +159,15 @@ abstract class LobbyFixture {
                         fake.fallDistance = (Float) args[0];
                         yield null;
                     }
-                    case "setVelocity" -> null;
+                    case "setVelocity", "closeInventory", "getItemOnCursor" -> null;
+                    case "getOpenInventory" -> Proxy.newProxyInstance(org.bukkit.inventory.InventoryView.class
+                            .getClassLoader(), new Class<?>[] {org.bukkit.inventory.InventoryView.class},
+                            (view, viewMethod, viewArgs) -> switch (viewMethod.getName()) {
+                                case "getTopInventory" -> Proxy.newProxyInstance(
+                                        org.bukkit.inventory.Inventory.class.getClassLoader(),
+                                        new Class<?>[] {org.bukkit.inventory.Inventory.class}, (i, m, a) -> null);
+                                default -> throw new UnsupportedOperationException(viewMethod.getName());
+                            });
                     case "sendMessage" -> {
                         fake.messages.add(args[0] instanceof Component component
                                 ? PlainTextComponentSerializer.plainText().serialize(component) : String.valueOf(args[0]));
