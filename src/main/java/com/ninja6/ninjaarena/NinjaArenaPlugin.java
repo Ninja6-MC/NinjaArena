@@ -1,6 +1,5 @@
 package com.ninja6.ninjaarena;
 
-import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaGrid;
 import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
@@ -73,6 +72,7 @@ import com.ninja6.ninjaarena.restore.ArenaCombatCleanup;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
+import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.spectate.Spectators;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;

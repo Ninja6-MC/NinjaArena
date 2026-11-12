@@ -9,12 +9,19 @@ import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.sound.Sounds.Cue;
+import com.ninja6.ninjaarena.tool.ToolSettings;
+import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
+import com.ninja6.ninjaarena.world.ArenaWorldSettings;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import org.bukkit.configuration.ConfigurationSection;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class SoundsTest extends MatchFixture {
-    @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir;
+    @TempDir Path dir;
 
     @Test
     void reloadChangesTheNextCueInAnExistingMatchAndBadValuesFallBack() throws Exception {
@@ -24,18 +31,18 @@ class SoundsTest extends MatchFixture {
         var warnings = new ArrayList<String>();
         var target = new ConfigReload.Target() {
             public boolean canResize() { return true; }
-            public void world(com.ninja6.ninjaarena.world.ArenaWorldSettings value) { }
+            public void world(ArenaWorldSettings value) { }
             public void grid(int size, double border) { }
-            public void waiting(com.ninja6.ninjaarena.waiting.WaitingRoomSettings value) { }
+            public void waiting(WaitingRoomSettings value) { }
             public void match(MatchSettings value, boolean friendlyFire, ScoringSettings scoring) { }
-            public void tools(com.ninja6.ninjaarena.tool.ToolSettings value) { }
+            public void tools(ToolSettings value) { }
             public void kit(KitDefinition value) { }
-            public void configuration(org.bukkit.configuration.ConfigurationSection value) {
+            public void configuration(ConfigurationSection value) {
                 sounds.load(value, warnings::add);
             }
         };
         var reload = new ConfigReload(dir, config, KitDefinition.EMPTY, new KitItems(), target);
-        java.nio.file.Files.writeString(dir.resolve("kits.yml"), "format: 1\nitems: []\n");
+        Files.writeString(dir.resolve("kits.yml"), "format: 1\nitems: []\n");
         config.set("sounds.hazard-warning.sound", "minecraft:ui.button.click");
         config.set("sounds.hazard-warning.volume", 0.1);
         config.save(dir.resolve("config.yml").toFile());

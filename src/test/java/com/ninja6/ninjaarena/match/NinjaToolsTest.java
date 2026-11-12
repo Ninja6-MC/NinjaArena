@@ -8,15 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent;
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
-import com.ninja6.ninjaarena.match.event.RoundStartEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
+import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
+import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.support.TestTaggedItem;
 import com.ninja6.ninjaarena.tool.NinjaTool;
 import com.ninja6.ninjaarena.tool.NinjaTools;
@@ -48,6 +48,7 @@ import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
@@ -224,9 +225,37 @@ class NinjaToolsTest extends MatchFixture {
     }
 
     @Test
+    void cooldownCuesStaySilentAfterTheLastAllowedThrow() {
+        fight();
+        tools.setSounds(new Sounds(plugin.getServer()::getPlayer));
+        var match = matches.matchOf(ALICE).orElseThrow();
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            for (int limit : List.of(1, 2)) {
+                tools.prepareRound(ALICE);
+                players.get(ALICE).sounds.clear();
+                tools.setSettings(throwSettings(1, limit, 1, limit));
+                assertFalse(launch(ALICE, tool).event().isCancelled());
+                tick += 20;
+                tools.checkCooldowns(match);
+                tools.checkCooldowns(match);
+                assertEquals(limit == 1 ? 0 : 1, players.get(ALICE).sounds.size(), tool + " limit " + limit);
+                assertEquals(limit == 1, tools.throwState(ALICE, tool).usedUp());
+                if (limit == 2) {
+                    assertFalse(launch(ALICE, tool).event().isCancelled());
+                    tick += 20;
+                    tools.checkCooldowns(match);
+                    assertEquals(1, players.get(ALICE).sounds.size(), tool + " final throw");
+                }
+                assertTrue(tools.throwState(ALICE, tool).usedUp());
+                assertTrue(launch(ALICE, tool).event().isCancelled());
+            }
+        }
+    }
+
+    @Test
     void reusingAToolBeforeTheHudCheckPreservesBothCooldownCompletions() {
         fight();
-        tools.setSounds(new com.ninja6.ninjaarena.sound.Sounds(plugin.getServer()::getPlayer));
+        tools.setSounds(new Sounds(plugin.getServer()::getPlayer));
         tools.setSettings(throwSettings(1, 0, 0, 0));
         launch(ALICE, NinjaTool.SHURIKEN);
         tick += 20;
@@ -242,7 +271,7 @@ class NinjaToolsTest extends MatchFixture {
     @Test
     void cooldownCuesExpireOnceForTheirOwnerAndClearsStaySilent() {
         fight();
-        tools.setSounds(new com.ninja6.ninjaarena.sound.Sounds(plugin.getServer()::getPlayer));
+        tools.setSounds(new Sounds(plugin.getServer()::getPlayer));
         tools.setSettings(throwSettings(1, 0, 1, 0));
         var match = matches.matchOf(ALICE).orElseThrow();
         launch(ALICE, NinjaTool.SHURIKEN);

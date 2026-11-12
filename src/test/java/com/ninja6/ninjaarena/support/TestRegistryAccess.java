@@ -11,6 +11,7 @@ import org.bukkit.Color;
 import org.bukkit.Keyed;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
+import org.bukkit.Sound;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.BlockType;
@@ -47,8 +48,8 @@ public final class TestRegistryAccess implements RegistryAccess {
                                     "entity.player.levelup", "ui.button.click").contains(value)) {
                                 return null;
                             }
-                            return Proxy.newProxyInstance(org.bukkit.Sound.class.getClassLoader(),
-                                    new Class<?>[] {org.bukkit.Sound.class}, (p, m, a) -> switch (m.getName()) {
+                            return Proxy.newProxyInstance(Sound.class.getClassLoader(),
+                                    new Class<?>[] {Sound.class}, (p, m, a) -> switch (m.getName()) {
                                         case "key", "getKey" -> NamespacedKey.minecraft(value);
                                         default -> throw new UnsupportedOperationException(m.getName());
                                     });

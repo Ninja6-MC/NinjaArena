@@ -2,15 +2,20 @@ package com.ninja6.ninjaarena.sound;
 
 import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.room.Room;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 
@@ -34,7 +39,7 @@ public final class Sounds {
         }
 
         public String key() {
-            return name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+            return name().toLowerCase(Locale.ROOT).replace('_', '-');
         }
 
         public Sound defaultSound() {
@@ -47,7 +52,7 @@ public final class Sounds {
     private final Map<Cue, Sound> settings = new EnumMap<>(Cue.class);
 
     public Sounds(Function<UUID, Player> players) {
-        this(players, arena -> java.util.List.of());
+        this(players, arena -> List.of());
     }
 
     public Sounds(Function<UUID, Player> players, Function<String, ? extends Collection<UUID>> spectators) {
@@ -82,10 +87,10 @@ public final class Sounds {
     }
 
     private static boolean known(String key) {
-        org.bukkit.NamespacedKey parsed = org.bukkit.NamespacedKey.fromString(key);
+        NamespacedKey parsed = NamespacedKey.fromString(key);
         return parsed != null && parsed.getNamespace().equals("minecraft")
-                && io.papermc.paper.registry.RegistryAccess.registryAccess()
-                        .getRegistry(io.papermc.paper.registry.RegistryKey.SOUND_EVENT).get(parsed) != null;
+                && RegistryAccess.registryAccess()
+                        .getRegistry(RegistryKey.SOUND_EVENT).get(parsed) != null;
     }
 
     private static float number(ConfigurationSection config, String path, float fallback, float min, float max,

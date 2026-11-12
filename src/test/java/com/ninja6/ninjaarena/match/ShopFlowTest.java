@@ -18,10 +18,11 @@ import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.shop.Shop;
-import com.ninja6.ninjaarena.shop.ShopCatalogue;
 import com.ninja6.ninjaarena.shop.ShopCatalogue.Category;
 import com.ninja6.ninjaarena.shop.ShopCatalogue.Entry;
 import com.ninja6.ninjaarena.shop.ShopCatalogue.Potion;
+import com.ninja6.ninjaarena.shop.ShopCatalogue;
+import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.support.TestItemStack;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import com.ninja6.ninjaarena.tool.ToolSettings;
@@ -166,7 +167,7 @@ class ShopFlowTest extends MatchFixture {
 
     @Test
     void startReadyAndPurchaseCuesReachOnlyTheirIntendedAudience() {
-        var sounds = new com.ninja6.ninjaarena.sound.Sounds(plugin.getServer()::getPlayer);
+        var sounds = new Sounds(plugin.getServer()::getPlayer);
         matches.setSounds(sounds);
         shop.setSounds(sounds);
         startTwoOnTwo();

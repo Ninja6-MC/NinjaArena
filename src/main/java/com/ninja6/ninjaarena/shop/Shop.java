@@ -1,7 +1,5 @@
 package com.ninja6.ninjaarena.shop;
 
-import com.ninja6.ninjaarena.sound.Sounds;
-import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.match.MatchService;
@@ -11,6 +9,8 @@ import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import com.ninja6.ninjaarena.sound.Sounds;
+import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import java.util.ArrayList;
 import java.util.HashMap;

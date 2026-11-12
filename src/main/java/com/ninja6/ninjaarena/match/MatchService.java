@@ -2,8 +2,6 @@ package com.ninja6.ninjaarena.match;
 
 import static com.ninja6.ninjaarena.message.Messages.msg;
 
-import com.ninja6.ninjaarena.sound.Sounds;
-import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaException;
@@ -31,6 +29,8 @@ import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
+import com.ninja6.ninjaarena.sound.Sounds;
+import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.waiting.MatchStart;
 import java.util.ArrayList;
 import java.util.HashMap;
