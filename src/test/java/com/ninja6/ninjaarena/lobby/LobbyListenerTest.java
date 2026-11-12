@@ -11,6 +11,7 @@ import java.util.List;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
@@ -19,6 +20,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -173,6 +175,28 @@ class LobbyListenerTest extends LobbyFixture {
 
         BlockBreakEvent outside = new BlockBreakEvent(block(overworld), bob);
         listener.onBreak(outside);
+        assertFalse(outside.isCancelled());
+    }
+
+    @Test
+    void onlyAnEditorMayPlaceEntitiesAndAPlacementWithoutAPlayerIsLeftAlone() {
+        Player alice = add(ALICE, "Alice", inLobby(0.5, 65, 0.5));
+        EntityPlaceEvent visitor = new EntityPlaceEvent(stand(lobbyWorld), alice, block(lobbyWorld), BlockFace.UP);
+        listener.onEntityPlace(visitor);
+        assertTrue(visitor.isCancelled());
+
+        editing.edit(alice, "narena");
+        EntityPlaceEvent editor = new EntityPlaceEvent(stand(lobbyWorld), alice, block(lobbyWorld), BlockFace.UP);
+        listener.onEntityPlace(editor);
+        assertFalse(editor.isCancelled());
+
+        EntityPlaceEvent noPlayer = new EntityPlaceEvent(stand(lobbyWorld), null, block(lobbyWorld), BlockFace.UP);
+        listener.onEntityPlace(noPlayer);
+        assertFalse(noPlayer.isCancelled());
+
+        Player bob = add(BOB, "Bob", new Location(overworld, 0, 70, 0));
+        EntityPlaceEvent outside = new EntityPlaceEvent(stand(overworld), bob, block(overworld), BlockFace.UP);
+        listener.onEntityPlace(outside);
         assertFalse(outside.isCancelled());
     }
 

@@ -17,6 +17,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
@@ -37,8 +38,8 @@ import org.bukkit.event.player.PlayerTeleportEvent;
  * climbing out, is put back at the spawn as well, and one teleported out of the lobby world
  * stops being a member.
  *
- * <p>Nobody can break or place blocks, use buckets, or change hanging items or armour stands
- * in the lobby world, except an admin in lobby edit mode. Environmental changes are stopped
+ * <p>Nobody can break or place blocks, place entities such as armour stands or boats, use
+ * buckets, or change hanging items or armour stands in the lobby world, except an admin in lobby edit mode. Environmental changes are stopped
  * separately, by {@code ArenaProtectionListener}.
  */
 public final class LobbyListener implements Listener {
@@ -133,6 +134,14 @@ public final class LobbyListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onHangingPlace(HangingPlaceEvent event) {
         protect(event.getPlayer(), event.getEntity().getWorld(), event);
+    }
+
+    /** Armour stands, boats, minecarts and end crystals; a placement with no player is left alone. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onEntityPlace(EntityPlaceEvent event) {
+        if (event.getPlayer() != null) {
+            protect(event.getPlayer(), event.getEntity().getWorld(), event);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
