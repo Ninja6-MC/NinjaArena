@@ -284,7 +284,7 @@ system itself; and the reasons `/narena admin reload` gives for rejecting `confi
 
 Both qualities use the NinjaArena plugin icon as their Java and Bedrock pack-list
 icon. Icon updates change pack hashes: when cutting the next release,
-follow [the release checklist](RELEASE_PROCESS.md#promotion-and-recovery) to
+follow [the release checklist](RELEASE_PROCESS.md#after-publication) to
 refresh Java URL/SHA-1 and Bedrock filename/SHA-256 examples from verified assets.
 
 Resource-pack delivery is off by default. Enable it only after hosting the versioned

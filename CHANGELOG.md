@@ -20,6 +20,13 @@ Java 25, and does not run on Folia.
   match. Portals cannot be created in it. World-manager plugins must leave both worlds
   alone (see the plugin compatibility audit).
 
+- Each release is one GitHub release carrying the plugin JAR with the Java and Bedrock
+  resource packs, the Geyser mappings and a `SHA256SUMS` file, all built once from the
+  tagged commit. The release candidate tests the downloaded JAR and packs before a
+  gated publisher, approved by the maintainer, uploads those same bytes. Alpha, beta
+  and rc tags are published as pre-releases, and only the highest stable release is
+  marked latest. `RELEASE_PROCESS.md` describes the procedure and how to retry it.
+
 - Per-player shuriken and smoke bomb cooldown and per-round limit hints in the match
   action bar on Java and Bedrock. Used-up hints take priority over cooldown seconds;
   ready tools leave the existing status unchanged. Hint text and separators are

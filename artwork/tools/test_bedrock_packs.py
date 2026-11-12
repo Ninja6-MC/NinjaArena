@@ -1,4 +1,4 @@
-"""Checks converted Bedrock files, item mappings and shared promotion guards."""
+"""Checks converted Bedrock files and item mappings."""
 
 import importlib.util
 import json
@@ -6,7 +6,6 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
-from unittest.mock import patch
 import zipfile
 
 SPEC = importlib.util.spec_from_file_location("bedrock_packs", Path(__file__).with_name("bedrock-packs.py"))
@@ -14,8 +13,6 @@ packs = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(packs)
 SOURCE = "a" * 40
 VERSION = "v0.1.0-rc.1"
-GATE = json.dumps({"protection_rules": [{"type": "required_reviewers", "reviewers": [
-    {"type": "User", "reviewer": {"login": "BharathASL"}}]}]})
 
 
 class BedrockPacksTest(unittest.TestCase):
@@ -35,13 +32,6 @@ class BedrockPacksTest(unittest.TestCase):
 
     def verify(self):
         return packs.verify(packs.ROOT, self.output, VERSION, SOURCE, "42", "1")
-
-    def evidence(self):
-        file = self.folder / "evidence.json"
-        value = self.verify()
-        value.update(verification_run_id="42", verification_attempt="1")
-        packs.java.write_json(file, value)
-        return file
 
     def rehash(self):
         manifest = packs.java.read_json(self.output / packs.MANIFEST)
@@ -235,42 +225,6 @@ class BedrockPacksTest(unittest.TestCase):
             packs.verify(packs.ROOT, self.output, VERSION, "b" * 40, "42", "1")
         with self.assertRaisesRegex(ValueError, "attempt mismatch"):
             packs.verify(packs.ROOT, self.output, VERSION, SOURCE, "42", "2")
-
-    def test_missing_evidence_stops_before_network(self):
-        evidence = self.folder / "evidence.json"
-        packs.java.write_json(evidence, {"result": "failed"})
-        with patch.object(packs.java.subprocess, "check_output") as network:
-            with self.assertRaisesRegex(ValueError, "verification evidence"):
-                packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-            network.assert_not_called()
-
-    def test_shared_release_gate_fails_closed(self):
-        evidence = self.evidence()
-        with patch.object(packs.java.subprocess, "check_output", return_value="{}") as network, \
-                patch.object(packs.java.subprocess, "run") as upload:
-            with self.assertRaisesRegex(ValueError, "must require maintainer review"):
-                packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-            self.assertEqual(1, network.call_count)
-            upload.assert_not_called()
-
-    def test_shared_publisher_checks_tag_and_does_not_overwrite_existing_assets(self):
-        evidence = self.evidence()
-        with patch.object(packs.java.subprocess, "check_output", side_effect=[GATE, f'{"b" * 40}\trefs/tags/{VERSION}\n']), \
-                patch.object(packs.java.subprocess, "run") as upload:
-            with self.assertRaisesRegex(ValueError, "no longer points"):
-                packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-            upload.assert_not_called()
-        release = {"tagName": VERSION, "isPrerelease": True, "isDraft": False, "assets": [{"name": packs.MANIFEST}]}
-
-        def download(command, **kwargs):
-            self.assertEqual(["gh", "release", "download"], command[:3])
-            (Path(command[-1]) / packs.MANIFEST).write_bytes(b"conflicting public bytes")
-
-        with patch.object(packs.java.subprocess, "check_output", side_effect=[GATE, f'{SOURCE}\trefs/tags/{VERSION}\n', json.dumps(release)]), \
-                patch.object(packs.java.subprocess, "run", side_effect=download) as network:
-            with self.assertRaisesRegex(ValueError, "never overwrite"):
-                packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-            self.assertEqual(1, network.call_count)
 
 
 if __name__ == "__main__":

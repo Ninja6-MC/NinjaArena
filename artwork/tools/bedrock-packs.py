@@ -260,13 +260,9 @@ def verify(root, folder, version, source, run_id, attempt):
             "run_id": str(run_id), "attempt": str(attempt), "result": "passed"}
 
 
-def publish(root, folder, evidence, version, source, run_id, attempt):
-    java.publish(root, folder, evidence, version, source, run_id, attempt, verifier=verify, manifest_name=MANIFEST)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("convert", "mappings", "build", "verify", "publish"))
+    parser.add_argument("command", choices=("convert", "mappings", "build", "verify"))
     parser.add_argument("--output", type=Path, default=ROOT / "build/bedrock-resourcepacks")
     parser.add_argument("--converted", type=Path, default=ROOT / "build/bedrock-converted")
     parser.add_argument("--mapping-file", type=Path, default=ROOT / "build/bedrock-mappings.json")
@@ -288,14 +284,12 @@ def main():
         source = args.source or subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         if args.command == "build":
             build(ROOT, args.output, args.version, source, args.run_id, args.attempt, args.converted, args.mapping_file)
-        elif args.command == "verify":
+        else:
             evidence = verify(ROOT, args.output, args.version, source, args.run_id, args.attempt)
             evidence.update(verification_run_id=os.environ.get("GITHUB_RUN_ID", "local"),
                             verification_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"))
             args.evidence.parent.mkdir(parents=True, exist_ok=True)
             java.write_json(args.evidence, evidence)
-        else:
-            publish(ROOT, args.output, args.evidence, args.version, source, args.run_id, args.attempt)
 
 
 if __name__ == "__main__":
