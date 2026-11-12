@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.command;
 
 import static com.ninja6.ninjaarena.message.Messages.msg;
 
+import com.ninja6.ninjaarena.message.Keyed;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.texture.PlayerKey;
 import java.util.ArrayList;
@@ -247,8 +248,8 @@ public final class NinjaArenaCommand implements TabExecutor {
         try {
             key = PlayerKey.of(edition, args[4]);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(msg("command.invalid-player-id", "reason", e.getMessage(), "label", label,
-                    "usage", usage));
+            sender.sendMessage(msg("command.invalid-player-id", "reason", e instanceof Keyed keyed ? keyed.text()
+                    : e.getMessage(), "label", label, "usage", usage));
             return;
         }
         if (textures == null) {

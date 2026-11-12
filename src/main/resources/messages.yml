@@ -1,5 +1,13 @@
-# NinjaArena player messages. Every text the plugin shows to players and admins is here,
-# so it can be reworded or translated. /ninjaarena admin reload reads this file again.
+# NinjaArena player messages: the text the plugin shows to players and admins, so it can
+# be reworded or translated. /ninjaarena admin reload reads this file again.
+#
+# A few things are not here. Command argument syntax and argument names, such as create
+# <name> [<cell x> <cell z>] or x1, are filled in as <usage> and <what>. Names of arenas,
+# portals, worlds, files and config.yml settings are filled in as they are. Errors from
+# the system itself, such as a file or database failure or a YAML parse error, are filled
+# in as <reason>. The reasons /ninjaarena admin reload gives for rejecting config.yml or
+# kits.yml are configuration diagnostics, also written to the server log, and stay in
+# English.
 #
 # Format: MiniMessage, https://docs.advntr.dev/minimessage/format.html. Colours and styles
 # are tags such as <red>, <gold>, <bold> or <#ff8800>; </red> ends one early. Keep each
@@ -12,7 +20,9 @@
 # can never add formatting or click actions.
 #
 # A text that is missing, is not text (a list, say) or uses a tag MiniMessage cannot read
-# falls back to the bundled default, with one warning in the server log per key.
+# falls back to the bundled default, with one warning in the server log per key. A key
+# this version does not know is ignored, with a warning. Startup and reload read the file
+# the same way.
 #
 # Some texts are passed on as plain text: menu and dialog items, kick screens, entry
 # refusals, reload reports and the Discord webhook. Formatting tags in those are removed;
@@ -42,6 +52,11 @@ command:
   unknown-subcommand: "<red>Unknown subcommand <subcommand>. Use one of: <subcommands>."
   error: "<red><message>"
   warning: "<yellow><message>"
+  failed: "<reason>"
+  player-id:
+    xuid: "A Bedrock XUID is 1 to 20 digits"
+    xuid-required: "A Bedrock XUID is required"
+    java: "A Java id is a full account UUID"
 
 # The help list: one description per subcommand.
 help:
@@ -61,7 +76,8 @@ help:
   admin: "reload the Arena configuration, or reset a player's texture quality to Standard"
 
 # /ninjaarena arena: building and registering arenas. <cell>, <bounds> and <point> are
-# coordinates.
+# coordinates. invalid and error are refusals, shown through command.error; problem lists
+# what keeps an arena from hosting a match, as plain text shown through command.warning.
 arena:
   created: "<green>Arena <arena> created in cell <cell> (<cell-bounds>) and put in edit mode."
   deleted: "<green>Arena <arena> removed from the registry. Its blocks are still in the world."
@@ -97,8 +113,65 @@ arena:
   team-spawn-removed: "<green>Team <team> spawn of <arena> removed."
   enemy-spawn-added: "<green>Enemy spawn <number> of <arena> added at <point>."
   enemy-spawn-removed: "<green>Enemy spawn <number> of <arena> removed; later ones moved up."
+  invalid:
+    name: "Invalid arena name <name>."
+    too-many-teams: "At most <max> team spawns."
+    team: "Team must be 1 to <max>."
+    no-team-spawns: "No team spawns to remove."
+    no-enemy-spawn: "No enemy spawn <number>."
+    coordinates: "Coordinates must be finite."
+    rotation: "Yaw and pitch must be finite."
+  error:
+    unknown: "No arena called <arena>."
+    bad-name: "Arena names are 1 to 32 letters, digits, _ or -."
+    exists: "An arena called <arena> already exists."
+    no-free-cell: "Every grid cell inside the world border is taken."
+    cell-outside: "Cell <cell> is not inside the world border."
+    cell-taken: "Cell <cell> already holds an arena."
+    in-use: "Arena <arena> is in use by a match."
+    already-in-use: "Arena <arena> is already in use by a match."
+    unavailable: "Arena <arena> is not available for a match."
+    already-editing: "Arena <arena> is already in edit mode."
+    not-editing: "Arena <arena> is not in edit mode."
+    not-editing-hint: "Arena <arena> is not in edit mode. Start it with edit <arena> on."
+    reset-editing: "Arena <arena> is in edit mode; a reset would undo the edit."
+    match-while-editing: "No match can start while <arenas> is in edit mode: edit mode turns on saving for the whole arena world."
+    edit-while-match: "Arenas cannot be edited while a match is running in <arenas>: edit mode turns on saving for the whole arena world."
+    world-busy: "The arena world is changing state; try again once it is ready."
+    piston-moving: "A piston is still moving; wait for it to stop before finishing the edit"
+    freeze-unsupported: "Cannot freeze arena block actions on this server version"
+    edit-reset-failed: "Could not reset <arena> from its saved copy before the edit, so it stays out of edit mode: <reason>. To edit it as the world has it now, remove its folder plugins/NinjaArena/arena-copies/<arena> and start the edit again; finishing the edit saves a new copy. Or delete the arena and create it again."
+    copy-save-failed: "Could not save the copy of <arena>, so it stays in edit mode: <reason>"
+    reset-failed: "Could not reset <arena>: <reason>"
+    copy-missing: "Could not reset <arena> from its saved copy: the authoritative saved copy is missing"
+    copy-restore-failed: "Could not reset <arena> from its saved copy: <reason>"
+    close-save-failed: "Could not save the copy of <arena> while closing its edit: <reason>"
+    copy-delete-failed: "Could not delete the saved copy of <arena>: <reason>"
+    store-unreadable: "<file> could not be read at startup. Fix or remove it and restart before changing arenas."
+    store-save-failed: "Could not save <file>: <reason>"
+    teleport-outside: "The arena teleport target is outside the supported world border."
+    bounds-leave-cell: "Bounds <bounds> leave the arena's cell (<cell-bounds>)."
+    bounds-enclose-hub: "Bounds <bounds> enclose the shared hub at <point>. Move it first with portal sethub."
+    give-coordinates: "Give coordinates: <usage>"
+    stand-in-world: "Stand in the arena world (<world>) or give coordinates."
+    pitch: "Pitch must be between -90 and 90."
+    relative: "~ needs a player standing in the arena world; give a number for <what>."
+    out-of-range: "<what> is out of range."
+    not-number: "<what> must be a number, not <token>."
+    not-whole: "<what> must be a whole number, not <token>."
+  problem:
+    cell-outside: "Cell <cell> is not inside the world border."
+    no-bounds: "Bounds are not set."
+    bounds-leave-cell: "Bounds <bounds> leave cell <cell> (<cell-bounds>)."
+    no-waiting-room: "The waiting room is not set."
+    waiting-room-outside: "The waiting room is outside the bounds."
+    team-spawns: "Needs <min> to <max> team spawns, has <count>."
+    team-spawn-outside: "Team <team> spawn is outside the bounds."
+    no-enemy-spawns: "Needs at least one enemy spawn point: enemies spawn there during rounds."
+    enemy-spawn-outside: "Enemy spawn <number> is outside the bounds."
 
-# /ninjaarena portal: marking out portals and the shared hub.
+# /ninjaarena portal: marking out portals and the shared hub. invalid and error are
+# refusals, shown through command.error.
 portal:
   corner-players-only: "<red>Only a player can select a portal region."
   corner-cleared: "<yellow>Your other corner was in <world> and has been cleared."
@@ -146,9 +219,30 @@ portal:
     in-use: "closed, arena in use by a match"
     editing: "closed while arenas are in edit mode"
     not-ready: "closed, arena not ready"
+  invalid:
+    name: "Invalid portal name <name>."
+    world: "World must not be blank."
+    arena-world: "Portals cannot be in the arena world."
+    frame: "Invalid frame block <frame>."
+    spectator-lobby: "A spectator portal leads to a live match and has no lobby."
+    built-lobby: "A player-built portal follows the server default lobby."
+    too-large: "A portal can be at most <max> blocks along each axis."
+  error:
+    unknown: "No portal called <portal>."
+    bad-name: "Portal names are 1 to 32 letters, digits, _ or -."
+    exists: "A portal called <portal> already exists."
+    no-free-name: "No portal name is free."
+    overlaps: "That region overlaps portal <portal>."
+    built-lobby: "Portal <portal> is player-built and always follows waiting-room.lobby in config.yml."
+    no-selection: "Set both corners first with setcorner 1 and setcorner 2."
+    hub-outside: "The hub must be inside the arena world border."
+    hub-in-arena: "The hub cannot be inside the bounds of arena <arena>."
+    no-hub: "No shared hub is set."
+    store-unreadable: "<file> could not be read at startup. Fix or remove it and restart before changing portals."
 
-# /ninjaarena director: the enemy director of a running match. director.kind is plain
-# text.
+# /ninjaarena director: the enemy director of a running match. director.kind and the spawn
+# texts, which explain the last spawn that did not happen and also go to the server log,
+# are plain text.
 director:
   no-match: "<red>No match is running in arena <arena>."
   usage: "<red>Usage: /<label> <usage>, or run it while in a match."
@@ -160,6 +254,25 @@ director:
   kind: "<count> <kind> (threat <threat>)"
   refusal: "<yellow>Last spawn refusal: </yellow><gray><refusal>"
   none: "none"
+  spawn:
+    round: "round <round>, <detail>"
+    no-placement: "no enemy spawn point for a <kind>: <detail>"
+    no-points: "the arena has no enemy spawn points"
+    point: "point <point> <reason>"
+    too-close: "too close"
+    in-view: "in view"
+    chunk-not-loaded: "chunk not loaded"
+    blocked: "blocked space"
+    cancelled: "the world cancelled a <kind> spawn at <location>"
+    budget: "the threat budget cannot afford another enemy (target <target>, in play <in-play>)"
+    gate: "the spawn gate is holding back enemies"
+
+# Enemy names in the director status. Plain text.
+enemy:
+  zombie: "zombie"
+  skeleton: "skeleton"
+  spider: "spider"
+  shadow-stalker: "shadow stalker"
 
 # /ninjaarena leaderboard. all-time and unknown-player are plain text.
 leaderboard:
@@ -357,7 +470,8 @@ tool:
 reward:
   trophy-lore: "Season #<season>"
 
-# Resource packs. Plain text, except status, which wraps the status line for chat.
+# Resource packs and /ninjaarena pack status. Plain text, except status, which wraps the
+# status line for chat.
 pack:
   prompt: "NinjaArena tool visuals"
   kick-unreachable: "Your client could not reach NinjaArena's required resource pack host <host>. Please reconnect; reconnecting usually works. If it still fails, contact the server operator."
@@ -376,9 +490,27 @@ pack:
   java-disabled: "disabled"
   java-required: "enabled, required"
   java-optional: "enabled, optional"
+  menu-fell-back: "<mode> (chest after an error)"
+  accounts:
+    authenticated: "authenticated (<reason>)"
+    online-mode: "online mode"
+    online-proxy: "online proxy"
+    login-gate: "operator-declared login gate"
+    none: "not authenticated: choices last one connection"
+  bedrock:
+    absent: "vanilla (same-server Geyser absent, disabled or unavailable)"
+    closed: "vanilla (Geyser hook closed)"
+    eligible: "custom held models eligible (client load unobserved)"
+    vanilla: "vanilla (<reason>)"
+    reason:
+      disabled: "pack delivery disabled or Bedrock files not configured"
+      optional: "resource-pack.required is false"
+      invalid-files: "Bedrock pack files failed validation"
+      no-mappings: "matching Geyser mappings are not declared installed"
+      not-enforced: "set gameplay.force-resource-packs: true in Geyser (config missing, unreadable or not enforcing)"
 
 # The texture quality menu, dialog and notices. Plain text, except notice, admin-saved and
-# admin-failed, which wrap them for chat.
+# admin-failed, which wrap them for chat. problem says why saved choices are unsupported.
 texture:
   title: "Arena Texture Quality"
   standard: "Standard"
@@ -488,6 +620,9 @@ texture:
     unverified-timing: "Standard is used; nothing is saved."
     detailed-unavailable: "Detailed is not set up on this server."
     standard-used: "Standard is used."
+  problem:
+    schema-too-new: "the texture preference schema is version <found> but this build supports up to <supported>; update NinjaArena or point it at another database"
+    missing-driver: "the <driver> driver (<class>) is not available on this server"
 
 # /ninjaarena admin reload reports. Plain text, except line, which wraps each report line
 # for chat.
@@ -505,3 +640,4 @@ reload:
   next-match: "<path> (next match)"
   next-round: "<path> (next round)"
   line: "<yellow><line>"
+  messages-unreadable: "<file>: <reason>"

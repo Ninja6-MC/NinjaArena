@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.director;
 
+import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import java.util.ArrayList;
@@ -35,9 +36,15 @@ public final class SpawnPlacement {
             this.text = text;
         }
 
-        /** How the reason reads in the log and the director status. */
+        /** How the reason reads in the log. */
         public String text() {
             return text;
+        }
+
+        /** How the reason reads in the director status: its {@code director.refusal} message. */
+        public String displayText() {
+            return Messages.text("director.spawn."
+                    + name().toLowerCase(java.util.Locale.ROOT).replace('_', '-'));
         }
     }
 

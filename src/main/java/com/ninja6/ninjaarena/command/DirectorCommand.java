@@ -93,7 +93,7 @@ public final class DirectorCommand {
         int count = 0;
         for (MatchDirector.InPlay inPlay : director.inPlay()) {
             count += inPlay.count();
-            kinds.add(text("director.kind", "count", inPlay.count(), "kind", inPlay.kind().label(),
+            kinds.add(text("director.kind", "count", inPlay.count(), "kind", inPlay.kind().displayName(),
                     "threat", inPlay.threat()));
         }
         sender.sendMessage(count == 0

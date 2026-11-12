@@ -121,7 +121,8 @@ class MessagesTest {
             Messages.read(file, warnings::add);
             throw new AssertionError("invalid YAML was read");
         } catch (IOException expected) {
-            assertTrue(expected.getMessage().contains("not valid YAML"));
+            assertTrue(expected.getCause() instanceof org.bukkit.configuration.InvalidConfigurationException,
+                    String.valueOf(expected.getCause()));
         }
     }
 

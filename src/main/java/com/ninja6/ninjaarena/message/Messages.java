@@ -90,12 +90,22 @@ public final class Messages {
                 Objects.requireNonNull(warnings, "warnings"));
     }
 
-    /** Reads a messages file. Throws if it cannot be read or is not valid YAML. */
+    /**
+     * Reads a messages file, the one rule for startup and reload. Throws if it cannot be read
+     * or is not valid YAML, with the reader's own message. Any key name is accepted; one the
+     * bundled file does not have is ignored with a warning.
+     */
     public static Messages read(Path file, Consumer<String> warnings) throws IOException {
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            return of(flatten(reader), warnings);
+            Map<String, Object> values = flatten(reader);
+            for (String key : values.keySet()) {
+                if (!BUNDLED.containsKey(key)) {
+                    warnings.accept(FILE + ": " + key + " is not a message this version knows; it is ignored.");
+                }
+            }
+            return of(values, warnings);
         } catch (InvalidConfigurationException e) {
-            throw new IOException(file.getFileName() + " is not valid YAML: " + e.getMessage(), e);
+            throw new IOException(e.getMessage(), e);
         }
     }
 

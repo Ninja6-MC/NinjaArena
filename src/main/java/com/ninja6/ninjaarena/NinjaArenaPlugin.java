@@ -470,8 +470,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             }
             Messages.use(Messages.read(file, getLogger()::warning));
         } catch (IOException e) {
-            getLogger().warning("Could not read " + Messages.FILE + "; using the bundled messages until it is fixed"
-                    + " and reloaded: " + e.getMessage());
+            getLogger().warning("Could not read " + Messages.FILE + " (" + e.getMessage() + "); using the bundled"
+                    + " messages until it is fixed and reloaded.");
             Messages.use(Messages.bundled());
         }
     }

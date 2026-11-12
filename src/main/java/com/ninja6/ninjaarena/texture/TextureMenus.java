@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.texture;
 
+import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.resourcepack.TextureMenuMode;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -42,7 +43,8 @@ public final class TextureMenus {
 
     /** The screen in use, for {@code /narena pack status}. */
     public String describe() {
-        return mode == TextureMenuMode.DIALOG && fellBack.get() ? "dialog (chest after an error)" : mode.label();
+        return mode == TextureMenuMode.DIALOG && fellBack.get()
+                ? Messages.text("pack.menu-fell-back", "mode", mode.label()) : mode.label();
     }
 
     public void forget(UUID player) {

@@ -13,12 +13,11 @@ import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
@@ -102,8 +101,9 @@ public final class ConfigReload {
         Messages messages;
         try {
             messages = messages();
-        } catch (ReloadYaml.Invalid e) {
-            return List.of(text("reload.rejected", "reason", e.getMessage()));
+        } catch (IOException e) {
+            return List.of(text("reload.rejected", "reason",
+                    text("reload.messages-unreadable", "file", Messages.FILE, "reason", e.getMessage())));
         }
         YamlConfiguration next = candidate.config();
         List<String> changed = new ArrayList<>();
@@ -217,18 +217,11 @@ public final class ConfigReload {
         return text(key, "values", values.isEmpty() ? text("reload.none") : String.join(", ", values));
     }
 
-    /** The server's messages.yml, or the bundled text when there is none. */
-    private Messages messages() throws ReloadYaml.Invalid {
-        if (!Files.exists(messagesFile)) {
-            return Messages.bundled();
-        }
-        ReloadYaml document = ReloadYaml.read(messagesFile);
-        Map<String, Object> values = new LinkedHashMap<>();
-        for (String path : document.nodes().keySet()) {
-            if (!path.isEmpty() && !(document.value(path) instanceof Map<?, ?>)) {
-                values.put(path, document.value(path));
-            }
-        }
-        return Messages.of(values, target::warning);
+    /**
+     * The server's messages.yml, or the bundled text when there is none. Read exactly as at
+     * startup, so reload accepts and rejects the same files.
+     */
+    private Messages messages() throws IOException {
+        return Files.exists(messagesFile) ? Messages.read(messagesFile, target::warning) : Messages.bundled();
     }
 }

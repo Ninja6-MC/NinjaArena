@@ -642,6 +642,54 @@ class ConfigReloadTest {
         assertEquals(1, candidate().kit().items().getFirst().amount());
     }
 
+    /** Startup and reload read messages.yml with one rule, so they accept and reject the same files. */
+    @Test
+    void reloadAcceptsAndRejectsTheSameMessagesFilesAsStartup() throws Exception {
+        Path file = dir.resolve("messages.yml");
+        try {
+            for (String accepted : List.of("match:\n  fight: \"Go!\"\n", "match:\n  Fight: \"x\"\n",
+                    "Match_Typo:\n  fight: 3\n", "")) {
+                Files.writeString(file, accepted);
+                List<String> startupWarnings = new ArrayList<>();
+                Messages.read(file, startupWarnings::add);
+                List<String> report = reload.reload();
+                assertTrue(report.getFirst().contains("complete"), accepted + " -> " + report);
+            }
+            for (String rejected : List.of("match:\n  fight: [\n", "match: {fight: \"a\"\n", "\tmatch: x\n")) {
+                Files.writeString(file, rejected);
+                java.io.IOException startup = assertThrows(java.io.IOException.class,
+                        () -> Messages.read(file, message -> { }));
+                String report = reload.reload().getFirst();
+                assertEquals("The Arena reload was rejected: messages.yml: " + startup.getMessage()
+                        + ". Nothing changed.", report);
+            }
+        } finally {
+            Messages.use(Messages.bundled());
+        }
+    }
+
+    @Test
+    void anUnknownMessageKeyIsIgnoredWithAWarningAtStartupAndOnReload() throws Exception {
+        List<String> warnings = new ArrayList<>();
+        ConfigReload withWarnings = new ConfigReload(dir, ReloadFiles.defaults(), KitDefinition.EMPTY, items,
+                new Runtime() {
+                    @Override public void warning(String message) { warnings.add(message); }
+                });
+        Path file = dir.resolve("messages.yml");
+        Files.writeString(file, "match:\n  Fight: \"x\"\n  fight: \"Go!\"\n");
+        try {
+            List<String> startup = new ArrayList<>();
+            Messages read = Messages.read(file, startup::add);
+            assertEquals(List.of("messages.yml: match.Fight is not a message this version knows; it is ignored."),
+                    startup);
+            assertTrue(withWarnings.reload().getFirst().contains("complete"));
+            assertTrue(warnings.contains(startup.getFirst()), warnings.toString());
+            assertEquals(read, Messages.active());
+        } finally {
+            Messages.use(Messages.bundled());
+        }
+    }
+
     @Test
     void reloadPicksUpAChangedMessagesFileAndRejectsABrokenOne() throws Exception {
         List<String> warnings = new ArrayList<>();
@@ -663,7 +711,7 @@ class ConfigReloadTest {
 
             Files.writeString(dir.resolve("messages.yml"), "match:\n  fight: [\n");
             String rejected = withWarnings.reload().getFirst();
-            assertTrue(rejected.contains("rejected") && rejected.contains("messages.yml: line"), rejected);
+            assertTrue(rejected.startsWith("The Arena reload was rejected: messages.yml: "), rejected);
             assertEquals("Go, ninjas!", Messages.text("match.fight"));
         } finally {
             Messages.use(Messages.bundled());

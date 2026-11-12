@@ -105,7 +105,7 @@ public final class ArenaCommand {
                         "subcommands", String.join(", ", SUBCOMMANDS));
             }
         } catch (ArenaException e) {
-            tell(sender, "command.error", "message", e.getMessage());
+            tell(sender, "command.error", "message", e.text());
         }
     }
 
@@ -214,7 +214,7 @@ public final class ArenaCommand {
                         (cell.minZ() + cell.maxZ() + 1) / 2.0);
             }
             if (!ArenaExtent.contains(target.getX(), target.getZ(), registry.grid().borderSize())) {
-                throw new ArenaException("The arena teleport target is outside the supported world border.");
+                throw new ArenaException("arena.error.teleport-outside");
             }
             tell(sender, "arena.teleporting", "arena", arena.name(), "cell", arena.cell().describe(),
                     "cell-bounds", cell.describe(), "bounds", bounds(arena));
@@ -288,13 +288,13 @@ public final class ArenaCommand {
                 blockCoordinate(args[6], base == null ? null : base.getBlockZ(), "z2"));
         ArenaBounds cell = registry.grid().cellBounds(require(args[0]).cell());
         if (!cell.contains(bounds)) {
-            throw new ArenaException("Bounds " + bounds.describe() + " leave the arena's cell (" + cell.describe()
-                    + ").");
+            throw new ArenaException("arena.error.bounds-leave-cell", "bounds", bounds.describe(),
+                    "cell-bounds", cell.describe());
         }
         Optional<ArenaPoint> enclosed = hub.get().filter(bounds::contains);
         if (enclosed.isPresent()) {
-            throw new ArenaException("Bounds " + bounds.describe() + " enclose the shared hub at "
-                    + enclosed.get().describe() + ". Move it first with portal sethub.");
+            throw new ArenaException("arena.error.bounds-enclose-hub", "bounds", bounds.describe(),
+                    "point", enclosed.get().describe());
         }
         Arena arena = registry.update(args[0], a -> a.withBounds(bounds));
         tell(sender, "arena.bounds-set", "arena", arena.name(), "bounds", bounds.describe());
@@ -437,7 +437,7 @@ public final class ArenaCommand {
     }
 
     private Arena require(String name) throws ArenaException {
-        return registry.get(name).orElseThrow(() -> new ArenaException("No arena called " + name + "."));
+        return registry.get(name).orElseThrow(() -> new ArenaException("arena.error.unknown", "arena", name));
     }
 
     private Component status(Arena arena) {
@@ -465,10 +465,8 @@ public final class ArenaCommand {
         if (arena.bounds() == null) {
             return;
         }
-        for (String problem : registry.problems(arena.name())) {
-            if (problem.contains("outside the bounds")) {
-                tell(sender, "command.warning", "message", problem);
-            }
+        for (String problem : registry.outside(arena.name())) {
+            tell(sender, "command.warning", "message", problem);
         }
     }
 
@@ -491,15 +489,15 @@ public final class ArenaCommand {
         Location base = baseLocation(sender);
         if (args.length == 0) {
             if (!(sender instanceof Player)) {
-                throw new ArenaException("Give coordinates: " + usage);
+                throw new ArenaException("arena.error.give-coordinates", "usage", usage);
             }
             if (base == null) {
-                throw new ArenaException("Stand in the arena world (" + ArenaWorld.NAME + ") or give coordinates.");
+                throw new ArenaException("arena.error.stand-in-world", "world", ArenaWorld.NAME);
             }
             return new ArenaPoint(base.getX(), base.getY(), base.getZ(), base.getYaw(), base.getPitch());
         }
         if (args.length != 3 && args.length != 5) {
-            throw new ArenaException("Usage: " + usage);
+            throw new ArenaException("command.usage-full", "usage", usage);
         }
         double x = coordinate(args[0], base == null ? null : base.getX(), "x");
         double y = coordinate(args[1], base == null ? null : base.getY(), "y");
@@ -510,7 +508,7 @@ public final class ArenaCommand {
             yaw = (float) coordinate(args[3], null, "yaw");
             pitch = (float) coordinate(args[4], null, "pitch");
             if (pitch < -90 || pitch > 90) {
-                throw new ArenaException("Pitch must be between -90 and 90.");
+                throw new ArenaException("arena.error.pitch");
             }
         }
         return new ArenaPoint(x, y, z, yaw, pitch);
@@ -519,8 +517,7 @@ public final class ArenaCommand {
     static double coordinate(String token, Double base, String what) throws ArenaException {
         if (token.startsWith("~")) {
             if (base == null) {
-                throw new ArenaException("~ needs a player standing in the arena world; give a number for " + what
-                        + ".");
+                throw new ArenaException("arena.error.relative", "what", what);
             }
             String offset = token.substring(1);
             return offset.isEmpty() ? base : base + parseDouble(offset, what);
@@ -531,8 +528,7 @@ public final class ArenaCommand {
     static int blockCoordinate(String token, Integer base, String what) throws ArenaException {
         if (token.startsWith("~")) {
             if (base == null) {
-                throw new ArenaException("~ needs a player standing in the arena world; give a number for " + what
-                        + ".");
+                throw new ArenaException("arena.error.relative", "what", what);
             }
             String offset = token.substring(1);
             if (offset.isEmpty()) {
@@ -540,7 +536,7 @@ public final class ArenaCommand {
             }
             long value = (long) base + parseInt(offset, what);
             if (value != (int) value) {
-                throw new ArenaException(capitalize(what) + " is out of range.");
+                throw new ArenaException("arena.error.out-of-range", "what", capitalize(what));
             }
             return (int) value;
         }
@@ -555,7 +551,7 @@ public final class ArenaCommand {
             }
             return value;
         } catch (NumberFormatException e) {
-            throw new ArenaException(capitalize(what) + " must be a number, not " + token + ".");
+            throw new ArenaException("arena.error.not-number", "what", capitalize(what), "token", token);
         }
     }
 
@@ -563,7 +559,8 @@ public final class ArenaCommand {
         try {
             return Integer.parseInt(token);
         } catch (NumberFormatException e) {
-            throw new ArenaException(capitalize(what) + " must be a whole number, not " + token + ".");
+            throw new ArenaException("arena.error.not-whole", "what", capitalize(what),
+                    "token", token);
         }
     }
 

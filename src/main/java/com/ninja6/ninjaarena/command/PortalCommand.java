@@ -118,7 +118,7 @@ public final class PortalCommand {
                         "subcommands", String.join(", ", SUBCOMMANDS));
             }
         } catch (ArenaException e) {
-            tell(sender, "command.error", "message", e.getMessage());
+            tell(sender, "command.error", "message", e.text());
         }
     }
 
@@ -134,7 +134,7 @@ public final class PortalCommand {
         Location base = player.getLocation();
         String world = base.getWorld().getName();
         if (world.equals(ArenaWorld.NAME)) {
-            throw new ArenaException("Portals cannot be in the arena world.");
+            throw new ArenaException("portal.invalid.arena-world");
         }
         int[] block = {base.getBlockX(), base.getBlockY(), base.getBlockZ()};
         if (args.length == 4) {
@@ -180,9 +180,10 @@ public final class PortalCommand {
         }
         Selection selection = selections.get(player.getUniqueId());
         if (selection == null || !selection.complete()) {
-            throw new ArenaException("Set both corners first with setcorner 1 and setcorner 2.");
+            throw new ArenaException("portal.error.no-selection");
         }
-        Arena arena = arenas.get(args[1]).orElseThrow(() -> new ArenaException("No arena called " + args[1] + "."));
+        Arena arena = arenas.get(args[1])
+                .orElseThrow(() -> new ArenaException("arena.error.unknown", "arena", args[1]));
         boolean spectator = "spectator".equals(kind);
         LobbyMode lobby = spectator || kind == null ? null : LobbyMode.parse(kind).orElseThrow();
         Portal portal = portals.create(args[0], selection.world(), selection.bounds(), arena.name(), spectator, lobby);
@@ -211,11 +212,11 @@ public final class PortalCommand {
     private void setHub(CommandSender sender, String[] args, String usage) throws ArenaException {
         ArenaPoint point = ArenaCommand.position(sender, args, usage + "sethub " + POSITION);
         if (!ArenaExtent.contains(point.x(), point.z(), arenas.grid().borderSize())) {
-            throw new ArenaException("The hub must be inside the arena world border.");
+            throw new ArenaException("portal.error.hub-outside");
         }
         for (Arena arena : arenas.all()) {
             if (arena.bounds() != null && arena.bounds().contains(point)) {
-                throw new ArenaException("The hub cannot be inside the bounds of arena " + arena.name() + ".");
+                throw new ArenaException("portal.error.hub-in-arena", "arena", arena.name());
             }
         }
         portals.setHub(point);
@@ -232,7 +233,7 @@ public final class PortalCommand {
             return;
         }
         if (portals.hub().isEmpty()) {
-            throw new ArenaException("No shared hub is set.");
+            throw new ArenaException("portal.error.no-hub");
         }
         portals.setHub(null);
         tell(sender, "portal.hub-removed");
@@ -290,8 +291,8 @@ public final class PortalCommand {
             tell(sender, "command.usage-full", "usage", usage + "info <name>");
             return;
         }
-        Portal portal = portals.get(args[0]).orElseThrow(() -> new ArenaException("No portal called " + args[0]
-                + "."));
+        Portal portal = portals.get(args[0])
+                .orElseThrow(() -> new ArenaException("portal.error.unknown", "portal", args[0]));
         tell(sender, "portal.info.header", "portal", portal.name(), "status", status(portal));
         tell(sender, worldLoaded.test(portal.world()) ? "portal.info.world" : "portal.info.world-unloaded",
                 "world", portal.world());

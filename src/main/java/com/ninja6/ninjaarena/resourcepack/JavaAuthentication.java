@@ -1,18 +1,21 @@
 package com.ninja6.ninjaarena.resourcepack;
 
+import com.ninja6.ninjaarena.message.Messages;
+
 /** Whether, and why, Java account UUIDs can be trusted as an identity for saved texture choices. */
 public enum JavaAuthentication {
-    ONLINE_MODE(true, "online mode"),
-    ONLINE_PROXY(true, "online proxy"),
-    DECLARED_LOGIN_GATE(true, "operator-declared login gate"),
-    NONE(false, "not authenticated: choices last one connection");
+    ONLINE_MODE(true, "online-mode"),
+    ONLINE_PROXY(true, "online-proxy"),
+    DECLARED_LOGIN_GATE(true, "login-gate"),
+    NONE(false, "none");
 
     private final boolean authenticated;
-    private final String reason;
+    /** The {@code pack.accounts} message naming the reason. */
+    private final String key;
 
-    JavaAuthentication(boolean authenticated, String reason) {
+    JavaAuthentication(boolean authenticated, String key) {
         this.authenticated = authenticated;
-        this.reason = reason;
+        this.key = key;
     }
 
     public boolean authenticated() {
@@ -32,6 +35,7 @@ public enum JavaAuthentication {
 
     /** One phrase for status and the startup line. */
     public String describe() {
-        return authenticated ? "authenticated (" + reason + ")" : reason;
+        String reason = Messages.text("pack.accounts." + key);
+        return authenticated ? Messages.text("pack.accounts.authenticated", "reason", reason) : reason;
     }
 }
