@@ -119,8 +119,10 @@ class PluginDescriptionTest {
         assertEquals(Map.of(), nodes.get("ninjaarena.leaderboard").getChildren());
         assertEquals(PermissionDefault.TRUE, nodes.get("ninjaarena.rewards.payout").getDefault());
         assertEquals(Map.of(), nodes.get("ninjaarena.rewards.payout").getChildren());
+        assertEquals(PermissionDefault.TRUE, nodes.get("ninjaarena.shop.use").getDefault());
+        assertEquals(Map.of(), nodes.get("ninjaarena.shop.use").getChildren());
         assertEquals(Map.of("ninjaarena.spectate", true, "ninjaarena.leaderboard", true,
-                "ninjaarena.rewards.payout", true, "ninjaarena.room.create", true),
+                "ninjaarena.rewards.payout", true, "ninjaarena.room.create", true, "ninjaarena.shop.use", true),
                 nodes.get("ninjaarena.play").getChildren());
         // Servers where nobody has op can open rooms: everyone has it, through play as well.
         assertEquals(PermissionDefault.TRUE, nodes.get("ninjaarena.room.create").getDefault());
@@ -138,8 +140,8 @@ class PluginDescriptionTest {
         try (InputStream stream = pluginYml()) {
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(stream, StandardCharsets.UTF_8));
-            for (String tier : List.of("spectate", "leaderboard", "rewards.payout", "room.create", "event.manage", "play",
-                    "host", "admin", "admin.lobby")) {
+            for (String tier : List.of("shop.use", "spectate", "leaderboard", "rewards.payout", "room.create",
+                    "event.manage", "play", "host", "admin", "admin.lobby")) {
                 assertTrue(yaml.isConfigurationSection("permissions.ninjaarena." + tier + ".children"), tier);
             }
             assertTrue(yaml.getBoolean("permissions.ninjaarena.admin.children.ninjaarena.host"));

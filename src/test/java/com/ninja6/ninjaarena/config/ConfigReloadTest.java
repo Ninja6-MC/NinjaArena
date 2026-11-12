@@ -56,6 +56,8 @@ class ConfigReloadTest {
         SpectatorSettings spectating;
         PlayerPortalSettings playerPortals;
         KitDefinition kit;
+        com.ninja6.ninjaarena.shop.ShopCatalogue shop;
+        @Override public void shop(com.ninja6.ninjaarena.shop.ShopCatalogue catalogue) { shop = catalogue; }
         ConfigurationSection published;
         String season;
         Runnable enforcement = () -> { };
@@ -103,6 +105,24 @@ class ConfigReloadTest {
 
     private ReloadFiles.Candidate candidate() throws Exception {
         return ReloadFiles.read(dir.resolve("config.yml"), dir.resolve("kits.yml"), items);
+    }
+
+    @Test
+    void brokenShopKeepsPreviousCatalogueAndOtherSettingsUntilAValidReload() throws Exception {
+        var original = com.ninja6.ninjaarena.shop.ShopCatalogue.EMPTY;
+        reload.enableShop(original, java.util.logging.Logger.getAnonymousLogger());
+        Files.writeString(dir.resolve("shop.yml"), "items: [");
+        var rejected = reload.reload();
+        assertTrue(rejected.getFirst().contains("shop.yml"));
+        org.junit.jupiter.api.Assertions.assertNull(target.shop);
+        Files.writeString(dir.resolve("shop.yml"), "format: 1\nitems:\n"
+                + "  - {id: iron, price: 2, limit: 1, category: armour, gives: {tier: iron}}\n");
+        assertTrue(reload.reload().get(2).contains("shop.yml (next match)"));
+        var accepted = target.shop;
+        assertEquals(1, accepted.items().size());
+        Files.writeString(dir.resolve("shop.yml"), "format: 2\nitems: []");
+        reload.reload();
+        assertSame(accepted, target.shop);
     }
 
     @Test

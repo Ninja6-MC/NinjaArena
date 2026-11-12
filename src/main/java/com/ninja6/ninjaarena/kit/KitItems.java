@@ -19,7 +19,7 @@ public final class KitItems {
         this(ItemStack::of);
     }
 
-    KitItems(Function<Material, ItemStack> vanilla) {
+    public KitItems(Function<Material, ItemStack> vanilla) {
         this.vanilla = Objects.requireNonNull(vanilla, "vanilla");
     }
 
@@ -52,7 +52,7 @@ public final class KitItems {
     }
 
     /** Resolves at application time, preserves provider metadata and isolates mutable stacks. */
-    ItemStack create(KitDefinition.Entry entry, Player player) {
+    public ItemStack create(KitDefinition.Entry entry, Player player) {
         ItemStack supplied;
         if (entry.id() != null) {
             var provider = providers.get(entry.id());

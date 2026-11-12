@@ -25,6 +25,12 @@ Java 25, and does not run on Folia.
   keeps it through every round to the end of the match; while every slot is leased, more
   rooms queue and see their place. Portals, the shared hub and `/narena host` leave the
   arenas rooms hold or wait for alone.
+- A validated `shop.yml` catalogue with personal-point purchases, per-round buy limits,
+  armour, extra thrown-tool uses, potion effects and consumables. Purchases apply after
+  round kits; undelivered purchases are refunded while the ledger exists. The new
+  `ninjaarena.shop.use` permission defaults to true and is a child of `ninjaarena.play`.
+  Buying remains closed until the between-round shop phase is available.
+
 - A prebuilt obsidian lobby, placed in `ninjaarena_lobby` the first time the plugin
   finds that world without it. Restarts and arena-world retirements leave the lobby
   as it is. `/narena admin lobby edit` lets an admin change it, `done` saves it and

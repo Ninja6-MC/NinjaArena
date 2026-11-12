@@ -747,3 +747,12 @@ reload:
   messages-unreadable: "<file>: <reason>"
   renamed: "<old> has been renamed <path>. It still works for now; rename it in config.yml."
   renamed-ignored: "<old> is the old name of <path>, which is also set, so it is ignored. Remove it."
+
+# Shop purchase results, displayed by the shop screen when available.
+shop:
+  bought: "<green>Purchase queued for the next round."
+  not-enough-points: "<red>You do not have enough points."
+  limit-reached: "<red>You reached this item's buy limit for the round."
+  unknown-item: "<red>This shop item is unavailable."
+  no-permission: "<red>You do not have permission to use the shop."
+  closed: "<red>The shop is closed."
