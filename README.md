@@ -266,7 +266,7 @@ validation. Item providers still resolve at round-kit application time.
 
 ## Player messages
 
-Every text the plugin shows players and admins is in `messages.yml`, saved to the plugin
+The text the plugin shows players and admins is in `messages.yml`, saved to the plugin
 folder on first start. Edit it to reword or translate the plugin, then run `/narena admin
 reload`. Texts use [MiniMessage](https://docs.advntr.dev/minimessage/format.html) tags
 such as `<red>` or `<bold>`, and named placeholders such as `<arena>`, `<player>` or
@@ -275,7 +275,10 @@ add formatting or click actions. A key that is missing or holds a tag MiniMessag
 read falls back to the bundled default, with one warning in the server log per key. The
 comments at the top of the file say which sections are shown as plain text, such as menu
 items, kick screens and the Discord webhook. Delete the file to get the defaults back on
-the next start.
+the next start. A few things stay outside it, as the comments at its top list: command
+argument syntax; names of arenas, portals, worlds, files and settings; errors from the
+system itself; and the reasons `/narena admin reload` gives for rejecting `config.yml` or
+`kits.yml`, which stay in English.
 
 ## Tool resource packs
 

@@ -27,6 +27,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.yaml.snakeyaml.error.MarkedYAMLException;
 
 /**
  * The player-facing text, read from {@code messages.yml} in MiniMessage format. The bundled
@@ -105,8 +106,21 @@ public final class Messages {
             }
             return of(values, warnings);
         } catch (InvalidConfigurationException e) {
-            throw new IOException(e.getMessage(), e);
+            throw new IOException(oneLine(e), e);
         }
+    }
+
+    /** The parser's problem and where it is, on one line, like the config.yml and kits.yml rejections. */
+    private static String oneLine(InvalidConfigurationException e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof MarkedYAMLException marked && marked.getProblemMark() != null) {
+                return "line " + (marked.getProblemMark().getLine() + 1) + ", column "
+                        + (marked.getProblemMark().getColumn() + 1) + ": " + marked.getProblem();
+            }
+        }
+        String message = String.valueOf(e.getMessage()).strip();
+        int end = message.indexOf('\n');
+        return end < 0 ? message : message.substring(0, end);
     }
 
     /** The messages in use. */

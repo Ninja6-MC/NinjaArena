@@ -1,12 +1,13 @@
 package com.ninja6.ninjaarena.director;
 
-import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
+import com.ninja6.ninjaarena.message.Messages;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import org.bukkit.Location;
@@ -41,10 +42,9 @@ public final class SpawnPlacement {
             return text;
         }
 
-        /** How the reason reads in the director status: its {@code director.refusal} message. */
+        /** How the reason reads in the director status: its {@code director.spawn.<reason>} message. */
         public String displayText() {
-            return Messages.text("director.spawn."
-                    + name().toLowerCase(java.util.Locale.ROOT).replace('_', '-'));
+            return Messages.text("director.spawn." + name().toLowerCase(Locale.ROOT).replace('_', '-'));
         }
     }
 

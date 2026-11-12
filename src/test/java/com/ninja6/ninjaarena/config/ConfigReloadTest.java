@@ -659,6 +659,8 @@ class ConfigReloadTest {
                 Files.writeString(file, rejected);
                 java.io.IOException startup = assertThrows(java.io.IOException.class,
                         () -> Messages.read(file, message -> { }));
+                // One short line with the position, like the config.yml and kits.yml rejections.
+                assertTrue(startup.getMessage().matches("line \\d+, column \\d+: [^\\n]+"), startup.getMessage());
                 String report = reload.reload().getFirst();
                 assertEquals("The Arena reload was rejected: messages.yml: " + startup.getMessage()
                         + ". Nothing changed.", report);
