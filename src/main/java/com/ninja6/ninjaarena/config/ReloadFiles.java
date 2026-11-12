@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.stats.StatsSettings;
 import com.ninja6.ninjaarena.reward.RewardSettings;
 import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
 import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
+import com.ninja6.ninjaarena.room.MaxActive;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -28,7 +29,22 @@ import org.yaml.snakeyaml.nodes.MappingNode;
 /** Validates both reload files before exposing any candidate values. */
 public final class ReloadFiles {
 
-    public record Candidate(YamlConfiguration config, KitDefinition kit) { }
+    /**
+     * @param renamed old setting names the config file uses in place of the new one, such as
+     *                {@link MaxActive#OLD_KEY}
+     * @param ignored old setting names it sets beside the new one, which wins
+     */
+    public record Candidate(YamlConfiguration config, KitDefinition kit, List<String> renamed, List<String> ignored) {
+
+        public Candidate {
+            renamed = List.copyOf(renamed);
+            ignored = List.copyOf(ignored);
+        }
+
+        public Candidate(YamlConfiguration config, KitDefinition kit) {
+            this(config, kit, List.of(), List.of());
+        }
+    }
 
     private ReloadFiles() { }
 
@@ -40,7 +56,10 @@ public final class ReloadFiles {
             throws ReloadYaml.Invalid {
         ReloadYaml settings = ReloadYaml.read(config);
         ReloadYaml kit = ReloadYaml.read(kits);
-        return new Candidate(config(settings, arenaExists), kit(kit, items));
+        List<String> old = settings.has(MaxActive.OLD_KEY) ? List.of(MaxActive.OLD_KEY) : List.of();
+        boolean both = settings.has(MaxActive.KEY);
+        return new Candidate(config(settings, arenaExists), kit(kit, items), both ? List.of() : old,
+                both ? old : List.of());
     }
 
     public static YamlConfiguration defaults() {
@@ -66,6 +85,9 @@ public final class ReloadFiles {
             if (path.startsWith("events.schedule.") || path.startsWith("rewards.milestones.") || path.startsWith("rewards.placings.")) {
                 continue; // RewardSettings validates the contents of these lists.
             }
+            if (path.equals(MaxActive.OLD_KEY)) {
+                continue; // Read below as arenas.max-active when that is not set.
+            }
             int dot = path.lastIndexOf('.');
             if (dot > 0 && defaults.isList(path.substring(0, dot))) {
                 // An item of a list setting, validated with the list below.
@@ -84,7 +106,10 @@ public final class ReloadFiles {
                 continue;
             }
             Object fallback = defaults.get(path);
-            Object value = document.has(path) ? document.value(path) : fallback;
+            // Where the value comes from: the setting, or the old name of arenas.max-active.
+            String source = path.equals(MaxActive.KEY) && !document.has(path) && document.has(MaxActive.OLD_KEY)
+                    ? MaxActive.OLD_KEY : path;
+            Object value = document.has(source) ? document.value(source) : fallback;
             if (fallback instanceof Boolean) {
                 if (!(value instanceof Boolean)) {
                     throw document.invalid(path, "expected a boolean");
@@ -124,17 +149,17 @@ public final class ReloadFiles {
                 value = List.copyOf((List<?>) value);
             } else if (fallback instanceof Number) {
                 if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())) {
-                    throw document.invalid(path, "expected a finite number");
+                    throw document.invalid(source, "expected a finite number");
                 }
                 if (fallback instanceof Integer && (value instanceof Float || value instanceof Double
                         || number.doubleValue() != Math.rint(number.doubleValue())
                         || number.doubleValue() > Integer.MAX_VALUE)) {
-                    throw document.invalid(path, "expected an integer");
+                    throw document.invalid(source, "expected an integer");
                 }
                 double[] range = range(path);
                 double numeric = number.doubleValue();
                 if (numeric < range[0] || numeric > range[1]) {
-                    throw document.invalid(path, "must be from " + range[0] + " to " + range[1]);
+                    throw document.invalid(source, "must be from " + range[0] + " to " + range[1]);
                 }
                 if (path.equals("arena-grid.cell-size") && number.intValue() % 16 != 0) {
                     throw document.invalid(path, "must be a multiple of 16");
@@ -211,7 +236,8 @@ public final class ReloadFiles {
             case "points.player-kill", "points.enemy-kill-per-cost", "points.round-survive", "points.round-win"
                     -> new double[] {Integer.MIN_VALUE, Integer.MAX_VALUE};
             case "scoring.round-win-points", "scoring.player-kill-points" -> new double[] {0, Integer.MAX_VALUE};
-            case "stability.max-concurrent-matches", "stability.spawns-per-tick" -> new double[] {1, 100};
+            case MaxActive.KEY -> new double[] {MaxActive.MIN, MaxActive.MAX};
+            case "stability.spawns-per-tick" -> new double[] {1, 100};
             case "stability.match-mob-cap", "stability.global-mob-cap", "stability.pause-spawning-above-mspt",
                     "stability.drop-tier-above-mspt", "stability.resume-below-mspt" -> new double[] {1, 1000};
             case "stability.intensity-tier", "director.stealth.hidden-weight", "director.intensity.first-round-peak",

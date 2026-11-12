@@ -40,7 +40,12 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.Plugin;
 
-/** Tracks viewers independently of the match roster. All operations run on the server thread. */
+/**
+ * Tracks viewers independently of the match roster. A viewer who stops watching, by the leave
+ * command, by the match ending or by its arena closing, goes to the lobby with their snapshot
+ * kept ({@link #setLobby}); only a failed arrival and the plugin shutting down send them
+ * home. All operations run on the server thread.
+ */
 public final class Spectators implements Listener {
 
     private record Seat(MatchView match, ArenaBounds bounds, ArenaPoint point) {
@@ -54,6 +59,7 @@ public final class Spectators implements Listener {
     private final Supplier<World> world;
     private final Map<UUID, Seat> viewers = new HashMap<>();
     private SpectatorSettings settings;
+    private Predicate<Player> lobby = player -> false;
 
     public Spectators(Plugin plugin, ArenaRegistry arenas, MatchService matches, WaitingRoomService waiting,
             RestoreService restores, Supplier<World> world, SpectatorSettings settings) {
@@ -64,6 +70,14 @@ public final class Spectators implements Listener {
         this.restores = restores;
         this.world = world;
         this.settings = settings;
+    }
+
+    /**
+     * Where viewers go when they stop watching: the lobby, {@code RoomService#enterLobby} on
+     * a server. When it answers false they are sent home; by default everyone is.
+     */
+    public void setLobby(Predicate<Player> lobby) {
+        this.lobby = java.util.Objects.requireNonNull(lobby, "lobby");
     }
 
     public void setSettings(SpectatorSettings settings) {
@@ -149,8 +163,22 @@ public final class Spectators implements Listener {
         if (viewers.remove(player.getUniqueId()) == null) {
             return false;
         }
-        restore(player);
+        toLobby(player);
         return true;
+    }
+
+    /** To the lobby, or home when the lobby cannot take the player. */
+    private void toLobby(Player player) {
+        boolean placed;
+        try {
+            placed = lobby.test(player);
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(Level.SEVERE, "Could not send " + player.getName() + " to the lobby.", e);
+            placed = false;
+        }
+        if (!placed) {
+            restore(player);
+        }
     }
 
     private void restore(Player player) {
@@ -160,19 +188,24 @@ public final class Spectators implements Listener {
     }
 
     public void closeArena(String arena) {
-        closeMatching(seat -> seat.match().arena().equals(arena));
+        closeMatching(seat -> seat.match().arena().equals(arena), true);
     }
 
+    /** Sends every viewer home. Called on plugin disable. */
     public void close() {
-        closeMatching(seat -> true);
+        closeMatching(seat -> true, false);
     }
 
-    private void closeMatching(Predicate<Seat> matchesSeat) {
+    private void closeMatching(Predicate<Seat> matchesSeat, boolean toLobby) {
         for (var viewer : Map.copyOf(viewers).entrySet()) {
             if (matchesSeat.test(viewer.getValue()) && viewers.remove(viewer.getKey(), viewer.getValue())) {
                 Player player = plugin.getServer().getPlayer(viewer.getKey());
                 if (player != null && player.isOnline()) {
-                    restore(player);
+                    if (toLobby) {
+                        toLobby(player);
+                    } else {
+                        restore(player);
+                    }
                 }
             }
         }
@@ -180,7 +213,7 @@ public final class Spectators implements Listener {
 
     @EventHandler
     public void onMatchEnd(MatchEndEvent event) {
-        closeMatching(seat -> seat.match() == event.match());
+        closeMatching(seat -> seat.match() == event.match(), true);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

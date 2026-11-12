@@ -125,7 +125,7 @@ match:
   overrun-limit-seconds: 120
   # Pause after a round is decided, before the next one starts (1 to 3600).
   round-end-seconds: 5
-  # How long the result is shown before every player is sent home (1 to 3600).
+  # How long the result is shown before every player goes back to the lobby (1 to 3600).
   match-end-seconds: 10
   # Rounds in a match (1 to 25).
   rounds: 5
@@ -151,10 +151,17 @@ points:
   # Remainders go in roster order. Draws award no pool. Negative awards become zero.
   round-win: 6
 
+arenas:
+  # Arena slots in use at once (1 to 100), never more than the arena grid has cells. A room
+  # leases a slot for its arena when it is created and keeps it through its whole match;
+  # while every slot is leased, more rooms queue and see their place. A waiting room whose
+  # countdown ends while every slot is in use holds at its last second until one frees up.
+  # Applies on reload; lowering it never ends a lease already granted. This was
+  # stability.max-concurrent-matches, which is still read, with a warning, when this is
+  # not set.
+  max-active: 4
+
 stability:
-  # Matches running at once (1 to 100). A waiting room whose countdown ends while this many
-  # run holds at its last second until one finishes.
-  max-concurrent-matches: 4
   # Enemies alive at once in one match, and across every match (1 to 1000 each).
   match-mob-cap: 25
   global-mob-cap: 80

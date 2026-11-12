@@ -103,6 +103,93 @@ class SpectatorLifecycleTest extends MatchFixture {
         assertFalse(snapshots.exists(CAROL));
     }
 
+    /** A lobby that takes every viewer it is given, as the room service does. */
+    private List<UUID> lobbyFor(Spectators spectators) {
+        List<UUID> lobby = new java.util.ArrayList<>();
+        spectators.setLobby(player -> {
+            lobby.add(player.getUniqueId());
+            players.get(player.getUniqueId()).location = new Location(world(LobbyWorld.NAME), 0, 64, 0);
+            player.setGameMode(GameMode.ADVENTURE);
+            return true;
+        });
+        return lobby;
+    }
+
+    @Test
+    void leavingSpectatingGoesToTheLobbyWithTheSnapshotKept() throws Exception {
+        List<UUID> lobby = lobbyFor(viewers);
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        snapshots.save(snapshot(DAVE));
+        viewers.arrived(player(DAVE), "dojo");
+
+        assertTrue(viewers.leave(player(DAVE)));
+        assertEquals(List.of(DAVE), lobby);
+        assertEquals(List.of(), restored);
+        assertTrue(snapshots.exists(DAVE));
+        assertEquals(GameMode.ADVENTURE, players.get(DAVE).gameMode);
+        assertFalse(viewers.leave(player(DAVE)));
+    }
+
+    @Test
+    void theEndOfTheWatchedMatchAlsoTakesViewersToTheLobbyButShutdownSendsThemHome() throws Exception {
+        List<UUID> lobby = lobbyFor(viewers);
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        snapshots.save(snapshot(DAVE));
+        viewers.arrived(player(DAVE), "dojo");
+        for (int i = 0; i < 60 && events(MatchEndEvent.class).isEmpty(); i++) {
+            ticks(1);
+        }
+        viewers.onMatchEnd(events(MatchEndEvent.class).getLast());
+        assertTrue(lobby.contains(DAVE));
+        assertFalse(viewers.contains(DAVE));
+
+        ticks(5);
+        assertTrue(matches.match("dojo").isEmpty());
+        snapshots.save(snapshot(CAROL));
+        matches.start("dojo", List.of(List.of(ALICE), List.of(CAROL)));
+        viewers.arrived(player(CAROL), "dojo");
+        viewers.close();
+        assertFalse(lobby.contains(CAROL));
+        assertTrue(restored.contains(CAROL), "the plugin shutting down sends viewers home");
+    }
+
+    @Test
+    void whenTheLobbyCannotTakeAViewerTheyAreSentHome() throws Exception {
+        viewers.setLobby(player -> false);
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        snapshots.save(snapshot(DAVE));
+        viewers.arrived(player(DAVE), "dojo");
+        viewers.leave(player(DAVE));
+        assertEquals(List.of(DAVE), restored);
+        assertFalse(snapshots.exists(DAVE));
+    }
+
+    @Test
+    void quittingWhileSpectatingAndRejoiningReturnsToTheLobbyWithTheSnapshotKept() throws Exception {
+        List<UUID> lobby = new java.util.ArrayList<>();
+        var returns = new com.ninja6.ninjaarena.lobby.LobbyReturns(viewers::contains, player -> {
+            lobby.add(player.getUniqueId());
+            return true;
+        });
+        var restores = new RestoreService(new SnapshotService(snapshots, plugin.getLogger()), (player, snapshot) ->
+                restored.add(player.getUniqueId()), plugin.getLogger());
+        var rejoining = new RestoreListener(plugin, restores, id -> false, returns);
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        snapshots.save(snapshot(DAVE));
+        viewers.arrived(player(DAVE), "dojo");
+
+        var quit = new PlayerQuitEvent(player(DAVE), Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED);
+        returns.onQuit(quit);
+        rejoining.onQuit(quit);
+        viewers.onQuit(quit);
+        rejoining.onJoin(new PlayerJoinEvent(player(DAVE), Component.empty()));
+        runNextTick();
+
+        assertEquals(List.of(DAVE), lobby);
+        assertEquals(List.of(), restored);
+        assertTrue(snapshots.exists(DAVE));
+    }
+
     @Test
     void quitFreesTheSlotAndJoinRestoresThroughTheExistingListener() throws Exception {
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));

@@ -481,7 +481,7 @@ class NinjaArenaCommandTest {
         messages.clear();
         run(player, "arena list");
         assertEquals(List.of("You do not have permission to use this command."), messages);
-        assertEquals(List.of("help", "leave", "textures", "accept"),
+        assertEquals(List.of("help", "leave", "textures", "accept", "room"),
                 command.onTabComplete(player, null, "narena", new String[] {""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
     }
@@ -564,18 +564,20 @@ class NinjaArenaCommandTest {
         command.onCommand(player, null, "ninjaarena", new String[0]);
         assertEquals(List.of("The Arena commands:",
                 "/ninjaarena help - show the commands you can use",
-                "/ninjaarena leave - leave the arena and return home",
+                "/ninjaarena leave - leave your room, match or spectating for the lobby, or leave the lobby for home",
                 "/ninjaarena textures - choose Standard or Detailed ninja tool textures",
-                "/ninjaarena accept <host> - accept an invitation to the Arena"), messages);
+                "/ninjaarena accept <host> - accept an invitation to the Arena",
+                "/ninjaarena room [create|settings|invite|accept|kick|start|leave] - open a room, invite players and"
+                        + " start its match"), messages);
 
         messages.clear();
         Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
         run(host, "HELP");
-        assertEquals(7, messages.size());
+        assertEquals(8, messages.size());
         assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena host <arena>")));
         assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena invite <player>")));
         assertFalse(messages.stream().anyMatch(message -> message.contains("admin") || message.contains("portal")));
-        assertEquals(List.of("help", "leave", "textures", "accept", "host", "invite"),
+        assertEquals(List.of("help", "leave", "textures", "accept", "room", "host", "invite"),
                 command.onTabComplete(host, null, "narena", new String[] {""}));
         assertEquals(List.of("help", "host"), command.onTabComplete(host, null, "narena", new String[] {"H"}));
         assertEquals(List.of("accept"), command.onTabComplete(player, null, "narena", new String[] {"AC"}));
@@ -703,6 +705,72 @@ class NinjaArenaCommandTest {
         run(host, "accept");
         run(console(true), "host dojo");
         assertEquals(3, calls.size());
+    }
+
+    @Test
+    void roomSubcommandsDispatchOnlyAfterPermissionPlayerAndArityChecks() {
+        List<String> calls = new ArrayList<>();
+        command.setRooms(new RoomCommands() {
+            @Override public void show(Player player) { calls.add("show"); }
+            @Override public void create(Player player) { calls.add("create"); }
+            @Override public void settings(Player player, String setting, String value) {
+                calls.add("settings " + setting + " " + value);
+            }
+            @Override public void invite(Player player, String invitee) { calls.add("invite " + invitee); }
+            @Override public void accept(Player player, String host) { calls.add("accept " + host); }
+            @Override public void kick(Player player, String member) { calls.add("kick " + member); }
+            @Override public void start(CommandSender sender, String host) { calls.add("start " + host); }
+            @Override public void leave(Player player) { calls.add("leave"); }
+        });
+        Player player = playerWithPlay();
+        for (String line : List.of("room", "ROOM create", "room settings", "room settings privacy invite",
+                "room invite", "room invite Bob", "room accept Alice", "room kick Bob", "room start",
+                "room start Alice", "room leave")) {
+            run(player, line);
+        }
+        assertEquals(List.of("show", "create", "settings null null", "settings privacy invite", "invite null",
+                "invite Bob", "accept Alice", "kick Bob", "start null", "start Alice", "leave"), calls);
+
+        calls.clear();
+        messages.clear();
+        for (String line : List.of("room settings players", "room create now", "room accept", "room kick",
+                "room start Alice Bob", "room invite Bob Carol", "room teleport")) {
+            run(player, line);
+        }
+        assertEquals(List.of(), calls);
+        assertEquals(7, messages.size());
+        assertTrue(messages.stream().allMatch(message -> message.startsWith("Usage: /narena room")), messages.toString());
+
+        CommandSender console = (CommandSender) Proxy.newProxyInstance(ConsoleCommandSender.class.getClassLoader(),
+                new Class<?>[] {ConsoleCommandSender.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "hasPermission" -> true;
+                    case "sendMessage" -> {
+                        messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
+                        yield null;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        messages.clear();
+        run(console, "room start Alice");
+        run(console, "room create");
+        assertEquals(List.of("start Alice"), calls, "the console can only start a room");
+        assertEquals(List.of("Only players can use this Arena command."), messages);
+
+        calls.clear();
+        run(playerWithPermissions("ninjaarena.spectate"), "room create");
+        assertEquals(List.of(), calls, "the route needs the play node");
+        assertEquals(List.of("create", "settings", "invite", "accept", "kick", "start", "leave"),
+                command.onTabComplete(player, null, "narena", new String[] {"room", ""}));
+        assertEquals(List.of("privacy"), command.onTabComplete(player, null, "narena",
+                new String[] {"room", "settings", "pr"}));
+        assertEquals(List.of("public", "invite"), command.onTabComplete(player, null, "narena",
+                new String[] {"room", "settings", "privacy", ""}));
+    }
+
+    @Test
+    void withoutRoomsTheRoomRouteSaysItIsUnavailable() {
+        run(playerWithPlay(), "room create");
+        assertEquals(List.of("Rooms is not available yet in the Arena."), messages);
     }
 
     @Test

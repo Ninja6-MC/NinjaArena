@@ -29,6 +29,11 @@ permissions:
       ninjaarena.spectate: true
       ninjaarena.leaderboard: true
       ninjaarena.rewards.payout: true
+      ninjaarena.room.create: true
+  ninjaarena.room.create:
+    description: Open a room and be handed one when its host leaves
+    default: true
+    children: {}
   ninjaarena.rewards.payout:
     description: Receive enabled Vault match payouts
     default: true

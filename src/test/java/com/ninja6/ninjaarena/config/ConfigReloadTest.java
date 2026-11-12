@@ -59,7 +59,11 @@ class ConfigReloadTest {
         ConfigurationSection published;
         String season;
         Runnable enforcement = () -> { };
+        Integer maxActive;
+        final List<String> logged = new ArrayList<>();
         @Override public boolean canResize() { return empty; }
+        @Override public void arenas(int maxActive) { calls.add("arenas"); this.maxActive = maxActive; }
+        @Override public void warning(String message) { logged.add(message); }
         @Override public void world(ArenaWorldSettings settings) {
             calls.add("world"); world = new ArenaWorldSettings(world.borderSize(), settings.viewDistance(), settings.simulationDistance());
             if (failWorld) { failWorld = false; throw new IllegalStateException("simulation setter failed"); }
@@ -560,10 +564,63 @@ class ConfigReloadTest {
     }
 
     @Test
+    void maxActiveAppliesOnReloadAndIsValidated() throws Exception {
+        write("arenas:\n  max-active: 2\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertEquals(List.of("arenas"), target.calls);
+        assertEquals(2, target.maxActive);
+        assertEquals("Changed: arenas.max-active.", report.get(1));
+        assertEquals(2, target.published.getInt("arenas.max-active"));
+
+        target.calls.clear();
+        assertEquals(4, reload.reload().size(), "no warning without the old name");
+        assertEquals(List.of(), target.calls, "an unchanged value is not applied again");
+
+        write("arenas:\n  max-active: 0\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("arenas.max-active: must be from 1.0 to 100.0"));
+        write("arenas:\n  max-active: 2.5\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage().contains("expected an integer"));
+    }
+
+    @Test
+    void theOldNameOfMaxActiveStillWorksWithAWarning() throws Exception {
+        write("stability:\n  max-concurrent-matches: 3\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertEquals(3, target.maxActive);
+        assertEquals("stability.max-concurrent-matches has been renamed arenas.max-active. It still works for now;"
+                + " rename it in config.yml.", report.get(4));
+        assertEquals(1, target.logged.size());
+        assertTrue(target.logged.getFirst().contains("renamed arenas.max-active"), target.logged.toString());
+
+        write("stability:\n  max-concurrent-matches: 101\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("stability.max-concurrent-matches: must be from 1.0 to 100.0"));
+
+        // Set beside the new name, the old one is ignored.
+        write("arenas:\n  max-active: 5\nstability:\n  max-concurrent-matches: 3\n", EMPTY_KIT);
+        report = reload.reload();
+        assertEquals(5, target.maxActive);
+        assertTrue(report.get(4).contains("also set, so it is ignored"), report.toString());
+    }
+
+    @Test
+    void theOldNameReadAtStartupIsTheValueAReloadComparesWith() throws Exception {
+        var started = ReloadFiles.defaults();
+        var withOld = new org.bukkit.configuration.file.YamlConfiguration();
+        withOld.set("stability.max-concurrent-matches", 3);
+        withOld.setDefaults(started);
+        var fromOld = new ConfigReload(dir, withOld, KitDefinition.EMPTY, items, target);
+        write("arenas:\n  max-active: 3\n", EMPTY_KIT);
+        fromOld.reload();
+        assertEquals(List.of(), target.calls, "3 was already in force");
+    }
+
+    @Test
     void settingsOutsideTheReloadTableRemainRestartOnly() throws Exception {
-        write("director:\n  debug: true\nstability:\n  max-concurrent-matches: 5\n", EMPTY_KIT);
+        write("director:\n  debug: true\nstability:\n  match-mob-cap: 5\n", EMPTY_KIT);
         assertTrue(reload.reload().get(3).contains("director.debug (restart required)"));
-        assertTrue(reload.reload().get(3).contains("stability.max-concurrent-matches (restart required)"));
+        assertTrue(reload.reload().get(3).contains("stability.match-mob-cap (restart required)"));
         assertTrue(target.calls.isEmpty());
         assertFalse(target.published.getBoolean("director.debug"));
     }

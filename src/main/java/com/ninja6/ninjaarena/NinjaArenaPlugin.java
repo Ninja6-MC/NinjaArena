@@ -88,6 +88,11 @@ import com.ninja6.ninjaarena.resourcepack.BedrockIntegration;
 import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
 import com.ninja6.ninjaarena.resourcepack.BedrockSelections;
 import com.ninja6.ninjaarena.resourcepack.BedrockSupport;
+import com.ninja6.ninjaarena.lobby.LobbyEntry;
+import com.ninja6.ninjaarena.lobby.LobbyReturns;
+import com.ninja6.ninjaarena.restore.JoinRestore;
+import com.ninja6.ninjaarena.room.MaxActive;
+import com.ninja6.ninjaarena.room.RoomService;
 import com.ninja6.ninjaarena.waiting.HostingService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
@@ -153,6 +158,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private com.ninja6.ninjaarena.command.TextureCommands textureCommands;
     private WaitingRoomService waitingRooms;
     private HostingService hosting;
+    private RoomService rooms;
+    private LobbyReturns lobbyReturns;
     private StatsStore stats;
     private Rewards rewards;
     private StatsPlaceholders placeholders;
@@ -174,7 +181,19 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         restores = new RestoreService(snapshots, new PlayerRestorer(getLogger()), getLogger(),
                 new ArenaCombatCleanup(getLogger()));
         restores.markPendingOnStartup();
-        getServer().getPluginManager().registerEvents(new RestoreListener(this, restores, busy), this);
+        // Players who quit from the lobby, a room, a match or spectating rejoin in the lobby.
+        getServer().getPluginManager().registerEvents(new RestoreListener(this, restores, busy,
+                new JoinRestore.Rejoin() {
+                    @Override
+                    public boolean claim(UUID player) {
+                        return lobbyReturns != null && lobbyReturns.claim(player);
+                    }
+
+                    @Override
+                    public boolean enter(Player player) {
+                        return lobbyReturns != null && lobbyReturns.enter(player);
+                    }
+                }), this);
         getServer().getPluginManager().registerEvents(new ArenaExtentListener(() -> arenaWorld == null
                 ? ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")).borderSize()
                 : arenaWorld.borderSize(), getServer().getWorlds().getFirst().getSpawnLocation()), this);
@@ -315,7 +334,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new InventoryLockdownListener(busy), this);
         getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
         arenas.onEditOrDelete(waitingRooms::closeRoom);
-        // Match slots, enemy caps, the spawn rate and the tick-time guard; enemies are counted
+        // Enemy caps, the spawn rate and the tick-time guard; enemies are counted
         // from each match's director. Set before any fight can create a director.
         StabilitySettings stability = StabilitySettings.from(getConfig().getConfigurationSection("stability"));
         DirectorService enemyDirectors = directors;
@@ -327,7 +346,6 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         directors.setGate(hud.withSpawnCues(new StabilityGate(stability,
                 match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
                 Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger())));
-        waitingRooms.setStartAllowed(() -> inMatch.matches().size() < stability.maxMatches());
         ArenaEvents arenaEvents = startEvents();
         waitingRooms.setEventArena(arenaEvents::arena);
         matches.setEventBonus(arenaEvents::bonus);
@@ -345,6 +363,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         hosting = new HostingService(this, arenas, waitingRooms, entry, admission, arenaWorld::world,
                 inMatch::isInMatch, arenaWorld::acquire);
         getServer().getPluginManager().registerEvents(hosting, this);
+        startRooms(entry);
+        RoomService roomList = rooms;
         getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
                 admission, portalCommand::forget, arenaWorld::acquire, watching::arrived), this);
         // Player-built portals share the registry and the entry above; under the dedicated lobby
@@ -390,6 +410,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     @Override
                     public void waiting(WaitingRoomSettings settings) {
                         waiting.setSettings(settings);
+                    }
+
+                    @Override
+                    public void arenas(int maxActive) {
+                        roomList.setMaxActive(maxActive);
                     }
 
                     @Override
@@ -473,8 +498,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         NinjaArenaCommand command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 player -> {
+                    // Spectating, a room or a match leads to the lobby; a waiting room or the
+                    // lobby itself leads home.
                     boolean cancelled = hosting.leave(player);
                     return watching.leave(player) || waitingRooms.leave(player, Exit.COMMAND)
+                            || roomList.leaveRoom(player)
                             || matches.leave(player, MatchService.Exit.COMMAND)
                             || inLobby.leave(player, LobbyMembers.Exit.COMMAND) || cancelled;
                 }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats),
@@ -482,9 +510,50 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         command.setPackStatus(this::packStatus);
         command.setTextures(textureCommands);
         command.setLobby(lobbyEditing);
+        command.setRooms(roomList);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
+    }
+
+    /**
+     * Host-started rooms in the lobby, their arena slot leases and the exits that lead back
+     * to the lobby: the end of a match, the leave command from a room, match or spectating,
+     * and a rejoin after quitting from any of them. Waiting rooms keep their own countdown.
+     */
+    private void startRooms(PortalEntry entry) {
+        MatchService inMatch = matches;
+        WaitingRoomService waiting = waitingRooms;
+        Spectators watching = spectators;
+        HostingService hosted = hosting;
+        LobbyMembers members = lobbyMembers;
+        SnapshotService saved = snapshots;
+        LobbyEntry lobbyEntry = new LobbyEntry(members,
+                id -> inMatch.isInMatch(id) || waiting.isWaiting(id) || watching.contains(id),
+                saved::captureAndPersist, id -> {
+                    try {
+                        saved.delete(id);
+                    } catch (IOException e) {
+                        getLogger().log(Level.SEVERE, "Could not delete the snapshot of " + id
+                                + " after the lobby turned them away; it will be restored on their next join.", e);
+                    }
+                });
+        rooms = new RoomService(this, arenas, inMatch, lobbyEntry, waiting::settings, transfers, arenaWorld::hold,
+                MaxActive.read(getConfig(), getLogger()::warning));
+        RoomService roomList = rooms;
+        roomList.setElsewhere(name -> waiting.hasRoom(name) || hosted.isReserved(name));
+        getServer().getPluginManager().registerEvents(roomList, this);
+        inMatch.setLobby(roomList::enterLobby);
+        watching.setLobby(roomList::enterLobby);
+        // Waiting rooms share the slots, and leave the arenas rooms hold or wait for alone.
+        waiting.setStartAllowed(roomList::hasFreeSlot);
+        waiting.setClaimed(name -> hosted.isReserved(name) || roomList.isClaimed(name));
+        hosted.setRoomClaims(roomList::isClaimed);
+        entry.setRoomClaims(roomList::isClaimed);
+        lobbyReturns = new LobbyReturns(id -> members.isMember(id) || roomList.isMember(id) || inMatch.isInMatch(id)
+                || watching.contains(id), roomList::enterLobby);
+        getServer().getPluginManager().registerEvents(lobbyReturns, this);
+        roomList.start();
     }
 
     /**
@@ -743,6 +812,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             hosting.close();
             hosting = null;
         }
+        if (rooms != null) {
+            rooms.close();
+            rooms = null;
+        }
+        lobbyReturns = null;
         if (waitingRooms != null) {
             waitingRooms.close();
             waitingRooms = null;
@@ -921,6 +995,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
      */
     public StatsStore stats() {
         return stats;
+    }
+
+    /** Host-started rooms and their arena slots; {@code null} while the plugin is disabled. */
+    public RoomService rooms() {
+        return rooms;
     }
 
     /** Registered portals; {@code null} while the plugin is disabled. */

@@ -56,6 +56,17 @@ public final class HostingService implements HostingCommands, Listener {
     private final Map<String, Open> reserved = new HashMap<>();
     private final Map<UUID, Pending> entering = new HashMap<>();
     private boolean closed;
+    private Predicate<String> roomClaimed = arena -> false;
+
+    /** Arenas rooms hold or wait for; they cannot be hosted meanwhile. */
+    public void setRoomClaims(Predicate<String> roomClaimed) {
+        this.roomClaimed = java.util.Objects.requireNonNull(roomClaimed, "roomClaimed");
+    }
+
+    /** Whether a host has reserved the arena for their party. */
+    public boolean isReserved(String arena) {
+        return reserved.containsKey(Arena.normalizeName(arena));
+    }
 
     public HostingService(Plugin plugin, ArenaRegistry arenas, WaitingRoomService rooms, PortalEntry entry,
             ArenaAdmission admission, Supplier<World> world, Predicate<UUID> inMatch) {
@@ -92,7 +103,7 @@ public final class HostingService implements HostingCommands, Listener {
             return;
         }
         String name = Arena.normalizeName(arenaName);
-        if (!arenas.isAvailable(name) || reserved.containsKey(name) || rooms.hasRoom(name)) {
+        if (!arenas.isAvailable(name) || reserved.containsKey(name) || rooms.hasRoom(name) || roomClaimed.test(name)) {
             tell(player, "hosting.not-free", "arena", name);
             return;
         }

@@ -111,6 +111,66 @@ class JoinRestoreTest {
         now = end;
     }
 
+    /** A join that puts players who quit from the lobby, a room, a match or spectating back in it. */
+    private JoinRestore withLobby(java.util.Set<UUID> inLobbyFlow, List<UUID> lobby, boolean lobbyTakesThem) {
+        com.ninja6.ninjaarena.lobby.LobbyReturns returns = new com.ninja6.ninjaarena.lobby.LobbyReturns(
+                inLobbyFlow::contains, entering -> {
+                    if (lobbyTakesThem) {
+                        lobby.add(entering.getUniqueId());
+                    }
+                    return lobbyTakesThem;
+                });
+        returnsUnderTest = returns;
+        return new JoinRestore(restores, (ticks, task) -> queue.add(new Scheduled(now + ticks, task)),
+                id -> online ? player : null, id -> busy, returns);
+    }
+
+    private com.ninja6.ninjaarena.lobby.LobbyReturns returnsUnderTest;
+
+    @Test
+    void quittingFromTheLobbyFlowAndRejoiningReturnsToTheLobbyWithTheSnapshotKept() {
+        List<UUID> lobby = new ArrayList<>();
+        JoinRestore rejoining = withLobby(java.util.Set.of(ALICE), lobby, true);
+        returnsUnderTest.quit(ALICE);
+        restores.markIfPending(ALICE);
+
+        rejoining.onJoin(ALICE);
+        advance(1);
+        assertEquals(List.of(ALICE), lobby);
+        assertEquals(0, attempts, "not restored home");
+        assertTrue(snapshots.hasPending(ALICE), "the snapshot is kept for when they leave the lobby");
+
+        // Once only: a later join with nothing recorded restores as before.
+        lobby.clear();
+        rejoining.onJoin(ALICE);
+        advance(1);
+        assertEquals(List.of(), lobby);
+        assertEquals(1, attempts);
+        assertFalse(snapshots.hasPending(ALICE));
+    }
+
+    @Test
+    void aPlayerWhoQuitFromAWaitingRoomOrNowhereIsRestoredHomeAsBefore() {
+        List<UUID> lobby = new ArrayList<>();
+        JoinRestore rejoining = withLobby(java.util.Set.of(), lobby, true);
+        returnsUnderTest.quit(ALICE);
+        rejoining.onJoin(ALICE);
+        advance(1);
+        assertEquals(List.of(), lobby);
+        assertEquals(1, attempts);
+    }
+
+    @Test
+    void whenTheLobbyCannotTakeARejoiningPlayerTheyAreRestoredHome() {
+        List<UUID> lobby = new ArrayList<>();
+        JoinRestore rejoining = withLobby(java.util.Set.of(ALICE), lobby, false);
+        returnsUnderTest.quit(ALICE);
+        rejoining.onJoin(ALICE);
+        advance(1);
+        assertEquals(1, attempts);
+        assertFalse(snapshots.hasPending(ALICE));
+    }
+
     @Test
     void aCancelledRestoreIsRetriedAndThenSucceeds() {
         cancelledAttempts = 2;

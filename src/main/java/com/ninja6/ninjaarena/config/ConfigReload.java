@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
+import com.ninja6.ninjaarena.room.MaxActive;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
@@ -36,6 +37,12 @@ public final class ConfigReload {
         void world(ArenaWorldSettings settings);
         void grid(int cellSize, double borderSize);
         void waiting(WaitingRoomSettings settings);
+        /**
+         * A new {@code arenas.max-active}. Rooms queued for a slot may be let in; a lower
+         * value never ends a lease already granted.
+         */
+        default void arenas(int maxActive) {
+        }
         void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring);
         default void points(PointsSettings settings) {
         }
@@ -85,6 +92,9 @@ public final class ConfigReload {
             if (!effective.isConfigurationSection(path) && initial.contains(path)) {
                 effective.set(path, initial.get(path));
             }
+        }
+        if (!initial.contains(MaxActive.KEY, true) && initial.contains(MaxActive.OLD_KEY, true)) {
+            effective.set(MaxActive.KEY, initial.get(MaxActive.OLD_KEY));
         }
     }
 
@@ -171,6 +181,9 @@ public final class ConfigReload {
                 return List.of(text("reload.world-rejected", "reason", e.getMessage()));
             }
         }
+        if (!same(effective.get(MaxActive.KEY), next.get(MaxActive.KEY))) {
+            target.arenas(next.getInt(MaxActive.KEY));
+        }
         if (differs("waiting-room.", next)) {
             target.waiting(WaitingRoomSettings.from(next.getConfigurationSection("waiting-room")));
         }
@@ -202,8 +215,17 @@ public final class ConfigReload {
         }
         effective = next;
         kit = candidate.kit();
-        return List.of(text("reload.complete"), report("reload.changed", changed),
-                report("reload.postponed", postponed), report("reload.refused", refused));
+        List<String> lines = new ArrayList<>(List.of(text("reload.complete"), report("reload.changed", changed),
+                report("reload.postponed", postponed), report("reload.refused", refused)));
+        for (String old : candidate.renamed()) {
+            target.warning(MaxActive.warning(false));
+            lines.add(text("reload.renamed", "old", old, "path", MaxActive.KEY));
+        }
+        for (String old : candidate.ignored()) {
+            target.warning(MaxActive.warning(true));
+            lines.add(text("reload.renamed-ignored", "old", old, "path", MaxActive.KEY));
+        }
+        return List.copyOf(lines);
     }
 
     private boolean differs(String prefix, ConfigurationSection next) {

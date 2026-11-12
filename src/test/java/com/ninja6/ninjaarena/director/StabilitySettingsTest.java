@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.director;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -18,7 +19,7 @@ class StabilitySettingsTest {
             var config = YamlConfiguration.loadConfiguration(new InputStreamReader(stream, StandardCharsets.UTF_8));
             var section = config.getConfigurationSection("stability");
             assertNotNull(section);
-            assertEquals(4, section.getInt("max-concurrent-matches"));
+            assertFalse(section.contains("max-concurrent-matches"), "renamed arenas.max-active");
             assertEquals(25, section.getInt("match-mob-cap"));
             assertEquals(80, section.getInt("global-mob-cap"));
             assertEquals(4, section.getInt("spawns-per-tick"));
@@ -27,7 +28,7 @@ class StabilitySettingsTest {
             assertEquals(35.0, section.getDouble("resume-below-mspt"));
             assertEquals(0.25, section.getDouble("intensity-tier"));
             assertEquals(30, section.getInt("tier-recovery-seconds"));
-            assertEquals(new StabilitySettings(4, 25, 80, 4, 40, 45, 35, 0.25, 30), StabilitySettings.DEFAULTS);
+            assertEquals(new StabilitySettings(25, 80, 4, 40, 45, 35, 0.25, 30), StabilitySettings.DEFAULTS);
             assertEquals(StabilitySettings.DEFAULTS, StabilitySettings.from(section));
             for (String key : section.getKeys(false)) {
                 var without = new YamlConfiguration();
@@ -47,7 +48,6 @@ class StabilitySettingsTest {
     @Test
     void readsEveryKey() {
         var config = new YamlConfiguration();
-        config.set("max-concurrent-matches", 2);
         config.set("match-mob-cap", 10);
         config.set("global-mob-cap", 30);
         config.set("spawns-per-tick", 2);
@@ -56,20 +56,20 @@ class StabilitySettingsTest {
         config.set("resume-below-mspt", 25.0);
         config.set("intensity-tier", 0.5);
         config.set("tier-recovery-seconds", 10);
-        assertEquals(new StabilitySettings(2, 10, 30, 2, 30, 40, 25, 0.5, 10), StabilitySettings.from(config));
+        assertEquals(new StabilitySettings(10, 30, 2, 30, 40, 25, 0.5, 10), StabilitySettings.from(config));
     }
 
     @Test
     void clampsOutOfRangeValues() {
-        assertEquals(new StabilitySettings(1, 1, 1, 1, 1, 1, 1, 0, 0),
-                new StabilitySettings(0, -5, 0, -1, -10, 0, -3, -1, -5));
-        assertEquals(new StabilitySettings(100, 1000, 1000, 100, 1000, 1000, 1000, 1, 600),
-                new StabilitySettings(1000, 5000, 5000, 1000, 1e9, 1e9, 1e9, 2, 100_000));
+        assertEquals(new StabilitySettings(1, 1, 1, 1, 1, 1, 0, 0),
+                new StabilitySettings(-5, 0, -1, -10, 0, -3, -1, -5));
+        assertEquals(new StabilitySettings(1000, 1000, 100, 1000, 1000, 1000, 1, 600),
+                new StabilitySettings(5000, 5000, 1000, 1e9, 1e9, 1e9, 2, 100_000));
     }
 
     @Test
     void keepsTheTickTimeThresholdsInOrder() {
-        var crossed = new StabilitySettings(4, 25, 80, 4, 40, 30, 50, 0.25, 30);
+        var crossed = new StabilitySettings(25, 80, 4, 40, 30, 50, 0.25, 30);
         assertEquals(40, crossed.pauseAboveMspt());
         assertEquals(40, crossed.dropTierAboveMspt());
         assertEquals(40, crossed.resumeBelowMspt());
@@ -82,8 +82,8 @@ class StabilitySettingsTest {
             config.set("pause-spawning-above-mspt", bad);
             config.set("intensity-tier", bad);
             assertEquals(StabilitySettings.DEFAULTS, StabilitySettings.from(config));
-            assertThrows(IllegalArgumentException.class, () -> new StabilitySettings(4, 25, 80, 4, bad, 45, 35, 0.25, 30));
-            assertThrows(IllegalArgumentException.class, () -> new StabilitySettings(4, 25, 80, 4, 40, 45, 35, bad, 30));
+            assertThrows(IllegalArgumentException.class, () -> new StabilitySettings(25, 80, 4, bad, 45, 35, 0.25, 30));
+            assertThrows(IllegalArgumentException.class, () -> new StabilitySettings(25, 80, 4, 40, 45, 35, bad, 30));
         }
     }
 }
