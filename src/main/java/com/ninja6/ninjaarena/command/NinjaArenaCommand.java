@@ -534,7 +534,6 @@ public final class NinjaArenaCommand implements TabExecutor {
                     && "ready".startsWith(args[1].toLowerCase(Locale.ROOT)) ? List.of("ready") : List.of();
         }
         if (args[0].equalsIgnoreCase(ROOM)) {
-
             if (!sender.hasPermission(PLAY)) {
                 return List.of();
             }

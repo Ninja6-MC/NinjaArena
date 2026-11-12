@@ -179,6 +179,7 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `room kick <player>` | Host | Remove a player from the room to the lobby |
 | `room start [host]` | Host, or `ninjaarena.admin` for any room | Start the room's match |
 | `room leave` | `ninjaarena.play` | Leave the room and stay in the lobby |
+| `map <list\|set <arena>>` | `ninjaarena.play`; `set` needs `ninjaarena.map.change` | List pickable maps, or change your room's map while it is in the lobby |
 | `shop ready` | `ninjaarena.play` | Say you are ready in the [shop between rounds](#shop-phase) |
 | `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
 | `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |

@@ -207,7 +207,6 @@ public final class MatchHud implements Listener {
             case SHOP -> BossBar.Color.GREEN;
             default -> BossBar.Color.YELLOW;
         });
-
         display.bar.progress(duration == 0 ? 1 : Math.clamp((float) match.secondsLeft() / duration, 0, 1));
         for (UUID id : new ArrayList<>(display.viewers.keySet())) {
             Player player = players.apply(id);

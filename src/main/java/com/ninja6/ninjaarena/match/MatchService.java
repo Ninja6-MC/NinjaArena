@@ -715,7 +715,6 @@ public final class MatchService implements MatchStart {
             case COMBAT -> broadcast(running, msg("match.fight"));
             case SHOP -> broadcast(running, msg("shop.open", "round", match.round() + 1,
                     "seconds", match.secondsLeft()));
-
             case OVERRUN -> broadcast(running, match.settings().overrunLimitSeconds() > 0
                     ? msg("match.overrun-limited", "seconds", match.settings().overrunLimitSeconds())
                     : msg("match.overrun"));

@@ -12,8 +12,8 @@ import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
-import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.portal.PortalEntry;
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.world.PluginWorlds;
@@ -276,7 +276,6 @@ public final class Spectators implements Listener {
         }
         return PluginWorlds.isArena(to) && contains(seat.bounds(), to.getX(), to.getY(), to.getZ());
     }
-
 
     static boolean contains(ArenaBounds bounds, double x, double y, double z) {
         return x >= bounds.minX() && x < bounds.maxX() + 1.0
