@@ -3,7 +3,19 @@ plugins {
 }
 
 group = "com.ninja6"
-version = "0.1.0-SNAPSHOT"
+
+// A release candidate passes the version derived from its tag (v0.5.0-rc.1 -> 0.5.0-rc.1);
+// every other build keeps the snapshot version. plugin.yml and the JAR name follow it.
+val releaseVersion = providers.gradleProperty("releaseVersion").orNull
+val releaseVersionPattern = Regex("""0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.[1-9][0-9]*)?""")
+if (releaseVersion != null && !releaseVersionPattern.matches(releaseVersion)) {
+    throw GradleException("releaseVersion must be 0.MINOR.PATCH with an optional -alpha.N, -beta.N or -rc.N suffix")
+}
+version = releaseVersion ?: "0.1.0-SNAPSHOT"
+
+// The release candidate runs the unit suite a second time against the downloaded JAR in
+// place of the compiled classes and resources, so the tests exercise the bytes that ship.
+val releaseJar = providers.gradleProperty("releaseJar").orNull?.let { file(it) }
 
 // paper-api 26.3 is Java 25 bytecode and its Gradle metadata requires a Java 25 consumer,
 // so the toolchain and the release target both follow it.
@@ -66,6 +78,18 @@ tasks {
         useJUnitPlatform()
         // The SQLite driver loads its native library; Paper grants this on the server.
         jvmArgs("--enable-native-access=ALL-UNNAMED")
+        if (releaseJar != null) {
+            if (releaseVersion == null) {
+                throw GradleException("releaseJar needs releaseVersion, the version the JAR must carry")
+            }
+            if (!releaseJar.isFile) {
+                throw GradleException("releaseJar does not exist: $releaseJar")
+            }
+            inputs.file(releaseJar)
+            classpath = files(releaseJar) + (classpath - sourceSets.main.get().output)
+            systemProperty("ninjaarena.releaseJar", releaseJar.absolutePath)
+            systemProperty("ninjaarena.releaseVersion", releaseVersion)
+        }
     }
 }
 

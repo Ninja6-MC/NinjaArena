@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, verify and promote the same Java resource pack candidate bytes."""
+"""Build and verify Java resource pack candidates; Publish Release promotes their bytes."""
 
 import argparse
 import hashlib
@@ -9,7 +9,6 @@ from pathlib import Path
 import re
 import subprocess
 import struct
-import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -146,51 +145,9 @@ def verify(root, folder, version, source, run_id, attempt):
             "run_id": str(run_id), "attempt": str(attempt), "result": "passed"}
 
 
-def publish(root, folder, evidence_file, version, source, run_id, attempt, *, verifier=None, manifest_name="manifest.json"):
-    evidence = read_json(evidence_file)
-    expected = (verifier or verify)(root, folder, version, source, run_id, attempt)
-    if any(evidence.get(key) != value for key, value in expected.items()) or not evidence.get("verification_run_id") or not evidence.get("verification_attempt"):
-        raise ValueError("passing verification evidence is missing or does not identify this candidate")
-    if version_channel(version) == "snapshot":
-        raise ValueError("CI snapshots cannot be published as releases")
-    environment = json.loads(subprocess.check_output(
-        ["gh", "api", f"repos/{REPOSITORY}/environments/release"], text=True))
-    if not any(rule.get("type") == "required_reviewers" and any(
-            reviewer.get("type") == "User" and reviewer.get("reviewer", {}).get("login", "").casefold() == "bharathasl"
-            for reviewer in rule.get("reviewers", [])) for rule in environment.get("protection_rules", [])):
-        raise ValueError("release environment must require maintainer review before publishing")
-    refs = subprocess.check_output(["git", "ls-remote", "origin", f"refs/tags/{version}", f"refs/tags/{version}^{{}}"], text=True)
-    commits = dict(line.split()[::-1] for line in refs.splitlines())
-    if commits.get(f"refs/tags/{version}^{{}}", commits.get(f"refs/tags/{version}")) != source:
-        raise ValueError("release tag no longer points to the verified source")
-    release = json.loads(subprocess.check_output(["gh", "release", "view", version, "--repo", REPOSITORY,
-                                                 "--json", "tagName,isPrerelease,isDraft,assets"], text=True))
-    if release["isDraft"] or release["tagName"] != version or release["isPrerelease"] != (version_channel(version) == "prerelease"):
-        raise ValueError("published release tag/channel mismatch")
-    manifest = read_json(folder / manifest_name)
-    intended = set(manifest["files"]) | {manifest_name}
-    existing = {asset["name"] for asset in release["assets"]} & intended
-    with tempfile.TemporaryDirectory() as temp:
-        for name in sorted(existing):
-            subprocess.run(["gh", "release", "download", version, "--repo", REPOSITORY, "--pattern", name, "--dir", temp], check=True)
-            if (Path(temp) / name).read_bytes() != (folder / name).read_bytes():
-                raise ValueError(f"public asset differs; reconcile manually, never overwrite: {name}")
-        missing = sorted(intended - existing)
-        if missing:
-            subprocess.run(["gh", "release", "upload", version, "--repo", REPOSITORY, *[str(folder / name) for name in missing]], check=True)
-        # Read back the public bytes, including assets already present on a retry.
-        for name in sorted(intended):
-            destination = Path(temp) / name
-            if destination.exists():
-                destination.unlink()
-            subprocess.run(["gh", "release", "download", version, "--repo", REPOSITORY, "--pattern", name, "--dir", temp], check=True)
-            if destination.read_bytes() != (folder / name).read_bytes():
-                raise ValueError(f"published asset verification failed: {name}")
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("build", "verify", "publish"))
+    parser.add_argument("command", choices=("build", "verify"))
     parser.add_argument("--output", type=Path, default=ROOT / "build/resourcepacks")
     parser.add_argument("--version", default=os.environ.get("PACK_VERSION"), required="PACK_VERSION" not in os.environ)
     parser.add_argument("--source", default=os.environ.get("GITHUB_SHA"))
@@ -201,14 +158,12 @@ def main():
     source = args.source or subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     if args.command == "build":
         build(ROOT, args.output, args.version, source, args.run_id, args.attempt)
-    elif args.command == "verify":
+    else:
         evidence = verify(ROOT, args.output, args.version, source, args.run_id, args.attempt)
         evidence.update(verification_run_id=os.environ.get("GITHUB_RUN_ID", "local"),
                         verification_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"))
         args.evidence.parent.mkdir(parents=True, exist_ok=True)
         write_json(args.evidence, evidence)
-    else:
-        publish(ROOT, args.output, args.evidence, args.version, source, args.run_id, args.attempt)
 
 
 if __name__ == "__main__":

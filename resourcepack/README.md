@@ -65,15 +65,16 @@ bytes with the source, including for releases.
 
 Artwork CI builds both ZIPs for pull requests, merge groups, main pushes and
 manual runs. Snapshot versions are `ci-<full commit SHA>`. The candidate and
-separate downloaded-artifact test evidence are retained for 30 days. Release
-attachments use the release tag; see [the release process](../RELEASE_PROCESS.md).
+separate downloaded-artifact test evidence are retained for 30 days. Release packs
+are built from the release tag by Release Candidate and published with the plugin
+JAR by Publish Release; see [the release process](../RELEASE_PROCESS.md).
 
 ## Hosting, hashes and pinning
 
 Use an HTTPS URL that directly returns the ZIP without login, cookies or a
 landing page. With `required: true`, delivery is only as reliable as the pack host:
 use a host you control or a CDN. GitHub release URLs are a convenience for small or
-test setups, available once the gated attachment job completes. If a client cannot
+test setups, available once the gated release is published. If a client cannot
 reach the pack host, reconnecting usually works.
 For example, replace this version with a published release containing the packs:
 
@@ -228,8 +229,8 @@ Outputs under `build/bedrock-resourcepacks` are both versioned `.mcpack` files,
 `bedrock-manifest.json`. The manifest pins SHA-256 for every output and SHA-1 for
 the packs. CI performs conversion and mapping generation before packaging,
 then downloads and verifies the retained candidate against repository sources.
-The existing protected release publisher attaches the verified bytes and fails
-closed until the required release environment exists. See
+The gated release publisher uploads those verified bytes unchanged, in the same
+release as the plugin JAR. See
 [the release process](../RELEASE_PROCESS.md) for numeric Bedrock version bumps,
 snapshot limitations and immutable hosting. Never replace published pack bytes
 under an existing UUID/version.
