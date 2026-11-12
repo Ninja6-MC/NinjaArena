@@ -20,6 +20,11 @@ Java 25, and does not run on Folia.
   and rc tags are published as pre-releases, and only the highest stable release is
   marked latest. `RELEASE_PROCESS.md` describes the procedure and how to retry it.
 
+- Per-player shuriken and smoke bomb cooldown and per-round limit hints in the match
+  action bar on Java and Bedrock. Used-up hints take priority over cooldown seconds;
+  ready tools leave the existing status unchanged. Hint text and separators are
+  configurable in `messages.yml` without changing `hud.status`.
+
 - Separate shuriken and smoke bomb cooldown groups and configurable per-round limits.
   Both tools default to unlimited, non-consuming throws. Each has `cooldown-seconds`
   (0-60, default 0) and `uses-per-round` (0-64, default 0) under `tools`; kit amounts
@@ -77,6 +82,12 @@ Java 25, and does not run on Folia.
   `overlay(UUID)` reports its state.
 
 ### Fixed
+- Servers sharing one SQLite file no longer lose matches when they create the file
+  together: the plugin creates the file before the bundled SQLite driver opens it, since
+  that driver deletes a missing file it has just created to test write access. Stats
+  and season writes take the write lock before they read, so a server waits for the
+  other's commit instead of reporting the database as unusable, and the switch to WAL
+  waits for its lock (#181).
 - A join restore that another plugin cancelled, such as a login plugin holding the
   player at a spawn, is retried after 20, 100, 200, 400 and 600 ticks. The snapshot
   stays until a restore succeeds, a retry replaces the inventory instead of adding

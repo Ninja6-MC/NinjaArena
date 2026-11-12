@@ -10,6 +10,8 @@ import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import com.ninja6.ninjaarena.tool.NinjaTool;
+import com.ninja6.ninjaarena.tool.NinjaTools.ThrowState;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,6 +21,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -27,6 +30,7 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.JoinConfiguration;
 import net.kyori.adventure.title.Title;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -53,17 +57,19 @@ public final class MatchHud implements Listener {
     private final MatchStandings scores;
     private final PlayerPoints points;
     private final ToIntFunction<MatchView> enemies;
+    private final BiFunction<UUID, NinjaTool, ThrowState> tools;
     private final Map<MatchView, Display> displays = new IdentityHashMap<>();
     private BukkitTask ticker;
     private boolean closed;
 
     public MatchHud(Supplier<List<MatchView>> matches, Function<UUID, Player> players, MatchStandings scores, PlayerPoints points,
-            ToIntFunction<MatchView> enemies) {
+            ToIntFunction<MatchView> enemies, BiFunction<UUID, NinjaTool, ThrowState> tools) {
         this.matches = Objects.requireNonNull(matches, "matches");
         this.players = Objects.requireNonNull(players, "players");
         this.scores = Objects.requireNonNull(scores, "scores");
         this.points = Objects.requireNonNull(points, "points");
         this.enemies = Objects.requireNonNull(enemies, "enemies");
+        this.tools = Objects.requireNonNull(tools, "tools");
     }
 
     /** Start after the match ticker so each refresh sees the current second. */
@@ -212,8 +218,24 @@ public final class MatchHud implements Listener {
     }
 
     private Component statusLine(List<String> totals, int livingEnemies, MatchView match, UUID player) {
-        return msg("hud.status", "totals", String.join(text("hud.team-separator"), totals),
+        Component status = msg("hud.status", "totals", String.join(text("hud.team-separator"), totals),
                 "enemies", livingEnemies, "points", points.points(match, player));
+        List<Component> hints = new ArrayList<>();
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            ThrowState state = tools.apply(player, tool);
+            if (state.usedUp()) {
+                hints.add(msg("hud.tool-used-up", "tool", msg("tool." + tool.key())));
+            } else if (state.cooldownSeconds() > 0) {
+                hints.add(msg("hud.tool-cooldown", "tool", msg("tool." + tool.key()),
+                        "seconds", state.cooldownSeconds()));
+            }
+        }
+        if (hints.isEmpty()) {
+            return status;
+        }
+        return msg("hud.status-with-tools", "status", status,
+                "tools", Component.join(JoinConfiguration.separator(
+                        msg("hud.tool-separator")), hints));
     }
 
     private void title(MatchView match, Component title, Component subtitle) {

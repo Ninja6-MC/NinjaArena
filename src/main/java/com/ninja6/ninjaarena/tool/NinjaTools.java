@@ -143,6 +143,25 @@ public final class NinjaTools implements Listener {
         this.settings = Objects.requireNonNull(settings, "settings");
     }
 
+    /** A read-only snapshot of one thrown tool, with remaining seconds rounded up. */
+    public record ThrowState(long cooldownSeconds, boolean usedUp) {
+    }
+
+    /** Reads current deadlines and the current per-round limit without changing either. */
+    public ThrowState throwState(UUID player, NinjaTool tool) {
+        if (!tool.thrown()) {
+            throw new IllegalArgumentException("Not a thrown tool: " + tool);
+        }
+        long remaining = Math.max(0, throwReady.getOrDefault(player, Map.of()).getOrDefault(tool, 0L)
+                - ticks.getAsLong());
+        return new ThrowState((remaining + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND, usedUp(player, tool));
+    }
+
+    private boolean usedUp(UUID player, NinjaTool tool) {
+        int limit = settings.usesPerRound(tool);
+        return limit > 0 && throwUses.getOrDefault(player, Map.of()).getOrDefault(tool, 0) >= limit;
+    }
+
     /** Registers every tool's kit item, such as {@code ninjaarena:shuriken}. */
     public static void registerItems(KitItems items) {
         for (NinjaTool tool : NinjaTool.values()) {
@@ -237,7 +256,7 @@ public final class NinjaTools implements Listener {
         int limit = settings.usesPerRound(kind);
         if (!usable(event.getPlayer())
                 || ticks.getAsLong() < throwReady.getOrDefault(id, Map.of()).getOrDefault(kind, 0L)
-                || limit > 0 && throwUses.getOrDefault(id, Map.of()).getOrDefault(kind, 0) >= limit) {
+                || usedUp(id, kind)) {
             event.setCancelled(true);
             return;
         }

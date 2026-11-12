@@ -86,6 +86,7 @@ abstract class MatchFixture {
         InventoryView view;
         final List<String> messages = new ArrayList<>();
         final List<String> actionBars = new ArrayList<>();
+        final List<Component> actionBarComponents = new ArrayList<>();
         final List<Title> titles = new ArrayList<>();
         final List<Sound> sounds = new ArrayList<>();
         final List<BossBar> bossBars = new ArrayList<>();
@@ -333,8 +334,11 @@ abstract class MatchFixture {
                         fake.messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
                         yield null;
                     }
-                    case "sendActionBar" -> { fake.actionBars.add(PlainTextComponentSerializer.plainText()
-                            .serialize((Component) args[0])); yield null; }
+                    case "sendActionBar" -> {
+                        fake.actionBarComponents.add((Component) args[0]);
+                        fake.actionBars.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
+                        yield null;
+                    }
                     case "showBossBar" -> { fake.bossBars.add((BossBar) args[0]); yield null; }
                     case "hideBossBar" -> { fake.bossBars.remove((BossBar) args[0]); yield null; }
                     case "showTitle" -> { fake.titles.add((Title) args[0]); yield null; }
