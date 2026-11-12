@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.stats;
 
+import com.ninja6.ninjaarena.message.Keyed;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Driver;
@@ -18,9 +19,24 @@ public interface ConnectionSource {
     Connection connect() throws SQLException;
 
     /** A driver class that is not on the server; retrying cannot help. */
-    final class MissingDriver extends Exception {
-        public MissingDriver(String message, Throwable cause) {
-            super(message, cause);
+    final class MissingDriver extends Exception implements Keyed {
+        private final String name;
+        private final String className;
+
+        public MissingDriver(String name, String className, Throwable cause) {
+            super("the " + name + " driver (" + className + ") is not available on this server", cause);
+            this.name = name;
+            this.className = className;
+        }
+
+        @Override
+        public String key() {
+            return "texture.problem.missing-driver";
+        }
+
+        @Override
+        public Object[] placeholders() {
+            return new Object[] {"driver", name, "class", className};
         }
     }
 
@@ -70,7 +86,7 @@ public interface ConnectionSource {
             return (Driver) Class.forName(className, true, ConnectionSource.class.getClassLoader())
                     .getDeclaredConstructor().newInstance();
         } catch (ReflectiveOperationException | ClassCastException | LinkageError e) {
-            throw new MissingDriver("the " + name + " driver (" + className + ") is not available on this server", e);
+            throw new MissingDriver(name, className, e);
         }
     }
 }

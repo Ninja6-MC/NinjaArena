@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.texture;
 
+import com.ninja6.ninjaarena.message.Keyed;
+import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.resourcepack.BedrockSelections.Quality;
 import com.ninja6.ninjaarena.stats.ConnectionSource;
 import com.ninja6.ninjaarena.stats.StatsSettings;
@@ -75,6 +77,8 @@ public final class PreferenceStore implements AutoCloseable {
     private final List<Runnable> readyListeners = new CopyOnWriteArrayList<>();
     private volatile Health health = Health.STARTING;
     private volatile String problem = "";
+    /** The UNSUPPORTED cause, worded by messages.yml for players; null otherwise. */
+    private volatile Keyed unsupported;
     private volatile boolean closed;
     private volatile boolean everReady;
 
@@ -138,9 +142,11 @@ public final class PreferenceStore implements AutoCloseable {
         return health == Health.READY;
     }
 
-    /** Why the store is not ready, or an empty text. */
+    /** Why the store is not ready, or an empty text, in the words players see. */
     public String problem() {
-        return problem;
+        Keyed cause = unsupported;
+        return health == Health.UNSUPPORTED && cause != null
+                ? Messages.text(cause.key(), cause.placeholders()) : problem;
     }
 
     /**
@@ -245,6 +251,7 @@ public final class PreferenceStore implements AutoCloseable {
         } catch (SchemaTooNew | ConnectionSource.MissingDriver e) {
             health = Health.UNSUPPORTED;
             problem = e.getMessage();
+            unsupported = (Keyed) e;
             logger.severe("Texture preferences are off: " + e.getMessage() + ".");
             return false;
         } catch (SQLException | RuntimeException e) {

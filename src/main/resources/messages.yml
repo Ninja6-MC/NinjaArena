@@ -1,0 +1,645 @@
+# NinjaArena player messages: the text the plugin shows to players and admins, so it can
+# be reworded or translated. /ninjaarena admin reload reads this file again.
+#
+# A few things are not here. Command argument syntax and argument names, such as create
+# <name> [<cell x> <cell z>] or x1, are filled in as <usage> and <what>. Names of arenas,
+# portals, worlds, files and config.yml settings are filled in as they are. Errors from
+# the system itself, such as a file or database failure or a YAML parse error, are filled
+# in as <reason>. The reasons /ninjaarena admin reload gives for rejecting config.yml or
+# kits.yml are configuration diagnostics, also written to the server log, and stay in
+# English.
+#
+# Format: MiniMessage, https://docs.advntr.dev/minimessage/format.html. Colours and styles
+# are tags such as <red>, <gold>, <bold> or <#ff8800>; </red> ends one early. Keep each
+# text in double quotes; to show a literal tag, write it with a doubled backslash:
+# \\<player>.
+#
+# Placeholders are named tags, such as <arena>, <player> or <seconds>. A text can use the
+# placeholders its default uses, in any order or not at all; any other name counts as an
+# unreadable tag. Player names and other typed input are inserted as plain text, so they
+# can never add formatting or click actions.
+#
+# A text that is missing, is not text (a list, say) or uses a tag MiniMessage cannot read
+# falls back to the bundled default, with one warning in the server log per key. A key
+# this version does not know is ignored, with a warning. Startup and reload read the file
+# the same way.
+#
+# Some texts are passed on as plain text: menu and dialog items, kick screens, entry
+# refusals, reload reports and the Discord webhook. Formatting tags in those are removed;
+# the sections below say which. Delete this file to get the defaults back on the next
+# start.
+
+# Shared by several features.
+common:
+  restore-failed: "<red>Your belongings could not be returned yet. Rejoin the server, or ask an admin if this keeps happening."
+
+# /ninjaarena itself. <label> is the command as typed, <usage> its arguments.
+command:
+  no-permission: "<red>You do not have permission to use this command."
+  players-only: "<red>Only players can use this Arena command."
+  leave-players-only: "<red>Only players can leave an arena."
+  not-in-arena: "<red>You are not in an arena."
+  usage: "<red>Usage: /<label> <usage>"
+  unknown: "<red>Unknown command <command>. Available commands:"
+  help-header: "<gold>The Arena commands:"
+  help-line: "<yellow>/<label> <usage></yellow><gray> - <description>"
+  unavailable: "<yellow><feature> is not available yet in the Arena."
+  invalid-player-id: "<red><reason>. Usage: /<label> <usage>"
+  feature:
+    textures: "Texture quality"
+    reload: "Configuration reload"
+  usage-full: "<red>Usage: <usage>"
+  unknown-subcommand: "<red>Unknown subcommand <subcommand>. Use one of: <subcommands>."
+  error: "<red><message>"
+  warning: "<yellow><message>"
+  failed: "<reason>"
+  player-id:
+    xuid: "A Bedrock XUID is 1 to 20 digits"
+    xuid-required: "A Bedrock XUID is required"
+    java: "A Java id is a full account UUID"
+
+# The help list: one description per subcommand.
+help:
+  help: "show the commands you can use"
+  leave: "leave the arena and return home"
+  spectate: "watch a live match from a waiting room"
+  leaderboard: "show the top 10 for an Arena stat"
+  textures: "choose Standard or Detailed ninja tool textures"
+  accept: "accept an invitation to the Arena"
+  host: "open a match in the Arena"
+  invite: "invite a player to the Arena"
+  arena: "create, edit and set up arenas"
+  portal: "mark out portals that lead to arenas"
+  director: "show the enemy director of a running match"
+  event: "manage scheduled arena events"
+  pack: "show Java and Bedrock resource pack state"
+  admin: "reload the Arena configuration, or reset a player's texture quality to Standard"
+
+# /ninjaarena arena: building and registering arenas. <cell>, <bounds> and <point> are
+# coordinates. invalid and error are refusals, shown through command.error; problem lists
+# what keeps an arena from hosting a match, as plain text shown through command.warning.
+arena:
+  created: "<green>Arena <arena> created in cell <cell> (<cell-bounds>) and put in edit mode."
+  deleted: "<green>Arena <arena> removed from the registry. Its blocks are still in the world."
+  list-empty: "<gray>No arenas are registered."
+  list-line: "<gray><arena> (cell <cell>): <status>"
+  not-set: "not set"
+  info:
+    header: "<gray>Arena <arena>: <status>"
+    cell: "<gray>Cell <cell> (<cell-bounds>)"
+    bounds: "<gray>Bounds: <bounds>"
+    waiting-room: "<gray>Waiting room: <point>"
+    team-spawn: "<gray>Team <team> spawn: <point>"
+    enemy-spawn: "<gray>Enemy spawn <number>: <point>"
+  status:
+    in-use: "in use by a match"
+    editing: "in edit mode"
+    ready: "ready"
+    incomplete-one: "incomplete (1 problem)"
+    incomplete: "incomplete (<problems> problems)"
+    unknown: "unknown"
+  edit-on: "<green>Arena <arena> is in edit mode: the arena world saves and the arena takes no matches."
+  edit-saved: "<green>Arena <arena> saved and ready for matches."
+  edit-incomplete: "<yellow>Arena <arena> saved and left edit mode, but it cannot host a match yet:"
+  edit-fix: "<yellow>Turn edit mode back on with <command> to fix them."
+  tp-players-only: "<red>Only a player can be teleported."
+  teleporting: "<green>Teleporting to arena <arena> in cell <cell> (<cell-bounds>). Bounds: <bounds>."
+  teleport-failed: "<red>The teleport to arena <arena> failed."
+  empty-world: "<yellow>The arena world is empty until you build: there is nothing under you yet. Use creative or flight while building."
+  flight-on: "<yellow>Flight was turned on because the arena has no waiting room yet. It stays on until your game mode changes."
+  bounds-set: "<green>Bounds of <arena> set to <bounds>."
+  waiting-room-set: "<green>Waiting room of <arena> set to <point>."
+  team-spawn-set: "<green>Team <team> spawn of <arena> set to <point>."
+  team-spawn-removed: "<green>Team <team> spawn of <arena> removed."
+  enemy-spawn-added: "<green>Enemy spawn <number> of <arena> added at <point>."
+  enemy-spawn-removed: "<green>Enemy spawn <number> of <arena> removed; later ones moved up."
+  invalid:
+    name: "Invalid arena name <name>."
+    too-many-teams: "At most <max> team spawns."
+    team: "Team must be 1 to <max>."
+    no-team-spawns: "No team spawns to remove."
+    no-enemy-spawn: "No enemy spawn <number>."
+    coordinates: "Coordinates must be finite."
+    rotation: "Yaw and pitch must be finite."
+  error:
+    unknown: "No arena called <arena>."
+    bad-name: "Arena names are 1 to 32 letters, digits, _ or -."
+    exists: "An arena called <arena> already exists."
+    no-free-cell: "Every grid cell inside the world border is taken."
+    cell-outside: "Cell <cell> is not inside the world border."
+    cell-taken: "Cell <cell> already holds an arena."
+    in-use: "Arena <arena> is in use by a match."
+    already-in-use: "Arena <arena> is already in use by a match."
+    unavailable: "Arena <arena> is not available for a match."
+    already-editing: "Arena <arena> is already in edit mode."
+    not-editing: "Arena <arena> is not in edit mode."
+    not-editing-hint: "Arena <arena> is not in edit mode. Start it with edit <arena> on."
+    reset-editing: "Arena <arena> is in edit mode; a reset would undo the edit."
+    match-while-editing: "No match can start while <arenas> is in edit mode: edit mode turns on saving for the whole arena world."
+    edit-while-match: "Arenas cannot be edited while a match is running in <arenas>: edit mode turns on saving for the whole arena world."
+    world-busy: "The arena world is changing state; try again once it is ready."
+    piston-moving: "A piston is still moving; wait for it to stop before finishing the edit"
+    freeze-unsupported: "Cannot freeze arena block actions on this server version"
+    edit-reset-failed: "Could not reset <arena> from its saved copy before the edit, so it stays out of edit mode: <reason>. To edit it as the world has it now, remove its folder plugins/NinjaArena/arena-copies/<arena> and start the edit again; finishing the edit saves a new copy. Or delete the arena and create it again."
+    copy-save-failed: "Could not save the copy of <arena>, so it stays in edit mode: <reason>"
+    reset-failed: "Could not reset <arena>: <reason>"
+    copy-missing: "Could not reset <arena> from its saved copy: the authoritative saved copy is missing"
+    copy-restore-failed: "Could not reset <arena> from its saved copy: <reason>"
+    close-save-failed: "Could not save the copy of <arena> while closing its edit: <reason>"
+    copy-delete-failed: "Could not delete the saved copy of <arena>: <reason>"
+    store-unreadable: "<file> could not be read at startup. Fix or remove it and restart before changing arenas."
+    store-save-failed: "Could not save <file>: <reason>"
+    teleport-outside: "The arena teleport target is outside the supported world border."
+    bounds-leave-cell: "Bounds <bounds> leave the arena's cell (<cell-bounds>)."
+    bounds-enclose-hub: "Bounds <bounds> enclose the shared hub at <point>. Move it first with portal sethub."
+    give-coordinates: "Give coordinates: <usage>"
+    stand-in-world: "Stand in the arena world (<world>) or give coordinates."
+    pitch: "Pitch must be between -90 and 90."
+    relative: "~ needs a player standing in the arena world; give a number for <what>."
+    out-of-range: "<what> is out of range."
+    not-number: "<what> must be a number, not <token>."
+    not-whole: "<what> must be a whole number, not <token>."
+  problem:
+    cell-outside: "Cell <cell> is not inside the world border."
+    no-bounds: "Bounds are not set."
+    bounds-leave-cell: "Bounds <bounds> leave cell <cell> (<cell-bounds>)."
+    no-waiting-room: "The waiting room is not set."
+    waiting-room-outside: "The waiting room is outside the bounds."
+    team-spawns: "Needs <min> to <max> team spawns, has <count>."
+    team-spawn-outside: "Team <team> spawn is outside the bounds."
+    no-enemy-spawns: "Needs at least one enemy spawn point: enemies spawn there during rounds."
+    enemy-spawn-outside: "Enemy spawn <number> is outside the bounds."
+
+# /ninjaarena portal: marking out portals and the shared hub. invalid and error are
+# refusals, shown through command.error.
+portal:
+  corner-players-only: "<red>Only a player can select a portal region."
+  corner-cleared: "<yellow>Your other corner was in <world> and has been cleared."
+  corner-set: "<green>Corner <corner> set to <x>, <y>, <z> in <world>."
+  selected: "<gray>Selected <bounds>."
+  too-large: "<yellow>That is more than <max> blocks along an axis; create will refuse it."
+  flat: "<yellow>The selection is one block tall, so the portal would be a flat pad. For a doorway, stand in it and use setcorner <corner> ~ ~2 ~."
+  create-players-only: "<red>Only a player can create a portal from their selection."
+  created-spectator: "<green>Portal <portal> created in <world> (<region>), leading to arena <arena> for spectating."
+  created: "<green>Portal <portal> created in <world> (<region>), leading to <destination>."
+  lobby-set: "<green>Portal <portal> now leads to <destination>."
+  hub-set: "<green>Shared hub set to <point> in <world>. Anyone waiting at the old point is sent home."
+  hub-unused: "<yellow>No portal leads there yet. Use lobby \\<portal> shared, or set waiting-room.lobby to shared in config.yml."
+  hub-removed: "<green>Shared hub removed. Portals that lead there turn players away until a hub is set."
+  no-hub: "<yellow>No shared hub is set, so the portal turns players away until one is. Stand there and use sethub."
+  arena-unavailable: "<yellow>Arena <arena> is not available right now, so the portal turns players away until it is."
+  deleted: "<green>Portal <portal> removed. Blocks built around it are still in the world."
+  list-header-shared: "<gray>Shared hub: <hub>. Portals with no lobby of their own lead to the shared hub."
+  list-header-dedicated: "<gray>Shared hub: <hub>. Portals with no lobby of their own lead to their arena's waiting room."
+  list-empty: "<gray>No portals are registered."
+  list-line: "<gray><portal> (<world>) to <target>: <status>"
+  player-built-target: "any arena, player-built"
+  destination:
+    hub: "the shared hub"
+    any: "a waiting room that is filling, else a free arena"
+    arena: "arena <arena>"
+    server-default: "<destination> (server default)"
+  info:
+    header: "<gray>Portal <portal>: <status>"
+    world: "<gray>World: <world>"
+    world-unloaded: "<gray>World: <world> (not loaded)"
+    region: "<gray>Region: <region>"
+    built: "<gray>Built by player <owner> from <frame>. Breaking a frame block removes it."
+    arena: "<gray>Arena: <arena>"
+    arena-spectator: "<gray>Arena: <arena> (spectator portal)"
+    leads-to: "<gray>Leads to: <destination>"
+  status:
+    world-unloaded: "world not loaded"
+    hub-open: "open, to the shared hub"
+    hub-closed: "closed, no shared hub is set"
+    any: "open, to whichever arena takes players when someone walks in"
+    arena-missing: "arena missing"
+    spectator: "spectator portal, requires a live match with space"
+    open: "open"
+    in-use: "closed, arena in use by a match"
+    editing: "closed while arenas are in edit mode"
+    not-ready: "closed, arena not ready"
+  invalid:
+    name: "Invalid portal name <name>."
+    world: "World must not be blank."
+    arena-world: "Portals cannot be in the arena world."
+    frame: "Invalid frame block <frame>."
+    spectator-lobby: "A spectator portal leads to a live match and has no lobby."
+    built-lobby: "A player-built portal follows the server default lobby."
+    too-large: "A portal can be at most <max> blocks along each axis."
+  error:
+    unknown: "No portal called <portal>."
+    bad-name: "Portal names are 1 to 32 letters, digits, _ or -."
+    exists: "A portal called <portal> already exists."
+    no-free-name: "No portal name is free."
+    overlaps: "That region overlaps portal <portal>."
+    built-lobby: "Portal <portal> is player-built and always follows waiting-room.lobby in config.yml."
+    no-selection: "Set both corners first with setcorner 1 and setcorner 2."
+    hub-outside: "The hub must be inside the arena world border."
+    hub-in-arena: "The hub cannot be inside the bounds of arena <arena>."
+    no-hub: "No shared hub is set."
+    store-unreadable: "<file> could not be read at startup. Fix or remove it and restart before changing portals."
+
+# /ninjaarena director: the enemy director of a running match. director.kind and the spawn
+# texts, which explain the last spawn that did not happen and also go to the server log,
+# are plain text.
+director:
+  no-match: "<red>No match is running in arena <arena>."
+  usage: "<red>Usage: /<label> <usage>, or run it while in a match."
+  header: "<gold>Director of arena <arena>, round <round> (<phase>):"
+  not-started: "<yellow>Not started: </yellow><gray>it starts with the match's first fight."
+  budget: "<yellow>Round budget: </yellow><gray><budget>, intensity <intensity>"
+  enemies-none: "<yellow>Enemies in play: </yellow><gray><count>, threat <threat>"
+  enemies: "<yellow>Enemies in play: </yellow><gray><count>, threat <threat>: <kinds>"
+  kind: "<count> <kind> (threat <threat>)"
+  refusal: "<yellow>Last spawn refusal: </yellow><gray><refusal>"
+  none: "none"
+  spawn:
+    round: "round <round>, <detail>"
+    no-placement: "no enemy spawn point for a <kind>: <detail>"
+    no-points: "the arena has no enemy spawn points"
+    point: "point <point> <reason>"
+    too-close: "too close"
+    in-view: "in view"
+    chunk-not-loaded: "chunk not loaded"
+    blocked: "blocked space"
+    cancelled: "the world cancelled a <kind> spawn at <location>"
+    budget: "the threat budget cannot afford another enemy (target <target>, in play <in-play>)"
+    gate: "the spawn gate is holding back enemies"
+
+# Enemy names in the director status. Plain text.
+enemy:
+  zombie: "zombie"
+  skeleton: "skeleton"
+  spider: "spider"
+  shadow-stalker: "shadow stalker"
+
+# /ninjaarena leaderboard. all-time and unknown-player are plain text.
+leaderboard:
+  usage: "Usage: /<label> <usage>"
+  stats: "Stats: <stats>"
+  disabled: "Arena stats are disabled."
+  unavailable: "Arena stats are temporarily unavailable."
+  no-season: "No active Arena season."
+  all-time: "all-time"
+  heading: "Top <limit> - <stat> (<period>)"
+  empty: "No scores recorded yet."
+  line: "<rank>. <player> - <value>"
+  line-seconds: "<rank>. <player> - <value> s"
+  unknown-player: "Unknown player"
+
+# Scheduled arena events. upcoming and start are broadcast and also sent to the Discord
+# webhook as plain text; they get <id>, <arena> and <minutes>. They replace
+# events.messages in config.yml.
+event:
+  upcoming: "<gold>Arena event <id> starts in <minutes> minute(s) at <arena>."
+  start: "<gold>Arena event <id> has started at <arena>."
+  usage: "<yellow>Usage: /<label> <usage>"
+  none-configured: "<yellow>No arena events are configured."
+  list-line: "<yellow><id> • <day> <time> <zone> • <arena> • <minutes> min"
+  active: "<yellow>Active arena event: <id>"
+  next: "<yellow>Next arena event: <id> at <start>"
+  no-upcoming: "<yellow>No upcoming arena event."
+  started: "<yellow>Arena event started."
+  start-failed: "<yellow>Unknown event or an event is already active."
+  cancelled: "<yellow>Arena event occurrence cancelled."
+  cancel-failed: "<yellow>No occurrence of that event to cancel."
+
+# Why a player is not let into an arena. Plain text, except refused, which wraps them for
+# chat.
+entry:
+  no-permission: "You do not have permission to enter arenas."
+  no-spectate-permission: "You do not have permission to spectate matches."
+  busy: "All arenas are busy. Try again when a match ends."
+  no-spectator-match: "This portal does not lead to a match open to spectators."
+  no-arena: "This portal does not lead to an arena."
+  match-running: "A match is already running in arena <arena>."
+  editing: "Arenas are being edited right now. Try again later."
+  not-ready: "Arena <arena> is not ready yet."
+  no-hub: "This portal leads to the shared hub, which is not set up yet."
+  snapshot-failed: "Your belongings could not be saved, so you were not sent to the arena."
+  snapshot-pending: "Your belongings from an earlier arena visit have not been returned yet, so you cannot enter. Rejoin the server, or ask an admin if this keeps happening."
+  loose-items: "Put away the items on your cursor or in your crafting grid, then try again."
+  teleport-failed: "You could not be sent to the arena."
+  load-failed: "The arena could not load. Please try again."
+  refused: "<red><message>"
+
+# Portals that players build. Plain text, except built and refused, which wrap them for
+# chat.
+player-portal:
+  opened: "The portal is open. Walk through it to join the Arena."
+  open-failed: "This portal could not be opened. Ask an admin to check the server log."
+  no-permission: "You do not have permission to build arena portals."
+  world: "Arena portals cannot be built in this world."
+  limit-one: "You already have <max> arena portal, the most one player may build. Break one to build another."
+  limit: "You already have <max> arena portals, the most one player may build. Break one to build another."
+  already-open: "This frame is already open."
+  too-close: "This is <distance> blocks from another arena portal. Portals must be at least <min> blocks apart."
+  built: "<green><message>"
+  refused: "<red><message>"
+
+# /ninjaarena host, invite and accept.
+hosting:
+  opened: "<yellow>You opened arena <arena>. Walk through its portal to join the Arena, then invite players with /narena invite \\<player>. Hosting does not move you."
+  already-hosting: "<yellow>You already host arena <arena>. Walk in or use /narena leave to cancel."
+  not-free: "<yellow>Arena <arena> is not free and ready for hosting."
+  leave-first: "<yellow>Leave your current waiting room or match before hosting."
+  host-first: "<yellow>Open a free arena with /narena host \\<arena> first."
+  no-player: "<yellow>No online player called <player>."
+  self: "<yellow>You cannot invite yourself."
+  cannot-accept: "<yellow>That player cannot accept an invitation right now."
+  already-accepted: "<yellow>That player has already accepted your invitation."
+  invited-you: "<yellow><host> invited you to the Arena in <arena>. To join, type /narena accept <host>. You will move only if you accept."
+  invited: "<yellow>Invited <player> to arena <arena>."
+  no-invitation: "<yellow>You have no open invitation from <host>."
+  leave-before-accept: "<yellow>Leave your current match or hosted arena before accepting."
+  leave-room-first: "<yellow>Leave your current waiting room before accepting."
+  loading: "<yellow>Your accepted entry is already loading. Please wait."
+  load-failed: "<yellow>The Arena could not load. Your invitation is still open; try accepting again."
+  accepted: "<yellow>You accepted the invitation to arena <arena>."
+  entry-cancelled: "<yellow>Your entry to the Arena was cancelled. Your invitation is still open."
+  stopped: "<yellow>You stopped hosting arena <arena>."
+  no-permission: "<yellow>You do not have permission to use this Arena command."
+  dead: "<yellow>You cannot use this Arena command while dead or spectating."
+  refused: "<yellow><message>"
+
+# Waiting rooms and the shared hub. full and full-one are plain text.
+waiting:
+  full-one: "The waiting room of arena <arena> is full (<size> player). Try another arena, or come back after its match."
+  full: "The waiting room of arena <arena> is full (<size> players). Try another arena, or come back after its match."
+  arena-gone: "<red>This arena is gone, so you were sent back."
+  filled-up: "<red>The waiting room of arena <arena> filled up before you arrived, so you were sent back."
+  joined: "<green>You joined arena <arena> on team <team>."
+  player-joined: "<gray><player> joined team <team> <count>."
+  hub-gone: "<red>The hub is gone, so you were sent back."
+  joined-hub: "<green>You joined the hub. You go to the next free arena once enough players are here."
+  player-joined-hub: "<gray><player> joined the hub <count>."
+  join-failed-hub: "<red>You could not join the hub, so you were sent back."
+  join-failed-room: "<red>You could not join the waiting room, so you were sent back."
+  left-hub: "<yellow>You left the hub."
+  left-room: "<yellow>You left the waiting room."
+  player-left: "<gray><player> left <count>."
+  player-left-hub: "<gray><player> left the hub <count>."
+  moved: "<yellow>You were moved to team <team> to keep the teams even."
+  countdown: "<gold>The match starts in <seconds> seconds."
+  countdown-stopped: "<red>Not enough players. The countdown stopped."
+  next-countdown: "<gold>The next match starts in <seconds> seconds."
+  arena-full-stay: "<yellow>Arena <arena> is full, so you stay in the hub for the next free arena."
+  arena-closed: "<yellow>Arena <arena> is no longer available, so you were sent back."
+  hub-closed: "<yellow>The hub was moved or removed, so you were sent back."
+  starting: "<gold>The match is starting in arena <arena>."
+  start-failed: "<red>The match could not start."
+  status-countdown: "<gold>Match starts in <seconds>s"
+  status-waiting: "<gray>Waiting for players <count>"
+  held-slots: "<gold>Every match slot is in use. Starting when one frees up."
+  held-arenas: "<gold>Every arena is in use. Starting when one frees up."
+  count-short: "(<size>/<min>)"
+  count-one: "(<size> player)"
+  count: "(<size> players)"
+
+# Spectating a match.
+spectate:
+  watching: "<yellow>Watching <arena>. Use /ninjaarena leave to return home."
+  not-waiting: "<red>You must be in a waiting room to spectate with this command."
+  not-open: "<red>That match is not open to spectators."
+  send-failed: "<red>You could not be sent to the match."
+  mode-failed: "<red>You could not enter spectator mode."
+  restore-failed: "<red>Your belongings could not be returned. Rejoin the server to try again."
+
+# A running match. team-separator joins team numbers.
+match:
+  arena-unavailable: "<red>Arena <arena> is not available, so the match could not start."
+  arena-not-prepared: "<red>Arena <arena> could not be prepared, so the match could not start."
+  left: "<yellow>You left the match."
+  player-out: "<gray><player> is out for this round."
+  player-left: "<gray><player> left the match."
+  prep: "<gold>Round <round> of <rounds>. The fight starts in <seconds> seconds."
+  prep-extra: "<gold>Extra round! The fight starts in <seconds> seconds."
+  fight: "<red>Fight!"
+  overrun: "<dark_red>Overrun! Time is up: the round goes on until one team is left."
+  overrun-limited: "<dark_red>Overrun! Time is up: the round goes on until one team is left, for at most <seconds> seconds."
+  round-draw: "<yellow>Round <round> is a draw."
+  round-won: "<gold>Team <team> wins round <round>."
+  won: "<gold>Team <team> wins the match!"
+  shared-win: "<gold>Teams <teams> share the win!"
+  forfeit: "<gold>Team <teams> wins the match: no other team is left."
+  stopped: "<red>The match was stopped."
+  team-separator: " and "
+  returning: "<gray>Returning in <seconds> seconds."
+
+# Titles, the boss bar and the action bar of a match. team-score and team-separator
+# are plain text; status is the complete action bar, including each player's points.
+hud:
+  fight-title: "<red>Fight!"
+  fight-subtitle: "Round <round>"
+  round-title: "<gold>Round <round>"
+  extra-round-title: "<gold>Extra round <round>"
+  round-subtitle: "Prepare for the fight"
+  won-title: "<gold>Team <team> wins!"
+  draw-title: "<gold>Round drawn"
+  round-end-subtitle: "Round <round> complete"
+  round-label: "Round <round>"
+  extra-round-label: "Extra round <round>"
+  bar-prep: "<round> - Prep <time>"
+  bar-combat: "<round> - <time>"
+  bar-overrun: "<round> - OVERRUN"
+  bar-overrun-timed: "<round> - OVERRUN <time>"
+  bar-round-end: "Next round in <seconds>s"
+  team-score: "T<team>: <score>"
+  team-separator: "  "
+  status: "<yellow><totals>  |  Enemies left: <enemies>  |  Points: <points>"
+
+# The final score table. entry, points and rounds are plain text.
+score:
+  final: "<gold>Final scores: <table>."
+  entry: "Team <team>: <points> (<rounds> won)"
+  points-one: "<points> point"
+  points: "<points> points"
+  rounds-one: "<rounds> round"
+  rounds: "<rounds> rounds"
+
+# Restoring a player who rejoins.
+restore:
+  failed: "<red>Your inventory and location could not be restored yet. Rejoin the server, or ask staff for help."
+
+# Names of the ninja tools.
+tool:
+  smoke-bomb: "<gray>Smoke Bomb"
+  shuriken: "<gray>Shuriken"
+  dash: "<gray>Dash"
+
+# Season trophies. The trophy name itself is set under rewards in config.yml.
+reward:
+  trophy-lore: "Season #<season>"
+
+# Resource packs and /ninjaarena pack status. Plain text, except status, which wraps the
+# status line for chat.
+pack:
+  prompt: "NinjaArena tool visuals"
+  kick-unreachable: "Your client could not reach NinjaArena's required resource pack host <host>. Please reconnect; reconnecting usually works. If it still fails, contact the server operator."
+  kick: "NinjaArena's required resource pack <reason>. Check Server Resource Packs in this server's settings, then reconnect. If it still fails, contact the server operator."
+  reason:
+    declined: "was declined"
+    failed-download: "could not be downloaded"
+    invalid-url: "has an invalid download URL"
+    failed-reload: "could not be reloaded"
+    discarded: "was discarded"
+    not-requested: "could not be requested"
+    timed-out: "timed out while loading"
+  status: "<yellow><status>"
+  status-unavailable: "Resource pack status unavailable."
+  status-line: "Resource packs: Java: <java>; Java accounts: <accounts>; Bedrock: <bedrock>; Texture menu: <menu>"
+  java-disabled: "disabled"
+  java-required: "enabled, required"
+  java-optional: "enabled, optional"
+  menu-fell-back: "<mode> (chest after an error)"
+  accounts:
+    authenticated: "authenticated (<reason>)"
+    online-mode: "online mode"
+    online-proxy: "online proxy"
+    login-gate: "operator-declared login gate"
+    none: "not authenticated: choices last one connection"
+  bedrock:
+    absent: "vanilla (same-server Geyser absent, disabled or unavailable)"
+    closed: "vanilla (Geyser hook closed)"
+    eligible: "custom held models eligible (client load unobserved)"
+    vanilla: "vanilla (<reason>)"
+    reason:
+      disabled: "pack delivery disabled or Bedrock files not configured"
+      optional: "resource-pack.required is false"
+      invalid-files: "Bedrock pack files failed validation"
+      no-mappings: "matching Geyser mappings are not declared installed"
+      not-enforced: "set gameplay.force-resource-packs: true in Geyser (config missing, unreadable or not enforcing)"
+
+# The texture quality menu, dialog and notices. Plain text, except notice, admin-saved and
+# admin-failed, which wrap them for chat. problem says why saved choices are unsupported.
+texture:
+  title: "Arena Texture Quality"
+  standard: "Standard"
+  detailed: "Detailed"
+  locked: "The texture menu cannot be opened right now. Leave your match and try again."
+  menu-stale: "That menu is out of date. Reopen it with /ninjaarena textures."
+  menu-no-permission: "You do not have permission to use this menu."
+  still-saving: "Still saving your last choice. Wait for it to finish."
+  disabled: "Texture quality choices are off: custom tool visuals are disabled on this server."
+  disabled-storage: "Texture quality choices are off: the storage settings are invalid."
+  notice: "<yellow><message>"
+  admin-saved: "<green><message>"
+  admin-failed: "<red><message>"
+  load-failed: "Your saved texture quality could not be read, so Standard is used for now."
+  load-failed-remembered: "Your saved texture quality could not be read, so the last known choice is used for now."
+  overlay-declined: "Detailed was declined. Standard stays active and <kept>"
+  overlay-failed: "Detailed could not be loaded (<reason>). Standard stays active and <kept>"
+  overlay-loaded: "Detailed is now active."
+  kept: "your Detailed choice is kept for your next connection."
+  kept-session: "your Detailed choice was for this connection only and is not saved."
+  session-note: "This is not saved and resets when you leave."
+  storage-starting: "Storage is still starting; Standard is used until it is ready."
+  storage-unavailable: "Storage is unavailable; Standard is used and choices cannot be saved."
+  storage-unsupported: "Storage is unsupported (<problem>); Standard is used."
+  delivery-session: "<delivery>. Your choice is for this connection only: <note>"
+  delivery-unverified: "Standard (your account could not be verified, so nothing is saved)"
+  delivery-unavailable: "Standard (saved choices are unavailable)"
+  bedrock-unverified: "Your Bedrock account could not be verified, so Standard is used and nothing can be saved."
+  detailed-unavailable: "Detailed is not set up on this server, so nothing was changed."
+  save-failed: "Could not save: texture preference storage is unavailable. Nothing was changed."
+  save-failed-removed: "Could not save: texture preference storage is unavailable. Nothing was changed. The Detailed overlay was removed for this connection only."
+  saved: "Saved: <quality>."
+  chosen-session: "<quality> chosen for this connection only. <note>"
+  reset-notice: "An administrator reset your texture quality to Standard."
+  reset: "Reset <player> to Standard."
+  reset-removed: "Reset <player> to Standard. Their Detailed overlay was removed."
+  next:
+    bedrock: "<saved> Applies on your next connection. Pack loading cannot be observed."
+    next-connection: "<saved> Applies on your next connection."
+    overlay-removed: "<saved> The Detailed overlay is removed for this connection."
+    requesting: "<saved> Requesting the Detailed overlay now. If you decline it, Standard stays active."
+    active: "<saved> It is already active."
+    after-standard: "<saved> It will be requested once Standard has loaded."
+    used: "<saved> This connection already used its one overlay request, so Detailed applies on your next connection."
+    used-session: "<saved> This connection already used its one overlay request, so Detailed cannot load until you reconnect and choose it again."
+  status:
+    bedrock-sent: "<quality> sent on connect."
+    bedrock-unknown: "Current pack is unknown."
+    standard-active: "Standard active"
+    standard-missing: "Standard not loaded"
+    standard: "<base>."
+    detailed-active: "Detailed active."
+    detailed-loading: "<base>; Detailed loading."
+    detailed-declined: "<base>; Detailed declined."
+    detailed-failed: "<base>; Detailed failed."
+  java:
+    standard-active: "Standard is active"
+    standard-missing: "Standard has not loaded on this connection"
+    detailed-active: "Detailed is active"
+    detailed-not-set-up: "<base>; Detailed is saved but not set up on this server"
+    detailed-pending: "<base>; Detailed was requested and is waiting for your client"
+    detailed-declined: "<base>; Detailed was declined"
+    detailed-failed: "<base>; Detailed failed (<reason>)"
+    detailed-removed: "<base>; Detailed was removed for this connection"
+    detailed-not-requested: "<base>; Detailed has not been requested"
+    detailed-waiting: "<base>; Detailed waits for Standard to load"
+  bedrock:
+    given: "this connection was given <quality> when you connected"
+    unknown: "this connection's selection is not known"
+    changed: "<now>; <quality> applies next time"
+    delivery: "Bedrock: <now>. Pack loading cannot be observed. Custom tools: <tools>"
+  choice:
+    saved: "Saved choice: <quality>"
+    session: "This connection only (not saved): <quality>"
+    default: "Standard (default, not saved yet)"
+  menu:
+    standard: "Standard 16x16"
+    standard-lore: "The default 16x16 ninja tool textures."
+    choose-standard: "Click to choose Standard."
+    detailed: "Detailed 32x32"
+    detailed-unavailable: "Detailed 32x32 (unavailable)"
+    detailed-lore: "Sharper 32x32 textures with the same gameplay."
+    detailed-java: "Loads on top of Standard. You can decline it and keep Standard."
+    detailed-session: "Loads on top of Standard for this connection only. <note>"
+    detailed-bedrock: "Applies on your next connection."
+    choose-detailed: "Click to choose Detailed."
+    unavailable-lore: "Unavailable: Detailed is not set up on this server."
+    selected-unavailable: "[SELECTED] Your saved choice is Detailed, but Standard is used until it is set up."
+    selected-saved: "[SELECTED] This is your saved choice."
+    selected-default: "[SELECTED] Standard (default, not saved yet)."
+    selected-session: "[SELECTED] This is your choice for this connection only. <note>"
+    saving: "Saving..."
+    status: "Status"
+    right-now: "Right now: <delivery>"
+    close: "Close"
+    close-lore: "Close this menu."
+  dialog:
+    update-failed: "The texture menu could not be updated. Reopen it with /ninjaarena textures."
+    timing-java: "Applies now, or reconnect if needed."
+    timing-session: "For this connection; resets on leave."
+    timing-bedrock: "Changes apply next connection."
+    save-failed: "Could not save. Try again later."
+    storage-unsupported: "Storage unsupported. Ask a server admin."
+    storage-unavailable: "Storage unavailable. Try again later."
+    choice-default: "Standard (default)"
+    unverified: "Account unverified; choices unavailable."
+    unverified-timing: "Standard is used; nothing is saved."
+    detailed-unavailable: "Detailed is not set up on this server."
+    standard-used: "Standard is used."
+  problem:
+    schema-too-new: "the texture preference schema is version <found> but this build supports up to <supported>; update NinjaArena or point it at another database"
+    missing-driver: "the <driver> driver (<class>) is not available on this server"
+
+# /ninjaarena admin reload reports. Plain text, except line, which wraps each report line
+# for chat.
+reload:
+  rejected: "The Arena reload was rejected: <reason>. Nothing changed."
+  world-failed: "The Arena reload failed while applying world settings: <reason>. World settings could not be restored: <restore>"
+  world-rejected: "The Arena reload was rejected: world settings could not be applied: <reason>. Old settings were restored."
+  complete: "The Arena reload complete."
+  changed: "Changed: <values>."
+  postponed: "Postponed: <values>."
+  refused: "Refused: <values>."
+  none: "none"
+  restart-required: "<path> (restart required)"
+  resize-refused: "<path> (arenas exist or a match runs; restart required)"
+  next-match: "<path> (next match)"
+  next-round: "<path> (next round)"
+  line: "<yellow><line>"
+  messages-unreadable: "<file>: <reason>"

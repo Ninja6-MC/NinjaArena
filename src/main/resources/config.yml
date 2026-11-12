@@ -357,6 +357,9 @@ events:
   announcement-lead-minutes: [30, 10, 1]
   webhook-url: ''
   schedule: []
+  # Deprecated: the announcement texts are event.upcoming and event.start in messages.yml.
+  # On the first start with messages.yml, texts changed here are moved there; after that
+  # these two keys are no longer read.
   messages:
     upcoming: 'Arena event {id} starts in {minutes} minute(s) at {arena}.'
     start: 'Arena event {id} has started at {arena}.'

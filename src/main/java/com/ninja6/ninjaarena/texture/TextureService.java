@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.texture;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.resourcepack.BedrockSelections.Quality;
 import com.ninja6.ninjaarena.resourcepack.ResourcePacks;
 import com.ninja6.ninjaarena.resourcepack.ResourcePacks.OverlayState;
@@ -54,7 +56,8 @@ public final class TextureService implements ResourcePacks.Listener {
 
     /** Everything the menu and status show for one player. */
     public record View(Optional<PlayerKey> key, boolean bedrock, Optional<Quality> explicit, Quality saved,
-            boolean detailedAvailable, String delivery, String storage, boolean sessionOnly, String playerStatus) {
+            boolean detailedAvailable, String delivery, String storage, boolean sessionOnly, String playerStatus,
+            boolean storageUnsupported) {
     }
 
     private static final class Session {
@@ -73,13 +76,6 @@ public final class TextureService implements ResourcePacks.Listener {
         }
     }
 
-    /** Start of the storage line for a store that can never work; the dialog words it differently. */
-    static final String STORAGE_UNSUPPORTED = "Storage is unsupported";
-
-    public static final String SAVE_FAILED = "Could not save: texture preference storage is unavailable."
-            + " Nothing was changed.";
-    public static final String SESSION_ONLY_NOTE = "This is not saved and resets when you leave.";
-    public static final String BEDROCK_SAVED_TAIL = " Applies on your next connection. Pack loading cannot be observed.";
 
     private final PreferenceStore store;
     private final ResourcePacks packs;
@@ -130,8 +126,8 @@ public final class TextureService implements ResourcePacks.Listener {
                 current.loadFailed = true;
                 Optional<Quality> remembered = store.explicit(key);
                 current.preference = remembered.orElse(Quality.STANDARD);
-                notifier.tell(player, "Your saved texture quality could not be read, so "
-                        + (remembered.isPresent() ? "the last known choice" : "Standard") + " is used for now.");
+                notifier.tell(player, text(remembered.isPresent() ? "texture.load-failed-remembered"
+                        : "texture.load-failed"));
             } else {
                 current.preference = stored.map(Stored::quality).orElse(Quality.STANDARD);
             }
@@ -180,20 +176,17 @@ public final class TextureService implements ResourcePacks.Listener {
     @Override
     public void overlay(UUID player, OverlayState state, String reason) {
         switch (state) {
-            case DECLINED -> notifier.tell(player, "Detailed was declined. Standard stays active and "
-                    + keptNote(player));
-            case FAILED -> notifier.tell(player, "Detailed could not be loaded (" + reason + "). Standard stays"
-                    + " active and " + keptNote(player));
-            case LOADED -> notifier.tell(player, "Detailed is now active.");
+            case DECLINED -> notifier.tell(player, text("texture.overlay-declined", "kept", keptNote(player)));
+            case FAILED -> notifier.tell(player, text("texture.overlay-failed",
+                    "reason", ResourcePacks.describe(reason), "kept", keptNote(player)));
+            case LOADED -> notifier.tell(player, text("texture.overlay-loaded"));
             default -> { }
         }
     }
 
     private String keptNote(UUID player) {
         Session session = sessions.get(player);
-        return session != null && session.sessionOnly
-                ? "your Detailed choice was for this connection only and is not saved."
-                : "your Detailed choice is kept for your next connection.";
+        return text(session != null && session.sessionOnly ? "texture.kept-session" : "texture.kept");
     }
 
     private boolean detailedAvailable(UUID player) {
@@ -209,72 +202,79 @@ public final class TextureService implements ResourcePacks.Listener {
         Quality saved = explicit.orElse(Quality.STANDARD);
         String storage = session.sessionOnly ? "" : switch (store.health()) {
             case READY -> "";
-            case STARTING -> "Storage is still starting; Standard is used until it is ready.";
-            case DEGRADED -> "Storage is unavailable; Standard is used and choices cannot be saved.";
-            case UNSUPPORTED -> STORAGE_UNSUPPORTED + " (" + store.problem() + "); Standard is used.";
+            case STARTING -> text("texture.storage-starting");
+            case DEGRADED -> text("texture.storage-unavailable");
+            case UNSUPPORTED -> text("texture.storage-unsupported", "problem", store.problem());
         };
         String delivery;
         if (session.sessionOnly) {
-            delivery = javaDelivery(player, saved) + ". Your choice is for this connection only: " + SESSION_ONLY_NOTE;
+            delivery = text("texture.delivery-session", "delivery", javaDelivery(player, saved),
+                    "note", text("texture.session-note"));
         } else if (session.key.isEmpty()) {
-            delivery = "Standard (your account could not be verified, so nothing is saved)";
+            delivery = text("texture.delivery-unverified");
         } else if (store.health() != Health.READY && explicit.isEmpty()) {
-            delivery = "Standard (saved choices are unavailable)";
+            delivery = text("texture.delivery-unavailable");
         } else if (bedrock) {
             delivery = bedrockDelivery(player, saved);
         } else {
             delivery = javaDelivery(player, saved);
         }
         return new View(session.key, bedrock, explicit, saved, detailedAvailable(player), delivery, storage,
-                session.sessionOnly, playerStatus(player, bedrock));
+                session.sessionOnly, playerStatus(player, bedrock),
+                !session.sessionOnly && store.health() == Health.UNSUPPORTED);
     }
 
     /** Short player wording; the full delivery diagnostics remain in {@link View#delivery()}. */
     private String playerStatus(UUID player, boolean bedrock) {
         if (bedrock) {
-            return identities.bedrockActive(player).map(quality -> display(quality) + " sent on connect.")
-                    .orElse("Current pack is unknown.");
+            return identities.bedrockActive(player).map(quality -> text("texture.status.bedrock-sent",
+                    "quality", display(quality))).orElseGet(() -> text("texture.status.bedrock-unknown"));
         }
-        String base = packs.loaded(player) ? "Standard active" : "Standard not loaded";
+        String base = text(packs.loaded(player) ? "texture.status.standard-active"
+                : "texture.status.standard-missing");
         return switch (packs.overlay(player)) {
-            case LOADED -> "Detailed active.";
-            case PENDING -> base + "; Detailed loading.";
-            case DECLINED -> base + "; Detailed declined.";
-            case FAILED -> base + "; Detailed failed.";
-            case CANCELLED, NONE -> base + ".";
+            case LOADED -> text("texture.status.detailed-active");
+            case PENDING -> text("texture.status.detailed-loading", "base", base);
+            case DECLINED -> text("texture.status.detailed-declined", "base", base);
+            case FAILED -> text("texture.status.detailed-failed", "base", base);
+            case CANCELLED, NONE -> text("texture.status.standard", "base", base);
         };
     }
 
     private String bedrockDelivery(UUID player, Quality saved) {
         String note = identities.bedrockStatus();
         Optional<Quality> active = identities.bedrockActive(player);
-        String now = active.map(quality -> "this connection was given " + display(quality)
-                + " when you connected").orElse("this connection's selection is not known");
-        String change = active.isPresent() && active.get() != saved ? "; " + display(saved) + " applies next time" : "";
-        return "Bedrock: " + now + change + ". Pack loading cannot be observed. Custom tools: " + note;
+        String now = active.map(quality -> text("texture.bedrock.given", "quality", display(quality)))
+                .orElseGet(() -> text("texture.bedrock.unknown"));
+        if (active.isPresent() && active.get() != saved) {
+            now = text("texture.bedrock.changed", "now", now, "quality", display(saved));
+        }
+        return text("texture.bedrock.delivery", "now", now, "tools", note);
     }
 
     private String javaDelivery(UUID player, Quality saved) {
         OverlayState overlay = packs.overlay(player);
         boolean baseLoaded = packs.loaded(player);
-        String base = baseLoaded ? "Standard is active" : "Standard has not loaded on this connection";
+        String base = text(baseLoaded ? "texture.java.standard-active" : "texture.java.standard-missing");
         if (saved == Quality.DETAILED && !packs.detailedConfigured()) {
-            return base + "; Detailed is saved but not set up on this server";
+            return text("texture.java.detailed-not-set-up", "base", base);
         }
         return switch (overlay) {
-            case LOADED -> "Detailed is active";
-            case PENDING -> base + "; Detailed was requested and is waiting for your client";
-            case DECLINED -> base + "; Detailed was declined";
-            case FAILED -> base + "; Detailed failed (" + packs.overlayReason(player) + ")";
-            case CANCELLED -> base + "; Detailed was removed for this connection";
+            case LOADED -> text("texture.java.detailed-active");
+            case PENDING -> text("texture.java.detailed-pending", "base", base);
+            case DECLINED -> text("texture.java.detailed-declined", "base", base);
+            case FAILED -> text("texture.java.detailed-failed", "base", base,
+                    "reason", ResourcePacks.describe(packs.overlayReason(player)));
+            case CANCELLED -> text("texture.java.detailed-removed", "base", base);
             case NONE -> saved == Quality.DETAILED
-                    ? base + (baseLoaded ? "; Detailed has not been requested" : "; Detailed waits for Standard to load")
+                    ? text(baseLoaded ? "texture.java.detailed-not-requested" : "texture.java.detailed-waiting",
+                            "base", base)
                     : base;
         };
     }
 
-    private static String display(Quality quality) {
-        return quality == Quality.DETAILED ? "Detailed" : "Standard";
+    static String display(Quality quality) {
+        return text(quality == Quality.DETAILED ? "texture.detailed" : "texture.standard");
     }
 
     /**
@@ -286,12 +286,11 @@ public final class TextureService implements ResourcePacks.Listener {
         Session session = session(player);
         boolean bedrock = identities.bedrock(player);
         if (session.key.isEmpty() && !session.sessionOnly) {
-            done.accept(new Result(false, "Your Bedrock account could not be verified, so Standard is used and"
-                    + " nothing can be saved."));
+            done.accept(new Result(false, text("texture.bedrock-unverified")));
             return;
         }
         if (quality == Quality.DETAILED && !detailedAvailable(player)) {
-            done.accept(new Result(false, "Detailed is not set up on this server, so nothing was changed."));
+            done.accept(new Result(false, text("texture.detailed-unavailable")));
             return;
         }
         if (session.sessionOnly) {
@@ -314,9 +313,8 @@ public final class TextureService implements ResourcePacks.Listener {
             Session current = sessions.get(player);
             boolean live = current != null && current.id == session.id;
             if (failure != null) {
-                done.accept(new Result(false, !bedrock && quality == Quality.STANDARD
-                        ? SAVE_FAILED + " The Detailed overlay was removed for this connection only."
-                        : SAVE_FAILED));
+                done.accept(new Result(false, text(!bedrock && quality == Quality.STANDARD
+                        ? "texture.save-failed-removed" : "texture.save-failed")));
                 return;
             }
             if (live && !bedrock && current.choice == choice) {
@@ -330,27 +328,24 @@ public final class TextureService implements ResourcePacks.Listener {
     }
 
     private String savedMessage(UUID player, Quality quality, boolean live, boolean sessionOnly) {
-        String saved = sessionOnly ? display(quality) + " chosen for this connection only. " + SESSION_ONLY_NOTE
-                : "Saved: " + display(quality) + ".";
+        String saved = sessionOnly ? text("texture.chosen-session", "quality", display(quality),
+                "note", text("texture.session-note")) : text("texture.saved", "quality", display(quality));
+        String next;
         if (identities.bedrock(player)) {
-            return saved + BEDROCK_SAVED_TAIL;
+            next = "texture.next.bedrock";
+        } else if (!live) {
+            next = "texture.next.next-connection";
+        } else if (quality == Quality.STANDARD) {
+            next = "texture.next.overlay-removed";
+        } else {
+            next = switch (packs.overlay(player)) {
+                case PENDING -> "texture.next.requesting";
+                case LOADED -> "texture.next.active";
+                case NONE -> "texture.next.after-standard";
+                default -> sessionOnly ? "texture.next.used-session" : "texture.next.used";
+            };
         }
-        if (!live) {
-            return saved + " Applies on your next connection.";
-        }
-        if (quality == Quality.STANDARD) {
-            return saved + " The Detailed overlay is removed for this connection.";
-        }
-        return saved + switch (packs.overlay(player)) {
-            case PENDING -> " Requesting the Detailed overlay now. If you decline it, Standard stays active.";
-            case LOADED -> " It is already active.";
-            case NONE -> " It will be requested once Standard has loaded.";
-            default -> sessionOnly
-                    ? " This connection already used its one overlay request, so Detailed cannot load until you"
-                            + " reconnect and choose it again."
-                    : " This connection already used its one overlay request, so Detailed applies on your next"
-                            + " connection.";
-        };
+        return text(next, "saved", saved);
     }
 
     /**
@@ -360,7 +355,7 @@ public final class TextureService implements ResourcePacks.Listener {
     public void reset(PlayerKey key, Consumer<Result> done) {
         store.save(key, Quality.STANDARD).whenComplete((stored, failure) -> mainThread.execute(() -> {
             if (failure != null) {
-                done.accept(new Result(false, SAVE_FAILED));
+                done.accept(new Result(false, text("texture.save-failed")));
                 return;
             }
             boolean removed = false;
@@ -372,10 +367,9 @@ public final class TextureService implements ResourcePacks.Listener {
                 removed = packs.overlay(account.get()) == OverlayState.PENDING
                         || packs.overlay(account.get()) == OverlayState.LOADED;
                 packs.removeDetailed(account.get());
-                notifier.tell(account.get(), "An administrator reset your texture quality to Standard.");
+                notifier.tell(account.get(), text("texture.reset-notice"));
             }
-            done.accept(new Result(true, "Reset " + key + " to Standard."
-                    + (removed ? " Their Detailed overlay was removed." : "")));
+            done.accept(new Result(true, text(removed ? "texture.reset-removed" : "texture.reset", "player", key)));
         }));
     }
 }

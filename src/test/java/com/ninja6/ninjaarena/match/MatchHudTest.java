@@ -13,7 +13,9 @@ import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
+import com.ninja6.ninjaarena.message.Messages;
 import java.util.List;
+import java.util.LinkedHashMap;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -131,6 +133,27 @@ class MatchHudTest extends MatchFixture {
         enemies = 0;
         hud.tick();
         assertTrue(players.get(ALICE).actionBars.getLast().endsWith("Enemies left: 0  |  Points: 9"));
+    }
+
+    @Test
+    void actionbarUsesTheWholeCustomMessageWithEachPlayersPoints() {
+        var templates = new LinkedHashMap<String, Object>(Messages.defaults());
+        templates.put("hud.status", "<aqua>Coins <points>; mobs <enemies>; <totals>");
+        templates.put("hud.team-score", "Team <team>=<score>");
+        templates.put("hud.team-separator", ", ");
+        try {
+            Messages.use(Messages.of(templates, warning -> { throw new AssertionError(warning); }));
+            useHud(SETTINGS);
+            startTwoOnTwo();
+            advance(2);
+            enemies = 7;
+            matches.died(player(BOB), player(ALICE));
+            hud.tick();
+            assertEquals("Coins 2; mobs 7; Team 1=2, Team 2=0", players.get(ALICE).actionBars.getLast());
+            assertEquals("Coins 0; mobs 7; Team 1=2, Team 2=0", players.get(BOB).actionBars.getLast());
+        } finally {
+            Messages.use(Messages.bundled());
+        }
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.texture;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.resourcepack.BedrockSelections.Quality;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
@@ -81,11 +83,11 @@ public final class TextureDialog {
     public void open(Player player) {
         UUID id = player.getUniqueId();
         if (!player.hasPermission(TextureMenu.PERMISSION)) {
-            notifier.tell(id, "You do not have permission to use this command.");
+            notifier.tell(id, text("command.no-permission"));
             return;
         }
         if (locked.test(id)) {
-            notifier.tell(id, TextureMenu.LOCKED);
+            notifier.tell(id, text("texture.locked"));
             return;
         }
         Active active = new Active(++tokens);
@@ -103,19 +105,19 @@ public final class TextureDialog {
         Active active = open.get(owner);
         if (!owner.equals(id) || active == null || active.token != token) {
             screens.close(presser);
-            notifier.tell(id, "That menu is out of date. Reopen it with /ninjaarena textures.");
+            notifier.tell(id, text("texture.menu-stale"));
             return;
         }
         if (!presser.hasPermission(TextureMenu.PERMISSION)) {
             open.remove(id);
             screens.close(presser);
-            notifier.tell(id, "You do not have permission to use this menu.");
+            notifier.tell(id, text("texture.menu-no-permission"));
             return;
         }
         if (locked.test(id)) {
             open.remove(id, active);
             screens.close(presser);
-            notifier.tell(id, TextureMenu.LOCKED);
+            notifier.tell(id, text("texture.locked"));
             return;
         }
         switch (button) {
@@ -131,7 +133,7 @@ public final class TextureDialog {
     private void choose(Player player, Active active, Quality quality) {
         UUID id = player.getUniqueId();
         if (active.saving != null) {
-            notifier.tell(id, "Still saving your last choice. Wait for it to finish.");
+            notifier.tell(id, text("texture.still-saving"));
             return;
         }
         active.saving = quality;
@@ -153,8 +155,7 @@ public final class TextureDialog {
         } catch (RuntimeException | LinkageError e) {
             open.remove(player.getUniqueId(), active);
             screens.close(player);
-            notifier.tell(player.getUniqueId(), "The texture menu could not be updated. Reopen it with"
-                    + " /ninjaarena textures.");
+            notifier.tell(player.getUniqueId(), text("texture.dialog.update-failed"));
         }
     }
 
@@ -182,26 +183,26 @@ public final class TextureDialog {
     /** Three short lines leave room for the choice buttons on a Bedrock form. */
     static Content content(TextureService.View view, Quality saving, String note) {
         String choice = TextureMenu.choiceLine(view);
-        String status = saving != null ? "Saving..." : view.playerStatus();
-        String timing = view.bedrock() ? "Changes apply next connection."
-                : view.sessionOnly() ? "For this connection; resets on leave."
-                : "Applies now, or reconnect if needed.";
-        if (saving == null && note.startsWith("Could not save")) {
-            status = "Could not save. Try again later.";
-        } else if (saving == null && view.storage().startsWith(TextureService.STORAGE_UNSUPPORTED)) {
-            status = "Storage unsupported. Ask a server admin.";
+        String status = saving != null ? text("texture.menu.saving") : view.playerStatus();
+        String timing = text(view.bedrock() ? "texture.dialog.timing-bedrock"
+                : view.sessionOnly() ? "texture.dialog.timing-session" : "texture.dialog.timing-java");
+        if (saving == null && (note.equals(text("texture.save-failed"))
+                || note.equals(text("texture.save-failed-removed")))) {
+            status = text("texture.dialog.save-failed");
+        } else if (saving == null && view.storageUnsupported()) {
+            status = text("texture.dialog.storage-unsupported");
         } else if (saving == null && !view.storage().isEmpty()) {
-            status = "Storage unavailable. Try again later.";
+            status = text("texture.dialog.storage-unavailable");
         } else if (saving == null && view.bedrock() && view.key().isEmpty()) {
-            choice = "Standard (default)";
-            status = "Account unverified; choices unavailable.";
-            timing = "Standard is used; nothing is saved.";
+            choice = text("texture.dialog.choice-default");
+            status = text("texture.dialog.unverified");
+            timing = text("texture.dialog.unverified-timing");
         } else if (saving == null && view.saved() == Quality.DETAILED && !view.detailedAvailable()) {
-            status = "Detailed is not set up on this server.";
-            timing = "Standard is used.";
+            status = text("texture.dialog.detailed-unavailable");
+            timing = text("texture.dialog.standard-used");
         }
-        return new Content(TextureMenu.TITLE, List.of(choice, status, timing), "Standard 16x16",
-                view.detailedAvailable() ? "Detailed 32x32" : "Detailed 32x32 (unavailable)");
+        return new Content(text("texture.title"), List.of(choice, status, timing), text("texture.menu.standard"),
+                text(view.detailedAvailable() ? "texture.menu.detailed" : "texture.menu.detailed-unavailable"));
     }
 
     /** Builds and sends Paper dialogs. Button callbacks hop to the server thread before running. */
@@ -219,7 +220,7 @@ public final class TextureDialog {
             List<ActionButton> buttons = List.of(
                     button(content.standard(), Button.STANDARD, press, options),
                     button(content.detailed(), Button.DETAILED, press, options),
-                    button("Close", Button.CLOSE, press, options));
+                    button(text("texture.menu.close"), Button.CLOSE, press, options));
             List<DialogBody> body = content.lines().stream()
                     .map(line -> (DialogBody) DialogBody.plainMessage(Component.text(line))).toList();
             Dialog dialog = Dialog.create(factory -> factory.empty()

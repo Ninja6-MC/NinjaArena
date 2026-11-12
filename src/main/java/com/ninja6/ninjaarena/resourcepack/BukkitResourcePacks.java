@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.resourcepack;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import java.util.HexFormat;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
@@ -33,7 +35,7 @@ public final class BukkitResourcePacks implements Listener, AutoCloseable {
                 Player player = plugin.getServer().getPlayer(id);
                 if (player != null) {
                     player.addResourcePack(pack.id(), pack.url(), HexFormat.of().parseHex(pack.sha1()),
-                            "NinjaArena tool visuals", required);
+                            text("pack.prompt"), required);
                 }
             }
 

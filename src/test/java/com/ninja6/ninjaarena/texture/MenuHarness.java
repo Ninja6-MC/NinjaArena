@@ -64,7 +64,7 @@ final class MenuHarness {
                             default -> throw new UnsupportedOperationException(m.getName());
                         });
                 screens.add(screen);
-                if (!TextureMenu.TITLE.equals(title)) {
+                if (!com.ninja6.ninjaarena.message.Messages.text("texture.title").equals(title)) {
                     throw new AssertionError(title);
                 }
                 return screen.inventory;

@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.resourcepack.geyser;
 
+import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.resourcepack.BedrockIntegration;
 import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
 import com.ninja6.ninjaarena.resourcepack.BedrockSelections;
@@ -75,7 +76,7 @@ public final class GeyserPackHook implements BedrockIntegration, EventRegistrar 
     }
 
     @Override public boolean customHeld(UUID player) {
-        if (closed || !settings.vanillaReason(selections != null, enforcement.allowed()).isEmpty()) return false;
+        if (closed || settings.vanillaKey(selections != null, enforcement.allowed()) != null) return false;
         var connection = api.connectionByUuid(player);
         return connection != null && selections.selected(connection);
     }
@@ -103,9 +104,10 @@ public final class GeyserPackHook implements BedrockIntegration, EventRegistrar 
     }
 
     @Override public String status() {
-        if (closed) return "vanilla (Geyser hook closed)";
-        String reason = settings.vanillaReason(selections != null, enforcement.allowed());
-        return reason.isEmpty() ? "custom held models eligible (client load unobserved)" : "vanilla (" + reason + ")";
+        if (closed) return Messages.text("pack.bedrock.closed");
+        String key = settings.vanillaKey(selections != null, enforcement.allowed());
+        return key == null ? Messages.text("pack.bedrock.eligible")
+                : Messages.text("pack.bedrock.vanilla", "reason", Messages.text(key));
     }
 
     @Override public void refreshEnforcement() {

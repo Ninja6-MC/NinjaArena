@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.spectate;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.destroystokyo.paper.event.player.PlayerStartSpectatingEntityEvent;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
@@ -19,8 +21,6 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -100,18 +100,18 @@ public final class Spectators implements Listener {
     public void fromWaitingRoom(Player player, String arena) {
         if (!player.hasPermission(PortalEntry.SPECTATE) || !waiting.isWaiting(player.getUniqueId())
                 || player.isDead()) {
-            tell(player, "You must be in a waiting room to spectate with this command.");
+            tell(player, "spectate.not-waiting");
             return;
         }
         Seat seat = seat(arena).orElse(null);
         if (seat == null) {
-            tell(player, "That match is not open to spectators.");
+            tell(player, "spectate.not-open");
             return;
         }
         ArenaPoint point = seat.point();
         Location target = new Location(world.get(), point.x(), point.y(), point.z(), point.yaw(), point.pitch());
         if (!waiting.transferToSpectate(player, target)) {
-            tell(player, "You could not be sent to the match.");
+            tell(player, "spectate.send-failed");
             return;
         }
         arrived(player, arena);
@@ -121,7 +121,7 @@ public final class Spectators implements Listener {
     public void arrived(Player player, String arena) {
         Seat seat = seat(arena).orElse(null);
         if (seat == null || !inside(seat, player.getLocation())) {
-            tell(player, "You could not be sent to the match.");
+            tell(player, "spectate.send-failed");
             restore(player);
             return;
         }
@@ -134,14 +134,13 @@ public final class Spectators implements Listener {
             }
             if (player.getGameMode() == GameMode.SPECTATOR) {
                 KitInventory.clearForEntry(player);
-                player.sendMessage(Component.text("Watching " + arena + ". Use /ninjaarena leave to return home.",
-                        NamedTextColor.YELLOW));
+                player.sendMessage(msg("spectate.watching", "arena", arena));
                 return;
             }
         } catch (RuntimeException e) {
             plugin.getLogger().log(Level.WARNING, "Could not prepare " + player.getName() + " to spectate.", e);
         }
-        tell(player, "You could not enter spectator mode.");
+        tell(player, "spectate.mode-failed");
         leave(player);
     }
 
@@ -155,7 +154,7 @@ public final class Spectators implements Listener {
 
     private void restore(Player player) {
         if (restores.restore(player) == RestoreService.RestoreResult.FAILED) {
-            tell(player, "Your belongings could not be returned. Rejoin the server to try again.");
+            tell(player, "spectate.restore-failed");
         }
     }
 
@@ -269,7 +268,7 @@ public final class Spectators implements Listener {
         }
     }
 
-    private static void tell(Player player, String message) {
-        player.sendMessage(Component.text(message, NamedTextColor.RED));
+    private static void tell(Player player, String key) {
+        player.sendMessage(msg(key));
     }
 }

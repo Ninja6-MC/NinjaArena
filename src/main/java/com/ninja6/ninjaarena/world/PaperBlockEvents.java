@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.world;
 
+import com.ninja6.ninjaarena.message.KeyedStateException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
@@ -16,7 +17,9 @@ public final class PaperBlockEvents {
         for (var chunk : world.getLoadedChunks()) {
             for (var state : chunk.getTileEntities()) {
                 if (state.getType() == Material.MOVING_PISTON) {
-                    throw new IllegalStateException("A piston is still moving; wait for it to stop before finishing the edit");
+                    throw new KeyedStateException(
+                            "A piston is still moving; wait for it to stop before finishing the edit",
+                            "arena.error.piston-moving");
                 }
             }
         }
@@ -44,7 +47,9 @@ public final class PaperBlockEvents {
             }
             clear(level, serverLevel);
         } catch (ReflectiveOperationException | RuntimeException failure) {
-            throw new IllegalStateException("Cannot freeze arena block actions on this server version", failure);
+            throw (IllegalStateException) new KeyedStateException(
+                    "Cannot freeze arena block actions on this server version", "arena.error.freeze-unsupported")
+                    .initCause(failure);
         }
     }
 

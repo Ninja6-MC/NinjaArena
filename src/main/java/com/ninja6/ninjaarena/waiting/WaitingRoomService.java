@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.waiting;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
@@ -25,7 +28,6 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
@@ -235,8 +237,8 @@ public final class WaitingRoomService {
             return Optional.empty();
         }
         int size = room.state().size();
-        return Optional.of("The waiting room of arena " + room.arena() + " is full (" + size
-                + (size == 1 ? " player" : " players") + "). Try another arena, or come back after its match.");
+        return Optional.of(text(size == 1 ? "waiting.full-one" : "waiting.full", "arena", room.arena(),
+                "size", size));
     }
 
     private Supplier<Optional<String>> eventArena = Optional::empty;
@@ -297,13 +299,12 @@ public final class WaitingRoomService {
         Optional<Arena> arena = arenas.get(arenaName);
         Room room = arena.map(found -> rooms.get(found.name())).orElse(null);
         if (room == null && (arena.isEmpty() || arena.get().waitingRoom() == null)) {
-            player.sendMessage(Component.text("This arena is gone, so you were sent back.", NamedTextColor.RED));
+            player.sendMessage(msg("waiting.arena-gone"));
             sendHome(player);
             return;
         }
         if (room != null && room.state().isFull()) {
-            player.sendMessage(Component.text("The waiting room of arena " + room.arena() + " filled up before you"
-                    + " arrived, so you were sent back.", NamedTextColor.RED));
+            player.sendMessage(msg("waiting.filled-up", "arena", room.arena()));
             sendHome(player);
             return;
         }
@@ -321,13 +322,11 @@ public final class WaitingRoomService {
         WaitingRoom.Joined joined = room.state().join(playerId);
         arenaOf.put(playerId, room.arena());
         notifyMoves(joined.moves());
-        player.sendMessage(Component.text("You joined arena " + room.arena() + " on team " + joined.team() + ".",
-                NamedTextColor.GREEN));
-        broadcast(room.state().players(), playerId, Component.text(player.getName() + " joined team "
-                + joined.team() + " " + count(room) + ".", NamedTextColor.GRAY));
+        player.sendMessage(msg("waiting.joined", "arena", room.arena(), "team", joined.team()));
+        broadcast(room.state().players(), playerId, msg("waiting.player-joined", "player", player.getName(),
+                "team", joined.team(), "count", count(room)));
         if (joined.countdownStarted()) {
-            broadcast(room.state().players(), null, Component.text("The match starts in "
-                    + room.state().secondsLeft() + " seconds.", NamedTextColor.GOLD));
+            broadcast(room.state().players(), null, msg("waiting.countdown", "seconds", room.state().secondsLeft()));
         }
         showStatus(room);
     }
@@ -346,7 +345,7 @@ public final class WaitingRoomService {
         checkHubPoint();
         Optional<ArenaPoint> point = hub != null ? Optional.of(hub.point()) : hubPoint.get();
         if (point.isEmpty()) {
-            player.sendMessage(Component.text("The hub is gone, so you were sent back.", NamedTextColor.RED));
+            player.sendMessage(msg("waiting.hub-gone"));
             sendHome(player);
             return;
         }
@@ -357,13 +356,11 @@ public final class WaitingRoomService {
             hub = new Hub(point.get(), new SharedHub(hubMinimum(), settings.countdownSeconds()));
         }
         boolean started = hub.state().join(playerId);
-        player.sendMessage(Component.text("You joined the hub. You go to the next free arena once enough players"
-                + " are here.", NamedTextColor.GREEN));
-        broadcast(hub.state().players(), playerId, Component.text(player.getName() + " joined the hub "
-                + count(hub.state().size(), hub.state().minPlayers()) + ".", NamedTextColor.GRAY));
+        player.sendMessage(msg("waiting.joined-hub"));
+        broadcast(hub.state().players(), playerId, msg("waiting.player-joined-hub", "player", player.getName(),
+                "count", count(hub.state().size(), hub.state().minPlayers())));
         if (started) {
-            broadcast(hub.state().players(), null, Component.text("The match starts in "
-                    + hub.state().secondsLeft() + " seconds.", NamedTextColor.GOLD));
+            broadcast(hub.state().players(), null, msg("waiting.countdown", "seconds", hub.state().secondsLeft()));
         }
         showHubStatus(hub);
     }
@@ -376,8 +373,7 @@ public final class WaitingRoomService {
         } catch (RuntimeException e) {
             plugin.getLogger().log(Level.SEVERE, "Could not empty the inventory of " + player.getName() + " ("
                     + player.getUniqueId() + ") in " + place + "; sending them home.", e);
-            player.sendMessage(Component.text("You could not join " + (place.equals("the hub") ? "the hub"
-                    : "the waiting room") + ", so you were sent back.", NamedTextColor.RED));
+            player.sendMessage(msg(place.equals("the hub") ? "waiting.join-failed-hub" : "waiting.join-failed-room"));
             sendHome(player);
             return false;
         }
@@ -451,12 +447,12 @@ public final class WaitingRoomService {
      */
     public boolean leave(Player player, Exit exit) {
         UUID playerId = player.getUniqueId();
-        String place;
+        String left;
         if (inHub(playerId)) {
             leaveHub(player);
-            place = "the hub";
+            left = "waiting.left-hub";
         } else if (leaveRoom(player)) {
-            place = "the waiting room";
+            left = "waiting.left-room";
         } else {
             return false;
         }
@@ -468,12 +464,12 @@ public final class WaitingRoomService {
                 // The restore listener marks the snapshot; it is restored on the next join.
             }
             case COMMAND -> {
-                player.sendMessage(Component.text("You left " + place + ".", NamedTextColor.YELLOW));
+                player.sendMessage(msg(left));
                 sendHome(player);
             }
             case WALKED_OUT, TELEPORTED, DIED -> {
                 if (exit != Exit.DIED) {
-                    player.sendMessage(Component.text("You left " + place + ".", NamedTextColor.YELLOW));
+                    player.sendMessage(msg(left));
                 }
                 // Not inside the move, teleport or death event that saw the player leave.
                 homeBound.add(playerId);
@@ -504,12 +500,11 @@ public final class WaitingRoomService {
         if (room.state().isEmpty()) {
             rooms.remove(arena);
         } else {
-            broadcast(room.state().players(), null, Component.text(player.getName() + " left " + count(room) + ".",
-                    NamedTextColor.GRAY));
+            broadcast(room.state().players(), null, msg("waiting.player-left", "player", player.getName(),
+                    "count", count(room)));
             notifyMoves(left.moves());
             if (left.countdownCancelled()) {
-                broadcast(room.state().players(), null, Component.text("Not enough players. The countdown stopped.",
-                        NamedTextColor.RED));
+                broadcast(room.state().players(), null, msg("waiting.countdown-stopped"));
             }
             showStatus(room);
         }
@@ -524,11 +519,10 @@ public final class WaitingRoomService {
             heldSince.remove(HUB);
             return;
         }
-        broadcast(current.state().players(), null, Component.text(player.getName() + " left the hub "
-                + count(current.state().size(), current.state().minPlayers()) + ".", NamedTextColor.GRAY));
+        broadcast(current.state().players(), null, msg("waiting.player-left-hub", "player", player.getName(),
+                "count", count(current.state().size(), current.state().minPlayers())));
         if (cancelled) {
-            broadcast(current.state().players(), null, Component.text("Not enough players. The countdown stopped.",
-                    NamedTextColor.RED));
+            broadcast(current.state().players(), null, msg("waiting.countdown-stopped"));
         }
         showHubStatus(current);
     }
@@ -549,7 +543,7 @@ public final class WaitingRoomService {
         for (UUID playerId : waiting) {
             arenaOf.remove(playerId);
         }
-        sendAllHome(waiting, "Arena " + room.arena() + " is no longer available, so you were sent back.");
+        sendAllHome(waiting, msg("waiting.arena-closed", "arena", room.arena()));
     }
 
     /** Sends everyone in the hub home and closes it, because its point was moved or removed. */
@@ -560,15 +554,15 @@ public final class WaitingRoomService {
         }
         hub = null;
         heldSince.remove(HUB);
-        sendAllHome(closing.state().players(), "The hub was moved or removed, so you were sent back.");
+        sendAllHome(closing.state().players(), msg("waiting.hub-closed"));
     }
 
-    private void sendAllHome(List<UUID> waiting, String message) {
+    private void sendAllHome(List<UUID> waiting, Component message) {
         for (UUID playerId : waiting) {
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null && player.isOnline()) {
                 player.sendActionBar(Component.empty());
-                player.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+                player.sendMessage(message);
                 sendHome(player);
             }
         }
@@ -605,7 +599,7 @@ public final class WaitingRoomService {
             }
             if (room.state().secondsLeft() == 1 && !startAllowed.getAsBoolean()) {
                 heldSince.putIfAbsent(room.arena(), holds++);
-                showHeld(room.state().players(), "Every match slot is in use. Starting when one frees up.");
+                showHeld(room.state().players(), "waiting.held-slots");
                 continue;
             }
             heldSince.remove(room.arena());
@@ -623,22 +617,19 @@ public final class WaitingRoomService {
         boolean wasCounting = state.isCounting();
         state.setSettings(hubMinimum(), settings.countdownSeconds());
         if (wasCounting && !state.isCounting()) {
-            broadcast(state.players(), null, Component.text("Not enough players. The countdown stopped.",
-                    NamedTextColor.RED));
+            broadcast(state.players(), null, msg("waiting.countdown-stopped"));
             showHubStatus(current);
             return;
         }
         if (!wasCounting && state.isCounting()) {
-            broadcast(state.players(), null, Component.text("The match starts in " + state.secondsLeft()
-                    + " seconds.", NamedTextColor.GOLD));
+            broadcast(state.players(), null, msg("waiting.countdown", "seconds", state.secondsLeft()));
         }
         if (state.secondsLeft() == 1) {
             boolean slot = startAllowed.getAsBoolean();
             Optional<Arena> arena = slot ? freeArena(state.size()) : Optional.empty();
             if (arena.isEmpty()) {
                 heldSince.putIfAbsent(HUB, holds++);
-                showHeld(state.players(), slot ? "Every arena is in use. Starting when one frees up."
-                        : "Every match slot is in use. Starting when one frees up.");
+                showHeld(state.players(), slot ? "waiting.held-arenas" : "waiting.held-slots");
                 return;
             }
             heldSince.remove(HUB);
@@ -761,11 +752,9 @@ public final class WaitingRoomService {
         if (state.isEmpty()) {
             hub = null;
         } else {
-            broadcast(state.players(), null, Component.text("Arena " + arena.name() + " is full, so you stay in the"
-                    + " hub for the next free arena.", NamedTextColor.YELLOW));
+            broadcast(state.players(), null, msg("waiting.arena-full-stay", "arena", arena.name()));
             if (state.isCounting()) {
-                broadcast(state.players(), null, Component.text("The next match starts in " + state.secondsLeft()
-                        + " seconds.", NamedTextColor.GOLD));
+                broadcast(state.players(), null, msg("waiting.next-countdown", "seconds", state.secondsLeft()));
             }
             showHubStatus(current);
         }
@@ -779,8 +768,7 @@ public final class WaitingRoomService {
                 Player player = plugin.getServer().getPlayer(playerId);
                 if (player != null) {
                     player.sendActionBar(Component.empty());
-                    player.sendMessage(Component.text("The match is starting in arena " + arena + ".",
-                            NamedTextColor.GOLD));
+                    player.sendMessage(msg("waiting.starting", "arena", arena));
                 }
             }
         }
@@ -793,7 +781,7 @@ public final class WaitingRoomService {
                 for (UUID playerId : team) {
                     Player player = plugin.getServer().getPlayer(playerId);
                     if (player != null && player.isOnline()) {
-                        player.sendMessage(Component.text("The match could not start.", NamedTextColor.RED));
+                        player.sendMessage(msg("waiting.start-failed"));
                         sendHome(player);
                     }
                 }
@@ -804,8 +792,7 @@ public final class WaitingRoomService {
     private void sendHome(Player player) {
         RestoreResult result = restore.apply(player);
         if (result == RestoreResult.FAILED) {
-            player.sendMessage(Component.text("Your belongings could not be returned yet. Rejoin the server,"
-                    + " or ask an admin if this keeps happening.", NamedTextColor.RED));
+            player.sendMessage(msg("common.restore-failed"));
         }
     }
 
@@ -813,8 +800,7 @@ public final class WaitingRoomService {
         for (WaitingRoom.Move move : moves) {
             Player moved = plugin.getServer().getPlayer(move.player());
             if (moved != null) {
-                moved.sendMessage(Component.text("You were moved to team " + move.to()
-                        + " to keep the teams even.", NamedTextColor.YELLOW));
+                moved.sendMessage(msg("waiting.moved", "team", move.to()));
             }
         }
     }
@@ -822,22 +808,21 @@ public final class WaitingRoomService {
     private void showStatus(Room room) {
         WaitingRoom state = room.state();
         Component line = state.isCounting()
-                ? Component.text("Match starts in " + state.secondsLeft() + "s", NamedTextColor.GOLD)
-                : Component.text("Waiting for players " + count(room), NamedTextColor.GRAY);
+                ? msg("waiting.status-countdown", "seconds", state.secondsLeft())
+                : msg("waiting.status-waiting", "count", count(room));
         showLine(state.players(), line);
     }
 
     private void showHubStatus(Hub current) {
         SharedHub state = current.state();
         Component line = state.isCounting()
-                ? Component.text("Match starts in " + state.secondsLeft() + "s", NamedTextColor.GOLD)
-                : Component.text("Waiting for players " + count(state.size(), state.minPlayers()),
-                        NamedTextColor.GRAY);
+                ? msg("waiting.status-countdown", "seconds", state.secondsLeft())
+                : msg("waiting.status-waiting", "count", count(state.size(), state.minPlayers()));
         showLine(state.players(), line);
     }
 
-    private void showHeld(List<UUID> players, String message) {
-        showLine(players, Component.text(message, NamedTextColor.GOLD));
+    private void showHeld(List<UUID> players, String key) {
+        showLine(players, msg(key));
     }
 
     private void showLine(List<UUID> players, Component line) {
@@ -850,12 +835,13 @@ public final class WaitingRoomService {
     }
 
     /** The head count, against the minimum until it is reached. */
-    private static String count(Room room) {
+    private static Component count(Room room) {
         return count(room.state().size(), room.state().minPlayers());
     }
 
-    private static String count(int size, int min) {
-        return size < min ? "(" + size + "/" + min + ")" : "(" + size + (size == 1 ? " player)" : " players)");
+    private static Component count(int size, int min) {
+        return size < min ? msg("waiting.count-short", "size", size, "min", min)
+                : msg(size == 1 ? "waiting.count-one" : "waiting.count", "size", size);
     }
 
     /** Sends a message to the players except {@code skip}, which may be {@code null}. */

@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.portal;
 
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
+import com.ninja6.ninjaarena.message.KeyedArgumentException;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import java.util.Locale;
 import java.util.Objects;
@@ -41,7 +42,8 @@ public record Portal(String name, String world, ArenaBounds region, String arena
             Objects.requireNonNull(owner, "owner");
             Objects.requireNonNull(frame, "frame");
             if (!frame.matches("[a-z0-9_]{1,64}")) {
-                throw new IllegalArgumentException("invalid frame block " + frame);
+                throw new KeyedArgumentException("invalid frame block " + frame,
+                        "portal.invalid.frame", "frame", frame);
             }
         }
     }
@@ -98,26 +100,29 @@ public record Portal(String name, String world, ArenaBounds region, String arena
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(region, "region");
         if (!isValidName(name)) {
-            throw new IllegalArgumentException("invalid portal name " + name);
+            throw new KeyedArgumentException("invalid portal name " + name, "portal.invalid.name", "name", name);
         }
         if (world.isBlank()) {
-            throw new IllegalArgumentException("world must not be blank");
+            throw new KeyedArgumentException("world must not be blank", "portal.invalid.world");
         }
         if (world.equals(ArenaWorld.NAME)) {
-            throw new IllegalArgumentException("portals cannot be in the arena world");
+            throw new KeyedArgumentException("portals cannot be in the arena world", "portal.invalid.arena-world");
         }
         if (arena == null ? built == null : !Arena.isValidName(arena)) {
-            throw new IllegalArgumentException("invalid arena name " + arena);
+            throw new KeyedArgumentException("invalid arena name " + arena, "arena.invalid.name", "name", arena);
         }
         if (spectator && lobby != null) {
-            throw new IllegalArgumentException("a spectator portal leads to a live match and has no lobby");
+            throw new KeyedArgumentException("a spectator portal leads to a live match and has no lobby",
+                    "portal.invalid.spectator-lobby");
         }
         if (built != null && (spectator || lobby != null)) {
-            throw new IllegalArgumentException("a player-built portal follows the server default lobby");
+            throw new KeyedArgumentException("a player-built portal follows the server default lobby",
+                    "portal.invalid.built-lobby");
         }
         if (span(region.minX(), region.maxX()) > MAX_SPAN || span(region.minY(), region.maxY()) > MAX_SPAN
                 || span(region.minZ(), region.maxZ()) > MAX_SPAN) {
-            throw new IllegalArgumentException("a portal can be at most " + MAX_SPAN + " blocks along each axis");
+            throw new KeyedArgumentException("a portal can be at most " + MAX_SPAN + " blocks along each axis",
+                    "portal.invalid.too-large", "max", MAX_SPAN);
         }
     }
 

@@ -171,7 +171,7 @@ under the root.
 | `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals, their lobby and the shared hub |
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
 | `event <subcommand>` | `ninjaarena.event.manage` | List, inspect, start or cancel scheduled arena events |
-| `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration and kits |
+| `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration, kits and messages |
 
 Enter the Arena by walking through a portal or explicitly accepting an invitation.
 Leaderboard, event management and admin reload also work from the console.
@@ -228,13 +228,14 @@ on a successful reload. Current viewers can stay until they leave or the match e
 
 ## Safe configuration reload
 
-Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml` or `kits.yml`.
-Both files are read and validated before anything changes. A missing file, malformed YAML,
-duplicate or unknown key, wrong type, out-of-range or non-finite number, invalid kit entry,
-unregistered item ID or excessive stack amount rejects the whole reload. The reply names
-the file, setting and source line; the previous settings and kit remain active. Omitted
-config settings use the bundled defaults. Reload never reads arenas, portals or snapshots,
-and never moves match players or restarts a match.
+Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml`, `kits.yml`
+or `messages.yml`. All three are read and validated before anything changes. A missing
+config or kit file, malformed YAML, duplicate or unknown key, wrong type, out-of-range or
+non-finite number, invalid kit entry, unregistered item ID or excessive stack amount
+rejects the whole reload. The reply names the file, setting and source line; the previous
+settings and kit remain active. Omitted config settings use the bundled defaults. Reload
+never reads arenas, portals or snapshots, and never moves match players or restarts a
+match.
 
 | Settings | Reload behavior |
 | :--- | :--- |
@@ -250,6 +251,7 @@ and never moves match players or restarts a match.
 | Grid cell size and world border | Apply only before any arena exists and while no match runs. Otherwise refuse the change and require a restart. |
 | Placeholder cache | `placeholders.cache-seconds` applies to cached stats immediately. |
 | Stats season | A new `stats.season` archives the current season and starts it. Other stats settings require a restart. |
+| Messages | `messages.yml` applies immediately to every later message. Malformed YAML rejects the whole reload; a missing or unreadable key uses its default with one warning. |
 
 The reply separates changed settings, postponed changes (next match or round), and refused
 changes. Refused settings remain unchanged in memory; the files are not rewritten. Director
@@ -261,6 +263,22 @@ providers declare stack limits of 16 for shuriken and smoke bombs and 1 for dash
 providers can declare a safe limit with `kitItems.register(id, maxStackSize, provider)`;
 the existing two-argument registration conservatively permits one item during reload
 validation. Item providers still resolve at round-kit application time.
+
+## Player messages
+
+The text the plugin shows players and admins is in `messages.yml`, saved to the plugin
+folder on first start. Edit it to reword or translate the plugin, then run `/narena admin
+reload`. Texts use [MiniMessage](https://docs.advntr.dev/minimessage/format.html) tags
+such as `<red>` or `<bold>`, and named placeholders such as `<arena>`, `<player>` or
+`<seconds>`. Player names and other typed input are inserted as plain text, so they cannot
+add formatting or click actions. A key that is missing or holds a tag MiniMessage cannot
+read falls back to the bundled default, with one warning in the server log per key. The
+comments at the top of the file say which sections are shown as plain text, such as menu
+items, kick screens and the Discord webhook. Delete the file to get the defaults back on
+the next start. A few things stay outside it, as the comments at its top list: command
+argument syntax; names of arenas, portals, worlds, files and settings; errors from the
+system itself; and the reasons `/narena admin reload` gives for rejecting `config.yml` or
+`kits.yml`, which stay in English.
 
 ## Tool resource packs
 

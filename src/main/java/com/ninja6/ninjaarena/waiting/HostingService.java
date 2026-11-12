@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.waiting;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.HostingCommands;
@@ -15,8 +17,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -88,23 +88,22 @@ public final class HostingService implements HostingCommands, Listener {
         }
         UUID id = player.getUniqueId();
         if (hosted.containsKey(id)) {
-            tell(player, "You already host arena " + hosted.get(id).arena + ". Walk in or use /narena leave to cancel.");
+            tell(player, "hosting.already-hosting", "arena", hosted.get(id).arena);
             return;
         }
         String name = Arena.normalizeName(arenaName);
         if (!arenas.isAvailable(name) || reserved.containsKey(name) || rooms.hasRoom(name)) {
-            tell(player, "Arena " + name + " is not free and ready for hosting.");
+            tell(player, "hosting.not-free", "arena", name);
             return;
         }
         if (rooms.isWaiting(id) || inMatch.test(id)) {
-            tell(player, "Leave your current waiting room or match before hosting.");
+            tell(player, "hosting.leave-first");
             return;
         }
         Open open = new Open(id, name);
         hosted.put(id, open);
         reserved.put(name, open);
-        tell(player, "You opened arena " + name + ". Walk through its portal to join the Arena, then invite players"
-                + " with /narena invite <player>. Hosting does not move you.");
+        tell(player, "hosting.opened", "arena", name);
     }
 
     @Override
@@ -115,31 +114,30 @@ public final class HostingService implements HostingCommands, Listener {
         }
         Open open = hosted.get(player.getUniqueId());
         if (open == null) {
-            tell(player, "Open a free arena with /narena host <arena> first.");
+            tell(player, "hosting.host-first");
             return;
         }
         Player target = plugin.getServer().getPlayerExact(invitee);
         if (target == null || !target.isOnline()) {
-            tell(player, "No online player called " + invitee + ".");
+            tell(player, "hosting.no-player", "player", invitee);
             return;
         }
         if (target.getUniqueId().equals(open.host)) {
-            tell(player, "You cannot invite yourself.");
+            tell(player, "hosting.self");
             return;
         }
         if (!target.hasPermission(NinjaArenaCommand.PLAY) || inMatch.test(target.getUniqueId())
                 || hosted.containsKey(target.getUniqueId())) {
-            tell(player, "That player cannot accept an invitation right now.");
+            tell(player, "hosting.cannot-accept");
             return;
         }
         if (open.accepted.contains(target.getUniqueId())) {
-            tell(player, "That player has already accepted your invitation.");
+            tell(player, "hosting.already-accepted");
             return;
         }
         open.invited.add(target.getUniqueId());
-        tell(target, player.getName() + " invited you to the Arena in " + open.arena + ". To join, type /narena accept "
-                + player.getName() + ". You will move only if you accept.");
-        tell(player, "Invited " + target.getName() + " to arena " + open.arena + ".");
+        tell(target, "hosting.invited-you", "host", player.getName(), "arena", open.arena);
+        tell(player, "hosting.invited", "player", target.getName(), "arena", open.arena);
     }
 
     @Override
@@ -152,11 +150,11 @@ public final class HostingService implements HostingCommands, Listener {
         Open open = host == null ? null : hosted.get(host.getUniqueId());
         UUID id = player.getUniqueId();
         if (open == null || !open.invited.contains(id)) {
-            tell(player, "You have no open invitation from " + hostName + ".");
+            tell(player, "hosting.no-invitation", "host", hostName);
             return;
         }
         if (inMatch.test(id) || hosted.containsKey(id)) {
-            tell(player, "Leave your current match or hosted arena before accepting.");
+            tell(player, "hosting.leave-before-accept");
             return;
         }
         if (rooms.isWaiting(id)) {
@@ -164,12 +162,12 @@ public final class HostingService implements HostingCommands, Listener {
             return;
         }
         if (entering.containsKey(id)) {
-            tell(player, "Your accepted entry is already loading. Please wait.");
+            tell(player, "hosting.loading");
             return;
         }
         var refusal = entry.check(player, open.arena);
         if (refusal.isPresent()) {
-            tell(player, refusal.get().message());
+            tell(player, "hosting.refused", "message", refusal.get().message());
             return;
         }
         Pending pending = new Pending(open);
@@ -180,7 +178,7 @@ public final class HostingService implements HostingCommands, Listener {
             releaseWorld = acquireWorld.get();
         } catch (RuntimeException e) {
             entering.remove(id, pending);
-            tell(player, "The Arena could not load. Your invitation is still open; try accepting again.");
+            tell(player, "hosting.load-failed");
             return;
         }
         try {
@@ -206,7 +204,7 @@ public final class HostingService implements HostingCommands, Listener {
         } catch (RuntimeException e) {
             releaseWorld.run();
             entering.remove(id, pending);
-            tell(player, "The Arena could not load. Your invitation is still open; try accepting again.");
+            tell(player, "hosting.load-failed");
         }
     }
 
@@ -230,17 +228,17 @@ public final class HostingService implements HostingCommands, Listener {
             return;
         }
         if (error != null) {
-            tell(player, "The Arena could not load. Your invitation is still open; try accepting again.");
+            tell(player, "hosting.load-failed");
             return;
         }
         // The room's party supplier sees the acceptance during the synchronous join. Failure rolls it back.
         open.accepted.add(id);
         try {
-            admission.enter(player, open.arena, message -> tell(player, message));
+            admission.enter(player, open.arena, message -> tell(player, "hosting.refused", "message", message));
         } finally {
             if (rooms.arenaOf(id).filter(open.arena::equals).isPresent()) {
                 open.invited.remove(id);
-                tell(player, "You accepted the invitation to arena " + open.arena + ".");
+                tell(player, "hosting.accepted", "arena", open.arena);
             } else {
                 open.accepted.remove(id);
             }
@@ -250,14 +248,14 @@ public final class HostingService implements HostingCommands, Listener {
     private void acceptWaiting(Player player, Open open) {
         UUID id = player.getUniqueId();
         if (!rooms.arenaOf(id).filter(open.arena::equals).isPresent()) {
-            tell(player, "Leave your current waiting room before accepting.");
+            tell(player, "hosting.leave-room-first");
             return;
         }
         entering.remove(id);
         open.accepted.add(id);
         open.invited.remove(id);
         rooms.refreshParty(open.arena);
-        tell(player, "You accepted the invitation to arena " + open.arena + ".");
+        tell(player, "hosting.accepted", "arena", open.arena);
     }
 
     /** Also cancels a reservation when its host has not entered the room yet. */
@@ -266,22 +264,22 @@ public final class HostingService implements HostingCommands, Listener {
         Open open = hosted.get(player.getUniqueId());
         if (open == null) {
             if (cancelled) {
-                tell(player, "Your entry to the Arena was cancelled. Your invitation is still open.");
+                tell(player, "hosting.entry-cancelled");
             }
             return cancelled;
         }
         cancelArena(open.arena);
-        tell(player, "You stopped hosting arena " + open.arena + ".");
+        tell(player, "hosting.stopped", "arena", open.arena);
         return true;
     }
 
     private boolean eligible(Player player, String permission) {
         if (closed || !player.isOnline() || !player.hasPermission(permission)) {
-            tell(player, "You do not have permission to use this Arena command.");
+            tell(player, "hosting.no-permission");
             return false;
         }
         if (player.isDead() || player.getGameMode() == GameMode.SPECTATOR) {
-            tell(player, "You cannot use this Arena command while dead or spectating.");
+            tell(player, "hosting.dead");
             return false;
         }
         return true;
@@ -353,7 +351,7 @@ public final class HostingService implements HostingCommands, Listener {
         entering.clear();
     }
 
-    private static void tell(Player player, String message) {
-        player.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+    private static void tell(Player player, String key, Object... placeholders) {
+        player.sendMessage(msg(key, placeholders));
     }
 }

@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.arena;
 
+import com.ninja6.ninjaarena.message.KeyedArgumentException;
 import java.util.Locale;
 
 /**
@@ -9,10 +10,10 @@ public record ArenaPoint(double x, double y, double z, float yaw, float pitch) {
 
     public ArenaPoint {
         if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
-            throw new IllegalArgumentException("coordinates must be finite");
+            throw new KeyedArgumentException("coordinates must be finite", "arena.invalid.coordinates");
         }
         if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) {
-            throw new IllegalArgumentException("yaw and pitch must be finite");
+            throw new KeyedArgumentException("yaw and pitch must be finite", "arena.invalid.rotation");
         }
     }
 

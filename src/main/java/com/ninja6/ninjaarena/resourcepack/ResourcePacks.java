@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.resourcepack;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings.Pack;
 import java.net.URI;
 import java.util.HashMap;
@@ -264,18 +266,14 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
                         + host + ". Ask the player to reconnect; reconnecting usually works."
                         + " If failures persist, check the pack host's availability and"
                         + " resource-pack.url and resource-pack.sha1.");
-                transport.kick(player, "Your client could not reach NinjaArena's required resource pack host "
-                        + host + ". Please reconnect; reconnecting usually works."
-                        + " If it still fails, contact the server operator.");
+                transport.kick(player, text("pack.kick-unreachable", "host", host));
                 return;
             }
             if (!reason.equals(reason(Status.DECLINED))) {
                 transport.warn("The required resource pack " + reason + " for " + player
                         + ". Check resource-pack.url and resource-pack.sha1; players cannot join until it loads.");
             }
-            transport.kick(player, "NinjaArena's required resource pack " + reason
-                    + ". Check Server Resource Packs in this server's settings, then reconnect."
-                    + " If it still fails, contact the server operator.");
+            transport.kick(player, text("pack.kick", "reason", describe(reason)));
         }
     }
 
@@ -285,6 +283,21 @@ public final class ResourcePacks implements LoadedPacks, AutoCloseable {
         } catch (RuntimeException e) {
             transport.error("Could not remove resource pack " + pack + " from " + player, e);
         }
+    }
+
+    /** A failure reason from this class, worded for players. */
+    public static String describe(String reason) {
+        String key = switch (reason) {
+            case "was declined" -> "declined";
+            case "could not be downloaded" -> "failed-download";
+            case "has an invalid download URL" -> "invalid-url";
+            case "could not be reloaded" -> "failed-reload";
+            case "was discarded" -> "discarded";
+            case "could not be requested" -> "not-requested";
+            case "timed out while loading" -> "timed-out";
+            default -> null;
+        };
+        return key == null ? reason : text("pack.reason." + key);
     }
 
     private static String reason(Status status) {

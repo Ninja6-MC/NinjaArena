@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.arena;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.PaperBlockEvents;
 import java.io.IOException;
@@ -203,10 +205,10 @@ public final class ArenaRegistry {
         requireWorldAccess();
         String key = Arena.normalizeName(name);
         if (!Arena.isValidName(key)) {
-            throw new ArenaException("Arena names are 1 to 32 letters, digits, _ or -.");
+            throw new ArenaException("arena.error.bad-name");
         }
         if (arenas.containsKey(key)) {
-            throw new ArenaException("An arena called " + key + " already exists.");
+            throw new ArenaException("arena.error.exists", "arena", key);
         }
         Set<GridCell> taken = new HashSet<>();
         for (Arena arena : arenas.values()) {
@@ -216,11 +218,11 @@ public final class ArenaRegistry {
             cell = grid.cellsNearestFirst().stream()
                     .filter(candidate -> !taken.contains(candidate))
                     .findFirst()
-                    .orElseThrow(() -> new ArenaException("Every grid cell inside the world border is taken."));
+                    .orElseThrow(() -> new ArenaException("arena.error.no-free-cell"));
         } else if (!grid.insideBorder(cell)) {
-            throw new ArenaException("Cell " + cell.describe() + " is not inside the world border.");
+            throw new ArenaException("arena.error.cell-outside", "cell", cell.describe());
         } else if (taken.contains(cell)) {
-            throw new ArenaException("Cell " + cell.describe() + " already holds an arena.");
+            throw new ArenaException("arena.error.cell-taken", "cell", cell.describe());
         }
         refuseEditWhileHeld();
         // A copy left by an earlier arena of this name must never be restored over this one.
@@ -238,7 +240,7 @@ public final class ArenaRegistry {
         requireWorldAccess();
         Arena arena = require(name);
         if (held.contains(arena.name())) {
-            throw new ArenaException("Arena " + arena.name() + " is in use by a match.");
+            throw new ArenaException("arena.error.in-use", "arena", arena.name());
         }
         if (editing.contains(arena.name()) && editing.size() == 1) {
             settleEdit();
@@ -275,10 +277,10 @@ public final class ArenaRegistry {
         requireWorldAccess();
         Arena arena = require(name);
         if (held.contains(arena.name())) {
-            throw new ArenaException("Arena " + arena.name() + " is in use by a match.");
+            throw new ArenaException("arena.error.in-use", "arena", arena.name());
         }
         if (editing.contains(arena.name())) {
-            throw new ArenaException("Arena " + arena.name() + " is already in edit mode.");
+            throw new ArenaException("arena.error.already-editing", "arena", arena.name());
         }
         refuseEditWhileHeld();
         if (arena.bounds() != null && copies.exists(arena.name())) {
@@ -286,10 +288,8 @@ public final class ArenaRegistry {
                 copies.restore(arena.name());
             } catch (IOException e) {
                 unreset.add(arena.name());
-                throw new ArenaException("Could not reset " + arena.name() + " from its saved copy before the edit,"
-                        + " so it stays out of edit mode: " + e.getMessage() + ". To edit it as the world has it now,"
-                        + " remove its folder plugins/NinjaArena/arena-copies/" + arena.name() + " and start the edit"
-                        + " again; finishing the edit saves a new copy. Or delete the arena and create it again.", e);
+                throw new ArenaException(e, "arena.error.edit-reset-failed", "arena", arena.name(),
+                        "reason", e.getMessage());
             }
             unreset.remove(arena.name());
         }
@@ -323,15 +323,15 @@ public final class ArenaRegistry {
         requireWorldAccess();
         Arena arena = require(name);
         if (!editing.contains(arena.name())) {
-            throw new ArenaException("Arena " + arena.name() + " is not in edit mode.");
+            throw new ArenaException("arena.error.not-editing", "arena", arena.name());
         }
         settleEdit();
         if (arena.bounds() != null) {
             try {
                 copies.save(arena.name(), arena.bounds());
             } catch (IOException e) {
-                throw new ArenaException("Could not save the copy of " + arena.name() + ", so it stays in edit"
-                        + " mode: " + e.getMessage(), e);
+                throw new ArenaException(e, "arena.error.copy-save-failed", "arena", arena.name(),
+                        "reason", e.getMessage());
             }
             unreset.remove(arena.name());
         }
@@ -358,14 +358,13 @@ public final class ArenaRegistry {
         requireWorldAccess();
         Arena arena = require(name);
         if (!editing.contains(arena.name())) {
-            throw new ArenaException("Arena " + arena.name() + " is not in edit mode. Start it with edit "
-                    + arena.name() + " on.");
+            throw new ArenaException("arena.error.not-editing-hint", "arena", arena.name());
         }
         Arena changed;
         try {
             changed = change.apply(arena);
         } catch (IllegalArgumentException e) {
-            throw new ArenaException(capitalize(e.getMessage()) + ".", e);
+            throw ArenaException.refused(e);
         }
         Map<String, Arena> next = new TreeMap<>(arenas);
         next.put(arena.name(), changed);
@@ -376,6 +375,11 @@ public final class ArenaRegistry {
     /** What stops an arena from hosting a match, besides edit mode. Empty if nothing does. */
     public List<String> problems(String name) throws ArenaException {
         return ArenaValidator.problems(require(name), grid);
+    }
+
+    /** The arena's points that lie outside its bounds, a subset of {@link #problems}. */
+    public List<String> outside(String name) throws ArenaException {
+        return ArenaValidator.outside(require(name), grid);
     }
 
     /**
@@ -406,13 +410,13 @@ public final class ArenaRegistry {
         requireWorldAccess();
         Arena arena = require(name);
         if (editing.contains(arena.name())) {
-            throw new ArenaException("Arena " + arena.name() + " is in edit mode; a reset would undo the edit.");
+            throw new ArenaException("arena.error.reset-editing", "arena", arena.name());
         }
         try {
             copies.restore(arena.name());
         } catch (IOException e) {
             unreset.add(arena.name());
-            throw new ArenaException("Could not reset " + arena.name() + ": " + e.getMessage(), e);
+            throw new ArenaException(e, "arena.error.reset-failed", "arena", arena.name(), "reason", e.getMessage());
         }
         unreset.remove(arena.name());
     }
@@ -449,12 +453,14 @@ public final class ArenaRegistry {
                     copies.save(arena.name(), arena.bounds());
                     copied.add(arena.name());
                 } else {
-                    throw new IOException("the authoritative saved copy is missing");
+                    unreset.add(arena.name());
+                    failed.add(text("arena.error.copy-missing", "arena", arena.name()));
+                    continue;
                 }
                 unreset.remove(arena.name());
             } catch (IOException e) {
                 unreset.add(arena.name());
-                failed.add("Could not reset " + arena.name() + " from its saved copy: " + e.getMessage());
+                failed.add(text("arena.error.copy-restore-failed", "arena", arena.name(), "reason", e.getMessage()));
             }
         }
         return new ResetReport(reset, copied, failed);
@@ -487,14 +493,13 @@ public final class ArenaRegistry {
         requireWorldAccess();
         Arena arena = require(name);
         if (held.contains(arena.name())) {
-            throw new ArenaException("Arena " + arena.name() + " is already in use by a match.");
+            throw new ArenaException("arena.error.already-in-use", "arena", arena.name());
         }
         if (!editing.isEmpty()) {
-            throw new ArenaException("No match can start while " + String.join(", ", editing)
-                    + " is in edit mode: edit mode turns on saving for the whole arena world.");
+            throw new ArenaException("arena.error.match-while-editing", "arenas", String.join(", ", editing));
         }
         if (!isAvailable(arena.name())) {
-            throw new ArenaException("Arena " + arena.name() + " is not available for a match.");
+            throw new ArenaException("arena.error.unavailable", "arena", arena.name());
         }
         ArenaBounds bounds = arena.bounds();
         for (int x = bounds.minChunkX(); x <= bounds.maxChunkX(); x++) {
@@ -553,7 +558,7 @@ public final class ArenaRegistry {
                     copies.save(name, arena.bounds());
                 } catch (IOException e) {
                     unreset.add(name);
-                    failed.add("Could not save the copy of " + name + " while closing its edit: " + e.getMessage());
+                    failed.add(text("arena.error.close-save-failed", "arena", name, "reason", e.getMessage()));
                 }
             }
             editing.clear();
@@ -565,8 +570,7 @@ public final class ArenaRegistry {
     /** Edit mode turns saving on for the whole world, which must not happen during a match. */
     private void refuseEditWhileHeld() throws ArenaException {
         if (!held.isEmpty()) {
-            throw new ArenaException("Arenas cannot be edited while a match is running in " + String.join(", ",
-                    new TreeSet<>(held)) + ": edit mode turns on saving for the whole arena world.");
+            throw new ArenaException("arena.error.edit-while-match", "arenas", String.join(", ", new TreeSet<>(held)));
         }
     }
 
@@ -588,7 +592,7 @@ public final class ArenaRegistry {
         try {
             beforeFinishEdit.run();
         } catch (IllegalStateException failure) {
-            throw new ArenaException(failure.getMessage(), failure);
+            throw ArenaException.refused(failure);
         }
     }
 
@@ -596,42 +600,35 @@ public final class ArenaRegistry {
         try {
             copies.delete(key);
         } catch (IOException e) {
-            throw new ArenaException("Could not delete the saved copy of " + key + ": " + e.getMessage(), e);
+            throw new ArenaException(e, "arena.error.copy-delete-failed", "arena", key, "reason", e.getMessage());
         }
     }
 
     private Arena require(String name) throws ArenaException {
         Arena arena = arenas.get(Arena.normalizeName(name));
         if (arena == null) {
-            throw new ArenaException("No arena called " + name + ".");
+            throw new ArenaException("arena.error.unknown", "arena", name);
         }
         return arena;
     }
 
     private void requireWorldAccess() throws ArenaException {
         if (!worldAcceptingOperations.getAsBoolean()) {
-            throw new ArenaException("The arena world is changing state; try again once it is ready.");
+            throw new ArenaException("arena.error.world-busy");
         }
     }
 
     private void write(Map<String, Arena> next) throws ArenaException {
         if (unreadable) {
-            throw new ArenaException(store.file().getFileName() + " could not be read at startup. Fix or remove it"
-                    + " and restart before changing arenas.");
+            throw new ArenaException("arena.error.store-unreadable", "file", store.file().getFileName());
         }
         try {
             store.save(next.values());
         } catch (IOException e) {
-            throw new ArenaException("Could not save " + store.file().getFileName() + ": " + e.getMessage(), e);
+            throw new ArenaException(e, "arena.error.store-save-failed", "file", store.file().getFileName(),
+                    "reason", e.getMessage());
         }
         arenas.clear();
         arenas.putAll(next);
-    }
-
-    private static String capitalize(String text) {
-        if (text == null || text.isEmpty()) {
-            return "Refused";
-        }
-        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 }

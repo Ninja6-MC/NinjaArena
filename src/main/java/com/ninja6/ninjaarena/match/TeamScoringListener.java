@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.match;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.match.MatchUpdate.Cause;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
@@ -12,7 +15,6 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -67,11 +69,14 @@ public final class TeamScoringListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onMatchEnd(MatchEndEvent event) {
         try {
-            String table = event.result().standings().stream().map(standing -> "Team " + standing.team()
-                    + ": " + standing.score() + (standing.score() == 1 ? " point" : " points")
-                    + " (" + standing.roundsWon() + (standing.roundsWon() == 1 ? " round" : " rounds") + " won)")
+            String table = event.result().standings().stream().map(standing -> text("score.entry",
+                    "team", standing.team(),
+                    "points", text(standing.score() == 1 ? "score.points-one" : "score.points",
+                            "points", standing.score()),
+                    "rounds", text(standing.roundsWon() == 1 ? "score.rounds-one" : "score.rounds",
+                            "rounds", standing.roundsWon())))
                     .collect(Collectors.joining(", "));
-            Component message = Component.text("Final scores: " + table + ".", NamedTextColor.GOLD);
+            Component message = msg("score.final", "table", table);
             for (UUID id : event.match().players()) {
                 Player player = players.apply(id);
                 if (player != null && player.isOnline()) {

@@ -16,10 +16,20 @@ events:
       bonus:
         vault-per-match: 2.50
         reward-id: champion
-  messages:
-    upcoming: 'Arena event {id} starts in {minutes} minute(s) at {arena}.'
-    start: 'Arena event {id} has started at {arena}.'
 ```
+
+The announcements are `event.upcoming` and `event.start` in `messages.yml`, in
+MiniMessage format with the `<id>`, `<arena>` and `<minutes>` placeholders:
+
+```yaml
+event:
+  upcoming: "<gold>Arena event <id> starts in <minutes> minute(s) at <arena>."
+  start: "<gold>Arena event <id> has started at <arena>."
+```
+
+The old `events.messages` keys in `config.yml` are deprecated. On the first start that
+creates `messages.yml`, texts changed there are moved into it, with `{id}` written as
+`<id>`, and the server log says so. After that they are no longer read.
 
 Use a unique lowercase ID (letters, digits, underscores or hyphens), a day of the
 week, a quoted 24-hour time, and an existing arena name. The section uses one time
@@ -56,7 +66,8 @@ flow handles them. See [cosmetic rewards and Vault payouts](player-stats.md#cosm
 ## Discord
 
 Leave `webhook-url` empty to disable delivery. Set it to an HTTPS Discord
-webhook URL to post the same announcement text to Discord. Requests run
+webhook URL to post the same announcement text to Discord, as plain text without
+its formatting. Requests run
 asynchronously, time out after three seconds and send no mention notifications.
 Delivery failures log one warning per attempt. Keep the endpoint private.
 
