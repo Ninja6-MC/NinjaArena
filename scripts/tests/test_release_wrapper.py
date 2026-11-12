@@ -48,6 +48,13 @@ class ReleaseScriptTests(unittest.TestCase):
                 self.assertEqual(1, code)
                 self.assertIn("destinations must be", output)
 
+    def test_tagging_needs_a_candidate_run_id(self):
+        for args in ((), ("--candidate", "abc"), ("--candidate", "0")):
+            with self.subTest(args=args):
+                code, output = self.run_script("0.5.0", *args, "--dry-run")
+                self.assertEqual(1, code)
+                self.assertIn("--candidate needs", output)
+
     def test_unknown_options_are_refused(self):
         code, output = self.run_script("publish", "0.5.0", "99", "--attest", "github")
         self.assertEqual(1, code)

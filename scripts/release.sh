@@ -3,16 +3,18 @@
 # Cuts a release tag and pushes it, or dispatches Publish Release for a tag that already
 # exists.
 #
-# Usage: scripts/release.sh <version> [--dry-run]
+# Usage: scripts/release.sh <version> --candidate <candidate-run-id> [--dry-run]
 #        scripts/release.sh publish <version> <candidate-run-id>
 #                           [--destinations github|shared-state] [--dry-run]
 #
-#   scripts/release.sh 0.5.0-rc.1
-#   scripts/release.sh 0.5.0 --dry-run
+#   scripts/release.sh 0.5.0-rc.1 --candidate 123456789
+#   scripts/release.sh 0.5.0 --candidate 123456789 --dry-run
 #   scripts/release.sh publish 0.5.0-rc.1 123456789
 #   scripts/release.sh publish 0.5.0 123456789 --destinations shared-state --dry-run
 #
-# Pass the version without the leading "v"; the tag gets it. `--destinations` defaults to
+# Pass the version without the leading "v"; the tag gets it. Both modes check that the
+# candidate run is a successful first-attempt Release Candidate run on main for the commit
+# being tagged or already tagged, so a tag never points away from its candidate. `--destinations` defaults to
 # github. `shared-state` alone recovers the GitHub latest marker for a tag that is already
 # published, without uploading anything. RELEASE_PROCESS.md has the full procedure and the
 # retry table.
@@ -36,9 +38,24 @@ REPOSITORY=Ninja6-MC/NinjaArena
 TAG_PATTERN='^v0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.[1-9][0-9]*)?$'
 
 usage() {
-  echo "Usage: scripts/release.sh <version> [--dry-run]" >&2
+  echo "Usage: scripts/release.sh <version> --candidate <candidate-run-id> [--dry-run]" >&2
   echo "       scripts/release.sh publish <version> <candidate-run-id> [--destinations github|shared-state] [--dry-run]" >&2
   exit 2
+}
+
+# ---------------------------------------------------------------------------
+# The candidate run must be a successful first-attempt Release Candidate dispatch on
+# main whose commit is the one being tagged. Publish Release checks this again.
+# ---------------------------------------------------------------------------
+check_candidate() {
+  local run_id="$1" commit="$2" actual
+  actual="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" \
+    --jq '[.name, .path, .event, .head_branch, .status, .conclusion, .run_attempt, .head_sha] | map(tostring) | join(" ")')" \
+    || fail "could not read run $run_id from $REPOSITORY."
+  [ "$actual" = "Release Candidate .github/workflows/release-candidate.yml workflow_dispatch main completed success 1 $commit" ] \
+    || fail "run $run_id is not a successful first-attempt Release Candidate run on main for ${commit:0:7}.
+     It reports: $actual"
+  ok "candidate run $run_id built ${commit:0:7}"
 }
 
 # ---------------------------------------------------------------------------
@@ -67,6 +84,9 @@ publish() {
   git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 \
     || fail "tag '$tag' is not on origin. Cut it first: scripts/release.sh $version"
   ok "tag '$tag' exists on origin"
+  local commit
+  commit="$(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}" | tail -n 1 | cut -f1)"
+  check_candidate "$run_id" "$commit"
 
   local nonce
   nonce="$(date -u +%Y%m%dT%H%M%SZ)-$RANDOM"
@@ -91,14 +111,17 @@ if [ "${1:-}" = "publish" ]; then
 fi
 
 VERSION="${1:-}"
-DRY_RUN=0
-case "${2:-}" in
-  "") ;;
-  --dry-run) DRY_RUN=1 ;;
-  *) usage ;;
-esac
-[ $# -le 2 ] || usage
 [ -n "$VERSION" ] || usage
+shift
+DRY_RUN=0
+CANDIDATE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --candidate) [ $# -ge 2 ] || usage; CANDIDATE="$2"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    *) usage ;;
+  esac
+done
 
 TAG="v$VERSION"
 
@@ -111,6 +134,7 @@ if [[ ! "$TAG" =~ $TAG_PATTERN ]]; then
      For example: 0.5.0, 0.5.0-rc.1"
 fi
 ok "version '$VERSION' is well formed"
+[[ "$CANDIDATE" =~ ^[1-9][0-9]*$ ]] || fail "--candidate needs the successful Release Candidate run ID for this commit."
 
 # ---------------------------------------------------------------------------
 # 2. Refuse to run from a linked worktree. Those sit on their own branches at
@@ -175,6 +199,9 @@ if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; the
 fi
 ok "tag '$TAG' is unused"
 
+# The candidate must have been built from exactly the commit about to be tagged.
+check_candidate "$CANDIDATE" "$LOCAL"
+
 # ---------------------------------------------------------------------------
 # 7. The changelog gate. A stable release needs its own section; a pre-release
 #    falls back to its base version and may go without.
@@ -235,9 +262,8 @@ if [ "$DRY_RUN" -eq 1 ]; then
   exit 0
 fi
 
-echo "Push this tag only after a successful Release Candidate run for this commit"
-echo "and tag. Pushing the tag publishes nothing; Publish Release is dispatched"
-echo "separately with that run ID."
+echo "Pushing the tag publishes nothing; Publish Release is dispatched separately"
+echo "with candidate run $CANDIDATE."
 echo
 read -r -p "Type the tag to confirm: " CONFIRM
 [ "$CONFIRM" = "$TAG" ] || fail "confirmation did not match. Nothing was tagged."
@@ -254,5 +280,5 @@ ok "pushed $TAG"
 
 echo
 echo "Publish it with the Release Candidate run ID:"
-echo "  scripts/release.sh publish $VERSION <candidate-run-id>"
+echo "  scripts/release.sh publish $VERSION $CANDIDATE"
 echo "See RELEASE_PROCESS.md for verification and retry rules."

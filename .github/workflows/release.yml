@@ -61,10 +61,13 @@ jobs:
           [[ "$RELEASE_TAG" =~ ^v0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.[1-9][0-9]*)?$ ]] || { echo 'Invalid release tag'; exit 1; }
           [[ "$GITHUB_REF" == "refs/tags/$RELEASE_TAG" ]] || { echo 'Dispatch on the release tag ref'; exit 1; }
 
+      # github.sha, never the tag name: checkout resolves a bare name as a branch before a
+      # tag, so a branch named like the tag would supply the scripts. The guard above ties
+      # github.ref to refs/tags/<tag>, and the scripts check that HEAD is the tag's commit.
       - name: Checkout Exact Release Tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -135,7 +138,7 @@ jobs:
       - name: Checkout Exact Release Tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -173,7 +176,7 @@ jobs:
           python3 scripts/release_promotion.py notes --tag "$RELEASE_TAG" --output release-notes.md
           printf '\n' >> release-notes.md
           gh api -X POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$RELEASE_TAG" \
-            -f target_commitish="$(git rev-parse HEAD)" --jq .body >> release-notes.md
+            -f target_commitish="$GITHUB_SHA" --jq .body >> release-notes.md
 
       # The guard and the create share one step, so nothing runs between them. A re-run of
       # this job is attempt 2 or later and is refused here; dispatch a new run instead.
@@ -188,7 +191,7 @@ jobs:
           channel=()
           if [ -n "$(python3 scripts/release_promotion.py prerelease --tag "$RELEASE_TAG")" ]; then channel=(--prerelease); fi
           gh release create "$RELEASE_TAG" candidate/* --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --target "$(git rev-parse HEAD)" --title "NinjaArena $RELEASE_TAG" --notes-file release-notes.md \
+            --target "$GITHUB_SHA" --title "NinjaArena $RELEASE_TAG" --notes-file release-notes.md \
             --latest=false "${channel[@]}"
 
       - name: Verify What Consumers Download
@@ -200,7 +203,9 @@ jobs:
 
   shared-state:
     needs: [plan, publish-github]
-    if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.shared_needed == 'true' && github.ref == format('refs/tags/{0}', inputs.tag) && startsWith(inputs.tag, 'v')
+    # Runs after a successful publish, or when publish-github was skipped (a shared-state
+    # recovery dispatch). A failed, rejected or cancelled publish asks for no second approval.
+    if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.shared_needed == 'true' && (needs.publish-github.result == 'success' || needs.publish-github.result == 'skipped') && github.ref == format('refs/tags/{0}', inputs.tag) && startsWith(inputs.tag, 'v')
     name: Reconcile The Latest Marker
     # One group for every tag, so two tags published together cannot both decide they own
     # the marker. Ownership is checked again inside this group, directly before the write.
@@ -224,7 +229,7 @@ jobs:
       - name: Checkout Exact Release Tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 0
 

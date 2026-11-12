@@ -53,8 +53,10 @@ def flag(value):
 
 
 def tag_source(tag):
-    """The tag's commit, once the local tag and origin agree on it."""
+    """The tag's commit, once the checkout, the local tag and origin all agree on it."""
     source = command("git", "rev-parse", f"refs/tags/{tag}^{{commit}}").strip()
+    if command("git", "rev-parse", "HEAD^{commit}").strip() != source:
+        raise ValueError("The checkout is not the release tag's commit")
     remote_refs = command("git", "ls-remote", "origin", f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}").splitlines()
     remote_source = remote_refs[-1].split()[0] if remote_refs else ""
     if source != remote_source:

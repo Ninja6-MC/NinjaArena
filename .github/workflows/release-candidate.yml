@@ -39,7 +39,11 @@ jobs:
         id: tag
         env:
           RELEASE_TAG: ${{ inputs.tag }}
-        run: python3 scripts/release_candidate.py details --tag "$RELEASE_TAG" --output "$GITHUB_OUTPUT"
+        # A stable tag without its CHANGELOG.md section can never be published, so no
+        # candidate is built for it.
+        run: |
+          python3 scripts/release_candidate.py details --tag "$RELEASE_TAG" --output "$GITHUB_OUTPUT"
+          python3 scripts/release_promotion.py notes --tag "$RELEASE_TAG" --output "$RUNNER_TEMP/release-notes.md"
 
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1

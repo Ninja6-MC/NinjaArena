@@ -335,6 +335,34 @@ class LatestMarkerTests(unittest.TestCase):
         self.assertIn("concurrency:\n  group: publish-release-${{ github.ref }}\n", workflow)
 
 
+class WorkflowShapeTests(unittest.TestCase):
+    """Static checks on release.yml that the script tests cannot reach at run time."""
+
+    def setUp(self):
+        self.workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    def test_every_checkout_uses_the_dispatched_tag_commit(self):
+        # checkout resolves a bare name as a branch before a tag, so a branch named like the
+        # tag would otherwise supply the scripts and the release target.
+        refs = [line.strip() for line in self.workflow.splitlines() if line.strip().startswith("ref:")]
+        self.assertEqual(3, len(refs))
+        self.assertEqual({"ref: ${{ github.sha }}"}, set(refs))
+        self.assertNotIn("git rev-parse HEAD", self.workflow)
+        self.assertIn('--target "$GITHUB_SHA"', self.workflow)
+
+    def test_shared_state_needs_a_successful_or_skipped_publish(self):
+        job = self.workflow[self.workflow.index("\n  shared-state:\n"):self.workflow.index("\n  report-shared-state:\n")]
+        condition = next(line for line in job.splitlines() if line.strip().startswith("if:"))
+        self.assertIn("(needs.publish-github.result == 'success' || needs.publish-github.result == 'skipped')", condition)
+
+    def test_checkout_that_is_not_the_tag_commit_is_refused(self):
+        outputs = {("git", "rev-parse", f"refs/tags/{TAG}^{{commit}}"): SOURCE + "\n",
+                   ("git", "rev-parse", "HEAD^{commit}"): "b" * 40 + "\n"}
+        with patch.object(rp, "command", side_effect=lambda *args, **kwargs: outputs[args]):
+            with self.assertRaisesRegex(ValueError, "not the release tag's commit"):
+                rp.tag_source(TAG)
+
+
 class PlanTests(InTempDirectory):
     def plan(self, destinations, state, owner_tags, tag=TAG):
         output = self.root / "outputs"

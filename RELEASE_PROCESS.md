@@ -70,12 +70,15 @@ For tag `v0.5.0` the release carries these eleven assets, and nothing else:
    the manifest it records, and Publish Release checks that binding.
 3. Record the run ID once it succeeds. Do not re-run a failed or partly failed
    candidate: the publisher accepts first attempts only, so dispatch a new one.
-4. From the main checkout, run `scripts/release.sh 0.5.0-rc.1`. It refuses a linked
-   worktree, a branch other than `main`, uncommitted changes, a `main` out of step with
-   origin, an existing tag and a stable version without a changelog section, then asks
-   for the tag to be typed before it creates and pushes an annotated tag. Check that
-   the tag's commit is the candidate run's commit. Pushing a tag publishes nothing.
-5. Run `scripts/release.sh publish 0.5.0-rc.1 <candidate-run-id>`. It dispatches
+4. From the main checkout, run `scripts/release.sh 0.5.0-rc.1 --candidate <run-id>`.
+   It refuses a linked worktree, a branch other than `main`, uncommitted changes, a
+   `main` out of step with origin, an existing tag, a stable version without a
+   changelog section, and a run that is not a successful first-attempt Release
+   Candidate dispatch on `main` for the commit being tagged. It then asks for the tag
+   to be typed before it creates and pushes an annotated tag. Pushing a tag publishes
+   nothing.
+5. Run `scripts/release.sh publish 0.5.0-rc.1 <candidate-run-id>`. It checks the same
+   run against the tag's commit on origin, then dispatches
    `release.yml` on the tag ref with `tag`, `candidate_run_id`, `destinations=github`
    and a `nonce` that appears in the run name, and prints how to find the run.
 6. Read the `plan` job summary, then approve the `release` environment in the
@@ -88,8 +91,9 @@ For tag `v0.5.0` the release carries these eleven assets, and nothing else:
 ## Release Candidate
 
 The workflow runs only from `main` and only as attempt 1. Its `build` job, with a
-read-only token and no secrets, runs the release-script tests, the artwork validators
-and the pack tests, then:
+read-only token and no secrets, first checks the tag grammar and, for a stable tag, its
+changelog section, so no candidate is built for a tag that could never publish. It runs
+the release-script tests, the artwork validators and the pack tests, then:
 
 * builds the JAR once with `./gradlew test build -PreleaseVersion=<version>`, so the
   unit suite runs on the source before packaging;
@@ -133,7 +137,11 @@ they are done by hand.
 
 `release.yml` takes `tag`, `candidate_run_id`, `destinations` (`github`, or
 `shared-state` alone for recovery) and `nonce`. Every job requires `github.ref` to be
-`refs/tags/<tag>` and the tag to match the grammar above. The workflow's concurrency
+`refs/tags/<tag>` and the tag to match the grammar above. Every job checks out
+`github.sha`, the tag's commit at dispatch, never the tag name: checkout resolves a bare
+name as a branch before a tag, so a branch named like the tag would otherwise supply the
+scripts. The scripts also require the checkout, the local tag and the tag on origin to
+be the same commit, and the release targets that commit. The workflow's concurrency
 group is `publish-release-<github.ref>`, keyed on the ref rather than the input,
 because a workflow-level group is evaluated when the run is queued, before any step
 can validate the input. `release.yml` is the only workflow that writes releases;
@@ -153,12 +161,12 @@ the GitHub release (below), and predicts whether the latest marker needs the
 `shared-state` job. Its summary records the run's identity, channel, release state and
 the current latest owner.
 
-**`publish-github`** depends on `plan`, uses `environment: release` and is the only
-publishing job with `contents: write`. After approval it downloads the same candidate
-again and repeats the provenance, digest and evidence checks, preflights its token and
-the environment rule, and reconciles the release. When the release is absent it
-writes the notes (the changelog section, or a short pre-release line, followed by
-GitHub's generated change list), then, in one step:
+**`publish-github`** depends on `plan`, uses `environment: release` and holds
+`contents: write`, as does `shared-state` below; no other job does. After approval it
+downloads the same candidate again and repeats the provenance, digest and evidence
+checks, preflights its token and the environment rule, and reconciles the release.
+When the release is absent it writes the notes (the changelog section, or a short
+pre-release line, followed by GitHub's generated change list), then, in one step:
 
 * refuses any run attempt other than the first, because re-running one job reuses the
   outputs of the jobs it depends on;
@@ -185,8 +193,11 @@ SemVer, and stays unset until the first stable release. A pre-release never take
 and a stable hotfix published after a newer stable release does not take it either.
 
 Every release is created with `--latest=false`. The marker is moved only by the
-separate `shared-state` job, which runs after `publish-github` when `plan` predicts
-that this tag can own the marker. It uses `environment: release` (a second approval)
+separate `shared-state` job, which runs when `plan` predicts that this tag can own the
+marker and `publish-github` succeeded or was skipped. Skipped covers a `shared-state`
+recovery dispatch; a failed, rejected or cancelled publish asks for no second approval.
+A dispatch of `github` for an already complete release succeeds without writing, so it
+also reaches `shared-state`. It uses `environment: release` (a second approval)
 and the job-level concurrency group `release-shared-state`, which does not contain the
 tag, so two tags published at the same time cannot both decide they own it. Inside
 that group, directly before writing, it downloads and verifies the candidate again,
@@ -336,8 +347,12 @@ the start of every candidate build.
   draft, mismatched and conflicting releases, an untrusted download URL and consumer
   verification retries; the latest marker refused to a pre-release while a stable
   exists and to a stable hotfix below a newer stable, written and read back for the
-  owner, and one concurrency group for every tag; and the changelog gate.
-* `test_release_wrapper.py`: `release.sh` refusals before any network call, and on
+  owner, and one concurrency group for every tag; a checkout that is not the tag's
+  commit; and the changelog gate. Static checks on `release.yml` require every
+  checkout to use `github.sha` and `shared-state` to need a successful or skipped
+  publish.
+* `test_release_wrapper.py`: `release.sh` refusals before any network call, including
+  tagging without a valid `--candidate` run ID, and on
   Windows that `release.ps1` passes its arguments through intact.
 
 These tests mock GitHub. What only a real dispatch proves: the job token's access to

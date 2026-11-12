@@ -12,9 +12,9 @@
     therefore [object[]], and each array argument is joined back with commas before Git
     Bash sees it, so release.sh reports the list it was actually given.
 .EXAMPLE
-    scripts\release.ps1 0.5.0-rc.1
+    scripts\release.ps1 0.5.0-rc.1 --candidate 123456789
 .EXAMPLE
-    scripts\release.ps1 0.5.0 --dry-run
+    scripts\release.ps1 0.5.0 --candidate 123456789 --dry-run
 .EXAMPLE
     scripts\release.ps1 publish 0.5.0-rc.1 123456789
 .EXAMPLE
