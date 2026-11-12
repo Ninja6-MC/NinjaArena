@@ -40,6 +40,15 @@ portal-link and teleport targets. A teleport into the lobby world by another
 plugin takes a match player out of the match, and neither world is used as a
 landing for a restore.
 
+The lobby build and every change made in lobby edit mode live in the lobby
+world's own save, which also records that the bundled build was placed.
+Restoring an older backup of that world brings back the lobby as it was then;
+deleting or regenerating it makes NinjaArena place the bundled build again on
+the next start. `/narena admin lobby reset` puts the bundled build back without
+touching the world files. NinjaArena cancels all damage in the lobby world at
+the lowest priority and protects its blocks itself, so a region-protection
+plugin is not needed there.
+
 ### Multiverse-Core 5 and NetherPortals
 
 **Code review and recorded live.** Multiverse can import and manage existing

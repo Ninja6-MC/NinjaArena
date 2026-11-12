@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.match;
 import com.ninja6.ninjaarena.match.MatchService.Exit;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.CrossWorldTransfers;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.Objects;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -63,10 +64,16 @@ public final class MatchListener implements Listener {
         }
     }
 
+    /**
+     * A death in the lobby world never counts: no damage is taken there, and a fall into its
+     * void returns the player to the lobby spawn, so only another plugin can kill a match
+     * player there, during a shop phase say.
+     */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDeath(PlayerDeathEvent event) {
         Player player = event.getPlayer();
-        if (!event.isCancelled() && matches.isInMatch(player.getUniqueId())) {
+        if (!event.isCancelled() && matches.isInMatch(player.getUniqueId())
+                && !PluginWorlds.isLobby(player.getLocation())) {
             matches.died(player, player.getKiller());
         }
     }

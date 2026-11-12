@@ -1,0 +1,54 @@
+# The bundled obsidian lobby, placed in the lobby world the first time the plugin finds it
+# without one, and again by /ninjaarena admin lobby reset.
+#
+# This file is both the source of obsidian-lobby.nbt and the list of marked spots the
+# plugin reads. After changing blocks, size or data-version, run
+#
+#     ./gradlew generateLobbyBuild
+#
+# and commit both files; LobbyBuildTest fails while they disagree.
+#
+# Coordinates under blocks and marks are relative to the build's lowest north-west corner,
+# which is placed at origin in the lobby world. A box includes both corners, and a later box
+# replaces an earlier one where they overlap. Yaw 0 faces south and 180 faces north.
+
+# The oldest data version these blocks need. The server upgrades the build when it loads it.
+data-version: 4189
+size: [41, 4, 33]
+origin: [-20, 64, -16]
+
+# Where lobby members may be. One who leaves this box, by falling off the platform or
+# climbing over a wall, is put back at the spawn. Reset clears it before placing the build.
+bounds: {from: [-4, -8, -4], to: [44, 12, 36]}
+
+blocks:
+  # Floor.
+  - {block: obsidian, from: [0, 0, 0], to: [40, 0, 32]}
+  # Walls, two blocks high so nobody jumps them.
+  - {block: obsidian, from: [0, 1, 0], to: [40, 2, 0]}
+  - {block: obsidian, from: [0, 1, 32], to: [40, 2, 32]}
+  - {block: obsidian, from: [0, 1, 0], to: [0, 2, 32]}
+  - {block: obsidian, from: [40, 1, 0], to: [40, 2, 32]}
+  # Corner pillars.
+  - {block: crying_obsidian, from: [0, 1, 0], to: [0, 3, 0]}
+  - {block: crying_obsidian, from: [40, 1, 0], to: [40, 3, 0]}
+  - {block: crying_obsidian, from: [0, 1, 32], to: [0, 3, 32]}
+  - {block: crying_obsidian, from: [40, 1, 32], to: [40, 3, 32]}
+  # Room area floor, west.
+  - {block: polished_blackstone, from: [2, 0, 2], to: [17, 0, 22]}
+  # Shop area floor, east.
+  - {block: polished_blackstone_bricks, from: [23, 0, 2], to: [38, 0, 22]}
+  # The line between them.
+  - {block: crying_obsidian, from: [20, 0, 2], to: [20, 0, 22]}
+  # Spawn pad.
+  - {block: crying_obsidian, from: [19, 0, 27], to: [21, 0, 29]}
+
+marks:
+  spawn: {at: [20.5, 1, 28.5], yaw: 180}
+  room-area: {from: [2, 1, 2], to: [17, 3, 22]}
+  shop-area: {from: [23, 1, 2], to: [38, 3, 22]}
+  # In front of the north wall, facing into the lobby.
+  boards:
+    create-room: {at: [6.5, 2, 1.5], yaw: 0}
+    room-list: {at: [12.5, 2, 1.5], yaw: 0}
+    shop: {at: [30.5, 2, 1.5], yaw: 0}

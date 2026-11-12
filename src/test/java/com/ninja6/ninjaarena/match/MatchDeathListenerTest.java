@@ -156,6 +156,21 @@ class MatchDeathListenerTest extends MatchFixture {
         assertEquals(GameMode.SURVIVAL, player(ALICE).getGameMode());
     }
 
+    /** A shop phase can hold match players in the lobby world, where a death never counts. */
+    @Test
+    void aDeathInTheLobbyWorldNeverCountsAsAMatchDeath() {
+        startTwoOnTwo();
+        players.get(ALICE).location = new Location(world(com.ninja6.ninjaarena.world.LobbyWorld.NAME), 0.5, -130, 0.5);
+        int before = events.size();
+
+        death(ALICE, BOB);
+
+        assertTrue(matches.matchOf(ALICE).orElseThrow().isAlive(ALICE));
+        assertFalse(deaths.isSpectating(ALICE));
+        assertFalse(matches.isDisarmed(ALICE));
+        assertTrue(events.subList(before, events.size()).stream().noneMatch(PlayerEliminatedEvent.class::isInstance));
+    }
+
     @Test
     void eliminatedPlayersSpectateTheirOwnLivingTeamAfterRespawn() {
         startTwoOnTwo();

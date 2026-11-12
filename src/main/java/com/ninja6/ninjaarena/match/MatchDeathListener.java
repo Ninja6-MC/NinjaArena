@@ -91,10 +91,13 @@ public final class MatchDeathListener implements Listener {
         }
     }
 
-    /** Void or /kill deaths can also happen between rounds, where no elimination is emitted. */
+    /**
+     * Void or /kill deaths can also happen between rounds, where no elimination is emitted. A
+     * death in the lobby world is not one: it never counts ({@link MatchListener#onDeath}).
+     */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDeathBetweenRounds(PlayerDeathEvent event) {
-        if (event.isCancelled()) {
+        if (event.isCancelled() || PluginWorlds.isLobby(event.getPlayer().getLocation())) {
             return;
         }
         UUID id = event.getPlayer().getUniqueId();
