@@ -62,6 +62,12 @@ Java 25, and does not run on Folia.
   `overlay(UUID)` reports its state.
 
 ### Fixed
+- Servers sharing one SQLite file no longer lose matches when they create the file
+  together: the plugin creates the file before the bundled SQLite driver opens it, since
+  that driver deletes a missing file it has just created to test write access. Writes
+  take the lock when their transaction begins, so a server waits for the other's commit
+  instead of reporting the database as unusable, and the switch to WAL waits for its
+  lock (#181).
 - A join restore that another plugin cancelled, such as a login plugin holding the
   player at a spawn, is retried after 20, 100, 200, 400 and 600 ticks. The snapshot
   stays until a restore succeeds, a retry replaces the inventory instead of adding
