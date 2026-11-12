@@ -1,25 +1,32 @@
 package com.ninja6.ninjaarena.config;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
-/** Validates both files first, then applies the reload policy on the server thread. */
+/**
+ * Validates config.yml, kits.yml and messages.yml first, then applies the reload policy on the
+ * server thread.
+ */
 public final class ConfigReload {
 
     public interface Target {
@@ -46,10 +53,18 @@ public final class ConfigReload {
         }
         default void bedrockEnforcement() {
         }
+        /** The reloaded messages.yml; by default it becomes the text in use. */
+        default void messages(Messages messages) {
+            Messages.use(messages);
+        }
+        /** A messages.yml key that falls back to its default when first shown. */
+        default void warning(String message) {
+        }
     }
 
     private final Path configFile;
     private final Path kitFile;
+    private final Path messagesFile;
     private final KitItems items;
     private final Target target;
     private YamlConfiguration effective;
@@ -58,6 +73,7 @@ public final class ConfigReload {
     public ConfigReload(Path folder, ConfigurationSection initial, KitDefinition kit, KitItems items, Target target) {
         this.configFile = folder.resolve("config.yml");
         this.kitFile = folder.resolve("kits.yml");
+        this.messagesFile = folder.resolve(Messages.FILE);
         this.items = items;
         this.target = target;
         this.kit = kit;
@@ -71,7 +87,7 @@ public final class ConfigReload {
 
     public void execute(CommandSender sender) {
         for (String message : reload()) {
-            sender.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+            sender.sendMessage(msg("reload.line", "line", message));
         }
     }
 
@@ -80,7 +96,14 @@ public final class ConfigReload {
         try {
             candidate = ReloadFiles.read(configFile, kitFile, items, target::eventArenaExists);
         } catch (ReloadYaml.Invalid e) {
-            return List.of("The Arena reload was rejected: " + e.getMessage() + ". Nothing changed.");
+            return List.of(text("reload.rejected", "reason", e.getMessage()));
+        }
+        Messages messages;
+        try {
+            messages = messages();
+        } catch (IOException e) {
+            return List.of(text("reload.rejected", "reason",
+                    text("reload.messages-unreadable", "file", Messages.FILE, "reason", e.getMessage())));
         }
         YamlConfiguration next = candidate.config();
         List<String> changed = new ArrayList<>();
@@ -94,24 +117,28 @@ public final class ConfigReload {
             if (path.startsWith("director.") || path.startsWith("stability.")
                     || path.startsWith("resource-pack.") && !path.equals("resource-pack.thrown-visuals")
                     || path.startsWith("stats.") && !path.equals("stats.season")) {
-                refused.add(path + " (restart required)");
+                refused.add(text("reload.restart-required", "path", path));
                 next.set(path, effective.get(path));
             } else if (path.equals("arena-grid.cell-size") || path.equals("arena-world.border-size")) {
                 if (resize) {
                     changed.add(path);
                 } else {
-                    refused.add(path + " (arenas exist or a match runs; restart required)");
+                    refused.add(text("reload.resize-refused", "path", path));
                     next.set(path, effective.get(path));
                 }
             } else if (path.startsWith("match.") || path.startsWith("scoring.")) {
-                postponed.add(path + " (next match)");
+                postponed.add(text("reload.next-match", "path", path));
             } else {
                 changed.add(path);
             }
         }
         boolean kitChanged = !kit.equals(candidate.kit());
         if (kitChanged) {
-            postponed.add("kits.yml (next round)");
+            postponed.add(text("reload.next-round", "path", "kits.yml"));
+        }
+        boolean messagesChanged = !messages.equals(Messages.active());
+        if (messagesChanged) {
+            changed.add(Messages.FILE);
         }
         boolean worldChanged = !same(effective.get("arena-world.view-distance"), next.get("arena-world.view-distance"))
                 || !same(effective.get("arena-world.simulation-distance"), next.get("arena-world.simulation-distance"));
@@ -135,11 +162,10 @@ public final class ConfigReload {
                                 effective.getDouble("arena-world.border-size"));
                     }
                 } catch (RuntimeException restoreError) {
-                    return List.of("The Arena reload failed while applying world settings: " + e.getMessage()
-                            + ". World settings could not be restored: " + restoreError.getMessage());
+                    return List.of(text("reload.world-failed", "reason", e.getMessage(),
+                            "restore", restoreError.getMessage()));
                 }
-                return List.of("The Arena reload was rejected: world settings could not be applied: "
-                        + e.getMessage() + ". Old settings were restored.");
+                return List.of(text("reload.world-rejected", "reason", e.getMessage()));
             }
         }
         if (differs("waiting-room.", next)) {
@@ -165,10 +191,13 @@ public final class ConfigReload {
         }
         target.configuration(next);
         target.bedrockEnforcement();
+        if (messagesChanged) {
+            target.messages(messages);
+        }
         effective = next;
         kit = candidate.kit();
-        return List.of("The Arena reload complete.", report("Changed", changed), report("Postponed", postponed),
-                report("Refused", refused));
+        return List.of(text("reload.complete"), report("reload.changed", changed),
+                report("reload.postponed", postponed), report("reload.refused", refused));
     }
 
     private boolean differs(String prefix, ConfigurationSection next) {
@@ -184,7 +213,15 @@ public final class ConfigReload {
         return Objects.equals(first, second);
     }
 
-    private static String report(String category, List<String> values) {
-        return category + ": " + (values.isEmpty() ? "none" : String.join(", ", values)) + ".";
+    private static String report(String key, List<String> values) {
+        return text(key, "values", values.isEmpty() ? text("reload.none") : String.join(", ", values));
+    }
+
+    /**
+     * The server's messages.yml, or the bundled text when there is none. Read exactly as at
+     * startup, so reload accepts and rejects the same files.
+     */
+    private Messages messages() throws IOException {
+        return Files.exists(messagesFile) ? Messages.read(messagesFile, target::warning) : Messages.bundled();
     }
 }

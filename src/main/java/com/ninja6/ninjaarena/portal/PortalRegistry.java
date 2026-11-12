@@ -114,18 +114,17 @@ public final class PortalRegistry {
         String key = Portal.normalizeName(name);
         Portal portal = portals.get(key);
         if (portal == null) {
-            throw new ArenaException("No portal called " + name + ".");
+            throw new ArenaException("portal.error.unknown", "portal", name);
         }
         if (portal.playerBuilt()) {
             // Even "default" is refused: it would change nothing, and the admin may think it did.
-            throw new ArenaException("Portal " + portal.name() + " is player-built and always follows"
-                    + " waiting-room.lobby in config.yml.");
+            throw new ArenaException("portal.error.built-lobby", "portal", portal.name());
         }
         Portal changed;
         try {
             changed = portal.withLobby(lobby);
         } catch (IllegalArgumentException e) {
-            throw new ArenaException(capitalize(e.getMessage()) + ".", e);
+            throw ArenaException.refused(e);
         }
         Map<String, Portal> next = new TreeMap<>(portals);
         next.put(key, changed);
@@ -176,16 +175,16 @@ public final class PortalRegistry {
             LobbyMode lobby) throws ArenaException {
         String key = Portal.normalizeName(name);
         if (!Portal.isValidName(key)) {
-            throw new ArenaException("Portal names are 1 to 32 letters, digits, _ or -.");
+            throw new ArenaException("portal.error.bad-name");
         }
         if (portals.containsKey(key)) {
-            throw new ArenaException("A portal called " + key + " already exists.");
+            throw new ArenaException("portal.error.exists", "portal", key);
         }
         Portal portal;
         try {
             portal = new Portal(key, world, region, Arena.normalizeName(arena), spectator, lobby);
         } catch (IllegalArgumentException e) {
-            throw new ArenaException(capitalize(e.getMessage()) + ".", e);
+            throw ArenaException.refused(e);
         }
         return add(portal);
     }
@@ -205,13 +204,13 @@ public final class PortalRegistry {
             }
         }
         if (name == null) {
-            throw new ArenaException("No portal name is free.");
+            throw new ArenaException("portal.error.no-free-name");
         }
         Portal portal;
         try {
             portal = Portal.built(name, world, opening, built);
         } catch (IllegalArgumentException e) {
-            throw new ArenaException(capitalize(e.getMessage()) + ".", e);
+            throw ArenaException.refused(e);
         }
         return add(portal);
     }
@@ -219,7 +218,7 @@ public final class PortalRegistry {
     private Portal add(Portal portal) throws ArenaException {
         for (Portal other : portals.values()) {
             if (other.overlaps(portal)) {
-                throw new ArenaException("That region overlaps portal " + other.name() + ".");
+                throw new ArenaException("portal.error.overlaps", "portal", other.name());
             }
         }
         Map<String, Portal> next = new TreeMap<>(portals);
@@ -257,7 +256,7 @@ public final class PortalRegistry {
         String key = Portal.normalizeName(name);
         Portal portal = portals.get(key);
         if (portal == null) {
-            throw new ArenaException("No portal called " + name + ".");
+            throw new ArenaException("portal.error.unknown", "portal", name);
         }
         Map<String, Portal> next = new TreeMap<>(portals);
         next.remove(key);
@@ -271,13 +270,13 @@ public final class PortalRegistry {
 
     private void write(Map<String, Portal> next, ArenaPoint nextHub) throws ArenaException {
         if (unreadable) {
-            throw new ArenaException(store.file().getFileName() + " could not be read at startup. Fix or remove it"
-                    + " and restart before changing portals.");
+            throw new ArenaException("portal.error.store-unreadable", "file", store.file().getFileName());
         }
         try {
             store.save(next.values(), nextHub);
         } catch (IOException e) {
-            throw new ArenaException("Could not save " + store.file().getFileName() + ": " + e.getMessage(), e);
+            throw new ArenaException(e, "arena.error.store-save-failed", "file", store.file().getFileName(),
+                    "reason", e.getMessage());
         }
         if (next != portals) {
             portals.clear();
@@ -285,12 +284,5 @@ public final class PortalRegistry {
         }
         index = new PortalIndex(portals.values());
         hub = nextHub;
-    }
-
-    private static String capitalize(String text) {
-        if (text == null || text.isEmpty()) {
-            return "Refused";
-        }
-        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 }

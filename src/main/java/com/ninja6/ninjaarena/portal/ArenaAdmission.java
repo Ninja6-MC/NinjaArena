@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.portal;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
@@ -68,7 +70,7 @@ public final class ArenaAdmission {
             // destination and the waiting room joined all name the same arena.
             Optional<Portal> routed = entry.route(portal);
             if (routed.isEmpty()) {
-                refusal.accept("All arenas are busy. Try again when a match ends.");
+                refusal.accept(text("entry.busy"));
                 return false;
             }
             target = routed.get();
@@ -82,7 +84,7 @@ public final class ArenaAdmission {
     private boolean enter(Player player, String arena, Supplier<Optional<PortalEntry.Refusal>> admit,
             Supplier<ArenaPoint> destination, BiConsumer<Player, String> arrived, Consumer<String> refusal) {
         if (holdsLooseItems(player)) {
-            refusal.accept("Put away the items on your cursor or in your crafting grid, then try again.");
+            refusal.accept(text("entry.loose-items"));
             return false;
         }
         player.closeInventory();
@@ -115,7 +117,7 @@ public final class ArenaAdmission {
             plugin.getLogger().log(Level.SEVERE, "Could not delete the snapshot of " + player.getName() + " ("
                     + player.getUniqueId() + ") after a failed arena teleport; it will be restored on their next join.", e);
         }
-        refusal.accept("You could not be sent to the arena.");
+        refusal.accept(text("entry.teleport-failed"));
         return false;
     }
 

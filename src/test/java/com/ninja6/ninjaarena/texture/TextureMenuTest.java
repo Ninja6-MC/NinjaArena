@@ -55,7 +55,7 @@ class TextureMenuTest {
         assertTrue(screen.items.get(16).startsWith("Close|"));
         assertEquals(Map.of(10, Material.PAPER, 12, Material.DIAMOND, 14, Material.BOOK, 16, Material.OAK_DOOR),
                 screen.icons);
-        assertEquals("Arena Texture Quality", TextureMenu.TITLE);
+        assertEquals("Arena Texture Quality", com.ninja6.ninjaarena.message.Messages.text("texture.title"));
         assertEquals(27, TextureMenu.SIZE);
     }
 

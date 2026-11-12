@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.reward;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.ninja6.ninjaarena.NinjaArenaPlugin;
 import com.ninja6.ninjaarena.match.MatchResult;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
@@ -166,7 +168,7 @@ public final class Rewards implements Listener {
                 ItemStack trophy = ItemStack.of(Material.KNOWLEDGE_BOOK);
                 trophy.editMeta(meta -> {
                     meta.displayName(Component.text(award.trophy()));
-                    meta.lore(List.of(Component.text("Season #" + award.season())));
+                    meta.lore(List.of(msg("reward.trophy-lore", "season", award.season())));
                     meta.getPersistentDataContainer().set(trophyKey, PersistentDataType.BYTE, (byte) 1);
                 });
                 player.getInventory().setItem(player.getInventory().firstEmpty(), trophy);

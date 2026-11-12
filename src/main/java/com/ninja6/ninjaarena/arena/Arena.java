@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.arena;
 
+import com.ninja6.ninjaarena.message.KeyedArgumentException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -33,13 +34,14 @@ public record Arena(
     public Arena {
         Objects.requireNonNull(name, "name");
         if (!isValidName(name)) {
-            throw new IllegalArgumentException("invalid arena name " + name);
+            throw new KeyedArgumentException("invalid arena name " + name, "arena.invalid.name", "name", name);
         }
         Objects.requireNonNull(cell, "cell");
         teamSpawns = List.copyOf(teamSpawns);
         enemySpawns = List.copyOf(enemySpawns);
         if (teamSpawns.size() > MAX_TEAMS) {
-            throw new IllegalArgumentException("at most " + MAX_TEAMS + " team spawns");
+            throw new KeyedArgumentException("at most " + MAX_TEAMS + " team spawns",
+                    "arena.invalid.too-many-teams", "max", MAX_TEAMS);
         }
     }
 
@@ -72,7 +74,8 @@ public record Arena(
      */
     public Arena withTeamSpawn(int team, ArenaPoint point) {
         if (team < 1 || team > Math.min(teamSpawns.size() + 1, MAX_TEAMS)) {
-            throw new IllegalArgumentException("team must be 1 to " + Math.min(teamSpawns.size() + 1, MAX_TEAMS));
+            int last = Math.min(teamSpawns.size() + 1, MAX_TEAMS);
+            throw new KeyedArgumentException("team must be 1 to " + last, "arena.invalid.team", "max", last);
         }
         List<ArenaPoint> spawns = new ArrayList<>(teamSpawns);
         if (team <= spawns.size()) {
@@ -86,7 +89,7 @@ public record Arena(
     /** Removes the last team's spawn. Only the last can go, so team numbers never shift. */
     public Arena withoutLastTeamSpawn() {
         if (teamSpawns.isEmpty()) {
-            throw new IllegalArgumentException("no team spawns to remove");
+            throw new KeyedArgumentException("no team spawns to remove", "arena.invalid.no-team-spawns");
         }
         return new Arena(name, cell, bounds, waitingRoom, teamSpawns.subList(0, teamSpawns.size() - 1), enemySpawns);
     }
@@ -100,7 +103,8 @@ public record Arena(
     /** Removes an enemy spawn point, numbered from 1 as {@code info} lists them. */
     public Arena withoutEnemySpawn(int number) {
         if (number < 1 || number > enemySpawns.size()) {
-            throw new IllegalArgumentException("no enemy spawn " + number);
+            throw new KeyedArgumentException("no enemy spawn " + number,
+                    "arena.invalid.no-enemy-spawn", "number", number);
         }
         List<ArenaPoint> spawns = new ArrayList<>(enemySpawns);
         spawns.remove(number - 1);

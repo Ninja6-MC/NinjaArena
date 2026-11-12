@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.match;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaException;
@@ -40,7 +42,6 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
@@ -204,7 +205,7 @@ public final class MatchService implements MatchStart {
         }
         Optional<Arena> arena = arenas.get(name);
         if (arena.isEmpty() || arena.get().teamSpawns().size() < teams.size() || matches.containsKey(name)) {
-            refuse(everyone, "Arena " + name + " is not available, so the match could not start.");
+            refuse(everyone, msg("match.arena-unavailable", "arena", name));
             plugin.getLogger().warning("Could not start a match in arena " + name + ": it is gone, has fewer team"
                     + " spawns than teams, or already has a match.");
             return;
@@ -212,7 +213,7 @@ public final class MatchService implements MatchStart {
         try {
             arenas.hold(name);
         } catch (ArenaException e) {
-            refuse(everyone, "Arena " + name + " is not available, so the match could not start.");
+            refuse(everyone, msg("match.arena-unavailable", "arena", name));
             plugin.getLogger().warning("Could not start a match in arena " + name + ": " + e.getMessage());
             return;
         }
@@ -220,7 +221,7 @@ public final class MatchService implements MatchStart {
             arenas.reset(name);
         } catch (ArenaException e) {
             arenas.release(name);
-            refuse(everyone, "Arena " + name + " could not be prepared, so the match could not start.");
+            refuse(everyone, msg("match.arena-not-prepared", "arena", name));
             plugin.getLogger().log(Level.SEVERE, "Could not reset arena " + name + " before its match; it stays"
                     + " unavailable until a reset succeeds or an edit finishes.", e);
             return;
@@ -325,11 +326,11 @@ public final class MatchService implements MatchStart {
                 // The restore listener marks the snapshot; it is restored on the next join.
             }
             case COMMAND -> {
-                player.sendMessage(Component.text("You left the match.", NamedTextColor.YELLOW));
+                player.sendMessage(msg("match.left"));
                 sendHome(player);
             }
             case TELEPORTED -> {
-                player.sendMessage(Component.text("You left the match.", NamedTextColor.YELLOW));
+                player.sendMessage(msg("match.left"));
                 // Not inside the teleport event that saw the player leave.
                 homeBound.add(playerId);
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -404,22 +405,20 @@ public final class MatchService implements MatchStart {
                         started.extra()));
                 case PlayerEliminated out -> {
                     if (out.cause() == MatchUpdate.Cause.DIED) {
-                        broadcast(running, Component.text(name(out.player()) + " is out for this round.",
-                                NamedTextColor.GRAY));
+                        broadcast(running, msg("match.player-out", "player", name(out.player())));
                     }
                     events.accept(new PlayerEliminatedEvent(match, out.player(), out.team(), out.cause(),
                             out.killer()));
                 }
                 case PlayerLeft left -> {
-                    broadcast(running, Component.text(name(left.player()) + " left the match.", NamedTextColor.GRAY));
+                    broadcast(running, msg("match.player-left", "player", name(left.player())));
                     events.accept(new PlayerLeaveMatchEvent(match, left.player(), left.team()));
                 }
                 case RoundEnded ended -> {
                     RoundResult result = ended.result();
                     broadcast(running, result.isDraw()
-                            ? Component.text("Round " + result.round() + " is a draw.", NamedTextColor.YELLOW)
-                            : Component.text("Team " + result.winner() + " wins round " + result.round() + ".",
-                                    NamedTextColor.GOLD));
+                            ? msg("match.round-draw", "round", result.round())
+                            : msg("match.round-won", "team", result.winner(), "round", result.round()));
                     events.accept(new RoundEndEvent(match, result));
                 }
                 case MatchEnded ended -> {
@@ -503,11 +502,11 @@ public final class MatchService implements MatchStart {
         KitInventory.clear(player);
     }
 
-    private void refuse(List<UUID> players, String message) {
+    private void refuse(List<UUID> players, Component message) {
         for (UUID playerId : players) {
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null && player.isOnline()) {
-                player.sendMessage(Component.text(message, NamedTextColor.RED));
+                player.sendMessage(message);
                 sendHome(player);
             }
         }
@@ -516,13 +515,14 @@ public final class MatchService implements MatchStart {
     private void announce(Running running, MatchPhase phase) {
         Match match = running.match();
         switch (phase) {
-            case PREP -> broadcast(running, Component.text((match.isExtraRound() ? "Extra round! "
-                    : "Round " + match.round() + " of " + match.settings().rounds() + ". ") + "The fight starts in "
-                    + match.secondsLeft() + " seconds.", NamedTextColor.GOLD));
-            case COMBAT -> broadcast(running, Component.text("Fight!", NamedTextColor.RED));
-            case OVERRUN -> broadcast(running, Component.text("Overrun! Time is up: the round goes on until one"
-                    + " team is left" + (match.settings().overrunLimitSeconds() > 0 ? ", for at most "
-                    + match.settings().overrunLimitSeconds() + " seconds." : "."), NamedTextColor.DARK_RED));
+            case PREP -> broadcast(running, match.isExtraRound()
+                    ? msg("match.prep-extra", "seconds", match.secondsLeft())
+                    : msg("match.prep", "round", match.round(), "rounds", match.settings().rounds(),
+                            "seconds", match.secondsLeft()));
+            case COMBAT -> broadcast(running, msg("match.fight"));
+            case OVERRUN -> broadcast(running, match.settings().overrunLimitSeconds() > 0
+                    ? msg("match.overrun-limited", "seconds", match.settings().overrunLimitSeconds())
+                    : msg("match.overrun"));
             case WAITING, ROUND_END, MATCH_END -> {
                 // Round and match results are announced with their own update.
             }
@@ -532,11 +532,10 @@ public final class MatchService implements MatchStart {
     private void announceResult(Running running, MatchResult result) {
         Component headline = switch (result.reason()) {
             case COMPLETED -> result.isSharedWin()
-                    ? Component.text("Teams " + join(result.winners()) + " share the win!", NamedTextColor.GOLD)
-                    : Component.text("Team " + result.winners().getFirst() + " wins the match!", NamedTextColor.GOLD);
-            case FORFEIT -> Component.text("Team " + join(result.winners()) + " wins the match: no other team is"
-                    + " left.", NamedTextColor.GOLD);
-            case STOPPED -> Component.text("The match was stopped.", NamedTextColor.RED);
+                    ? msg("match.shared-win", "teams", join(result.winners()))
+                    : msg("match.won", "team", result.winners().getFirst());
+            case FORFEIT -> msg("match.forfeit", "teams", join(result.winners()));
+            case STOPPED -> msg("match.stopped");
             // Nobody is left to tell.
             case ABANDONED -> null;
         };
@@ -547,13 +546,13 @@ public final class MatchService implements MatchStart {
 
     private void announceReturn(Running running, MatchResult result) {
         if (result.reason() != Reason.STOPPED && result.reason() != Reason.ABANDONED) {
-            broadcast(running, Component.text("Returning in " + running.match().settings().matchEndSeconds() + " seconds.",
-                    NamedTextColor.GRAY));
+            broadcast(running, msg("match.returning", "seconds", running.match().settings().matchEndSeconds()));
         }
     }
 
     private static String join(List<Integer> teams) {
-        return teams.stream().map(String::valueOf).collect(Collectors.joining(" and "));
+        return teams.stream().map(String::valueOf)
+                .collect(Collectors.joining(com.ninja6.ninjaarena.message.Messages.text("match.team-separator")));
     }
 
     private Location location(ArenaPoint point) {
@@ -568,8 +567,7 @@ public final class MatchService implements MatchStart {
     private void sendHome(Player player) {
         RestoreResult result = restore.apply(player);
         if (result == RestoreResult.FAILED) {
-            player.sendMessage(Component.text("Your belongings could not be returned yet. Rejoin the server,"
-                    + " or ask an admin if this keeps happening.", NamedTextColor.RED));
+            player.sendMessage(msg("common.restore-failed"));
         }
     }
 

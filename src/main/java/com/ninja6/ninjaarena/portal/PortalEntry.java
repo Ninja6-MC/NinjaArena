@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.portal;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
@@ -131,21 +133,21 @@ public final class PortalEntry {
         if (!portal.spectator()) {
             if (portal.arena() == null) {
                 if (!player.hasPermission(PLAY)) {
-                    return refuse(Reason.NO_PERMISSION, "You do not have permission to enter arenas.");
+                    return refuse(Reason.NO_PERMISSION, text("entry.no-permission"));
                 }
                 Optional<Portal> routed = route(portal);
                 if (routed.isEmpty()) {
-                    return refuse(Reason.BUSY, "All arenas are busy. Try again when a match ends.");
+                    return refuse(Reason.BUSY, text("entry.busy"));
                 }
                 return check(player, routed.get().arena());
             }
             return check(player, portal.arena());
         }
         if (!player.hasPermission(SPECTATE)) {
-            return refuse(Reason.NO_PERMISSION, "You do not have permission to spectate matches.");
+            return refuse(Reason.NO_PERMISSION, text("entry.no-spectate-permission"));
         }
         if (destination(portal).isEmpty()) {
-            return refuse(Reason.UNAVAILABLE, "This portal does not lead to a match open to spectators.");
+            return refuse(Reason.UNAVAILABLE, text("entry.no-spectator-match"));
         }
         return pendingSnapshot.test(player.getUniqueId()) ? pending() : Optional.empty();
     }
@@ -153,21 +155,21 @@ public final class PortalEntry {
     /** The same admission checks for an explicitly accepted invitation. */
     public Optional<Refusal> check(Player player, String arenaName) {
         if (!player.hasPermission(PLAY)) {
-            return refuse(Reason.NO_PERMISSION, "You do not have permission to enter arenas.");
+            return refuse(Reason.NO_PERMISSION, text("entry.no-permission"));
         }
         Optional<Arena> arena = arenas.get(arenaName);
         if (arena.isEmpty() || arena.get().waitingRoom() == null) {
-            return refuse(Reason.NO_ARENA, "This portal does not lead to an arena.");
+            return refuse(Reason.NO_ARENA, text("entry.no-arena"));
         }
         String name = arena.get().name();
         if (!arenas.isAvailable(name)) {
             if (arenas.isHeld(name)) {
-                return refuse(Reason.UNAVAILABLE, "A match is already running in arena " + name + ".");
+                return refuse(Reason.UNAVAILABLE, text("entry.match-running", "arena", name));
             }
             if (!arenas.editing().isEmpty()) {
-                return refuse(Reason.UNAVAILABLE, "Arenas are being edited right now. Try again later.");
+                return refuse(Reason.UNAVAILABLE, text("entry.editing"));
             }
-            return refuse(Reason.UNAVAILABLE, "Arena " + name + " is not ready yet.");
+            return refuse(Reason.UNAVAILABLE, text("entry.not-ready", "arena", name));
         }
         Optional<String> full = roomFull.apply(name);
         if (full.isPresent()) {
@@ -185,10 +187,10 @@ public final class PortalEntry {
      */
     private Optional<Refusal> checkHub(Player player) {
         if (!player.hasPermission(PLAY)) {
-            return refuse(Reason.NO_PERMISSION, "You do not have permission to enter arenas.");
+            return refuse(Reason.NO_PERMISSION, text("entry.no-permission"));
         }
         if (hub.get().isEmpty()) {
-            return refuse(Reason.NO_HUB, "This portal leads to the shared hub, which is not set up yet.");
+            return refuse(Reason.NO_HUB, text("entry.no-hub"));
         }
         return pendingSnapshot.test(player.getUniqueId()) ? pending() : Optional.empty();
     }
@@ -213,8 +215,7 @@ public final class PortalEntry {
         return switch (capture.apply(player)) {
             case SAVED -> Optional.empty();
             case ALREADY_PENDING -> pending();
-            case WRITE_FAILED -> refuse(Reason.SNAPSHOT_FAILED,
-                    "Your belongings could not be saved, so you were not sent to the arena.");
+            case WRITE_FAILED -> refuse(Reason.SNAPSHOT_FAILED, text("entry.snapshot-failed"));
         };
     }
 
@@ -239,8 +240,7 @@ public final class PortalEntry {
     }
 
     private static Optional<Refusal> pending() {
-        return refuse(Reason.SNAPSHOT_PENDING, "Your belongings from an earlier arena visit have not been"
-                + " returned yet, so you cannot enter. Rejoin the server, or ask an admin if this keeps happening.");
+        return refuse(Reason.SNAPSHOT_PENDING, text("entry.snapshot-pending"));
     }
 
     private static Optional<Refusal> refuse(Reason reason, String message) {

@@ -1,12 +1,12 @@
 package com.ninja6.ninjaarena.command;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.ninja6.ninjaarena.event.ArenaEvents;
 import com.ninja6.ninjaarena.event.EventSettings.Night;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
 
 public final class EventCommand {
@@ -24,23 +24,24 @@ public final class EventCommand {
     void execute(CommandSender sender, String label, String[] args) {
         if (args.length == 1 && args[0].equalsIgnoreCase("list")) {
             if (events.settings().schedule().isEmpty()) {
-                send(sender, "No arena events are configured.");
+                send(sender, "event.none-configured");
             }
             for (Night night : events.settings().schedule()) {
-                send(sender, night.id() + " • " + night.day() + " " + night.time() + " "
-                        + events.settings().zone() + " • " + night.arena() + " • " + night.duration().toMinutes() + " min");
+                send(sender, "event.list-line", "id", night.id(), "day", night.day(), "time", night.time(),
+                        "zone", events.settings().zone(), "arena", night.arena(),
+                        "minutes", night.duration().toMinutes());
             }
         } else if (args.length == 1 && args[0].equalsIgnoreCase("next")) {
-            events.active().ifPresent(window -> send(sender, "Active arena event: " + window.night().id()));
-            send(sender, events.next().map(window -> "Next arena event: " + window.night().id() + " at "
-                    + DateTimeFormatter.RFC_1123_DATE_TIME.format(window.start().atZone(events.settings().zone())))
-                    .orElse("No upcoming arena event."));
+            events.active().ifPresent(window -> send(sender, "event.active", "id", window.night().id()));
+            events.next().ifPresentOrElse(window -> send(sender, "event.next", "id", window.night().id(), "start",
+                    DateTimeFormatter.RFC_1123_DATE_TIME.format(window.start().atZone(events.settings().zone()))),
+                    () -> send(sender, "event.no-upcoming"));
         } else if (args.length == 2 && args[0].equalsIgnoreCase("start")) {
-            send(sender, events.start(args[1]) ? "Arena event started." : "Unknown event or an event is already active.");
+            send(sender, events.start(args[1]) ? "event.started" : "event.start-failed");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("cancel")) {
-            send(sender, events.cancel(args[1]) ? "Arena event occurrence cancelled." : "No occurrence of that event to cancel.");
+            send(sender, events.cancel(args[1]) ? "event.cancelled" : "event.cancel-failed");
         } else {
-            send(sender, "Usage: /" + label + " " + USAGE);
+            send(sender, "event.usage", "label", label, "usage", USAGE);
         }
     }
 
@@ -58,7 +59,7 @@ public final class EventCommand {
         return options.stream().filter(value -> value.startsWith(prefix.toLowerCase(Locale.ROOT))).toList();
     }
 
-    private static void send(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+    private static void send(CommandSender sender, String key, Object... placeholders) {
+        sender.sendMessage(msg(key, placeholders));
     }
 }

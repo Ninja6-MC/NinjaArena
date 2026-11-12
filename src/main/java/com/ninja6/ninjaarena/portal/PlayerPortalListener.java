@@ -1,11 +1,11 @@
 package com.ninja6.ninjaarena.portal;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -76,7 +76,8 @@ public final class PlayerPortalListener implements Listener {
         event.setCancelled(true);
         Player player = event.getPlayer();
         PlayerPortals.Result result = portals.build(player, world.getName(), opening.get());
-        player.sendMessage(Component.text(result.message(), result.built() ? NamedTextColor.GREEN : NamedTextColor.RED));
+        player.sendMessage(msg(result.built() ? "player-portal.built" : "player-portal.refused",
+                "message", result.message()));
         if (result.built()) {
             if (player.getGameMode() != GameMode.CREATIVE && event.getHand() != null) {
                 player.damageItemStack(event.getHand(), 1);

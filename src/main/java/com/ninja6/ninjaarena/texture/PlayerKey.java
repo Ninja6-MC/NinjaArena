@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.texture;
 
+import com.ninja6.ninjaarena.message.KeyedArgumentException;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -36,11 +37,11 @@ public record PlayerKey(Edition edition, String id) {
         Objects.requireNonNull(id, "id");
         if (edition == Edition.BEDROCK) {
             if (!XUID.matcher(id).matches()) {
-                throw new IllegalArgumentException("A Bedrock XUID is 1 to 20 digits");
+                throw new KeyedArgumentException("A Bedrock XUID is 1 to 20 digits", "command.player-id.xuid");
             }
         } else {
             if (!UUID_TEXT.matcher(id).matches()) {
-                throw new IllegalArgumentException("A Java id is a full account UUID");
+                throw new KeyedArgumentException("A Java id is a full account UUID", "command.player-id.java");
             }
             id = id.toLowerCase(Locale.ROOT);
         }
@@ -52,7 +53,7 @@ public record PlayerKey(Edition edition, String id) {
 
     public static PlayerKey bedrock(String xuid) {
         if (xuid == null || xuid.isBlank()) {
-            throw new IllegalArgumentException("A Bedrock XUID is required");
+            throw new KeyedArgumentException("A Bedrock XUID is required", "command.player-id.xuid-required");
         }
         return new PlayerKey(Edition.BEDROCK, xuid.strip());
     }

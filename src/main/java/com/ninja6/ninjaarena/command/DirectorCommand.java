@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.command;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.director.MatchDirector;
 import com.ninja6.ninjaarena.match.MatchView;
 import java.util.ArrayList;
@@ -12,8 +15,6 @@ import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -46,13 +47,13 @@ public final class DirectorCommand {
         if (args.length > 0) {
             match = running(args[0]);
             if (match.isEmpty()) {
-                error(sender, "No match is running in arena " + args[0] + ".");
+                sender.sendMessage(msg("director.no-match", "arena", args[0]));
                 return;
             }
         } else {
             match = sender instanceof Player player ? matchOf.apply(player.getUniqueId()) : Optional.empty();
             if (match.isEmpty()) {
-                error(sender, "Usage: /" + label + " " + NAME + " <arena>, or run it while in a match.");
+                sender.sendMessage(msg("director.usage", "label", label, "usage", NAME + " <arena>"));
                 return;
             }
         }
@@ -78,37 +79,33 @@ public final class DirectorCommand {
     }
 
     private void show(CommandSender sender, MatchView match) {
-        sender.sendMessage(Component.text("Director of arena " + match.arena() + ", round " + match.round() + " ("
-                + match.phase().name().toLowerCase(Locale.ROOT) + "):", NamedTextColor.GOLD));
+        sender.sendMessage(msg("director.header", "arena", match.arena(), "round", match.round(),
+                "phase", match.phase().name().toLowerCase(Locale.ROOT)));
         Optional<MatchDirector> found = directors.apply(match);
         if (found.isEmpty()) {
-            line(sender, "Not started", "it starts with the match's first fight.");
+            sender.sendMessage(msg("director.not-started"));
             return;
         }
         MatchDirector director = found.get();
-        line(sender, "Round budget", format(director.roundBudget()) + ", intensity " + format(director.intensity()));
+        sender.sendMessage(msg("director.budget", "budget", format(director.roundBudget()),
+                "intensity", format(director.intensity())));
         StringJoiner kinds = new StringJoiner(", ");
         int count = 0;
         for (MatchDirector.InPlay inPlay : director.inPlay()) {
             count += inPlay.count();
-            kinds.add(inPlay.count() + " " + inPlay.kind().label() + " (threat "
-                    + inPlay.threat() + ")");
+            kinds.add(text("director.kind", "count", inPlay.count(), "kind", inPlay.kind().displayName(),
+                    "threat", inPlay.threat()));
         }
-        line(sender, "Enemies in play", count + ", threat " + format(director.threatInPlay())
-                + (count == 0 ? "" : ": " + kinds));
-        line(sender, "Last spawn refusal", director.lastRefusal().orElse("none"));
+        sender.sendMessage(count == 0
+                ? msg("director.enemies-none", "count", count, "threat", format(director.threatInPlay()))
+                : msg("director.enemies", "count", count, "threat", format(director.threatInPlay()),
+                        "kinds", kinds.toString()));
+        sender.sendMessage(msg("director.refusal", "refusal", director.lastRefusal()
+                .<Object>map(refusal -> refusal).orElseGet(() -> msg("director.none"))));
     }
 
     private static String format(double value) {
         return String.format(Locale.ROOT, "%.2f", value);
     }
 
-    private static void line(CommandSender sender, String name, String value) {
-        sender.sendMessage(Component.text(name + ": ", NamedTextColor.YELLOW)
-                .append(Component.text(value, NamedTextColor.GRAY)));
-    }
-
-    private static void error(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.RED));
-    }
 }

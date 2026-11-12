@@ -1,8 +1,8 @@
 package com.ninja6.ninjaarena.tool;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import java.util.Optional;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.Color;
 import org.bukkit.NamespacedKey;
@@ -16,24 +16,22 @@ import org.bukkit.persistence.PersistentDataType;
 public enum NinjaTool {
 
     /** Thrown; leaves a cloud that blinds rival players inside it. */
-    SMOKE_BOMB("smoke-bomb", Material.SNOWBALL, "Smoke Bomb", new NamespacedKey("ninjaarena", "smoke_bomb")),
+    SMOKE_BOMB("smoke-bomb", Material.SNOWBALL, new NamespacedKey("ninjaarena", "smoke_bomb")),
     /** Thrown; deals low damage and makes a rival glow for a few seconds. */
-    SHURIKEN("shuriken", Material.SNOWBALL, "Shuriken", new NamespacedKey("ninjaarena", "shuriken")),
+    SHURIKEN("shuriken", Material.SNOWBALL, new NamespacedKey("ninjaarena", "shuriken")),
     /** Used in place; a short forward burst with a cooldown. Never consumed. */
-    DASH("dash", Material.FEATHER, "Dash", new NamespacedKey("ninjaarena", "dash"));
+    DASH("dash", Material.FEATHER, new NamespacedKey("ninjaarena", "dash"));
 
     /** The data tag holding a tool item's {@link #key()}. */
     public static final NamespacedKey KEY = new NamespacedKey("ninjaarena", "tool");
 
     private final String key;
     private final Material material;
-    private final String displayName;
     private final NamespacedKey model;
 
-    NinjaTool(String key, Material material, String displayName, NamespacedKey model) {
+    NinjaTool(String key, Material material, NamespacedKey model) {
         this.key = key;
         this.material = material;
-        this.displayName = displayName;
         this.model = model;
     }
 
@@ -82,7 +80,7 @@ public enum NinjaTool {
     public ItemStack create(boolean custom, int color) {
         ItemStack item = ItemStack.of(material);
         item.editMeta(meta -> {
-            meta.itemName(Component.text(displayName, NamedTextColor.GRAY));
+            meta.itemName(msg("tool." + key));
             appearance(meta, custom, color);
             if (this == DASH) {
                 meta.setMaxStackSize(1);

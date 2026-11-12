@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.command;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
+import com.ninja6.ninjaarena.message.Keyed;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.texture.PlayerKey;
 import java.util.ArrayList;
@@ -9,8 +12,6 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -26,27 +27,24 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String LEAVE = "leave";
     public static final String TEXTURES = "textures";
 
-    private record Route(String name, String permission, String usage, String description) {
+    /** A route's help text is the message {@code help.<name>}. */
+    private record Route(String name, String permission, String usage) {
     }
 
     private static final List<Route> ROUTES = List.of(
-            new Route(LEAVE, PLAY, LEAVE, "leave the arena and return home"),
-            new Route("spectate", PortalEntry.SPECTATE, "spectate <arena>", "watch a live match from a waiting room"),
-            new Route(LeaderboardCommand.NAME, LeaderboardCommand.PERMISSION, LeaderboardCommand.USAGE,
-                    "show the top 10 for an Arena stat"),
-            new Route(TEXTURES, PLAY, TEXTURES, "choose Standard or Detailed ninja tool textures"),
-            new Route("accept", PLAY, "accept <host>", "accept an invitation to the Arena"),
-            new Route("host", HOST, "host <arena>", "open a match in the Arena"),
-            new Route("invite", HOST, "invite <player>", "invite a player to the Arena"),
-            new Route(ArenaCommand.NAME, ADMIN, ArenaCommand.NAME + " <subcommand>", "create, edit and set up arenas"),
-            new Route(PortalCommand.NAME, ADMIN, PortalCommand.NAME + " <subcommand>",
-                    "mark out portals that lead to arenas"),
-            new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]",
-                    "show the enemy director of a running match"),
-            new Route(EventCommand.NAME, EventCommand.PERMISSION, EventCommand.USAGE, "manage scheduled arena events"),
-            new Route("pack", ADMIN, "pack status", "show Java and Bedrock resource pack state"),
-            new Route("admin", ADMIN, "admin <reload|textures reset <java|bedrock> <id>>",
-                    "reload the Arena configuration, or reset a player's texture quality to Standard"));
+            new Route(LEAVE, PLAY, LEAVE),
+            new Route("spectate", PortalEntry.SPECTATE, "spectate <arena>"),
+            new Route(LeaderboardCommand.NAME, LeaderboardCommand.PERMISSION, LeaderboardCommand.USAGE),
+            new Route(TEXTURES, PLAY, TEXTURES),
+            new Route("accept", PLAY, "accept <host>"),
+            new Route("host", HOST, "host <arena>"),
+            new Route("invite", HOST, "invite <player>"),
+            new Route(ArenaCommand.NAME, ADMIN, ArenaCommand.NAME + " <subcommand>"),
+            new Route(PortalCommand.NAME, ADMIN, PortalCommand.NAME + " <subcommand>"),
+            new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]"),
+            new Route(EventCommand.NAME, EventCommand.PERMISSION, EventCommand.USAGE),
+            new Route("pack", ADMIN, "pack status"),
+            new Route("admin", ADMIN, "admin <reload|textures reset <java|bedrock> <id>>"));
 
     private final ArenaCommand arena;
     private final PortalCommand portal;
@@ -57,7 +55,8 @@ public final class NinjaArenaCommand implements TabExecutor {
     private final BiConsumer<Player, String> spectate;
     private final LeaderboardCommand leaderboard;
     private final EventCommand event;
-    private java.util.function.Supplier<String> packStatus = () -> "Resource pack status unavailable.";
+    private java.util.function.Supplier<String> packStatus =
+            () -> com.ninja6.ninjaarena.message.Messages.text("pack.status-unavailable");
 
     private TextureCommands textures;
 
@@ -171,7 +170,7 @@ public final class NinjaArenaCommand implements TabExecutor {
                     if (args.length != 2) {
                         usage(sender, label, route.usage());
                     } else if (!(sender instanceof Player player)) {
-                        sender.sendMessage(Component.text("Only players can use this Arena command.", NamedTextColor.RED));
+                        sender.sendMessage(msg("command.players-only"));
                     } else if (spectate == null) {
                         unavailable(sender, group);
                     } else {
@@ -182,7 +181,7 @@ public final class NinjaArenaCommand implements TabExecutor {
                     if (args.length != 2) {
                         usage(sender, label, route.usage());
                     } else if (!(sender instanceof Player player)) {
-                        sender.sendMessage(Component.text("Only players can use this Arena command.", NamedTextColor.RED));
+                        sender.sendMessage(msg("command.players-only"));
                     } else if (hosting == null) {
                         unavailable(sender, group);
                     } else {
@@ -196,7 +195,7 @@ public final class NinjaArenaCommand implements TabExecutor {
                 }
                 case "pack" -> {
                     if (args.length == 2 && args[1].equalsIgnoreCase("status")) {
-                        sender.sendMessage(Component.text(packStatus.get(), NamedTextColor.YELLOW));
+                        sender.sendMessage(msg("pack.status", "status", packStatus.get()));
                     } else {
                         usage(sender, label, route.usage());
                     }
@@ -205,9 +204,9 @@ public final class NinjaArenaCommand implements TabExecutor {
                     if (args.length != 1) {
                         usage(sender, label, route.usage());
                     } else if (!(sender instanceof Player player)) {
-                        sender.sendMessage(Component.text("Only players can use this Arena command.", NamedTextColor.RED));
+                        sender.sendMessage(msg("command.players-only"));
                     } else if (textures == null) {
-                        unavailable(sender, "Texture quality");
+                        unavailable(sender, msg("command.feature.textures"));
                     } else {
                         textures.open(player);
                     }
@@ -215,7 +214,7 @@ public final class NinjaArenaCommand implements TabExecutor {
                 case "admin" -> {
                     if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
                         if (reload == null) {
-                            unavailable(sender, "Configuration reload");
+                            unavailable(sender, msg("command.feature.reload"));
                         }
                         else reload.accept(sender);
                     } else if (args.length >= 2 && args[1].equalsIgnoreCase(TEXTURES)) {
@@ -249,12 +248,12 @@ public final class NinjaArenaCommand implements TabExecutor {
         try {
             key = PlayerKey.of(edition, args[4]);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(Component.text(e.getMessage() + ". Usage: /" + label + " " + usage,
-                    NamedTextColor.RED));
+            sender.sendMessage(msg("command.invalid-player-id", "reason", e instanceof Keyed keyed ? keyed.text()
+                    : e.getMessage(), "label", label, "usage", usage));
             return;
         }
         if (textures == null) {
-            unavailable(sender, "Texture quality");
+            unavailable(sender, msg("command.feature.textures"));
         } else {
             textures.reset(sender, key);
         }
@@ -272,42 +271,42 @@ public final class NinjaArenaCommand implements TabExecutor {
     }
 
     private static void denied(CommandSender sender) {
-        sender.sendMessage(Component.text("You do not have permission to use this command.", NamedTextColor.RED));
+        sender.sendMessage(msg("command.no-permission"));
     }
 
     private static void usage(CommandSender sender, String label, String usage) {
-        sender.sendMessage(Component.text("Usage: /" + label + " " + usage, NamedTextColor.RED));
+        sender.sendMessage(msg("command.usage", "label", label, "usage", usage));
     }
 
-    private static void unavailable(CommandSender sender, String feature) {
-        sender.sendMessage(Component.text(feature + " is not available yet in the Arena.", NamedTextColor.YELLOW));
+    private static void unavailable(CommandSender sender, Object feature) {
+        sender.sendMessage(msg("command.unavailable", "feature", feature));
     }
 
     /** Lists only the routes the sender can use. */
     private static void help(CommandSender sender, String label, String unknown) {
         if (unknown != null) {
-            sender.sendMessage(Component.text("Unknown command " + unknown + ". Available commands:", NamedTextColor.RED));
+            sender.sendMessage(msg("command.unknown", "command", unknown));
         } else {
-            sender.sendMessage(Component.text("The Arena commands:", NamedTextColor.GOLD));
+            sender.sendMessage(msg("command.help-header"));
         }
-        line(sender, label, "help", "show the commands you can use");
+        line(sender, label, "help", "help");
         for (Route route : ROUTES) {
             if (canUse(sender, route)) {
-                line(sender, label, route.usage(), route.description());
+                line(sender, label, route.usage(), route.name());
             }
         }
     }
 
-    private static void line(CommandSender sender, String label, String usage, String description) {
-        sender.sendMessage(Component.text("/" + label + " " + usage, NamedTextColor.YELLOW)
-                .append(Component.text(" - " + description, NamedTextColor.GRAY)));
+    private static void line(CommandSender sender, String label, String usage, String route) {
+        sender.sendMessage(msg("command.help-line", "label", label, "usage", usage,
+                "description", msg("help." + route)));
     }
 
     private void leave(CommandSender sender) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("Only players can leave an arena.", NamedTextColor.RED));
+            sender.sendMessage(msg("command.leave-players-only"));
         } else if (!leave.test(player)) {
-            sender.sendMessage(Component.text("You are not in an arena.", NamedTextColor.RED));
+            sender.sendMessage(msg("command.not-in-arena"));
         }
     }
 

@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.resourcepack;
 
+import com.ninja6.ninjaarena.message.Messages;
 import java.util.UUID;
 
 /** Optional same-server transport. It deliberately exposes no successful-load state. */
@@ -26,7 +27,7 @@ public interface BedrockIntegration extends AutoCloseable {
     /** Whether a complete Detailed Bedrock pack is configured and loaded for selection. */
     default boolean detailedAvailable() { return false; }
 
-    default String status() { return "vanilla (same-server Geyser absent, disabled or unavailable)"; }
+    default String status() { return Messages.text("pack.bedrock.absent"); }
 
     default void refreshEnforcement() { }
 

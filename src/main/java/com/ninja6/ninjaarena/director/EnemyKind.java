@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.director;
 
+import com.ninja6.ninjaarena.message.Messages;
 import java.util.Locale;
 import java.util.Objects;
 import org.bukkit.entity.Mob;
@@ -41,9 +42,14 @@ public enum EnemyKind {
         return height;
     }
 
-    /** How the kind reads in the log and the director status, such as {@code shadow stalker}. */
+    /** How the kind reads in the log, such as {@code shadow stalker}. */
     public String label() {
         return name().toLowerCase(Locale.ROOT).replace('_', ' ');
+    }
+
+    /** How the kind reads in the director status: the {@code enemy} message for it. */
+    public String displayName() {
+        return Messages.text("enemy." + name().toLowerCase(Locale.ROOT).replace('_', '-'));
     }
 
     /** Threat points from the cost table. */

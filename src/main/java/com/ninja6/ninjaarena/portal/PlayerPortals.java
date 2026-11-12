@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.portal;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.portal.PortalFrame.Cell;
@@ -74,38 +76,37 @@ public final class PlayerPortals {
         } catch (ArenaException e) {
             logger.warning("Could not register the portal " + player.getName() + " lit in " + world + " at "
                     + opening.describe() + ": " + e.getMessage());
-            return new Result(null, "This portal could not be opened. Ask an admin to check the server log.");
+            return new Result(null, text("player-portal.open-failed"));
         }
         logger.info(player.getName() + " (" + player.getUniqueId() + ") built portal " + portal.name() + " in "
                 + world + " at " + opening.describe() + ".");
-        return new Result(portal, "The portal is open. Walk through it to join the Arena.");
+        return new Result(portal, text("player-portal.opened"));
     }
 
     /** Why the player may not light this opening here, if they may not. */
     public Optional<String> refusal(Player player, String world, ArenaBounds opening) {
         if (!player.hasPermission(PortalEntry.PLAY)) {
-            return Optional.of("You do not have permission to build arena portals.");
+            return Optional.of(text("player-portal.no-permission"));
         }
         if (!settings.allows(world)) {
-            return Optional.of("Arena portals cannot be built in this world.");
+            return Optional.of(text("player-portal.world"));
         }
         int max = settings.maxPerPlayer();
         if (max > 0 && portals.ownedBy(player.getUniqueId()) >= max) {
-            return Optional.of("You already have " + max + (max == 1 ? " arena portal" : " arena portals")
-                    + ", the most one player may build. Break one to build another.");
+            return Optional.of(text(max == 1 ? "player-portal.limit-one" : "player-portal.limit", "max", max));
         }
         Portal candidate = Portal.built("candidate", world, opening,
                 new Portal.Built(player.getUniqueId(), settings.frameName()));
         for (Portal other : portals.all()) {
             if (other.overlaps(candidate)) {
-                return Optional.of("This frame is already open.");
+                return Optional.of(text("player-portal.already-open"));
             }
         }
         int apart = settings.minDistance();
         for (Portal other : portals.all()) {
             if (other.world().equals(world) && other.distanceTo(candidate) < apart) {
-                return Optional.of(String.format(Locale.ROOT, "This is %.0f blocks from another arena portal. Portals"
-                        + " must be at least %d blocks apart.", Math.floor(other.distanceTo(candidate)), apart));
+                return Optional.of(text("player-portal.too-close", "distance",
+                        String.format(Locale.ROOT, "%.0f", Math.floor(other.distanceTo(candidate))), "min", apart));
             }
         }
         return Optional.empty();

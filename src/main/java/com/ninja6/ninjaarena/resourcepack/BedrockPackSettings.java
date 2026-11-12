@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.resourcepack;
 
+import com.ninja6.ninjaarena.message.Messages;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -97,12 +98,18 @@ public record BedrockPackSettings(boolean enabled, boolean required, boolean map
 
     /** Server policy only; this never claims a successful client load. */
     public String vanillaReason(boolean deliveryReady, boolean enforcement) {
-        if (!enabled) return "pack delivery disabled or Bedrock files not configured";
-        if (!required) return "resource-pack.required is false";
-        if (!deliveryReady) return "Bedrock pack files failed validation";
-        if (!mappingsInstalled) return "matching Geyser mappings are not declared installed";
-        if (!enforcement) return "set gameplay.force-resource-packs: true in Geyser (config missing, unreadable or not enforcing)";
-        return "";
+        String key = vanillaKey(deliveryReady, enforcement);
+        return key == null ? "" : Messages.text(key);
+    }
+
+    /** The {@code pack.bedrock.reason} message for why Bedrock stays vanilla; null if it does not. */
+    public String vanillaKey(boolean deliveryReady, boolean enforcement) {
+        if (!enabled) return "pack.bedrock.reason.disabled";
+        if (!required) return "pack.bedrock.reason.optional";
+        if (!deliveryReady) return "pack.bedrock.reason.invalid-files";
+        if (!mappingsInstalled) return "pack.bedrock.reason.no-mappings";
+        if (!enforcement) return "pack.bedrock.reason.not-enforced";
+        return null;
     }
 
     private static Pack pack(ConfigurationSection section, String quality, boolean required) {

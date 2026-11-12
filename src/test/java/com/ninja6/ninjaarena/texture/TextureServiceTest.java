@@ -389,7 +389,7 @@ class TextureServiceTest {
         f.backend.failWrites = true;
         var result = f.choose(ALICE, Quality.DETAILED);
         assertFalse(result.saved());
-        assertEquals(TextureService.SAVE_FAILED, result.message());
+        assertEquals(com.ninja6.ninjaarena.message.Messages.text("texture.save-failed"), result.message());
         assertEquals(0, f.wire.overlayOffers());
         assertTrue(f.service.describe(ALICE).explicit().isEmpty());
         assertTrue(f.backend.rows.isEmpty());
@@ -481,7 +481,7 @@ class TextureServiceTest {
         assertTrue(before.sessionOnly());
         assertTrue(before.key().isEmpty());
         assertEquals(Quality.STANDARD, before.saved());
-        assertTrue(before.delivery().contains(TextureService.SESSION_ONLY_NOTE));
+        assertTrue(before.delivery().contains(com.ninja6.ninjaarena.message.Messages.text("texture.session-note")));
 
         var result = f.choose(ALICE, Quality.DETAILED);
         assertFalse(result.saved());
@@ -495,7 +495,7 @@ class TextureServiceTest {
         var after = f.service.describe(ALICE);
         assertEquals(Quality.DETAILED, after.saved());
         assertEquals("Detailed is active. Your choice is for this connection only: "
-                + TextureService.SESSION_ONLY_NOTE, after.delivery());
+                + com.ninja6.ninjaarena.message.Messages.text("texture.session-note"), after.delivery());
         assertEquals("", after.storage());
         assertEquals(0, f.backend.writes.get());
         assertEquals(Quality.STANDARD, f.backend.rows.get(PlayerKey.java(ALICE)).quality());

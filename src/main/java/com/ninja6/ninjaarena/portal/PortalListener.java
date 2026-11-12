@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.portal;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.portal.PortalEntry.Refusal;
@@ -12,8 +15,6 @@ import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -141,7 +142,7 @@ public final class PortalListener implements Listener {
         try {
             releaseWorld = acquireWorld.get();
         } catch (RuntimeException failure) {
-            tell(player, "The arena could not load. Please try again.");
+            tell(player, text("entry.load-failed"));
             return;
         }
         entering.put(playerId, request);
@@ -166,7 +167,7 @@ public final class PortalListener implements Listener {
         } catch (RuntimeException failure) {
             entering.remove(playerId, request);
             releaseWorld.run();
-            tell(player, "The arena could not load. Please try again.");
+            tell(player, text("entry.load-failed"));
         }
     }
 
@@ -196,7 +197,7 @@ public final class PortalListener implements Listener {
         Player player = plugin.getServer().getPlayer(playerId);
         if (error != null) {
             if (player != null) {
-                tell(player, "The arena could not load. Please try again.");
+                tell(player, text("entry.load-failed"));
             }
             return;
         }
@@ -240,7 +241,7 @@ public final class PortalListener implements Listener {
             return;
         }
         lastMessage.put(player.getUniqueId(), now);
-        player.sendMessage(Component.text(message, NamedTextColor.RED));
+        player.sendMessage(msg("entry.refused", "message", message));
     }
 
     /**

@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.command;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
+import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.stats.Leaderboards;
 import com.ninja6.ninjaarena.stats.Stat;
 import com.ninja6.ninjaarena.stats.StatsScope;
@@ -33,20 +36,20 @@ public final class LeaderboardCommand {
         Stat stat = args.length >= 1 ? Leaderboards.stat(args[0]) : null;
         String period = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "all_time";
         if (args.length > 2 || stat == null || !PERIODS.contains(period)) {
-            sender.sendMessage(Component.text("Usage: /" + label + " " + USAGE));
-            sender.sendMessage(Component.text("Stats: " + String.join(", ", Leaderboards.STAT_NAMES)));
+            sender.sendMessage(msg("leaderboard.usage", "label", label, "usage", USAGE));
+            sender.sendMessage(msg("leaderboard.stats", "stats", String.join(", ", Leaderboards.STAT_NAMES)));
             return;
         }
         StatsStore store = stats.get();
         if (store == null) {
-            sender.sendMessage(Component.text("Arena stats are disabled."));
+            sender.sendMessage(msg("leaderboard.disabled"));
             return;
         }
-        CompletableFuture<List<String>> result = period.equals("season")
+        CompletableFuture<List<Component>> result = period.equals("season")
                 ? store.currentSeason().thenCompose(season -> season
                         .map(current -> read(store, stat, StatsScope.season(current.id()), current.name()))
-                        .orElseGet(() -> CompletableFuture.completedFuture(List.of("No active Arena season."))))
-                : read(store, stat, StatsScope.ALL_TIME, "all-time");
+                        .orElseGet(() -> CompletableFuture.completedFuture(List.of(msg("leaderboard.no-season")))))
+                : read(store, stat, StatsScope.ALL_TIME, Messages.text("leaderboard.all-time"));
         result.whenComplete((lines, error) -> {
             try {
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -54,9 +57,9 @@ public final class LeaderboardCommand {
                         return;
                     }
                     if (error != null) {
-                        sender.sendMessage(Component.text("Arena stats are temporarily unavailable."));
+                        sender.sendMessage(msg("leaderboard.unavailable"));
                     } else {
-                        lines.forEach(line -> sender.sendMessage(Component.text(line)));
+                        lines.forEach(sender::sendMessage);
                     }
                 });
             } catch (IllegalPluginAccessException ignored) {
@@ -65,7 +68,8 @@ public final class LeaderboardCommand {
         });
     }
 
-    private static CompletableFuture<List<String>> read(StatsStore store, Stat stat, StatsScope scope, String period) {
+    private static CompletableFuture<List<Component>> read(StatsStore store, Stat stat, StatsScope scope,
+            String period) {
         return store.top(stat, scope, Leaderboards.LIMIT).thenApply(entries -> Leaderboards.lines(stat, period, entries));
     }
 

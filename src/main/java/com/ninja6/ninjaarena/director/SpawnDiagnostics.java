@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.director;
 
+import static com.ninja6.ninjaarena.message.Messages.text;
+
 import com.ninja6.ninjaarena.match.MatchView;
 import java.util.EnumSet;
 import java.util.List;
@@ -45,30 +47,31 @@ public final class SpawnDiagnostics {
         String detail;
         if (refusals.isEmpty()) {
             reasons.add(Reason.NO_POINTS);
-            detail = "the arena has no enemy spawn points";
+            detail = text("director.spawn.no-points");
         } else {
             StringJoiner points = new StringJoiner(", ");
             for (SpawnPlacement.Refused refused : refusals) {
                 reasons.add(Reason.valueOf(refused.reason().name()));
-                points.add("point " + refused.point() + " " + refused.reason().text());
+                points.add(text("director.spawn.point", "point", refused.point(),
+                        "reason", refused.reason().displayText()));
             }
             detail = points.toString();
         }
-        report(reasons, "no enemy spawn point for a " + name(kind) + ": " + detail);
+        report(reasons, text("director.spawn.no-placement", "kind", name(kind), "detail", detail));
     }
 
     /** The world cancelled the spawn of an enemy of the kind at the location. */
     public void cancelled(EnemyKind kind, Location at) {
-        report(EnumSet.of(Reason.CANCELLED), "the world cancelled a " + name(kind) + " spawn at "
-                + String.format(Locale.ROOT, "%.1f, %.1f, %.1f", at.getX(), at.getY(), at.getZ()));
+        report(EnumSet.of(Reason.CANCELLED), text("director.spawn.cancelled", "kind", name(kind),
+                "location", String.format(Locale.ROOT, "%.1f, %.1f, %.1f", at.getX(), at.getY(), at.getZ())));
     }
 
     /** Spawning was held back before placement by the target threat budget or spawn gate. */
     public void blocked(MatchDirector.Blockage reason, double targetThreat, double inPlay) {
         String detail = switch (reason) {
-            case BUDGET -> String.format(Locale.ROOT,
-                    "the threat budget cannot afford another enemy (target %.2f, in play %.2f)", targetThreat, inPlay);
-            case GATE -> "the spawn gate is holding back enemies";
+            case BUDGET -> text("director.spawn.budget", "target", String.format(Locale.ROOT, "%.2f", targetThreat),
+                    "in-play", String.format(Locale.ROOT, "%.2f", inPlay));
+            case GATE -> text("director.spawn.gate");
         };
         report(EnumSet.of(Reason.valueOf(reason.name())), detail);
     }
@@ -79,7 +82,7 @@ public final class SpawnDiagnostics {
     }
 
     private void report(Set<Reason> reasons, String what) {
-        last = "round " + match.round() + ", " + what;
+        last = text("director.spawn.round", "round", match.round(), "detail", what);
         if (loggedRound != match.round()) {
             loggedRound = match.round();
             loggedThisRound.clear();
@@ -92,6 +95,6 @@ public final class SpawnDiagnostics {
     }
 
     private static String name(EnemyKind kind) {
-        return kind.label();
+        return kind.displayName();
     }
 }

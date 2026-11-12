@@ -35,6 +35,8 @@ import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.kit.RoundKitListener;
 import com.ninja6.ninjaarena.match.MatchDeathListener;
+import com.ninja6.ninjaarena.message.MessageMigration;
+import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.match.MatchHud;
 import com.ninja6.ninjaarena.match.MatchListener;
 import com.ninja6.ninjaarena.match.MatchProtectionListener;
@@ -90,10 +92,10 @@ import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import com.ninja6.ninjaarena.world.ArenaExtentListener;
 import com.ninja6.ninjaarena.world.ArenaExtent;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import java.util.List;
 import java.util.Optional;
 import java.util.SplittableRandom;
@@ -142,6 +144,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        loadMessages();
         try {
             snapshots = new SnapshotService(
                     new SnapshotStore(getDataFolder().toPath().resolve("snapshots")), getLogger());
@@ -415,6 +418,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void warning(String message) {
+                        getLogger().warning(message);
+                    }
+
+                    @Override
                     public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
                         if (placeholders != null) {
                             placeholders.setCacheSeconds(settings.getInt(StatsPlaceholders.CACHE_SECONDS));
@@ -448,6 +456,26 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getLogger().info("NinjaArena enabled.");
     }
 
+    /**
+     * Saves the bundled messages.yml on first start, carrying over customised
+     * {@code events.messages} texts from config.yml, then makes it the text in use. A file that
+     * cannot be read leaves the bundled text in use.
+     */
+    private void loadMessages() {
+        Path file = getDataFolder().toPath().resolve(Messages.FILE);
+        try {
+            if (!Files.exists(file)) {
+                saveResource(Messages.FILE, false);
+                MessageMigration.migrate(file, getConfig(), getLogger()::info);
+            }
+            Messages.use(Messages.read(file, getLogger()::warning));
+        } catch (IOException e) {
+            getLogger().warning("Could not read " + Messages.FILE + " (" + e.getMessage() + "); using the bundled"
+                    + " messages until it is fixed and reloaded.");
+            Messages.use(Messages.bundled());
+        }
+    }
+
     private ArenaEvents startEvents() {
         EventSettings settings;
         try {
@@ -463,13 +491,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         }
         EventWebhook webhook = EventWebhook.create(getLogger()::warning);
         ArenaEvents events = new ArenaEvents(settings, Clock.systemUTC(), (window, minutes, url) -> {
-            String path = minutes == 0 ? "events.messages.start" : "events.messages.upcoming";
-            String message = getConfig().getString(path, "")
-                    .replace("{id}", window.night().id())
-                    .replace("{arena}", window.night().arena())
-                    .replace("{minutes}", Integer.toString(minutes));
-            getServer().broadcast(Component.text(message, NamedTextColor.GOLD));
-            webhook.post(url, message);
+            String key = minutes == 0 ? "event.start" : "event.upcoming";
+            Object[] placeholders = {"id", window.night().id(), "arena", window.night().arena(), "minutes", minutes};
+            getServer().broadcast(Messages.msg(key, placeholders));
+            webhook.post(url, Messages.text(key, placeholders));
         });
         getServer().getScheduler().runTaskTimer(this, events::tick, 20, 20);
         return events;
@@ -514,8 +539,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
      * optionally MySQL) but live in their own tables and work whether or not stats are enabled.
      */
     private void startTextures(ResourcePackSettings packSettings) {
-        String off = "Texture quality choices are off: custom tool visuals are disabled on this server.";
-        textureCommands = disabledTextures(off);
+        textureCommands = disabledTextures("texture.disabled");
         if (!packSettings.enabled()) {
             return;
         }
@@ -525,7 +549,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         } catch (IllegalArgumentException e) {
             getLogger().severe("Texture quality choices are off: " + e.getMessage()
                     + ". Fix the stats storage settings in config.yml and restart.");
-            textureCommands = disabledTextures("Texture quality choices are off: the storage settings are invalid.");
+            textureCommands = disabledTextures("texture.disabled-storage");
             return;
         }
         com.ninja6.ninjaarena.texture.PreferenceStore store = com.ninja6.ninjaarena.texture.PreferenceStore.open(
@@ -539,7 +563,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         com.ninja6.ninjaarena.texture.TextureService.Notifier notifier = (id, message) -> {
             Player online = getServer().getPlayer(id);
             if (online != null) {
-                online.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+                online.sendMessage(Messages.msg("texture.notice", "message", message));
             }
         };
         BedrockIntegration integration = bedrock;
@@ -577,8 +601,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             @Override public void open(Player player) { menu.open(player); }
             @Override public void reset(org.bukkit.command.CommandSender sender,
                     com.ninja6.ninjaarena.texture.PlayerKey key) {
-                service.reset(key, result -> sender.sendMessage(Component.text(result.message(),
-                        result.saved() ? NamedTextColor.GREEN : NamedTextColor.RED)));
+                service.reset(key, result -> sender.sendMessage(Messages.msg(result.saved() ? "texture.admin-saved"
+                        : "texture.admin-failed", "message", result.message())));
             }
         };
     }
@@ -590,14 +614,15 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 || spectators != null && spectators.contains(id);
     }
 
-    private static com.ninja6.ninjaarena.command.TextureCommands disabledTextures(String message) {
+    /** {@code reason} is the message key, read when shown so a reload rewords it. */
+    private static com.ninja6.ninjaarena.command.TextureCommands disabledTextures(String reason) {
         return new com.ninja6.ninjaarena.command.TextureCommands() {
             @Override public void open(Player player) {
-                player.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+                player.sendMessage(Messages.msg("texture.notice", "message", Messages.text(reason)));
             }
             @Override public void reset(org.bukkit.command.CommandSender sender,
                     com.ninja6.ninjaarena.texture.PlayerKey key) {
-                sender.sendMessage(Component.text(message, NamedTextColor.YELLOW));
+                sender.sendMessage(Messages.msg("texture.notice", "message", Messages.text(reason)));
             }
         };
     }
