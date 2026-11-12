@@ -31,7 +31,8 @@ import org.bukkit.inventory.InventoryView;
 /**
  * Locks the inventory of a player in a match or a waiting room: no drops, pickups, containers,
  * ender chests (as a block or through any command that opens one) or armour stands. Membership,
- * never world or edit mode, decides whether an inventory is locked.
+ * never world or edit mode, decides whether an inventory is locked. Plugin menus whose
+ * holders implement {@link PluginMenuHolder} are exempt.
  */
 public final class InventoryLockdownListener implements Listener {
 
@@ -141,6 +142,9 @@ public final class InventoryLockdownListener implements Listener {
             return false;
         }
         var top = view.getTopInventory();
+        if (top.getHolder() instanceof PluginMenuHolder) {
+            return false;
+        }
         boolean ownCrafting = top.getType() == InventoryType.CRAFTING && top.getHolder() instanceof Player owner
                 && owner.getUniqueId().equals(view.getPlayer().getUniqueId());
         return !ownCrafting && !top.equals(view.getPlayer().getInventory());

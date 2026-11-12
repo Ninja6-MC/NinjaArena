@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
+import com.ninja6.ninjaarena.kit.PluginMenuHolder;
 import com.ninja6.ninjaarena.support.TestItemStack;
 import java.lang.reflect.Proxy;
 import java.util.List;
@@ -53,11 +54,15 @@ class InventoryLockdownListenerTest extends MatchFixture {
     }
 
     private InventoryView view(Player player, InventoryType type) {
+        return view(player, type, null);
+    }
+
+    private InventoryView view(Player player, InventoryType type, InventoryHolder holder) {
         Inventory top = (Inventory) Proxy.newProxyInstance(Inventory.class.getClassLoader(),
                 new Class<?>[] {Inventory.class}, (p, m, a) -> switch (m.getName()) {
                     case "getType" -> type;
                     case "equals" -> p == a[0];
-                    case "getHolder" -> null;
+                    case "getHolder" -> holder;
                     default -> throw new UnsupportedOperationException(m.getName());
                 });
         return (InventoryView) Proxy.newProxyInstance(InventoryView.class.getClassLoader(),
@@ -114,6 +119,50 @@ class InventoryLockdownListenerTest extends MatchFixture {
         var personal = new InventoryOpenEvent(players.get(ALICE).view);
         rules.onOpen(personal);
         assertFalse(personal.isCancelled());
+    }
+
+    @Test
+    void pluginMenusOpenAndAcceptClicksWhileAllDropActionsStayLocked() {
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        var rules = new InventoryLockdownListener(matches::isInMatch);
+        InventoryHolder holder = inert(PluginMenuHolder.class);
+        for (UUID id : List.of(ALICE, CAROL)) {
+            var menu = view(player(id), InventoryType.CHEST, holder);
+            var open = new InventoryOpenEvent(menu);
+            rules.onOpen(open);
+            assertFalse(open.isCancelled());
+            var click = new InventoryClickEvent(menu, InventoryType.SlotType.CONTAINER,
+                    1, ClickType.LEFT, InventoryAction.PICKUP_ALL);
+            rules.onClick(click);
+            assertFalse(click.isCancelled());
+            for (var action : List.of(InventoryAction.DROP_ALL_CURSOR, InventoryAction.DROP_ONE_CURSOR,
+                    InventoryAction.DROP_ALL_SLOT, InventoryAction.DROP_ONE_SLOT)) {
+                var drop = new InventoryClickEvent(menu, InventoryType.SlotType.CONTAINER,
+                        1, ClickType.DROP, action);
+                rules.onClick(drop);
+                assertEquals(matches.isInMatch(id), drop.isCancelled(), action.name());
+            }
+        }
+    }
+
+    @Test
+    void chestViewsWithUnmarkedHoldersStayLockedOnlyForMatchPlayers() {
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        var rules = new InventoryLockdownListener(matches::isInMatch);
+        InventoryHolder plain = () -> null;
+        InventoryHolder otherPlugin = inert(InventoryHolder.class);
+        for (InventoryHolder holder : List.of(plain, otherPlugin)) {
+            for (UUID id : List.of(ALICE, CAROL)) {
+                var chest = view(player(id), InventoryType.CHEST, holder);
+                var open = new InventoryOpenEvent(chest);
+                rules.onOpen(open);
+                assertEquals(matches.isInMatch(id), open.isCancelled());
+                var click = new InventoryClickEvent(chest, InventoryType.SlotType.CONTAINER,
+                        1, ClickType.LEFT, InventoryAction.PICKUP_ALL);
+                rules.onClick(click);
+                assertEquals(matches.isInMatch(id), click.isCancelled());
+            }
+        }
     }
 
     @Test
