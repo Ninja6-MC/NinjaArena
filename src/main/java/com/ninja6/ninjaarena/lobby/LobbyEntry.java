@@ -18,8 +18,7 @@ import org.bukkit.entity.Player;
 /**
  * The way into the lobby for rooms. A player who comes from outside the plugin's worlds has
  * their snapshot saved first, as a portal does, and is then made a lobby member; one who is
- * already a member stays as they are. A player in a match, a waiting room or the hub, or
- * spectating, is turned away. Server thread only.
+ * already a member stays as they are. A player in a match or spectating is turned away. Server thread only.
  */
 public final class LobbyEntry implements RoomLobby {
 
@@ -29,7 +28,7 @@ public final class LobbyEntry implements RoomLobby {
     private final Consumer<UUID> discard;
 
     /**
-     * @param elsewhere whether a player is in a match, a waiting room or the hub, or spectating
+     * @param elsewhere whether a player is in a match or spectating
      * @param capture   {@code SnapshotService#captureAndPersist}
      * @param discard   deletes the snapshot of a player the lobby did not take in
      */

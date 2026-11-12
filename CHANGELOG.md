@@ -43,8 +43,7 @@ Java 25, and does not run on Folia.
   granted by `ninjaarena.play`, so servers without ops can play.
 - Arena slot leases. A room leases a slot for its hand-built arena when it is created and
   keeps it through every round to the end of the match; while every slot is leased, more
-  rooms queue and see their place. Portals, the shared hub and `/narena host` leave the
-  arenas rooms hold or wait for alone.
+  rooms queue and see their place.
 - A validated `shop.yml` catalogue with personal-point purchases, per-round buy limits,
   armour, extra thrown-tool uses, potion effects and consumables. Purchases apply after
   round kits; undelivered purchases are refunded while the ledger exists. The new
@@ -137,15 +136,37 @@ Java 25, and does not run on Folia.
   rejecting `config.yml` or `kits.yml` stay in English.
 
 ### Changed
+- No match starts by itself: waiting rooms, their countdown and the shared hub are
+  replaced by rooms, and every match is a room's, started by its host or an admin, and
+  holds an arena slot lease. A room that closes while its match runs keeps the lease
+  until the match ends. Existing `config.yml` and `portals.yml` files still load, with a
+  startup warning per old setting that points to the new README section "Moving from
+  waiting rooms to rooms".
+- Play portals lead to the lobby, saving the snapshot there, and put the player in the
+  open room with the most players that admits them: on the portal's arena for an old
+  dedicated portal, any room for an old hub portal or a player-built portal. With no
+  such room the player stays in the lobby and sees the room list. Arena use or edit mode
+  no longer turns portal players away. Spectator portals still lead to the live match.
+- `/narena host <arena>` opens an invite-only room on that arena (it need not be
+  pickable); `/narena invite` and `/narena accept` are the room's invite and accept.
+  Nothing is reserved without a room any more.
+- `/narena spectate <arena>` works from the lobby, for a player in no room, instead of
+  from a waiting room.
+- `/narena room` outside a room lists the open rooms with join buttons. During a
+  scheduled event it names the featured map and marks rooms on it; a new room plays on
+  that map when it is free, hub and player-built portals prefer rooms on it, and a room's
+  match there earns the event bonus. Events still never start a match.
+- `waiting-room.min-players` and `team-size` are what a new room starts from, applied to
+  the next room on reload. An old hub point no longer limits `arena setbounds`.
 - `stability.max-concurrent-matches` is now `arenas.max-active` (default 4), at most the
-  cells of the arena grid. It counts room leases and waiting-room matches alike, applies
-  on reload, and a lower value never ends a lease already granted. The old name is still
-  read, with a warning, when the new one is not set.
+  cells of the arena grid. It counts room leases, applies on reload, and a lower value
+  never ends a lease already granted. The old name is still read, with a warning, when
+  the new one is not set.
 - The end of a match, and `/narena leave` from a room, a match or spectating, now lead to
   the lobby with the snapshot kept rather than home; `/narena leave` from the lobby goes
   home. A player who quits from the lobby, a room, a match or spectating rejoins in the
   lobby while the server keeps running. A teleport out of the plugin's worlds still sends
-  players home, and waiting rooms and the shared hub keep their countdown.
+  players home.
 
 - No snapshot is taken in the arena or lobby world, and a restore never lands in either:
   entering an arena from them is refused, and a saved spot or respawn point there is
@@ -153,6 +174,17 @@ Java 25, and does not run on Folia.
 
 - Each Java connection gets one Detailed overlay request through `ResourcePacks`;
   `overlay(UUID)` reports its state.
+
+### Deprecated
+- `/narena portal lobby` still sets a portal's choice, which now only picks which open
+  rooms its players join, and says it is deprecated. `/narena portal sethub` checks its
+  arguments, saves nothing and says the lobby took the hub's place; `portal removehub`
+  clears an old hub point.
+- `waiting-room.lobby` is still read as the default for portals with no choice of their
+  own, with a warning. `waiting-room.max-players`, `countdown-seconds` and `radius` are
+  ignored with a warning; a reload accepts all four and names them in its reply.
+- The `lobby:` value of a portal and `hub:` in `portals.yml` are still read, with a
+  startup warning.
 
 ### Fixed
 - Servers sharing one SQLite file no longer lose matches when they create the file

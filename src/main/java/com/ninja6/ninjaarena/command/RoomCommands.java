@@ -7,7 +7,10 @@ import org.bukkit.entity.Player;
 /** The {@code room} subcommands, after the command's permission and argument checks. */
 public interface RoomCommands {
 
-    /** Shows the player's room, with kick buttons for its host. */
+    /**
+     * Shows the player's room, with kick buttons for its host; outside a room, the room list
+     * with join buttons and the featured map of a running event.
+     */
     void show(Player player);
 
     void create(Player player);

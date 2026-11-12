@@ -44,16 +44,16 @@ announcements only. The server announces thresholds crossed while it is running.
 After a delay that crosses multiple thresholds for one event, it sends the latest
 applicable notice. On restart the current window is derived from the clock.
 
-## Admission and rewards
+## Featured map and rewards
 
-During the window, unbound player-built portals in dedicated mode use the featured
-arena's waiting room, and shared-hub matchmaking selects only the featured arena.
-If that arena is busy, reserved or unavailable, the hub waits and unbound
-dedicated portals refuse entry. Explicit dedicated portals and hosted invitations
-can still use other arenas. Existing matches and dedicated queues continue.
-Automatic matchmaking resumes its usual arena selection when no event is active.
+Events never start a match: every match is a room's, started by its host or an admin.
+During the window the event's arena is the featured map. The room list
+(`/narena room` outside a room) names it and marks rooms on it, a new room plays on it
+when it is ready and no other room holds it, and portals that may take a player to any
+room prefer rooms on it. Other arenas stay open to rooms as usual. See
+[Moving from waiting rooms to rooms](../README.md#moving-from-waiting-rooms-to-rooms).
 
-The optional bonus is captured when a match starts in the featured arena. Players
+The optional bonus is captured when a room's match starts on the featured map. Players
 still in a completed or forfeited match qualify, including when the event closes
 before the match finishes. The extra Vault amount is combined with the regular
 payout, under the same permission, Vault enablement and UTC daily cap.

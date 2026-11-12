@@ -235,4 +235,42 @@ class PortalRegistryTest {
                 () -> registry.create("other", "world", new ArenaBounds(0, 0, 0, 0, 0, 0), "dojo"));
         assertEquals("format: 1\nportals:\n  lobby: 5\n", Files.readString(file));
     }
+
+    @Test
+    void anOldPortalsFileWithLobbyChoicesAndAHubLoadsWithWarningsAndKeepsItsPortals() throws Exception {
+        Files.writeString(dir.resolve("portals.yml"), """
+                format: 1
+                hub: {x: -300.5, y: 64.0, z: -300.5, yaw: 90.0, pitch: 0.0}
+                portals:
+                  door:
+                    world: world
+                    arena: dojo
+                    lobby: dedicated
+                    region: {min-x: 10, min-y: 64, min-z: 10, max-x: 12, max-y: 67, max-z: 10}
+                  gate:
+                    world: world
+                    arena: dojo
+                    lobby: shared
+                    region: {min-x: 20, min-y: 64, min-z: 10, max-x: 22, max-y: 67, max-z: 10}
+                  plain:
+                    world: world
+                    arena: dojo
+                    region: {min-x: 30, min-y: 64, min-z: 10, max-x: 32, max-y: 67, max-z: 10}
+                """);
+        PortalRegistry registry = open();
+        assertEquals(3, registry.all().size());
+        assertEquals(LobbyMode.DEDICATED, registry.get("door").orElseThrow().lobby());
+        assertEquals(LobbyMode.SHARED, registry.get("gate").orElseThrow().lobby());
+        assertEquals("gate", registry.at("world", 21, 65, 10).name(), "the old portals still work");
+        assertEquals(List.of("portals.yml: portal(s) door, gate set the deprecated lobby: value. Every play portal"
+                + " now leads to the lobby; dedicated joins an open room on the portal's arena there and shared"
+                + " joins any open room. See the docs.",
+                "portals.yml: the shared hub point is no longer used; portals that led to the hub now lead to the"
+                + " lobby. /narena portal removehub clears it. See the docs."), registry.oldLobbyWarnings("the docs"));
+
+        registry.setLobby("door", null);
+        registry.setLobby("gate", null);
+        registry.setHub(null);
+        assertEquals(List.of(), open().oldLobbyWarnings("the docs"), "a migrated file loads quietly");
+    }
 }

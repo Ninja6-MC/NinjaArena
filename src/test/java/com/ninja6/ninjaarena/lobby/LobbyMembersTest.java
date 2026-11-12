@@ -128,7 +128,7 @@ class LobbyMembersTest extends LobbyFixture {
     /** Membership, not the world, locks the inventory. */
     @Test
     void theInventoryLockdownGoesByMembershipNotByWorld() {
-        ArenaBusy busy = new ArenaBusy(() -> null, () -> null, () -> null, () -> members);
+        ArenaBusy busy = new ArenaBusy(() -> null, () -> null, () -> members);
         InventoryLockdownListener lockdown = new InventoryLockdownListener(busy);
         Player alice = add(ALICE, "Alice", new Location(overworld, 5, 70, 5));
         Player bob = add(BOB, "Bob", inLobby(0.5, 65, 0.5));
@@ -152,12 +152,12 @@ class LobbyMembersTest extends LobbyFixture {
 
     @Test
     void theJoinRestoreTreatsMembersAsBusy() {
-        ArenaBusy busy = new ArenaBusy(() -> null, () -> null, () -> null, () -> members);
+        ArenaBusy busy = new ArenaBusy(() -> null, () -> null, () -> members);
         Player alice = add(ALICE, "Alice", new Location(overworld, 5, 70, 5));
         assertFalse(busy.test(ALICE));
         members.enter(alice);
         assertTrue(busy.test(ALICE));
-        assertFalse(new ArenaBusy(() -> null, () -> null, () -> null).test(ALICE));
+        assertFalse(new ArenaBusy(() -> null, () -> null).test(ALICE));
     }
 
     private static Item item() {

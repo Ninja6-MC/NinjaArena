@@ -50,6 +50,7 @@ in the order you need it:
 4. Stand at each team base and run `/narena arena setteamspawn dojo 1`, then `2`, up to
    four teams. Two are required.
 5. Stand where players wait before the match and run `/narena arena setwaitingroom dojo`.
+   Players now wait in the lobby, but an arena still needs the point to be ready.
 6. Stand where enemies should appear and run `/narena arena addenemyspawn dojo`. At least
    one is required; enemies spawn there during rounds.
 7. `/narena arena edit dojo off` saves the arena and leaves edit mode. If anything is
@@ -58,7 +59,8 @@ in the order you need it:
 8. Back in the main world, build a doorway frame for the portal. Stand on the floor
    inside it and run `/narena portal setcorner 1`, then `/narena portal setcorner 2 ~ ~2 ~`
    so the portal is a doorway rather than a flat pad. Move sideways first for a wider
-   door. `/narena portal create dojo-door dojo` binds it to the arena.
+   door. `/narena portal create dojo-door dojo` binds it to the arena. Walking through it
+   takes players to the lobby, into an open room on `dojo` when there is one.
 
 Restoration keeps the saved position inside the gate when it is safe (#107); it does not
 move the player outside. Standing still or walking forward within the same portal region
@@ -68,46 +70,39 @@ state to lose on logout, death or restart. Teleporting into a gate also requires
 and walking back in. Existing pending snapshots keep their saved coordinates and facing;
 the usual unsafe-landing fallbacks still apply.
 
-## Lobbies and player caps
+## Moving from waiting rooms to rooms
 
-Before a match, players wait either in a dedicated waiting room or in one shared hub. The
-admin chooses per portal; a portal that does not choose, including player-built portals,
-uses `waiting-room.lobby` in `config.yml` (`dedicated` by default).
+No match starts by itself any more. Waiting rooms with their automatic countdown and the
+shared hub are gone; every match is a [room](#rooms)'s, started by its host or an admin,
+and every match holds an [arena slot](#arena-slots). An existing `config.yml` and
+`portals.yml` still load: each old setting logs one warning at startup, and on reload,
+that points here, and keeps working through the lobby and rooms as follows.
 
-- **Dedicated:** each arena has its own waiting room. Arriving players are put on the
-  smallest team, and the countdown starts once `min-players` are there. When the room
-  already holds as many players as one match takes, the portal turns more away with a
-  message before their snapshot is saved.
-- **Shared:** every shared portal leads to the hub. Once `min-players` are there, or
-  enough to fill a free arena that holds fewer, the countdown runs; when it ends, the
-  players who arrived first go together to a free arena's teams, up to that arena's cap,
-  and the match starts. The rest stay in the hub for the next free arena. A free arena is
-  ready, has no match, no open waiting room and no host reservation; of those the players
-  waiting can start, the hub picks the smallest that takes everyone waiting, or the
-  largest if none does. While arenas are in edit mode, or every arena or match slot is in
-  use, the countdown holds at its last second and the hub keeps waiting; if the only free
-  arena it could fill is taken, the countdown stops.
+| Old | Now |
+| :--- | :--- |
+| A play portal bound to an arena (`lobby: dedicated`, or no choice under a dedicated default) | Takes the player to the lobby, saving their snapshot, and into the open room on that arena with the most players that admits them and has space. With none, they stay in the lobby and see the room list. The arena may be in use or edited meanwhile. |
+| A hub portal (`lobby: shared`, or no choice under a shared default) | The same, but into any open room, rooms on an event's featured map first. Nothing goes to the old hub point. |
+| A player-built portal | As a hub portal: the lobby and any open room. |
+| A spectator portal | Unchanged: it seats the player at the live match on its arena. Leaving goes to the lobby. |
+| `/narena spectate <arena>` from a waiting room or the hub | Works from the lobby, for a player in no room. |
+| `/narena host <arena>` | Opens an invite-only room on that arena, which need not be pickable. Needs `ninjaarena.host` as before. |
+| `/narena invite <player>`, `/narena accept <host>` | The same as `room invite` and `room accept`. |
+| `/narena portal lobby <portal> <dedicated\|shared\|default>` | Deprecated alias. It still sets the portal's choice, which now only picks which open rooms a player joins, and says so. |
+| `/narena portal sethub` | Deprecated alias. It checks its arguments and changes nothing: the lobby took the hub's place. `portal removehub` clears an old hub point. |
+| `waiting-room.lobby` | Deprecated, still read: the default for portals with no choice of their own, with the meaning above. |
+| `waiting-room.max-players`, `countdown-seconds`, `radius` | No longer used. Remove them. |
+| `waiting-room.min-players`, `team-size` | The settings a new room starts from. |
+| `lobby:` per portal and `hub:` in `portals.yml` | Still read, with a warning naming the portals; `portal lobby <portal> default` and `portal removehub` clear them. |
+| Scheduled events | They never started matches and still do not: their arena is the featured map. See [Events](#events). |
 
-Stand where players should gather in the arena world, outside every arena's bounds, and
-run `/narena portal sethub`, or give coordinates as for `setwaitingroom`. Later
-`arena setbounds` that would enclose the hub is refused; move the hub first.
-`/narena portal lobby <portal> <dedicated|shared|default>` sets a portal's choice;
-`default` returns it to the config value. Player-built portals have no choice of their own
-and refuse it. `portal create <name> <arena> shared` sets it at
-creation. `portal list` and `portal info` show the hub and where each portal leads.
-Moving or removing the hub sends anyone waiting there home.
+### Events
 
-The hub follows the waiting-room rules: an empty inventory and adventure mode on arrival,
-the same inventory lockdown, no damage, the same `radius`, and leaving by walking out,
-teleporting away, dying, `/narena leave` or disconnecting restores the snapshot as
-leaving a waiting room does. Hub players can use `/narena spectate <arena>`. Hosted
-matches always use the host's dedicated room.
-
-`waiting-room.max-players` caps the players in one match and `waiting-room.team-size` the
-players on one team; 0 turns either off. Both apply in both modes, and an arena takes
-the lower of the two (team size times its team count). An arena that holds fewer than
-`min-players` starts once it is full, from its waiting room or from the hub. Spectators are outside the teams and never count
-toward either cap.
+While a [scheduled event](docs/arena-events.md) runs, its arena is the featured map. The
+room list (`/narena room` outside a room) names it and marks rooms on it, a room on it
+says so in `/narena room`, a new room plays on it when it is ready and no other room
+holds it, and hub and player-built portals prefer rooms on it. A room's match on the
+featured map, started while the event runs, earns the event's reward bonus; the bonus is
+captured when the match starts, so a match the event outlasts keeps it.
 
 ## Player-built portals
 
@@ -119,15 +114,13 @@ nether portal, but from crying obsidian:
    crying obsidian, or 14 with corners.
 2. Use flint and steel on the inside of the frame. Instead of a fire, a curtain of
    coloured particles fills the opening, and the player is told the portal is open.
-3. Walking through it takes the player in with the same checks, snapshot and empty
-   inventory as an admin portal.
+3. Walking through it takes the player to the lobby with the same checks, snapshot and
+   empty inventory as an admin portal.
 
-A player-built portal belongs to no arena and always follows `waiting-room.lobby`: under
-`shared` it leads to the hub; under `dedicated` it leads to the waiting room with the most
-players that still has room, else to a free arena, and otherwise turns the player away
-with "All arenas are busy". Arenas a host has reserved are skipped. Vanilla does nothing
-with crying obsidian, so these portals never clash with nether portals; obsidian cannot be
-chosen as the frame block.
+A player-built portal belongs to no arena: it puts the player in the open public room
+with the most players, featured map first, or leaves them in the lobby to create or be
+invited to one. Vanilla does nothing with crying obsidian, so these portals never clash
+with nether portals; obsidian cannot be chosen as the frame block.
 
 Breaking, burning, blowing up or pushing any block of the frame removes the portal; the
 corners, the opening and blocks around the frame do not count, so ordinary block updates
@@ -136,11 +129,11 @@ for at most 16 portals at a time, and while a player is near, the frame is check
 every five seconds, which also catches changes no event reports, such as a frame edited
 while the server was down. A frame block in an unloaded chunk is never judged missing.
 
-Portals are saved in `portals.yml` with the admin ones, named `built-1`, `built-2` and so
-on, so they survive restarts and appear in `/narena portal list` and `info` with their
-builder. An admin removes one with `/narena portal delete <name>`; the frame stays. A
-player-built portal cannot choose its own lobby. Versions from before player-built portals
-refuse a `portals.yml` that holds one rather than drop it.
+Portals are saved in `portals.yml` with the admin ones, named `built-1`, `built-2` and
+so on, so they survive restarts and appear in `/narena portal list` and `info` with
+their builder. An admin removes one with `/narena portal delete <name>`; the frame
+stays. A player-built portal refuses the deprecated `portal lobby`. Versions from before
+player-built portals refuse a `portals.yml` that holds one rather than drop it.
 
 ```yaml
 player-portals:
@@ -167,11 +160,11 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | :--- | :--- | :--- |
 | `help` | Any tier below | List permitted commands |
 | `intro` | `ninjaarena.play` | Show the introduction again in the lobby |
-| `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Leave your room, match or spectating for the lobby; from the lobby or a waiting room, return home and restore your snapshot |
+| `leave` | `ninjaarena.play` or `ninjaarena.spectate` | Leave your room, match or spectating for the lobby; from the lobby, return home and restore your snapshot |
 | `leaderboard <stat> [all_time\|season]` | `ninjaarena.leaderboard` | Show the [top ten for a stat](docs/leaderboards.md) |
-| `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from a waiting room |
-| `accept <host>` | `ninjaarena.play` | Accept an invitation and enter the waiting room |
-| `room` | `ninjaarena.play` | Show your room, with remove buttons for its host |
+| `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from the lobby, while in no room |
+| `accept <host>` | `ninjaarena.play` | Join a host's room; the same as `room accept` |
+| `room` | `ninjaarena.play` | Show your room, with remove buttons for its host; outside a room, list the open rooms and an event's featured map |
 | `room create` | `ninjaarena.room.create` | Open a room in the lobby and become its host |
 | `room settings [players\|teams\|team-size\|privacy <value>]` | Host | Show or change the room's settings |
 | `room invite [player]` | Host | Invite a player with a join button, or list lobby players with invite buttons |
@@ -181,17 +174,17 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `room leave` | `ninjaarena.play` | Leave the room and stay in the lobby |
 | `map <list\|set <arena>>` | `ninjaarena.play`; `set` needs `ninjaarena.map.change` | List pickable maps, or change your room's map while it is in the lobby |
 | `shop ready` | `ninjaarena.play` | Say you are ready in the [shop between rounds](#shop-phase) |
-| `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
-| `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |
+| `host <arena>` | `ninjaarena.host` | Open an invite-only room on the named arena |
+| `invite <player>` | `ninjaarena.host` | Invite a player to your room; the same as `room invite <player>` |
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
-| `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals, their lobby and the shared hub |
+| `portal <subcommand>` | `ninjaarena.admin` | Select and manage entrance portals; `lobby` and `sethub` are deprecated aliases |
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
 | `event <subcommand>` | `ninjaarena.event.manage` | List, inspect, start or cancel scheduled arena events |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration, kits and messages |
 | `admin lobby <edit\|done\|reset>` | `ninjaarena.admin.lobby` | Change the lobby in edit mode, or put the bundled lobby back |
 
-Enter the Arena by walking through a portal, explicitly accepting an invitation, or
-opening or joining a room. Leaderboard, event management, admin reload, lobby reset and
+Enter the Arena by walking through a portal into the lobby, or by opening or joining a
+room. Leaderboard, event management, admin reload, lobby reset and
 `room start <host>` also work from the console.
 
 `ninjaarena.play`, `ninjaarena.spectate`, `ninjaarena.leaderboard` and
@@ -205,39 +198,24 @@ Dispatch, help and tab completion check the permissions for each route.
 
 ## Hosting and invitations
 
-With `ninjaarena.host`, run `/narena host dojo` to open a ready arena with no match,
-waiting players or other host. Opening reserves it for one host and does not move anyone.
-Walk through its portal to join, and use `/narena invite Bob` to invite an online player.
-Inviting only sends a plain message; Bob enters by typing `/narena accept <host-name>`.
-Invitations may be sent and accepted before the host walks in. The ordinary waiting-room
-countdown starts the match once enough players have arrived; portal entrants can still join.
-
-Accepting loads the room's chunk, checks admission again, saves the player's snapshot and
-teleports them through the same entry flow as a portal. Pending snapshots, loose cursor or
-crafting-grid items, death and spectator mode prevent entry. A failed load, snapshot,
-teleport or room preparation leaves the invitation open for a retry. `/narena leave`
-cancels an entry that is still loading. A player already waiting in that arena can accept
-without another snapshot or teleport; leave a different room or match before accepting.
-
-Waiting-room teams stay within one player of each other. The host and accepted invitees
-stay together where one balanced team has room; otherwise the host and earliest accepted
-players take that team's capacity. Later arrivals reunite the party when room permits,
-and departures move unrelated players before splitting those kept together.
-
-A host's `/narena leave`, departure from the waiting room, disconnect, room closure,
-match start, arena edit or deletion, and plugin shutdown cancel the reservation and its
-unaccepted invitations. Losing the host permission also invalidates it at the next hosting
-operation or pending entry check. Players already in the waiting room remain there and
-can leave through the normal snapshot restore.
+`/narena host`, `invite` and `accept` keep their names and permissions and work on rooms.
+With `ninjaarena.host`, `/narena host dojo` opens an invite-only room on `dojo` with you
+as host, taking you to the lobby as `room create` does; the arena must exist and have two
+team spawns, and need not be pickable. `/narena invite Bob` sends Bob a **[Join]**
+button, and Bob joins with it or `/narena accept <host-name>`, exactly as with
+`room invite` and `room accept`. The room then follows the rules under [Rooms](#rooms):
+it leases a slot or queues, and its match starts only when the host or an admin presses
+start. Nothing is reserved without a room any more.
 
 ## Rooms
 
-Rooms are how players start matches themselves. `/narena room create` takes the player to
-the lobby, saving their snapshot as a portal does, and opens a room there with them as its
-host. The room plays on a hand-built arena: the first by name that is ready and that no
-other room or waiting room holds. Nothing in a room counts down. The host, or an admin,
-presses start with `/narena room start` once the room has its required player count;
-below it the start is refused.
+Rooms are how players start matches themselves. `/narena room create` takes the player
+to the lobby, saving their snapshot as a portal does, and opens a room there with them
+as its host. The room plays on a hand-built arena: an event's featured map when it is
+ready and no other room holds it, else the first by name that is ready and that no other
+room holds. Nothing in a room counts down, and no match starts any other way. The host,
+or an admin, presses start with `/narena room start` once the room has its required
+player count; below it the start is refused.
 
 Hosts with `ninjaarena.map.change` (default op, inherited from `ninjaarena.admin`)
 can use `/narena map set <arena>` while their room is in the lobby. Admins mark a
@@ -263,8 +241,10 @@ the button or `/narena room accept <host>`; a public room needs no invitation. I
 `/narena room` the host sees a **[Remove]** button beside each player, the same as
 `/narena room kick <player>`. A removed player goes back to the lobby and cannot rejoin a
 public room unless invited again. Players are put on the smallest team and kept within one
-player of each other, as in a waiting room. Settings and removals wait until the room is
-back in the lobby.
+player of each other. Settings and removals wait until the room is back in the lobby.
+
+A player who comes through a play portal also joins an open room, as described under
+[Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms).
 
 When the host leaves, the room passes to the player who has waited in it longest and has
 `ninjaarena.room.create`. When nobody left has it, the room closes and its players stay in
@@ -276,11 +256,11 @@ A room leases an arena slot as soon as it has its arena, which for now is when i
 created. The lease lasts through the start, every round and the end of the match, and is
 given up when the room is back in the lobby, where it queues again for its next match, or
 when it closes. `arenas.max-active` in `config.yml` (default 4) caps the slots in use at
-once, matches started from waiting rooms included; it is also never more than the cells
+once; every match is a room's and holds one. It is also never more than the cells
 of the arena grid. While every slot is leased, more rooms queue, and their players see
 their place in the queue. A hand-built arena holds one match at a time, so a room whose
 arena is in use queues for that arena; rooms behind it that want a free arena go first.
-Portals, the shared hub and `/narena host` leave the arenas rooms hold or wait for alone.
+A room that closes while its match runs keeps the lease until the match ends.
 
 `arenas.max-active` was called `stability.max-concurrent-matches`. The old name is still
 read, with a warning at startup and on reload, when the new one is not set; set beside
@@ -302,16 +282,15 @@ enough are given up.
 
 A player the lobby cannot take is sent home instead. Rejoining puts a player in the lobby
 only while the server keeps running; after a restart they are restored home on joining, as
-before. Waiting rooms and the shared hub keep their own countdown and still send players
-home when they leave them; matches from them end in the lobby like any other.
+before.
 
 ## Watching live matches
 
-From any waiting room, run `/narena spectate <arena>` to watch an in-progress match.
-A successful transfer removes you from the queue and keeps your pre-entry snapshot.
-To offer access from another world, mark portal corners as usual and run
+From the lobby, while in no room, run `/narena spectate <arena>` to watch an
+in-progress match. The transfer keeps your snapshot from entering the lobby. To offer
+access from another world, mark portal corners as usual and run
 `/narena portal create <name> <arena> spectator`. The portal admits viewers only while
-the named match is open to spectators. Ordinary portals still lead to the waiting room.
+the named match is open to spectators. Play portals lead to the lobby.
 
 Viewers can fly within the arena's three-dimensional bounds. Entity cameras, arena
 interactions, and teleports outside the bounds are blocked. Viewers are outside the
@@ -372,12 +351,11 @@ seconds caps the whole pause between rounds at well over a minute without leavin
 waiting on a map that is stuck; 0 replays at the time limit.
 
 Leaving during the shop works as in a round: `/narena leave` goes to the lobby, a
-teleport by another plugin or a disconnect takes the player out of the match, and leaving
-drops their points and refunds nothing into a ledger they no longer have. When only one
-team is left, the match ends at once as a forfeit. A room keeps its arena slot lease
-through the shop until its match closes; matches from waiting rooms and the hub, which
-hold no lease, work the same way. `shop.enabled: false` goes straight from one round to
-the next as before, and buying never opens.
+teleport by another plugin or a disconnect takes the player out of the match, and
+leaving drops their points and refunds nothing into a ledger they no longer have. When
+only one team is left, the match ends at once as a forfeit. A room keeps its arena slot
+lease through the shop until its match closes. `shop.enabled: false` goes straight from
+one round to the next as before, and buying never opens.
 
 Other plugins see the phase as `MatchPhase.SHOP` in `MatchPhaseChangeEvent`: ROUND_END
 to SHOP, with the players already in the shop area, then SHOP to PREP.
@@ -401,8 +379,8 @@ match players or restarts a match.
 | Settings | Reload behavior |
 | :--- | :--- |
 | `arenas.max-active` | Applies immediately. A higher value lets queued rooms in; a lower one never ends a lease already granted. The old name `stability.max-concurrent-matches` is read with a warning when the new one is not set. |
-| Waiting-room minimum, countdown and radius | Apply immediately to waiting rooms and the hub; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
-| Default lobby and player caps | Apply immediately. The lobby applies to the next portal entry; players already waiting stay where they are. A lower cap turns away later arrivals but never removes waiting players. |
+| `waiting-room.min-players` and `team-size` | Apply to the next room opened; rooms already open keep their settings. |
+| Deprecated `waiting-room.lobby` | Applies to the next portal entry. It and the unused `max-players`, `countdown-seconds` and `radius` are accepted with a warning in the reply and the log (see [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms)). |
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
@@ -542,10 +520,9 @@ Nothing takes damage in the lobby world. Anyone who falls into its void is put b
 the lobby spawn; such a fall never kills and never counts as a death in a match, and no
 death there counts in a match.
 
-Lobby membership is a player state like a waiting room. A member's inventory is locked
-as in a waiting room, the join restore treats them as busy, and a member who walks or
-falls out of the lobby area is put back at the spawn. That area takes the place of the
-waiting-room radius for members; waiting rooms keep their radius. Rooms bring their
+Lobby membership is a player state. A member's inventory is locked, the join restore
+treats them as busy, and a member who walks or falls out of the lobby area is put back at
+the spawn. Rooms and play portals bring their
 players here, and the end of a match, leaving a room, match or spectating, and rejoining
 after a quit from any of them lead back here (see [Rooms](#rooms)).
 
@@ -565,10 +542,10 @@ exclusions when running NinjaArena alongside other server plugins.
 
 ## Round kits and inventory
 
-Players arrive in the waiting room with an empty inventory. Once their snapshot is saved
-and they are in the room, their storage, armour, offhand, cursor and crafting grid are
+Players arrive in the lobby with an empty inventory. Once their snapshot is saved and
+they are in the lobby, their storage, armour, offhand, cursor and crafting grid are
 cleared, their potion effects and fire are removed, and they are put in adventure mode.
-The waiting room is locked like a match: no item drops or pickups, no containers or ender
+The lobby is locked like a match: no item drops or pickups, no containers or ender
 chests (including ones opened by a command), and no armour stands. A player whose
 inventory cannot be emptied is sent home through the restore instead. Leaving returns
 exactly what they came in with, game mode and effects included.
@@ -774,7 +751,7 @@ still on the death screen at round start is placed and readied when they respawn
 `/narena leave` to leave while spectating for the lobby; leaving the lobby then returns the
 saved belongings, game mode and location. Quitting puts the player back in the lobby on
 their next join.
-A join restore that another plugin cancels (for example a login plugin) is retried for about a minute, and the player is told if it still fails (a player who joins dead is restored on respawn instead, without retries, a failure message or the window below). For 5 seconds after a restore, any other plugin's teleport (a plot placement, but also a spawn or hub command) is reverted once; NinjaArena's own teleports and players in a match, waiting room or hub are never reverted; see [plugin compatibility](docs/plugin-compatibility.md).
+A join restore that another plugin cancels (for example a login plugin) is retried for about a minute, and the player is told if it still fails (a player who joins dead is restored on respawn instead, without retries, a failure message or the window below). For 5 seconds after a restore, any other plugin's teleport (a plot placement, but also a spawn or hub command) is reverted once; NinjaArena's own teleports and players in a match or the lobby are never reverted; see [plugin compatibility](docs/plugin-compatibility.md).
 Every exit first clears spectator mode, so an unsuccessful restore leaves the player in
 Adventure mode while their snapshot remains available for a retry.
 

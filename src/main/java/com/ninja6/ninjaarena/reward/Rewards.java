@@ -44,7 +44,7 @@ public final class Rewards implements Listener {
     private RewardSettings settings;
     private boolean placing;
 
-    /** @param busy whether a player is in a match, a waiting room, the hub or the lobby, or spectating */
+    /** @param busy whether a player is in a match or the lobby, or spectating */
     public Rewards(NinjaArenaPlugin plugin, RewardSettings settings, Predicate<UUID> busy) {
         this.plugin = plugin;
         this.settings = settings;
@@ -144,7 +144,7 @@ public final class Rewards implements Listener {
 
     /**
      * Whether a trophy can be handed to a player now: they are online and alive, outside both
-     * plugin worlds, not in a match, a waiting room, the hub or the lobby, or spectating, have
+     * plugin worlds, not in a match or the lobby, or spectating, have
      * nothing waiting to be restored, and have a free slot. A claim is checked again just
      * before the item is placed, so a player who has since entered a plugin world keeps it
      * pending.

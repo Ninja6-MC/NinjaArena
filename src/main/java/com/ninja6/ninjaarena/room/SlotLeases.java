@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 
 /**
@@ -21,9 +20,9 @@ import java.util.function.Predicate;
  * ends one: the leases above the new maximum stay, and nobody new is let in until enough
  * of them are released.
  *
- * <p>Slots can also be used by something that holds no lease, such as a match started from
- * a waiting room ({@link #setOthers}); those count against the maximum, and the arenas they
- * use are skipped. Server thread only.
+ * <p>Every running match holds a lease, so the leases are every slot in use. An arena that
+ * cannot be leased for now, such as one in edit mode, is skipped ({@link #setArenaTaken}).
+ * Server thread only.
  *
  * @param <K> who holds a lease, compared by {@code equals}
  */
@@ -33,7 +32,6 @@ public final class SlotLeases<K> {
     private final Map<K, String> leases = new LinkedHashMap<>();
     /** Waiting holders and the arena each wants, longest waiting first. */
     private final Map<K, String> queue = new LinkedHashMap<>();
-    private IntSupplier othersUsing = () -> 0;
     private Predicate<String> arenaTaken = arena -> false;
 
     /** @param max slots in use at once; at least 1 */
@@ -42,13 +40,11 @@ public final class SlotLeases<K> {
     }
 
     /**
-     * Slots used outside the leases, and arenas that cannot be leased now because something
-     * else uses them (a running match, a waiting room, edit mode). Both are asked each time
+     * Arenas that cannot be leased now, such as one in edit mode or not ready; asked each time
      * the queue is checked.
      */
-    public void setOthers(IntSupplier slotsInUse, Predicate<String> arenaInUse) {
-        this.othersUsing = Objects.requireNonNull(slotsInUse, "slotsInUse");
-        this.arenaTaken = Objects.requireNonNull(arenaInUse, "arenaInUse");
+    public void setArenaTaken(Predicate<String> arenaTaken) {
+        this.arenaTaken = Objects.requireNonNull(arenaTaken, "arenaTaken");
     }
 
     public int max() {
@@ -130,9 +126,9 @@ public final class SlotLeases<K> {
         return List.copyOf(granted);
     }
 
-    /** Slots in use: the leases plus whatever uses a slot without one. */
+    /** Slots in use: the leases. */
     public int used() {
-        return leases.size() + Math.max(0, othersUsing.getAsInt());
+        return leases.size();
     }
 
     /** Whether one more slot can be used now. */

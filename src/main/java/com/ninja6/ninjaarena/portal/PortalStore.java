@@ -55,7 +55,7 @@ public final class PortalStore {
         return loadAll().portals();
     }
 
-    /** Reads every portal and the shared hub point. A missing file means neither. */
+    /** Reads every portal and an old shared hub point. A missing file means neither. */
     public PortalCodec.Contents loadAll() throws IOException {
         removeLeftoverTempFiles();
         if (!Files.exists(file)) {
@@ -74,7 +74,7 @@ public final class PortalStore {
         save(portals, null);
     }
 
-    /** Replaces the file with the given portals and shared hub point, which may be {@code null}. */
+    /** Replaces the file with the given portals and old shared hub point, which may be {@code null}. */
     public synchronized void save(Collection<Portal> portals, ArenaPoint hub) throws IOException {
         byte[] bytes = PortalCodec.encode(portals, hub).getBytes(StandardCharsets.UTF_8);
         Path directory = file.getParent();

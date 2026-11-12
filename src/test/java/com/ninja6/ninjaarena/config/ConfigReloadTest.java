@@ -249,22 +249,27 @@ class ConfigReloadTest {
     }
 
     @Test
-    void lobbyAndPlayerCapsReloadImmediatelyAndBadValuesAreRejected() throws Exception {
-        write("waiting-room:\n  lobby: shared\n  min-players: 3\n  max-players: 8\n  team-size: 2\n", EMPTY_KIT);
+    void anOldWaitingRoomConfigStillReloadsWithAWarningPerDeprecatedKey() throws Exception {
+        write("waiting-room:\n  lobby: shared\n  min-players: 3\n  max-players: 8\n  team-size: 2\n"
+                + "  countdown-seconds: 30\n  radius: 16\n", EMPTY_KIT);
         var report = reload.reload();
         assertTrue(report.getFirst().contains("complete"), report.toString());
-        assertEquals(new WaitingRoomSettings(3, 8, 2, 30, 16, LobbyMode.SHARED), target.waiting);
-        assertTrue(report.get(1).contains("waiting-room.lobby"), report.toString());
+        assertEquals(new WaitingRoomSettings(3, 2, LobbyMode.SHARED), target.waiting);
+        for (String path : WaitingRoomSettings.DEPRECATED) {
+            assertTrue(report.stream().anyMatch(line -> line.contains(path + " is from the waiting rooms")), path);
+            assertTrue(target.logged.contains(WaitingRoomSettings.warning(path)), path);
+        }
 
-        write("waiting-room:\n  min-players: 4\n  max-players: 3\n", EMPTY_KIT);
-        report = reload.reload();
-        assertTrue(report.getFirst().contains("waiting-room.max-players: max-players must be 0 or at least"
-                + " min-players"), report.toString());
         write("waiting-room:\n  lobby: everywhere\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("waiting-room.lobby: expected dedicated or shared"));
         write("waiting-room:\n  team-size: 65\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("waiting-room.team-size"));
-        assertEquals(new WaitingRoomSettings(3, 8, 2, 30, 16, LobbyMode.SHARED), target.waiting);
+        assertEquals(new WaitingRoomSettings(3, 2, LobbyMode.SHARED), target.waiting);
+
+        write("waiting-room:\n  min-players: 3\n", EMPTY_KIT);
+        report = reload.reload();
+        assertTrue(report.stream().noneMatch(line -> line.contains("waiting rooms")), report.toString());
+        assertEquals(new WaitingRoomSettings(3), target.waiting);
     }
 
     @Test
@@ -404,7 +409,7 @@ class ConfigReloadTest {
 
     @Test
     void invalidBedrockCandidateRollsBackBothFilesAndAllServices() throws Exception {
-        write("waiting-room: {radius: 8}\n", EMPTY_KIT);
+        write("waiting-room: {min-players: 8}\n", EMPTY_KIT);
         reload.reload();
         var accepted = target.published;
         target.calls.clear();
@@ -412,7 +417,7 @@ class ConfigReloadTest {
                 bedrockConfig().replace("standard.mcpack", "../standard.mcpack"),
                 bedrockConfig().replace("a".repeat(64), "bad-hash"),
                 bedrockConfig().replace("standard:", "unknown:"))) {
-            write(bad + "waiting-room: {radius: 12}\n", "format: 1\nitems:\n  - slot: 1\n    material: STICK\n");
+            write(bad + "waiting-room: {min-players: 12}\n", "format: 1\nitems:\n  - slot: 1\n    material: STICK\n");
             var report = reload.reload();
             assertTrue(report.getFirst().contains("rejected"), report.toString());
             assertSame(accepted, target.published);
@@ -436,7 +441,7 @@ class ConfigReloadTest {
                 packConfig().replace("thrown-visuals: false", "thrown-visuals: 'true'"),
                 packConfig().replace("https://example.test/detailed-v1.zip", ""),
                 packConfig().replace("22222222-2222-4222-8222-222222222222", "11111111-1111-4111-8111-111111111111"))) {
-            write(bad + "\nwaiting-room: {radius: 10}\n", EMPTY_KIT);
+            write(bad + "\nwaiting-room: {min-players: 10}\n", EMPTY_KIT);
             var report = reload.reload();
             assertTrue(report.getFirst().contains("rejected") && report.getFirst().contains("resource-pack"),
                     report.toString());
@@ -503,8 +508,7 @@ class ConfigReloadTest {
         write("""
                 waiting-room:
                   min-players: 4
-                  countdown-seconds: 18
-                  radius: 12
+                  team-size: 12
                 match:
                   prep-seconds: 9
                   round-seconds: 60
@@ -526,7 +530,7 @@ class ConfigReloadTest {
                 """, "format: 1\nitems:\n  - slot: 1\n    id: ninjaarena:dash\n");
         var report = reload.reload();
         assertEquals(List.of("world", "waiting", "match", "tools", "kit"), target.calls);
-        assertEquals(new WaitingRoomSettings(4, 18, 12), target.waiting);
+        assertEquals(new WaitingRoomSettings(4, 12, LobbyMode.DEDICATED), target.waiting);
         assertEquals(new MatchSettings(9, 60, 0, 2, 3, 3, 2), target.match);
         assertTrue(target.friendlyFire);
         assertEquals(new ScoringSettings(7, 3), target.scoring);
@@ -567,7 +571,7 @@ class ConfigReloadTest {
     @Test
     void invalidGridIsRejectedEvenWhenItWouldHaveBeenRefusedByPolicy() throws Exception {
         target.empty = false;
-        write("arena-grid:\n  cell-size: 513\nwaiting-room:\n  radius: 10\n", EMPTY_KIT);
+        write("arena-grid:\n  cell-size: 513\nwaiting-room:\n  min-players: 10\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("config.yml: line 2"));
         assertTrue(target.calls.isEmpty());
     }
@@ -582,7 +586,7 @@ class ConfigReloadTest {
     @Test
     void worldSetterFailureRollsBackBeforeOtherServicesChange() throws Exception {
         target.failWorld = true;
-        write("arena-world:\n  view-distance: 12\nwaiting-room:\n  radius: 10\n", EMPTY_KIT);
+        write("arena-world:\n  view-distance: 12\nwaiting-room:\n  min-players: 10\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("Old settings were restored"));
         assertEquals(List.of("world", "world"), target.calls);
         assertEquals(ArenaWorldSettings.DEFAULTS, target.world);
@@ -710,7 +714,7 @@ class ConfigReloadTest {
         assertTrue(reload.reload().getFirst().contains("config.yml: line 1: cannot read"));
         assertTrue(target.calls.isEmpty());
         for (String name : List.of("arenas.yml", "portals.yml", "snapshot.dat")) Files.writeString(dir.resolve(name), "unchanged");
-        write("waiting-room:\n  radius: 8\n", EMPTY_KIT);
+        write("waiting-room:\n  min-players: 8\n", EMPTY_KIT);
         reload.reload();
         for (String name : List.of("arenas.yml", "portals.yml", "snapshot.dat")) assertEquals("unchanged", Files.readString(dir.resolve(name)));
     }

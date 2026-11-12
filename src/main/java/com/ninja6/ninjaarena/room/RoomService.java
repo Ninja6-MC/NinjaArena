@@ -4,6 +4,7 @@ import static com.ninja6.ninjaarena.message.Messages.msg;
 
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.command.HostingCommands;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.RoomCommands;
 import com.ninja6.ninjaarena.match.MatchService;
@@ -11,6 +12,7 @@ import com.ninja6.ninjaarena.waiting.WaitingRoom;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.CrossWorldTransfers;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -21,7 +23,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
@@ -44,8 +45,20 @@ import org.bukkit.scheduler.BukkitTask;
  * created, and leases a slot for it at once ({@link SlotLeases}). While every slot is in use,
  * or its arena is, the room waits in a queue and its players see their position. The lease
  * lasts through the start, every round and the end of the match, and is given up when the
- * room is back in the lobby, where it queues again for its next match, or when it closes. At
- * most {@link #maxActive()} slots are used at once, matches from waiting rooms included.
+ * room is back in the lobby, where it queues again for its next match, or when it closes;
+ * a room that closes while its match runs keeps the lease until the match ends. At most
+ * {@link #maxActive()} slots are used at once. Every match is a room's, so every running
+ * match holds a lease.
+ *
+ * <p><b>Ways in.</b> Besides {@code /narena room create} and an invitation, a player who
+ * walks through a play portal comes into the lobby and joins an open room there
+ * ({@link #fromPortal}), and {@code /narena host <arena>} opens an invite-only room on the
+ * named arena. None of these starts a match.
+ *
+ * <p><b>Events.</b> While a scheduled event runs, its arena is the featured map
+ * ({@link #setFeatured}): new rooms play on it when it is free, the room list shows it, and
+ * portals that may take a player to any room prefer rooms on it. A match there earns the
+ * event bonus, which the match engine captures when it starts.
  *
  * <p><b>Leaving.</b> A member who leaves the room, by {@code /narena room leave}, by
  * {@code /narena leave}, by being removed, or by leaving the lobby and match world some
@@ -59,7 +72,7 @@ import org.bukkit.scheduler.BukkitTask;
  *
  * <p>Not thread-safe: call it from the server thread.
  */
-public final class RoomService implements RoomCommands, Listener {
+public final class RoomService implements RoomCommands, HostingCommands, Listener {
 
     /** Opening a room and being handed one; a child of {@code ninjaarena.play}. */
     public static final String CREATE = "ninjaarena.room.create";
@@ -81,7 +94,7 @@ public final class RoomService implements RoomCommands, Listener {
     private final Map<String, Room> playing = new HashMap<>();
     private final SlotLeases<Room> slots;
     private final Runnable crossing;
-    private Predicate<String> elsewhere = arena -> false;
+    private Supplier<Optional<String>> featured = Optional::empty;
     private Runnable heldWorld;
     private BukkitTask ticker;
     private int configuredMax;
@@ -103,18 +116,15 @@ public final class RoomService implements RoomCommands, Listener {
         this.worldHold = Objects.requireNonNull(worldHold, "worldHold");
         this.configuredMax = maxActive;
         this.slots = new SlotLeases<>(effectiveMax(maxActive));
-        slots.setOthers(this::unleasedMatches, arena -> !arenas.isAvailable(arena) || elsewhere.test(arena));
+        slots.setArenaTaken(arena -> !arenas.isAvailable(arena));
         this.crossing = transfers.allow(roomOf::containsKey);
         matches.onClose(this::matchClosed);
         arenas.onEditOrDelete(this::arenaChanged);
     }
 
-    /**
-     * Arenas something outside the rooms waits for, such as an open waiting room or an arena a
-     * host has reserved with {@code /narena host}. No room is granted them meanwhile.
-     */
-    public void setElsewhere(Predicate<String> elsewhere) {
-        this.elsewhere = Objects.requireNonNull(elsewhere, "elsewhere");
+    /** The featured map of the scheduled event running now, {@code ArenaEvents#arena}; by default none. */
+    public void setFeatured(Supplier<Optional<String>> featured) {
+        this.featured = Objects.requireNonNull(featured, "featured");
     }
 
     /** Starts the once-a-second queue check and room status line. */
@@ -158,27 +168,6 @@ public final class RoomService implements RoomCommands, Listener {
             return cells;
         }
         return Math.max(1, configured);
-    }
-
-    /** Whether a match from outside the rooms may start now: a slot is free. */
-    public boolean hasFreeSlot() {
-        return slots.hasFree();
-    }
-
-    /** Whether a room holds or waits for the arena, which other features must then leave alone. */
-    public boolean isClaimed(String arena) {
-        return slots.isClaimed(arena);
-    }
-
-    /** Running matches that hold no lease, such as those started from waiting rooms. */
-    private int unleasedMatches() {
-        int count = 0;
-        for (var match : matches.matches()) {
-            if (!slots.isLeased(match.arena())) {
-                count++;
-            }
-        }
-        return count;
     }
 
     private void granted(List<Room> granted) {
@@ -226,11 +215,14 @@ public final class RoomService implements RoomCommands, Listener {
     public void show(Player player) {
         Room room = roomOf.get(player.getUniqueId());
         if (room == null) {
-            tell(player, "room.not-in-room");
+            list(player);
             return;
         }
         player.sendMessage(msg("room.info-header", "host", name(room.host()), "arena", room.arena(),
                 "privacy", privacy(room.settings())));
+        if (isFeatured(room.arena())) {
+            tell(player, "room.info-featured", "arena", room.arena());
+        }
         player.sendMessage(msg("room.info-settings", "size", room.size(), "required", room.settings().players(),
                 "teams", room.settings().teams(), "team-size", teamSize(room.settings())));
         player.sendMessage(status(room));
@@ -248,29 +240,62 @@ public final class RoomService implements RoomCommands, Listener {
 
     @Override
     public void create(Player player) {
-        UUID id = player.getUniqueId();
         if (!player.hasPermission(CREATE)) {
             tell(player, "room.no-permission");
             return;
         }
-        if (roomOf.containsKey(id)) {
-            tell(player, "room.already-in-room");
+        open(player, null);
+    }
+
+    /**
+     * {@code /narena host <arena>}, for {@code ninjaarena.host}: opens an invite-only room on
+     * the named arena, which need not be pickable. {@code /narena invite} and
+     * {@code /narena accept} are the room's {@link #invite} and {@link #accept}.
+     */
+    @Override
+    public void host(Player player, String arenaName) {
+        Arena target = arenas.get(arenaName).orElse(null);
+        if (target == null) {
+            tell(player, "room.map-unknown", "arena", arenaName);
             return;
         }
-        Optional<Arena> arena = defaultArena(null);
+        if (target.teamSpawns().size() < Arena.MIN_TEAMS) {
+            tell(player, "room.map-too-few-teams", "arena", target.name());
+            return;
+        }
+        Room room = open(player, target);
+        if (room != null) {
+            room.setSettings(room.settings().withInviteOnly(true));
+            tell(player, "room.hosted", "arena", room.arena());
+        }
+    }
+
+    /**
+     * Opens a room for the player on the arena, or on the {@linkplain #defaultArena default}
+     * one when it is {@code null}, and asks for its slot.
+     *
+     * @return the room, or {@code null} after telling the player why there is none
+     */
+    private Room open(Player player, Arena chosen) {
+        UUID id = player.getUniqueId();
+        if (roomOf.containsKey(id)) {
+            tell(player, "room.already-in-room");
+            return null;
+        }
+        Optional<Arena> arena = chosen != null ? Optional.of(chosen) : defaultArena(null);
         if (arena.isEmpty()) {
             tell(player, "room.no-arena");
-            return;
+            return null;
         }
         if (!holdWorld()) {
             tell(player, "room.world-failed");
-            return;
+            return null;
         }
         Optional<String> refused = lobby.join(player);
         if (refused.isPresent()) {
             releaseWorldIfUnused();
             player.sendMessage(msg("room.refused", "message", refused.get()));
-            return;
+            return null;
         }
         WaitingRoomSettings base = defaults.get();
         int teams = teamCount(arena.get());
@@ -286,6 +311,7 @@ public final class RoomService implements RoomCommands, Listener {
         if (!slots.request(room, room.arena())) {
             tellQueued(player, room);
         }
+        return room;
     }
 
     @Override
@@ -435,6 +461,48 @@ public final class RoomService implements RoomCommands, Listener {
             tell(player, "room.full", "host", host);
             return;
         }
+        join(player, room);
+    }
+
+    /**
+     * A player who walked through a play portal: into the lobby, saving their snapshot, and
+     * into the open room with the most players that admits them and has space, on the arena
+     * when one is given ({@code PortalEntry#roomArena}). Without an arena, rooms on the
+     * featured map come first. With no such room they stay in the lobby and see the room
+     * list. Nothing here starts a match.
+     *
+     * @return empty once they are in the lobby, otherwise why not, as text to show them
+     */
+    public Optional<String> fromPortal(Player player, Optional<String> arena) {
+        Optional<String> refused = lobby.join(player);
+        if (refused.isPresent()) {
+            return refused;
+        }
+        UUID id = player.getUniqueId();
+        if (roomOf.containsKey(id)) {
+            return Optional.empty();
+        }
+        Optional<String> wanted = arena.map(Arena::normalizeName);
+        Optional<Room> open = rooms.stream()
+                .filter(room -> !room.isPlaying() && !room.isFull() && room.admits(id))
+                .filter(room -> wanted.isEmpty() || wanted.get().equals(room.arena()))
+                .sorted(Comparator.comparing((Room room) -> wanted.isEmpty() && isFeatured(room.arena()) ? 0 : 1)
+                        .thenComparing(Room::size, Comparator.reverseOrder()))
+                .findFirst();
+        if (open.isPresent()) {
+            join(player, open.get());
+        } else {
+            tell(player, wanted.isPresent() ? "room.portal-no-room-arena" : "room.portal-no-room",
+                    "arena", wanted.orElse(""));
+            list(player);
+        }
+        return Optional.empty();
+    }
+
+    /** Puts a lobby member in a room that admits them and has space. */
+    private void join(Player player, Room room) {
+        UUID id = player.getUniqueId();
+        String host = name(room.host());
         WaitingRoom.Joined joined = room.join(id);
         roomOf.put(id, room);
         names.put(id, player.getName());
@@ -589,14 +657,15 @@ public final class RoomService implements RoomCommands, Listener {
     }
 
     /**
-     * A match closed. A room's players are back in the lobby; any match, leased or not, frees
-     * a slot, which goes to the longest-queued room before a waiting room can take it.
+     * A match closed. A room's players are back in the lobby, and its slot goes to the
+     * longest-queued room; so does that of a room that closed while its match ran.
      */
     void matchClosed(String arena) {
         Room room = playing.remove(Arena.normalizeName(arena));
         if (room == null || !rooms.contains(room)) {
             if (room != null) {
                 room.setPlaying(false);
+                granted(slots.release(room));
             }
             granted(slots.pump());
             return;
@@ -798,7 +867,10 @@ public final class RoomService implements RoomCommands, Listener {
             tell(member, reason);
         }
         room.members().forEach(names::remove);
-        granted(slots.release(room));
+        if (!room.isPlaying()) {
+            // A running match keeps its lease until it ends (matchClosed).
+            granted(slots.release(room));
+        }
         releaseWorldIfUnused();
     }
 
@@ -824,9 +896,10 @@ public final class RoomService implements RoomCommands, Listener {
     }
 
     /**
-     * The arena a new room plays on until a map can be chosen: the first by name that is
-     * ready and that no room or waiting room holds or waits for, else the first no room
-     * claims, else the first with a team spawn. Empty when there is no arena at all.
+     * The arena a new room plays on until a map can be chosen: the featured map of a running
+     * event when it is ready and no other room holds or waits for it, else the first such
+     * arena by name, else the first no room claims, else the first with a team spawn. Empty
+     * when there is no arena at all.
      */
     private Optional<Arena> defaultArena(Room except) {
         List<Arena> usable = new ArrayList<>();
@@ -835,9 +908,9 @@ public final class RoomService implements RoomCommands, Listener {
                 usable.add(arena);
             }
         }
+        usable.sort(Comparator.comparing(arena -> isFeatured(arena.name()) ? 0 : 1));
         for (Arena arena : usable) {
-            if (arenas.isAvailable(arena.name()) && !claimedByOthers(arena.name(), except)
-                    && !elsewhere.test(arena.name())) {
+            if (arenas.isAvailable(arena.name()) && !claimedByOthers(arena.name(), except)) {
                 return Optional.of(arena);
             }
         }
@@ -887,6 +960,34 @@ public final class RoomService implements RoomCommands, Listener {
             }
         }
         return null;
+    }
+
+    /**
+     * The room list: the featured map of a running event, then every open room with its
+     * arena, head count and state, and a join button where the player may join.
+     */
+    private void list(Player player) {
+        featured.get().map(Arena::normalizeName)
+                .ifPresent(arena -> tell(player, "room.list-featured", "arena", arena));
+        if (rooms.isEmpty()) {
+            tell(player, "room.list-empty");
+            return;
+        }
+        tell(player, "room.list-header");
+        UUID id = player.getUniqueId();
+        for (Room room : rooms) {
+            String host = name(room.host());
+            Component state = room.isPlaying() ? msg("room.list-playing")
+                    : room.isFull() ? msg("room.list-full")
+                    : room.admits(id) ? button("room.button-accept", "accept " + host)
+                    : msg("room.privacy-invite");
+            player.sendMessage(msg(isFeatured(room.arena()) ? "room.list-line-featured" : "room.list-line",
+                    "host", host, "arena", room.arena(), "count", count(room), "state", state));
+        }
+    }
+
+    private boolean isFeatured(String arena) {
+        return featured.get().map(Arena::normalizeName).filter(arena::equals).isPresent();
     }
 
     private Component status(Room room) {

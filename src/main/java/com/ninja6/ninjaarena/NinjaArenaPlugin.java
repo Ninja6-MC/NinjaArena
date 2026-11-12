@@ -97,10 +97,6 @@ import com.ninja6.ninjaarena.lobby.LobbyReturns;
 import com.ninja6.ninjaarena.restore.JoinRestore;
 import com.ninja6.ninjaarena.room.MaxActive;
 import com.ninja6.ninjaarena.room.RoomService;
-import com.ninja6.ninjaarena.waiting.HostingService;
-import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
-import com.ninja6.ninjaarena.waiting.WaitingRoomService.Exit;
-import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaChunkUnloader;
 import com.ninja6.ninjaarena.world.ArenaWorld;
@@ -135,9 +131,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private LobbyMembers lobbyMembers;
     private com.ninja6.ninjaarena.lobby.LobbyIntro lobbyIntro;
     private LobbyEditing lobbyEditing;
-    /** In a match, a waiting room, the hub or the lobby, or spectating. */
-    private final ArenaBusy busy = new ArenaBusy(() -> this.matches, () -> this.waitingRooms, () -> this.spectators,
-            () -> this.lobbyMembers);
+    /** In a match or the lobby, or spectating. */
+    private final ArenaBusy busy = new ArenaBusy(() -> this.matches, () -> this.spectators, () -> this.lobbyMembers);
     private final CrossWorldTransfers transfers = new CrossWorldTransfers();
     /** Lets match players cross to the shop area and back; released on disable. */
     private Runnable shopCrossing;
@@ -164,8 +159,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private com.ninja6.ninjaarena.texture.TextureService textures;
     private com.ninja6.ninjaarena.texture.TextureMenus textureMenu;
     private com.ninja6.ninjaarena.command.TextureCommands textureCommands;
-    private WaitingRoomService waitingRooms;
-    private HostingService hosting;
+    /** What a new room starts from, {@code waiting-room} in config.yml; replaced on reload. */
+    private volatile WaitingRoomSettings roomDefaults = WaitingRoomSettings.DEFAULTS;
     private RoomService rooms;
     private LobbyReturns lobbyReturns;
     private StatsStore stats;
@@ -215,6 +210,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 () -> arenaWorld.releaseIfIdle(arenas::canReleaseWorld), getLogger());
         chunkUnloader.start(this);
         portals = PortalRegistry.open(this);
+        portals.oldLobbyWarnings(WaitingRoomSettings.MIGRATION_DOCS).forEach(getLogger()::warning);
         matches = new MatchService(this, arenas, arenaWorld::world,
                 MatchSettings.from(getConfig().getConfigurationSection("match")), restores::restore,
                 getServer().getPluginManager()::callEvent, MatchService::readyForRound);
@@ -325,15 +321,15 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(roundKits, this);
         matches.start();
         deaths.start();
-        // A finished countdown hands its players to the match engine.
-        String lobby = getConfig().getString("waiting-room.lobby");
+        // No match starts by itself: rooms start them when their host or an admin says so. An
+        // old config still naming the waiting-room countdown loads with a warning per setting.
+        WaitingRoomSettings.warnDeprecated(getConfig(), getLogger()::warning);
+        String lobby = getConfig().getString(WaitingRoomSettings.LOBBY);
         if (lobby != null && LobbyMode.parse(lobby).isEmpty()) {
-            getLogger().warning("waiting-room.lobby must be dedicated or shared, not " + lobby
-                    + "; portals use dedicated waiting rooms until it is fixed.");
+            getLogger().warning(WaitingRoomSettings.LOBBY + " must be dedicated or shared, not " + lobby
+                    + "; portals join open rooms on their own arena until it is fixed.");
         }
-        waitingRooms = new WaitingRoomService(this, arenas,
-                WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room")), restores::restore,
-                KitInventory::emptyForWaiting, matches);
+        roomDefaults = WaitingRoomSettings.from(getConfig().getConfigurationSection("waiting-room"));
         SpectatorSettings spectating;
         try {
             if (!getConfig().isConfigurationSection("spectating")) {
@@ -344,19 +340,15 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getLogger().warning("Spectating disabled: " + e.getMessage());
             spectating = new SpectatorSettings(false, 16);
         }
-        spectators = new Spectators(this, arenas, matches, waitingRooms, restores, arenaWorld::world, spectating);
+        spectators = new Spectators(this, arenas, matches, restores, arenaWorld::world, spectating);
         Spectators watching = spectators;
         watching.setShopArea(() -> shopLobby.layout().shop(lobbyWorld.world()), shopLobby.layout()::contains);
         getServer().getPluginManager().registerEvents(watching, this);
         arenas.onEditOrDelete(watching::closeArena);
-        // Waiting players and lobby members are locked like match players: by membership, never
-        // by world.
+        // Lobby members are locked like match players: by membership, never by world.
         MatchService inMatch = matches;
-        WaitingRoomService waiting = waitingRooms;
         LobbyMembers inLobby = lobbyMembers;
         getServer().getPluginManager().registerEvents(new InventoryLockdownListener(busy), this);
-        getServer().getPluginManager().registerEvents(new WaitingRoomListener(waitingRooms), this);
-        arenas.onEditOrDelete(waitingRooms::closeRoom);
         // Enemy caps, the spawn rate and the tick-time guard; enemies are counted
         // from each match's director. Set before any fight can create a director.
         StabilitySettings stability = StabilitySettings.from(getConfig().getConfigurationSection("stability"));
@@ -369,30 +361,24 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         directors.setGate(hud.withSpawnCues(new StabilityGate(stability,
                 match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
                 Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger())));
+        // Events never start a match: their arena is the featured map for rooms, and a match
+        // there earns the bonus, captured when it starts.
         ArenaEvents arenaEvents = startEvents();
-        waitingRooms.setEventArena(arenaEvents::arena);
         matches.setEventBonus(arenaEvents::bonus);
-        waitingRooms.start();
-        // Each portal leads to its arena's waiting room or the shared hub; the default is read
-        // from the current settings, so a reload changes it for the next entry.
-        PortalRegistry portalList = portals;
-        waitingRooms.setHub(portalList::hub);
+        // Play portals lead to the lobby and its rooms; spectator portals to a live match. The
+        // old lobby choice, read at each entry, only picks which open rooms a player joins.
         PortalCommand portalCommand = new PortalCommand(portals, arenas, name -> getServer().getWorld(name) != null,
-                () -> waiting.settings().lobby());
-        PortalEntry entry = new PortalEntry(arenas, snapshots::hasPending, snapshots::captureAndPersist, watching::destination);
-        entry.setLobbies(() -> waiting.settings().lobby(), portalList::hub, waiting::full);
-        ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots, waitingRooms::join,
-                waitingRooms::joinHub);
-        hosting = new HostingService(this, arenas, waitingRooms, entry, admission, arenaWorld::world,
-                inMatch::isInMatch, arenaWorld::acquire);
-        getServer().getPluginManager().registerEvents(hosting, this);
-        startRooms(entry);
+                () -> roomDefaults.lobby());
+        PortalEntry entry = new PortalEntry(snapshots::hasPending, snapshots::captureAndPersist, watching::destination);
+        entry.setDefaultLobby(() -> roomDefaults.lobby());
+        ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots);
+        startRooms();
         RoomService roomList = rooms;
-        getServer().getPluginManager().registerEvents(new PortalListener(this, portals, entry, arenaWorld::world,
-                admission, portalCommand::forget, arenaWorld::acquire, watching::arrived), this);
-        // Player-built portals share the registry and the entry above; under the dedicated lobby
-        // each entry is routed to a filling waiting room or a free arena.
-        entry.setRouting(waiting::openArena);
+        roomList.setFeatured(arenaEvents::arena);
+        PortalListener portalListener = new PortalListener(this, portals, entry, arenaWorld::world, admission,
+                portalCommand::forget, arenaWorld::acquire, watching::arrived);
+        portalListener.setLobby(roomList::fromPortal);
+        getServer().getPluginManager().registerEvents(portalListener, this);
         PlayerPortalSettings building;
         try {
             building = PlayerPortalSettings.from(getConfig().getConfigurationSection(PlayerPortalSettings.SECTION));
@@ -435,7 +421,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
                     @Override
                     public void waiting(WaitingRoomSettings settings) {
-                        waiting.setSettings(settings);
+                        roomDefaults = settings;
                     }
 
                     @Override
@@ -531,18 +517,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         reloader.enableShop(catalogue, getLogger());
         ArenaCommand arenaCommand = new ArenaCommand(arenas, arenaWorld::world, arenaWorld::acquire,
                 task -> getServer().getScheduler().runTask(this, task));
-        arenaCommand.setHub(() -> portals == null ? Optional.empty() : portals.hub());
         NinjaArenaCommand command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
-                player -> {
-                    // Spectating, a room or a match leads to the lobby; a waiting room or the
-                    // lobby itself leads home.
-                    boolean cancelled = hosting.leave(player);
-                    return watching.leave(player) || waitingRooms.leave(player, Exit.COMMAND)
-                            || roomList.leaveRoom(player)
-                            || matches.leave(player, MatchService.Exit.COMMAND)
-                            || inLobby.leave(player, LobbyMembers.Exit.COMMAND) || cancelled;
-                }, hosting, reloader::execute, watching::fromWaitingRoom, new LeaderboardCommand(this, this::stats),
+                // Spectating, a room or a match leads to the lobby; the lobby itself leads home.
+                player -> watching.leave(player) || roomList.leaveRoom(player)
+                        || matches.leave(player, MatchService.Exit.COMMAND)
+                        || inLobby.leave(player, LobbyMembers.Exit.COMMAND),
+                roomList, reloader::execute, watching::fromLobby, new LeaderboardCommand(this, this::stats),
                 new EventCommand(arenaEvents));
         command.setPackStatus(this::packStatus);
         command.setTextures(textureCommands);
@@ -558,17 +539,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /**
      * Host-started rooms in the lobby, their arena slot leases and the exits that lead back
      * to the lobby: the end of a match, the leave command from a room, match or spectating,
-     * and a rejoin after quitting from any of them. Waiting rooms keep their own countdown.
+     * and a rejoin after quitting from any of them. Rooms are the only way a match starts.
      */
-    private void startRooms(PortalEntry entry) {
+    private void startRooms() {
         MatchService inMatch = matches;
-        WaitingRoomService waiting = waitingRooms;
         Spectators watching = spectators;
-        HostingService hosted = hosting;
         LobbyMembers members = lobbyMembers;
         SnapshotService saved = snapshots;
-        LobbyEntry lobbyEntry = new LobbyEntry(members,
-                id -> inMatch.isInMatch(id) || waiting.isWaiting(id) || watching.contains(id),
+        LobbyEntry lobbyEntry = new LobbyEntry(members, id -> inMatch.isInMatch(id) || watching.contains(id),
                 saved::captureAndPersist, id -> {
                     try {
                         saved.delete(id);
@@ -577,18 +555,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                                 + " after the lobby turned them away; it will be restored on their next join.", e);
                     }
                 });
-        rooms = new RoomService(this, arenas, inMatch, lobbyEntry, waiting::settings, transfers, arenaWorld::hold,
+        rooms = new RoomService(this, arenas, inMatch, lobbyEntry, () -> roomDefaults, transfers, arenaWorld::hold,
                 MaxActive.read(getConfig(), getLogger()::warning));
         RoomService roomList = rooms;
-        roomList.setElsewhere(name -> waiting.hasRoom(name) || hosted.isReserved(name));
         getServer().getPluginManager().registerEvents(roomList, this);
         inMatch.setLobby(roomList::enterLobby);
         watching.setLobby(roomList::enterLobby);
-        // Waiting rooms share the slots, and leave the arenas rooms hold or wait for alone.
-        waiting.setStartAllowed(roomList::hasFreeSlot);
-        waiting.setClaimed(name -> hosted.isReserved(name) || roomList.isClaimed(name));
-        hosted.setRoomClaims(roomList::isClaimed);
-        entry.setRoomClaims(roomList::isClaimed);
+        // /narena spectate works from the lobby, for players in no room.
+        watching.setLobbyMembers(id -> members.isMember(id) && !roomList.isMember(id));
         lobbyReturns = new LobbyReturns(id -> members.isMember(id) || roomList.isMember(id) || inMatch.isInMatch(id)
                 || watching.contains(id), roomList::enterLobby);
         getServer().getPluginManager().registerEvents(lobbyReturns, this);
@@ -766,9 +740,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         build.placeIfNew();
         world.setSpawnLocation(layout.spawn(world));
         lobbyMembers = new LobbyMembers(this, layout, lobbyWorld::world,
-                id -> matches != null && matches.isInMatch(id)
-                        || waitingRooms != null && waitingRooms.isWaiting(id)
-                        || spectators != null && spectators.contains(id),
+                id -> matches != null && matches.isInMatch(id) || spectators != null && spectators.contains(id),
                 KitInventory::emptyForWaiting, player -> restores.restore(player));
         LobbyMembers members = lobbyMembers;
         lobbyIntro = new com.ninja6.ninjaarena.lobby.LobbyIntro(() -> activePackSettings.textureMenu(),
@@ -850,19 +822,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             spectators.close();
             spectators = null;
         }
-        if (hosting != null) {
-            hosting.close();
-            hosting = null;
-        }
         if (rooms != null) {
             rooms.close();
             rooms = null;
         }
         lobbyReturns = null;
-        if (waitingRooms != null) {
-            waitingRooms.close();
-            waitingRooms = null;
-        }
         if (lobbyMembers != null) {
             lobbyMembers.close();
             lobbyMembers = null;
@@ -964,14 +928,6 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Registered arenas; {@code null} while the plugin is disabled. */
     public ArenaRegistry arenas() {
         return arenas;
-    }
-
-    /**
-     * Waiting rooms, the shared hub and their start countdowns; {@code null} while the plugin
-     * is disabled.
-     */
-    public WaitingRoomService waitingRooms() {
-        return waitingRooms;
     }
 
     /**

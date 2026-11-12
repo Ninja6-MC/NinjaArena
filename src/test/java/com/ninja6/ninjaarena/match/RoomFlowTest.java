@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.command.HostingCommands;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
+import com.ninja6.ninjaarena.event.EventSettings;
 import com.ninja6.ninjaarena.room.Room;
 import com.ninja6.ninjaarena.room.RoomLobby;
 import com.ninja6.ninjaarena.room.RoomService;
@@ -92,7 +94,7 @@ class RoomFlowTest extends MatchFixture {
                 return true;
             }
         };
-        rooms = new RoomService(plugin, arenas, matches, fakeLobby, () -> new WaitingRoomSettings(2, 30, 16),
+        rooms = new RoomService(plugin, arenas, matches, fakeLobby, () -> new WaitingRoomSettings(2),
                 transfers, () -> {
                     worldHolds.add("hold");
                     return () -> worldHolds.add("release");
@@ -417,24 +419,8 @@ class RoomFlowTest extends MatchFixture {
 
         rooms.leave(player(EVE));
         rooms.leave(player(FRANK));
-        assertFalse(rooms.hasFreeSlot(), "two matches still use the one slot");
         rooms.create(player(EVE));
         assertFalse(rooms.hasLease(room(EVE)));
-    }
-
-    @Test
-    void aMatchWithoutALeaseThatClosesLetsTheNextQueuedRoomInAtOnce() {
-        matches.start("temple", List.of(List.of(DAVE), List.of(EVE)));
-        Room leased = openWith(ALICE, BOB);
-        rooms.create(player(CAROL));
-        Room queued = room(CAROL);
-        assertEquals("dojo", leased.arena());
-        assertEquals("garden", queued.arena());
-        assertFalse(rooms.hasLease(queued), "the waiting-room match uses the second slot");
-
-        playToTheEnd("temple");
-        assertTrue(rooms.hasLease(queued), "granted at the close, before a waiting room's next tick");
-        assertFalse(rooms.hasFreeSlot());
     }
 
     @Test
@@ -781,5 +767,177 @@ class RoomFlowTest extends MatchFixture {
         assertTrue(rooms.rooms().isEmpty());
         assertEquals(List.of("hold", "release"), worldHolds);
         assertNotNull(rooms);
+    }
+
+    // ---- Moving waiting rooms, the hub, hosting and events onto rooms ----
+
+    /** Every running match belongs to a room that holds its arena's lease. */
+    private void assertEveryMatchHoldsALease() {
+        for (var match : matches.matches()) {
+            assertTrue(rooms.rooms().stream().anyMatch(room -> room.arena().equals(match.arena())
+                    && rooms.hasLease(room)) || closedRoomLeases.contains(match.arena()), match.arena());
+        }
+    }
+
+    private final Set<String> closedRoomLeases = new HashSet<>();
+
+    @Test
+    void noMatchStartsWithoutAHostOrAdminPressFromAnyWayIn() {
+        rooms.setFeatured(() -> Optional.of("garden"));
+        // An old play portal, an old hub portal, /narena host, invitations and the clock.
+        assertEquals(Optional.empty(), rooms.fromPortal(player(ALICE), Optional.of("dojo")));
+        assertEquals(Optional.empty(), rooms.fromPortal(player(BOB), Optional.empty()));
+        players.get(CAROL).permissions.add(NinjaArenaCommand.HOST);
+        HostingCommands hosting = rooms;
+        hosting.host(player(CAROL), "temple");
+        hosting.invite(player(CAROL), "Dave");
+        hosting.accept(player(DAVE), "Carol");
+        rooms.create(player(EVE));
+        rooms.invite(player(EVE), "Frank");
+        rooms.accept(player(FRANK), "Eve");
+        for (int second = 0; second < 120; second++) {
+            rooms.tick();
+            matches.tick();
+            runNextTick();
+        }
+        assertTrue(matches.matches().isEmpty(), "full rooms with leases still wait for start");
+        assertTrue(rooms.rooms().stream().noneMatch(Room::isPlaying));
+
+        rooms.start(player(EVE), null);
+        assertEquals(1, matches.matches().size());
+        assertEveryMatchHoldsALease();
+    }
+
+    @Test
+    void anOldPlayPortalJoinsTheFullestOpenRoomOnItsArenaOrStaysInTheLobby() {
+        Room small = openWith(ALICE);
+        Room big = openWith(CAROL, DAVE);
+        rooms.setArena(big, "dojo");
+        assertEquals("dojo", small.arena());
+        rooms.fromPortal(player(EVE), Optional.of("DOJO"));
+        assertTrue(big.contains(EVE), "the room with more players fills first");
+        assertTrue(lobby.contains(EVE));
+
+        rooms.fromPortal(player(FRANK), Optional.of("temple"));
+        assertTrue(rooms.roomOf(FRANK).isEmpty());
+        assertTrue(lobby.contains(FRANK), "no room on temple: the player waits in the lobby");
+        assertTrue(players.get(FRANK).messages.contains("No open room on arena temple has space for you yet."
+                + " Create one with /narena room create, or join another below."));
+        assertTrue(players.get(FRANK).messages.contains("Open rooms:"));
+        assertTrue(matches.matches().isEmpty());
+    }
+
+    @Test
+    void anOldHubPortalJoinsAnyOpenPublicRoomFeaturedMapFirst() {
+        Room first = openWith(ALICE, BOB);
+        rooms.create(player(CAROL));
+        Room featured = room(CAROL);
+        assertEquals("garden", featured.arena());
+        rooms.settings(player(ALICE), "privacy", "invite");
+        rooms.setFeatured(() -> Optional.of("garden"));
+
+        rooms.fromPortal(player(DAVE), Optional.empty());
+        assertTrue(featured.contains(DAVE), "the featured map's room comes first");
+        rooms.setFeatured(Optional::empty);
+        rooms.fromPortal(player(EVE), Optional.empty());
+        assertTrue(featured.contains(EVE), "an invite-only room takes no portal player");
+        assertFalse(first.contains(EVE));
+    }
+
+    @Test
+    void aPortalThatTheLobbyRefusesLeavesThePlayerOutsideWithTheReason() {
+        lobbyRefuses.add(ALICE);
+        assertEquals(Optional.of("The lobby is closed."), rooms.fromPortal(player(ALICE), Optional.empty()));
+        assertTrue(rooms.roomOf(ALICE).isEmpty());
+    }
+
+    @Test
+    void hostOpensAnInviteOnlyRoomOnTheNamedArenaAndInviteAndAcceptAreTheRoomOnes() {
+        HostingCommands hosting = rooms;
+        hosting.host(player(ALICE), "missing");
+        assertEquals("No arena called missing.", lastMessage(ALICE));
+        hosting.host(player(ALICE), "TEMPLE");
+        Room room = room(ALICE);
+        assertEquals("temple", room.arena(), "no pickable flag needed");
+        assertTrue(room.settings().inviteOnly());
+        assertTrue(rooms.hasLease(room));
+        assertEquals("Your room on arena temple is invite only. Invite your players with /narena invite <player>.",
+                lastMessage(ALICE));
+
+        hosting.accept(player(BOB), "Alice");
+        assertEquals("The room of Alice is invite only, and you have no invitation.", lastMessage(BOB));
+        hosting.invite(player(ALICE), "Bob");
+        hosting.accept(player(BOB), "Alice");
+        assertTrue(room.contains(BOB));
+        hosting.host(player(ALICE), "dojo");
+        assertEquals("You are already in a room. Use /narena room leave first.", lastMessage(ALICE));
+        assertTrue(matches.matches().isEmpty());
+    }
+
+    @Test
+    void theRoomListShowsTheFeaturedMapAndNewRoomsPreferIt() {
+        rooms.setFeatured(() -> Optional.of("temple"));
+        rooms.show(player(EVE));
+        assertEquals(List.of("Featured map: temple. Matches there earn the event bonus while the event runs.",
+                "No rooms are open. Create one with /narena room create."), players.get(EVE).messages);
+
+        Room room = openWith(ALICE, BOB);
+        assertEquals("temple", room.arena(), "a free featured map is the default");
+        players.get(EVE).messages.clear();
+        rooms.show(player(EVE));
+        assertEquals("Open rooms:", players.get(EVE).messages.get(1));
+        assertEquals("- Alice on temple (featured) (2/2) [Join]", players.get(EVE).messages.get(2));
+        rooms.show(player(ALICE));
+        assertTrue(players.get(ALICE).messages.contains("Arena temple is the featured map of the event running"
+                + " now: its matches earn the event bonus."));
+
+        rooms.setFeatured(Optional::empty);
+        players.get(EVE).messages.clear();
+        rooms.show(player(EVE));
+        assertEquals("- Alice on temple (2/2) [Join]", players.get(EVE).messages.get(1));
+    }
+
+    @Test
+    void aRoomMatchOnTheFeaturedMapDuringTheEventGetsTheBonus() {
+        EventSettings.Bonus bonus = new EventSettings.Bonus(500, null, false);
+        String[] featured = {"temple"};
+        matches.setEventBonus(arena -> arena.equals(featured[0]) ? bonus : EventSettings.Bonus.NONE);
+        rooms.setFeatured(() -> Optional.ofNullable(featured[0]));
+        Room onFeatured = openWith(ALICE, BOB);
+        Room elsewhere = openWith(CAROL, DAVE);
+        assertEquals("temple", onFeatured.arena());
+        assertEquals("dojo", elsewhere.arena());
+        rooms.start(player(ALICE), null);
+        rooms.start(player(CAROL), null);
+        assertEquals(bonus, matches.match("temple").orElseThrow().eventBonus());
+        assertEquals(EventSettings.Bonus.NONE, matches.match("dojo").orElseThrow().eventBonus());
+
+        playToTheEnd("temple");
+        featured[0] = null;
+        rooms.start(player(ALICE), null);
+        assertEquals(EventSettings.Bonus.NONE, matches.match("temple").orElseThrow().eventBonus(),
+                "after the event the same room plays without it");
+    }
+
+    @Test
+    void aRoomThatClosesWhileItsMatchRunsKeepsTheLeaseUntilTheMatchEnds() {
+        rooms.setMaxActive(1);
+        Room room = openWith(ALICE, BOB, CAROL, DAVE);
+        rooms.start(player(ALICE), null);
+        rooms.create(player(EVE));
+        Room queued = room(EVE);
+        for (UUID guest : List.of(BOB, CAROL, DAVE)) {
+            players.get(guest).permissions.remove(RoomService.CREATE);
+        }
+        // The host leaves and nobody left may host: the room closes, its match goes on.
+        rooms.leave(player(ALICE));
+        assertFalse(rooms.rooms().contains(room));
+        assertTrue(matches.match("dojo").isPresent(), "the match goes on");
+        closedRoomLeases.add("dojo");
+        assertFalse(rooms.hasLease(queued), "the running match still holds the only slot");
+        assertEveryMatchHoldsALease();
+
+        playToTheEnd("dojo");
+        assertTrue(rooms.hasLease(queued), "granted when the match ends");
     }
 }

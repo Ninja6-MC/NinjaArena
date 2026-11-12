@@ -30,8 +30,11 @@ import org.bukkit.configuration.file.YamlConfiguration;
  *     region: {min-x: 40, min-y: 64, min-z: 8, max-x: 41, max-y: 66, max-z: 8}
  * </pre>
  *
- * <p>{@code hub} is the shared hub point in the arena world and {@code lobby} a portal's own
- * lobby choice; both are left out while unset, and a file without them reads as before.
+ * <p>{@code hub} is the shared hub point an older version saved in the arena world, and
+ * {@code lobby} a portal's own lobby choice; both are left out while unset, and a file
+ * without them reads as before. Both are deprecated: they still load, with a startup warning
+ * ({@link PortalRegistry#oldLobbyWarnings}), every play portal leads to the lobby, and
+ * {@code lobby} only picks which open rooms a player joins there.
  *
  * <p>A player-built portal has {@code built-by} and {@code frame} and no {@code arena},
  * {@code spectator} or {@code lobby}; its region is the opening of its frame. Versions from

@@ -64,38 +64,23 @@ arena-grid:
   cell-size: 256
 
 waiting-room:
-  # Where portals send players before their match, for every portal that does not choose
-  # for itself with /narena portal lobby (player-built portals never do; see player-portals):
-  #   dedicated - the waiting room of the portal's own arena. The match there starts once
-  #               enough players have arrived; when it is full, more are turned away.
-  #   shared    - one hub for every portal, set with /narena portal sethub. Once enough
-  #               players are there, the first to arrive go together to a free arena's
-  #               teams; the rest wait in the hub for the next free arena.
-  lobby: dedicated
-  # Players needed in a waiting room or the hub before the start countdown begins (1 to 64),
-  # or fewer for an arena that holds fewer. Arriving players are put on the smallest team.
+  # What a new room starts from; its host can change both with /narena room settings. The
+  # section keeps the name of the waiting rooms that rooms replaced. No match starts by
+  # itself: lobby, max-players, countdown-seconds and radius belonged to the automatic
+  # countdown and are no longer in this file. A config that still sets them loads with a
+  # warning (see "Moving from waiting rooms to rooms" in the README).
+  # Players a new room needs before its host can start it (1 to 64).
   min-players: 2
-  # The most players one match takes (0 for no limit, otherwise min-players to 256). A full
-  # waiting room turns arrivals away; the hub keeps them for the next arena.
-  max-players: 0
-  # The most players on one team (0 for no limit, otherwise 1 to 64). An arena then takes at
-  # most this many times its team count. An arena that holds fewer than min-players starts
-  # once it is full, whether its players wait in its room or in the hub.
+  # The most players on one team of a new room (0 for no limit, otherwise 1 to 64).
   team-size: 0
-  # Length of the start countdown in seconds (1 to 600). It stops if the count drops below
-  # min-players and starts again from the full length when it is reached again.
-  countdown-seconds: 30
-  # How far a player may move from the waiting-room or hub point, in blocks along any axis
-  # (2 to 64). Going further, or being teleported further, sends them home.
-  radius: 16
 
 player-portals:
   # Players with ninjaarena.play build their own way in: a frame of frame-material shaped
   # like a nether portal (an opening 2 to 21 wide and 3 to 21 tall, corners optional), lit
-  # with flint and steel. It leads where waiting-room.lobby says: the shared hub, or a
-  # waiting room that is filling, else a free arena, else the player is told every arena is
-  # busy. Changes apply to the next portal lit; portals already built stay until a frame
-  # block breaks or an admin deletes them with /narena portal delete.
+  # with flint and steel. It leads to the lobby, where the player joins the open public room
+  # with the most players, or waits to create or be invited to one. Changes apply to the
+  # next portal lit; portals already built stay until a frame block breaks or an admin
+  # deletes them with /narena portal delete.
   # Worlds players may build in, by name. An empty list turns building off. The arena world
   # is never allowed.
   worlds:
@@ -169,9 +154,8 @@ shop:
 arenas:
   # Arena slots in use at once (1 to 100), never more than the arena grid has cells. A room
   # leases a slot for its arena when it is created and keeps it through its whole match;
-  # while every slot is leased, more rooms queue and see their place. A waiting room whose
-  # countdown ends while every slot is in use holds at its last second until one frees up.
-  # Applies on reload; lowering it never ends a lease already granted. This was
+  # while every slot is leased, more rooms queue and see their place. Every match is a
+  # room's, so every running match holds a lease. Applies on reload; lowering it never ends a lease already granted. This was
   # stability.max-concurrent-matches, which is still read, with a warning, when this is
   # not set.
   max-active: 4

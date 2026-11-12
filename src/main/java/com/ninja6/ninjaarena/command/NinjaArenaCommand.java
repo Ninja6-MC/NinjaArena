@@ -28,10 +28,7 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String PLAY = "ninjaarena.play";
     /** Lobby edit mode and reset; a child of {@link #ADMIN}. */
     public static final String LOBBY = "ninjaarena.admin.lobby";
-    /**
-     * Leaves the room, match or spectating for the lobby, a waiting room or the lobby for
-     * home.
-     */
+    /** Leaves the room, match or spectating for the lobby, or the lobby for home. */
     public static final String LEAVE = "leave";
     /** Rooms: open, set up, invite, start and leave. */
     public static final String ROOM = "room";
@@ -117,8 +114,8 @@ public final class NinjaArenaCommand implements TabExecutor {
     }
 
     /**
-     * @param leave takes the player out of their waiting room or match and sends them home;
-     *              false if they were in neither
+     * @param leave takes the player out of their room, match or spectating to the lobby, or
+     *              out of the lobby home; false if they were in none of them
      */
     public NinjaArenaCommand(ArenaCommand arena, PortalCommand portal, DirectorCommand director,
             Predicate<Player> leave) {

@@ -10,17 +10,18 @@ import java.util.UUID;
 
 /**
  * A box of blocks in a world outside the arena world that sends a player who walks into it
- * to an arena's waiting room, the shared hub or a live match. Whatever is built around the box is decoration; only the box
- * counts. Instances are immutable.
+ * to the lobby and its rooms or, for a spectator portal, to a live match. Whatever is built
+ * around the box is decoration; only the box counts. Instances are immutable.
  *
  * @param world  the world's name
  * @param region both corners inclusive; at most {@link #MAX_SPAN} blocks along each axis
  * @param arena  the arena's name; the arena may have been deleted since, which makes the
- *               portal refuse everyone until it is bound again. A portal that leads to the
- *               shared hub only uses it while its lobby is dedicated. {@code null} for a
- *               player-built portal, which leads to whichever arena is open when a player
- *               walks in ({@link #boundTo})
- * @param lobby  the portal's own lobby choice, or {@code null} to use the server default;
+ *               spectator portal refuse everyone until it is bound again. A play portal
+ *               whose lobby choice is dedicated joins players to open rooms on it.
+ *               {@code null} for a player-built portal, which joins players to any open
+ *               room
+ * @param lobby  the portal's own deprecated lobby choice ({@link LobbyMode}), or
+ *               {@code null} to use the server default;
  *               always {@code null} for a spectator portal, which leads to a live match, and
  *               for a player-built one
  * @param built  who built the portal and from what, or {@code null} for a portal an admin
@@ -69,17 +70,6 @@ public record Portal(String name, String world, ArenaBounds region, String arena
     /** The same portal with another lobby choice; {@code null} uses the server default. */
     public Portal withLobby(LobbyMode lobby) {
         return new Portal(name, world, region, arena, spectator, lobby, built);
-    }
-
-    /**
-     * The player-built portal bound to the arena it sends one player to. Only that entry uses
-     * the copy; the registry keeps the unbound portal.
-     */
-    public Portal boundTo(String arena) {
-        if (built == null) {
-            throw new IllegalStateException("only a player-built portal is bound per entry");
-        }
-        return new Portal(name, world, region, Objects.requireNonNull(arena, "arena"), false, null, built);
     }
 
     /** Whether a player built this portal from a frame. */

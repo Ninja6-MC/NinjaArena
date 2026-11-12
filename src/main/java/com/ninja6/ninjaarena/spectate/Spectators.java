@@ -15,7 +15,6 @@ import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.restore.RestoreService;
-import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.HashMap;
 import java.util.Map;
@@ -61,7 +60,6 @@ public final class Spectators implements Listener {
     private final Plugin plugin;
     private final ArenaRegistry arenas;
     private final MatchService matches;
-    private final WaitingRoomService waiting;
     private final RestoreService restores;
     private final Supplier<World> world;
     private final Map<UUID, Seat> viewers = new HashMap<>();
@@ -70,15 +68,24 @@ public final class Spectators implements Listener {
     private Supplier<Location> shopArea = () -> null;
     private Predicate<Location> lobbyArea = location -> false;
 
-    public Spectators(Plugin plugin, ArenaRegistry arenas, MatchService matches, WaitingRoomService waiting,
-            RestoreService restores, Supplier<World> world, SpectatorSettings settings) {
+    private Predicate<UUID> inLobby = id -> false;
+
+    public Spectators(Plugin plugin, ArenaRegistry arenas, MatchService matches, RestoreService restores,
+            Supplier<World> world, SpectatorSettings settings) {
         this.plugin = plugin;
         this.arenas = arenas;
         this.matches = matches;
-        this.waiting = waiting;
         this.restores = restores;
         this.world = world;
         this.settings = settings;
+    }
+
+    /**
+     * Who may start watching with {@code /narena spectate}: lobby members who are in no room,
+     * whose snapshot is already saved. By default nobody may.
+     */
+    public void setLobbyMembers(Predicate<UUID> inLobby) {
+        this.inLobby = java.util.Objects.requireNonNull(inLobby, "inLobby");
     }
 
     /**
@@ -159,11 +166,14 @@ public final class Spectators implements Listener {
         }
     }
 
-    /** A waiting player already has a durable snapshot. Transfer only after teleport succeeds. */
-    public void fromWaitingRoom(Player player, String arena) {
-        if (!player.hasPermission(PortalEntry.SPECTATE) || !waiting.isWaiting(player.getUniqueId())
-                || player.isDead()) {
-            tell(player, "spectate.not-waiting");
+    /**
+     * {@code /narena spectate <arena>} from the lobby. A lobby member already has a durable
+     * snapshot; they leave the lobby by this plugin's own teleport, so it is not taken as a
+     * way out, and stop watching back in the lobby.
+     */
+    public void fromLobby(Player player, String arena) {
+        if (!player.hasPermission(PortalEntry.SPECTATE) || !inLobby.test(player.getUniqueId()) || player.isDead()) {
+            tell(player, "spectate.not-in-lobby");
             return;
         }
         Seat seat = seat(arena).orElse(null);
@@ -173,7 +183,7 @@ public final class Spectators implements Listener {
         }
         ArenaPoint point = seat.point();
         Location target = new Location(world.get(), point.x(), point.y(), point.z(), point.yaw(), point.pitch());
-        if (!waiting.transferToSpectate(player, target)) {
+        if (!OwnTeleports.teleport(player, target, TeleportCause.PLUGIN)) {
             tell(player, "spectate.send-failed");
             return;
         }

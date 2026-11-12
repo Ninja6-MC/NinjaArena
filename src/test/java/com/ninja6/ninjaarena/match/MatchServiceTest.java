@@ -16,8 +16,6 @@ import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
-import com.ninja6.ninjaarena.waiting.WaitingRoomService;
-import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.CrossWorldTransfers;
 import com.ninja6.ninjaarena.world.LobbyWorld;
 import java.util.List;
@@ -350,7 +348,7 @@ class MatchServiceTest extends MatchFixture {
     }
 
     @Test
-    void anUnexpectedFailureReleasesTheArenaAndThrowsSoTheWaitingRoomSendsPlayersHome() throws Exception {
+    void anUnexpectedFailureReleasesTheArenaAndThrowsSoTheRoomCanTakeItsPlayersBack() throws Exception {
         MatchService failing = new MatchService(plugin, arenas, () -> arenaWorld, SETTINGS, player -> {
             restored.add(player.getUniqueId());
             return RestoreResult.RESTORED;
@@ -361,16 +359,6 @@ class MatchServiceTest extends MatchFixture {
         assertFalse(arenas.isHeld("dojo"));
         assertFalse(failing.isInMatch(ALICE));
 
-        WaitingRoomService rooms = new WaitingRoomService(plugin, arenas, new WaitingRoomSettings(2, 1, 4),
-                player -> {
-                    restored.add(player.getUniqueId());
-                    return RestoreResult.RESTORED;
-                }, player -> { }, failing);
-        rooms.join(player(ALICE), "dojo");
-        rooms.join(player(BOB), "dojo");
-        rooms.tick();
-        assertEquals(List.of(ALICE, BOB), restored);
-        assertTrue(players.get(ALICE).messages.contains("The match could not start."));
         assertFalse(arenas.isHeld("dojo"));
     }
 

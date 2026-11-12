@@ -86,8 +86,8 @@ order asynchronous placement, so NinjaArena defines the order itself:
    from another plugin in the window is reverted too. The inventory is not written
    again. Only plugin-caused and unknown-cause teleports count, and a second one in
    the window is left to win. Teleports NinjaArena starts itself (admission, portal
-   entry, waiting room, match, restore) are marked and never undone, and nothing is
-   undone for a player in a match, waiting room, hub or spectating.
+   entry, lobby, match, restore) are marked and never undone, and nothing is undone
+   for a player in a match or the lobby, or spectating.
 3. A placement later than that, and the plot assignment and respawn point the
    plugin sets, are not touched.
 
@@ -136,8 +136,8 @@ accounting and reconnect recovery on a test backend.
 ### EssentialsX ender chest
 
 **Code review and recorded test-server finding.** EssentialsX `/enderchest`
-opens an inventory view directly. NinjaArena's waiting-room and match
-lockdown now cancels the inventory-open event, covering the command as well
+opens an inventory view directly. NinjaArena's lobby and match lockdown
+now cancels the inventory-open event, covering the command as well
 as ordinary container access ([#63][ender-chest]). Keep the lockdown in force
 during both phases. Operators can retain the command for ordinary play.
 
@@ -146,7 +146,7 @@ during both phases. Operators can retain the command for ordinary play.
 **Code review.** NinjaArena stores the pre-entry snapshot by player UUID and
 reapplies it after the return teleport. InventoryRollbackPlus can capture
 join, leave, death and world changes and lets staff restore those backups.
-An arena-era backup may contain a temporary kit or an empty waiting-room
+An arena-era backup may contain a temporary kit or an empty lobby
 inventory. A separate inventory manager that writes after NinjaArena can
 also overwrite the restored inventory. Inventory-open lockdown cannot stop
 another plugin from writing directly to a player inventory.
