@@ -34,6 +34,12 @@ stay out of both, and the terrain eases into them over `blendDepth()` rows. Rows
 and `y = 1` are always solid; floating platforms keep at least two blocks of air above
 the ground.
 
+Overhang hollows are carved only above the lowest ground within a few blocks, so most of
+them open sideways under a lip, but some stay sealed air pockets with no opening. Air
+below a column's `terrainTopY` is therefore not necessarily reachable: the movement
+solver and placement must not assume it is, and should flood-fill from the open sky if
+they need to know.
+
 Cells are stored one byte each in a single array, in column order (`(z * width + x) *
 height + y`).
 
@@ -101,8 +107,13 @@ to the same rules:
   between platforms; `StrictMath` is the fallback if one is ever needed.
 * Never let the iteration order of a `HashMap` or `HashSet`, or a parallel stream,
   decide what is generated.
-* Only append to `BlockKind` and `TerrainTheme`: the digest hashes ordinals, and the
-  seed picks a theme by index.
+* Only append to `BlockKind`, never reorder or remove a constant: the digest hashes
+  ordinals. Appending a kind leaves existing models unchanged until a pass uses it.
+* Never reorder or remove a `TerrainTheme`. Even appending one changes existing maps:
+  `themeFor` picks a theme by drawing an index below the number of themes, so a new
+  theme changes which theme many existing seeds get. Treat it as an intended output
+  change: update the golden theme assertions and any golden digest whose theme moved
+  (the theme ordinal is in the digest header), as described under Golden digests.
 
 ## Golden digests
 
@@ -110,9 +121,10 @@ to the same rules:
 two fixed seeds. They fail whenever the generator's output changes, which means every
 seed now gives a different map. When the change is intended, run `./gradlew test --tests
 '*TerrainGeneratorTest'`, copy the actual values from the failure messages into the
-constants at the top of the test, and say in the pull request that existing seeds now
-generate different maps. If the digest's byte layout changes, bump
-`TerrainModel.DIGEST_FORMAT` as well.
+digest constants at the top of the test and the expected themes in
+`themesForFixedSeedsAreUnchanged`, and say in the pull request that existing seeds now
+generate different maps. Adding a theme is such a change even when nothing else moves.
+If the digest's byte layout changes, bump `TerrainModel.DIGEST_FORMAT` as well.
 
 ## How later tasks use it
 

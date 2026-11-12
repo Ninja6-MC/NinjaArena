@@ -16,8 +16,10 @@ package com.ninja6.ninjaarena.terrain;
  *   <li><b>Ravines.</b> Where a ridge of noise passes near zero the ground is cut down in a
  *       V. Wider and deeper with difficulty.</li>
  *   <li><b>Overhangs.</b> Three-dimensional noise hollows the ground under a two-block roof,
- *       but only beside a nearby drop, so every hollow opens sideways under a lip. A deeper
- *       band and a lower threshold with difficulty.</li>
+ *       but only at heights above the lowest ground within a few blocks, so most hollows
+ *       open sideways under a lip. Some stay sealed air pockets with no opening, so air
+ *       below a column top is not necessarily reachable. A deeper band and a lower
+ *       threshold with difficulty.</li>
  *   <li><b>Platforms.</b> Floating ellipses above the ground, more of them with
  *       difficulty.</li>
  *   <li><b>Kinds.</b> Each solid cell is labelled surface, cliff, soil or rock.</li>
