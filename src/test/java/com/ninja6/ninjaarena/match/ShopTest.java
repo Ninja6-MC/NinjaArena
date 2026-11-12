@@ -50,7 +50,7 @@ class ShopTest extends MatchFixture {
         items = new KitItems(material -> new TestItemStack(material, "vanilla", 1));
         items.register("test:food", 64, player -> {
             if (brokenProvider) { throw new IllegalStateException("unavailable item"); }
-            return new TestItemStack(Material.GOLDEN_APPLE, "food", 1);
+            return new TestItemStack(Material.COOKED_BEEF, "food", 1);
         });
         definition = new ShopCatalogue(Map.of(
                 "armour", new Entry("armour", 2, 1, Category.ARMOUR, new Armour("iron")),

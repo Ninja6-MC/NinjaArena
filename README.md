@@ -251,14 +251,19 @@ a refund never recreates a departed player's ledger.
 
 ## Safe configuration reload
 
-Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml`, `kits.yml`,
-`shop.yml` or `messages.yml`. All four are read and validated before anything changes.
-A missing config, kit or shop file, malformed YAML, duplicate or unknown key, wrong type, out-of-range or
-non-finite number, invalid kit entry, unregistered item ID or excessive stack amount
-rejects the whole reload. The reply names the file, setting and source line; the previous
-settings and kit remain active. Omitted config settings use the bundled defaults. Reload
-never reads arenas, portals or snapshots, and never moves match players or restarts a
-match.
+Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml`,
+`kits.yml`, `shop.yml` or `messages.yml`. All four are read and validated before
+anything changes. For config and kit files, a missing file, malformed YAML, duplicate or
+unknown key, wrong type, out-of-range or non-finite number, invalid kit entry,
+unregistered item ID or excessive stack amount rejects the whole reload. The reply names
+the file, setting and source line; the previous settings and kit remain active. Omitted
+config settings use the bundled defaults.
+
+For `shop.yml`, whole-file problems such as a missing file, malformed YAML or wrong
+format reject the reload and keep the previous catalogue. A bad item is skipped with one
+server log warning; the remaining valid items load. Shop diagnostics do not necessarily
+include a source line. Reload never reads arenas, portals or snapshots, and never moves
+match players or restarts a match.
 
 | Settings | Reload behavior |
 | :--- | :--- |

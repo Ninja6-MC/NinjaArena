@@ -17,12 +17,12 @@ items:
       effect: minecraft:speed # Registered potion effect id.
       amplifier: 0 # Zero-based strength (0 is level I).
       duration: 12000 # Duration in ticks, capped by round end.
-  - id: apples
-    price: 2
+  - id: cooked-beef
+    price: 1
     limit: 2
     category: consumables
     gives:
-      material: GOLDEN_APPLE # Vanilla item; use id instead for a registered plugin item.
+      material: COOKED_BEEF # Vanilla item; use id instead for a registered plugin item.
       amount: 1 # Stack size, within the item's stack limit.
 # Extra uses are useful only with a positive tools.<tool>.uses-per-round in config.yml:
 #   - id: extra-shuriken
