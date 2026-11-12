@@ -11,6 +11,8 @@ import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import com.ninja6.ninjaarena.sound.Sounds;
+import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import io.papermc.paper.event.player.PlayerItemGroupCooldownEvent;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -92,6 +94,9 @@ public final class NinjaTools implements Listener {
     private record Thrown(NinjaTool tool, UUID thrower, String arena, Projectile projectile) {
     }
 
+    private record CooldownCue(NinjaTool tool, long deadline) {
+    }
+
     private record Smoke(UUID thrower, String arena, int team, AreaEffectCloud cloud) {
     }
 
@@ -106,6 +111,10 @@ public final class NinjaTools implements Listener {
 
     private final Map<UUID, Thrown> thrown = new HashMap<>();
     private final Map<UUID, Smoke> smoke = new HashMap<>();
+    private Sounds sounds;
+
+    private final Map<UUID, List<CooldownCue>> pendingCues = new HashMap<>();
+
     /** The tick at which each player may dash again. */
     private final Map<UUID, Long> dashReady = new HashMap<>();
     private final Map<UUID, Map<NinjaTool, Long>> throwReady = new HashMap<>();
@@ -132,6 +141,33 @@ public final class NinjaTools implements Listener {
         this.ticks = Objects.requireNonNull(ticks, "ticks");
         this.strike = Objects.requireNonNull(strike, "strike");
         this.clouds = Objects.requireNonNull(clouds, "clouds");
+    }
+
+    public void setSounds(Sounds sounds) {
+        this.sounds = sounds;
+    }
+
+    /** Called once per second by the match HUD, never by the per-tick tool path. */
+    public void checkCooldowns(MatchView match) {
+        long now = ticks.getAsLong();
+        for (UUID id : match.players()) {
+            List<CooldownCue> pending = pendingCues.get(id);
+            if (pending == null) {
+                continue;
+            }
+            pending.removeIf(cue -> {
+                if (cue.deadline() > now) {
+                    return false;
+                }
+                if (sounds != null && (!cue.tool().thrown() || !usedUp(id, cue.tool()))) {
+                    sounds.player(Cue.COOLDOWN_READY, players.apply(id));
+                }
+                return true;
+            });
+            if (pending.isEmpty()) {
+                pendingCues.remove(id);
+            }
+        }
     }
 
     /** Damages through the server's damage path, with the shuriken as the direct cause. */
@@ -294,6 +330,10 @@ public final class NinjaTools implements Listener {
         int cooldown = settings.cooldownSeconds(kind) * TICKS_PER_SECOND;
         throwReady.computeIfAbsent(id, ignored -> new EnumMap<>(NinjaTool.class))
                 .put(kind, ticks.getAsLong() + cooldown);
+        if (cooldown > 0) {
+            pendingCues.computeIfAbsent(id, ignored -> new ArrayList<>())
+                    .add(new CooldownCue(kind, throwReady.get(id).get(kind)));
+        }
         player.setCooldown(kind.cooldownGroup(), cooldown);
         Projectile projectile = event.getProjectile();
         String arena = matches.matchOf(player.getUniqueId()).orElseThrow().arena();
@@ -491,6 +531,8 @@ public final class NinjaTools implements Listener {
         player.setFallDistance(0);
         int cooldown = settings.dashCooldownSeconds() * TICKS_PER_SECOND;
         dashReady.put(id, now + cooldown);
+        pendingCues.computeIfAbsent(id, ignored -> new ArrayList<>())
+                .add(new CooldownCue(NinjaTool.DASH, now + cooldown));
         player.setCooldown(NinjaTool.DASH.material(), cooldown);
     }
 
@@ -518,6 +560,7 @@ public final class NinjaTools implements Listener {
     }
 
     private void forget(UUID id) {
+        pendingCues.remove(id);
         Map<NinjaTool, Long> throwsCooling = throwReady.remove(id);
         throwUses.remove(id);
         throwBonuses.remove(id);

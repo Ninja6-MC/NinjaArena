@@ -12,6 +12,7 @@ import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.room.Room;
 import com.ninja6.ninjaarena.room.RoomLobby;
 import com.ninja6.ninjaarena.room.RoomService;
+import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.CrossWorldTransfers;
 import com.ninja6.ninjaarena.world.LobbyWorld;
@@ -153,6 +154,20 @@ class RoomFlowTest extends MatchFixture {
                     case "sendMessage" -> null;
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
+    }
+
+    @Test
+    void joinCuesStayInsideTheirRoomIncludingTheJoiningPlayer() {
+        rooms.setSounds(new Sounds(plugin.getServer()::getPlayer));
+        rooms.create(player(ALICE));
+        rooms.create(player(CAROL));
+        players.values().forEach(fake -> fake.sounds.clear());
+        rooms.invite(player(ALICE), "Bob");
+        rooms.accept(player(BOB), "Alice");
+        assertEquals(1, players.get(ALICE).sounds.size());
+        assertEquals(1, players.get(BOB).sounds.size());
+        assertTrue(players.get(CAROL).sounds.isEmpty());
+        assertTrue(players.get(DAVE).sounds.isEmpty());
     }
 
     @Test

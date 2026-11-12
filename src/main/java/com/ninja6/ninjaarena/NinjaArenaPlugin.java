@@ -72,6 +72,7 @@ import com.ninja6.ninjaarena.restore.ArenaCombatCleanup;
 import com.ninja6.ninjaarena.restore.RestoreListener;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.snapshot.SnapshotService;
+import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.spectate.Spectators;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
@@ -129,6 +130,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public final class NinjaArenaPlugin extends JavaPlugin {
 
+    private Sounds sounds;
     private SnapshotService snapshots;
     private volatile ArenaWorld arenaWorld;
     private LobbyWorld lobbyWorld;
@@ -297,6 +299,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
                 ToolSettings.from(getConfig().getConfigurationSection("tools")), Bukkit::getCurrentTick,
                 NinjaTools::damage, at -> at.getWorld().spawn(at, AreaEffectCloud.class));
+        sounds = new Sounds(getServer()::getPlayer,
+                name -> spectators == null ? List.of() : spectators.players(name));
+        sounds.load(getConfig(), getLogger()::warning);
+        matches.setSounds(sounds);
+        tools.setSounds(sounds);
         tools.setVisuals(visuals);
         getServer().getPluginManager().registerEvents(tools, this);
         // Stealth, smoke and shuriken marks steer the enemies' targets.
@@ -319,6 +326,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         // Buying is open only while the buyer's match is in its shop phase.
         shop = new Shop(matches, points, kitItems, tools,
                 getServer()::getPlayer, getLogger(), catalogue, match -> match.phase() == MatchPhase.SHOP);
+        shop.setSounds(sounds);
         roundKits.setAfterKit(shop::apply);
         getServer().getPluginManager().registerEvents(shop, this);
         roundKits.warnToolAmounts(ToolSettings.from(getConfig().getConfigurationSection("tools")));
@@ -365,6 +373,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 match -> enemyDirectors.director(match).map(director -> (int) director.enemies().stream()
                         .filter(MatchDirector.Enemy::isAlive).count()).orElse(0), tools::throwState);
         getServer().getPluginManager().registerEvents(hud, this);
+        hud.setSounds(sounds);
+        hud.setCooldownCheck(tools::checkCooldowns);
         hud.start(this);
         directors.setGate(hud.withSpawnCues(new StabilityGate(stability,
                 match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
@@ -513,6 +523,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
                     @Override
                     public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
+                        sounds.load(settings, getLogger()::warning);
                         roundKits.warnToolAmounts(ToolSettings.from(settings.getConfigurationSection("tools")));
                         if (placeholders != null) {
                             placeholders.setCacheSeconds(settings.getInt(StatsPlaceholders.CACHE_SECONDS));
@@ -579,6 +590,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 });
         rooms = new RoomService(this, arenas, inMatch, lobbyEntry, waiting::settings, transfers, arenaWorld::hold,
                 MaxActive.read(getConfig(), getLogger()::warning));
+        rooms.setSounds(sounds);
         RoomService roomList = rooms;
         roomList.setElsewhere(name -> waiting.hasRoom(name) || hosted.isReserved(name));
         getServer().getPluginManager().registerEvents(roomList, this);

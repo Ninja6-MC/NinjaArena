@@ -9,6 +9,8 @@ import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import com.ninja6.ninjaarena.sound.Sounds;
+import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.tool.NinjaTools;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,6 +58,8 @@ public final class Shop implements Listener {
     private final Function<UUID, Player> players;
     private final Logger logger;
     private final Predicate<MatchView> open;
+    private Sounds sounds;
+
     private ShopCatalogue definition;
     private final Map<MatchView, ShopCatalogue> catalogues = new IdentityHashMap<>();
     private final Map<MatchView, Map<UUID, Purchases>> purchases = new IdentityHashMap<>();
@@ -75,6 +79,10 @@ public final class Shop implements Listener {
         this.logger = logger;
         this.definition = definition;
         this.open = open;
+    }
+
+    public void setSounds(Sounds sounds) {
+        this.sounds = sounds;
     }
 
     public ShopCatalogue catalogue(MatchView match) {
@@ -109,6 +117,9 @@ public final class Shop implements Listener {
         }
         cart.counts.merge(itemId, 1, Integer::sum);
         cart.pending.add(entry);
+        if (sounds != null) {
+            sounds.player(Cue.SHOP_BUY, player);
+        }
         return Result.BOUGHT;
     }
 

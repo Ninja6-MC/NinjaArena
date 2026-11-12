@@ -7,6 +7,8 @@ import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.RoomCommands;
 import com.ninja6.ninjaarena.match.MatchService;
+import com.ninja6.ninjaarena.sound.Sounds;
+import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.waiting.WaitingRoom;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.CrossWorldTransfers;
@@ -83,6 +85,8 @@ public final class RoomService implements RoomCommands, Listener {
     private final Runnable crossing;
     private Predicate<String> elsewhere = arena -> false;
     private Runnable heldWorld;
+    private Sounds sounds;
+
     private BukkitTask ticker;
     private int configuredMax;
 
@@ -107,6 +111,10 @@ public final class RoomService implements RoomCommands, Listener {
         this.crossing = transfers.allow(roomOf::containsKey);
         matches.onClose(this::matchClosed);
         arenas.onEditOrDelete(this::arenaChanged);
+    }
+
+    public void setSounds(Sounds sounds) {
+        this.sounds = sounds;
     }
 
     /**
@@ -283,6 +291,9 @@ public final class RoomService implements RoomCommands, Listener {
         roomOf.put(id, room);
         names.put(id, player.getName());
         tell(player, "room.created", "arena", room.arena());
+        if (sounds != null) {
+            sounds.room(Cue.ROOM_JOIN, room);
+        }
         if (!slots.request(room, room.arena())) {
             tellQueued(player, room);
         }
@@ -438,6 +449,9 @@ public final class RoomService implements RoomCommands, Listener {
         WaitingRoom.Joined joined = room.join(id);
         roomOf.put(id, room);
         names.put(id, player.getName());
+        if (sounds != null) {
+            sounds.room(Cue.ROOM_JOIN, room);
+        }
         notifyMoves(joined.moves());
         tell(player, "room.joined", "host", host, "team", joined.team());
         for (UUID other : room.others(id)) {
