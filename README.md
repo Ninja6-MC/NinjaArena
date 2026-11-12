@@ -26,6 +26,10 @@ from the readable spec beside it, `obsidian-lobby.yml`, which also marks the lob
 spawn, room area, shop area and board positions. After changing the spec, run
 `./gradlew generateLobbyBuild` and commit both files; the tests fail while they differ.
 
+The seeded terrain generator for generated maps, its determinism rules and how to
+update its golden digests are described in the
+[terrain generator notes](docs/terrain-generator.md).
+
 ## Verification
 
 A local Paper 26.3 build 226 run passed 600 measured seconds after 60 seconds of

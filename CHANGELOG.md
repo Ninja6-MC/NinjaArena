@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Internal: a seeded terrain generator that builds one team's side of a generated map
+  from a seed and a difficulty, identical on every run. Not used by matches yet; see
+  [the terrain generator notes](docs/terrain-generator.md).
 - Configurable personal sound cues for rooms, ready, match starts, purchases, tool
   cooldown completions, enemy spawns and round results, plus a future hazard warning.
   Each cue can be disabled and reload applies immediately to running matches.
