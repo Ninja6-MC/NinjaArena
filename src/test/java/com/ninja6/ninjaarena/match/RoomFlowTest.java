@@ -156,6 +156,100 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void mapChangesRefuseEachInvalidChoiceWithoutMovingTheLease() throws Exception {
+        Room room = openWith(ALICE, BOB);
+        rooms.mapSet(player(ALICE), "garden");
+        assertEquals("You do not have permission to change your room's map.", lastMessage(ALICE));
+        players.get(ALICE).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+        players.get(BOB).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+        players.get(CAROL).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+        rooms.mapSet(player(CAROL), "garden");
+        assertEquals("You are not in a room.", lastMessage(CAROL));
+        rooms.mapSet(player(BOB), "garden");
+        assertEquals("Only the host of the room can do that.", lastMessage(BOB));
+        rooms.mapSet(player(ALICE), "missing");
+        assertEquals("No arena called missing.", lastMessage(ALICE));
+        rooms.mapSet(player(ALICE), "garden");
+        assertEquals("Arena garden is not pickable.", lastMessage(ALICE));
+        arenas.startEdit("temple");
+        arenas.update("temple", a -> a.withoutLastTeamSpawn());
+        arenas.finishEdit("temple");
+        arenas.setPickable("temple", true);
+        rooms.mapSet(player(ALICE), "temple");
+        assertEquals("Arena temple needs at least two team spawns to be chosen.", lastMessage(ALICE));
+        assertEquals("dojo", room.arena());
+        assertTrue(rooms.hasLease(room));
+        rooms.start(player(ALICE), null);
+        rooms.mapSet(player(ALICE), "garden");
+        assertEquals("The room's map cannot change while it is playing.", lastMessage(ALICE));
+        assertEquals("dojo", room.arena());
+    }
+
+    @Test
+    void choosingABusyMapQueuesTheRoomAndGrantsItsOldSlotToTheNextRoom() throws Exception {
+        arenas.setPickable("garden", true);
+        Room first = openWith(ALICE, BOB);
+        Room second = openWith(CAROL, DAVE);
+        Room third = openWith(EVE, FRANK);
+        rooms.setArena(third, "dojo");
+        players.get(ALICE).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+        rooms.mapSet(player(ALICE), "GARDEN");
+        assertEquals("garden", first.arena());
+        assertFalse(rooms.hasLease(first));
+        assertTrue(rooms.hasLease(second));
+        assertTrue(rooms.hasLease(third), "the room waiting for dojo takes the released slot");
+        assertEquals(1, rooms.position(first).orElseThrow());
+        for (UUID member : List.of(ALICE, BOB)) {
+            assertTrue(players.get(member).messages.contains("Alice changed the room's map from dojo to garden."));
+            assertTrue(lastMessage(member).contains("number 1 in the queue"));
+        }
+        rooms.leave(player(CAROL));
+        rooms.leave(player(DAVE));
+        assertTrue(rooms.hasLease(first));
+    }
+
+    @Test
+    void choosingAFreeMapMovesTheLeaseAndReducesTeams() throws Exception {
+        arenas.startEdit("dojo");
+        arenas.update("dojo", a -> a.withTeamSpawn(3, a.teamSpawns().getFirst())
+                .withTeamSpawn(4, a.teamSpawns().getFirst()));
+        arenas.finishEdit("dojo");
+        arenas.setPickable("garden", true);
+        Room room = openWith(ALICE, BOB, CAROL);
+        rooms.settings(player(ALICE), "team-size", "1");
+        assertEquals(4, room.settings().teams());
+        players.get(ALICE).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+        rooms.mapSet(player(ALICE), "garden");
+        assertEquals("garden", room.arena());
+        assertEquals(2, room.settings().teams());
+        assertEquals(0, room.settings().teamSize(), "existing members still fit");
+        assertTrue(rooms.hasLease(room));
+        assertTrue(rooms.position(room).isEmpty());
+        for (UUID member : room.members()) {
+            assertEquals("Alice changed the room's map from dojo to garden.", lastMessage(member));
+        }
+        rooms.create(player(DAVE));
+        assertEquals("dojo", room(DAVE).arena());
+        assertTrue(rooms.hasLease(room(DAVE)), "the old arena is free");
+    }
+
+    @Test
+    void mapListIsForAnyRoomMemberAndMarksOnlyThePickableCurrentMap() throws Exception {
+        rooms.mapList(player(ALICE));
+        assertTrue(lastMessage(ALICE).contains("not in a room"));
+        openWith(ALICE, BOB);
+        rooms.mapList(player(BOB));
+        assertEquals("No maps are pickable.", lastMessage(BOB));
+        arenas.setPickable("dojo", true);
+        arenas.setPickable("garden", true);
+        players.get(BOB).messages.clear();
+        rooms.mapList(player(BOB));
+        assertEquals(List.of("Pickable maps:", "- dojo (current)", "- garden"), players.get(BOB).messages);
+        assertEquals(List.of("dojo", "garden"), rooms.pickableMaps());
+        assertEquals("dojo", room(ALICE).arena(), "a host without the map node keeps the default");
+    }
+
+    @Test
     void noMatchStartsWithoutTheHostsOrAnAdminsPress() {
         Room room = openWith(ALICE, BOB, CAROL);
         assertTrue(room.canStart());

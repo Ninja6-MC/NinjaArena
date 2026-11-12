@@ -21,6 +21,7 @@ import org.bukkit.entity.Player;
 public final class NinjaArenaCommand implements TabExecutor {
 
     public static final String ADMIN = "ninjaarena.admin";
+    public static final String MAP_CHANGE = "ninjaarena.map.change";
     public static final String HOST = "ninjaarena.host";
     public static final String PLAY = "ninjaarena.play";
     /** Lobby edit mode and reset; a child of {@link #ADMIN}. */
@@ -52,6 +53,7 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route(TEXTURES, PLAY, TEXTURES),
             new Route("accept", PLAY, "accept <host>"),
             new Route(ROOM, PLAY, ROOM_USAGE),
+            new Route("map", PLAY, "map <list|set <arena>>"),
             new Route("host", HOST, "host <arena>"),
             new Route("invite", HOST, "invite <player>"),
             new Route(ArenaCommand.NAME, ADMIN, ArenaCommand.NAME + " <subcommand>"),
@@ -220,6 +222,7 @@ public final class NinjaArenaCommand implements TabExecutor {
                         }
                     }
                 }
+                case "map" -> map(sender, label, args);
                 case ROOM -> room(sender, label, args);
                 case "pack" -> {
                     if (args.length == 2 && args[1].equalsIgnoreCase("status")) {
@@ -262,6 +265,23 @@ public final class NinjaArenaCommand implements TabExecutor {
             }
         }
         return true;
+    }
+
+    private void map(CommandSender sender, String label, String[] args) {
+        if (args.length == 3 && args[1].equalsIgnoreCase("set") && !sender.hasPermission(MAP_CHANGE)) {
+            sender.sendMessage(msg("room.map-no-permission"));
+        } else if (!(args.length == 2 && args[1].equalsIgnoreCase("list")
+                || args.length == 3 && args[1].equalsIgnoreCase("set"))) {
+            usage(sender, label, "map <list|set <arena>>");
+        } else if (!(sender instanceof Player player)) {
+            sender.sendMessage(msg("command.players-only"));
+        } else if (rooms == null) {
+            unavailable(sender, msg("command.feature.rooms"));
+        } else if (args[1].equalsIgnoreCase("list")) {
+            rooms.mapList(player);
+        } else {
+            rooms.mapSet(player, args[2]);
+        }
     }
 
     private void room(CommandSender sender, String label, String[] args) {
@@ -453,6 +473,17 @@ public final class NinjaArenaCommand implements TabExecutor {
         }
         if (args[0].equalsIgnoreCase(ADMIN_ROUTE)) {
             return completeAdmin(sender, args);
+        }
+        if (args[0].equalsIgnoreCase("map")) {
+            if (!sender.hasPermission(PLAY)) {
+                return List.of();
+            }
+            if (args.length == 2) {
+                return ArenaCommand.matching(sender.hasPermission(MAP_CHANGE) ? List.of("list", "set")
+                        : List.of("list"), args[1]);
+            }
+            return args.length == 3 && args[1].equalsIgnoreCase("set") && sender.hasPermission(MAP_CHANGE)
+                    && rooms != null ? ArenaCommand.matching(rooms.pickableMaps(), args[2]) : List.of();
         }
         if (args[0].equalsIgnoreCase(ROOM)) {
             if (!sender.hasPermission(PLAY)) {

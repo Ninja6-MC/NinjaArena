@@ -372,6 +372,15 @@ public final class ArenaRegistry {
         return changed;
     }
 
+    /** Changes room selection metadata without entering edit mode or changing the build. */
+    public Arena setPickable(String name, boolean pickable) throws ArenaException {
+        Arena changed = require(name).withPickable(pickable);
+        Map<String, Arena> next = new TreeMap<>(arenas);
+        next.put(changed.name(), changed);
+        write(next);
+        return changed;
+    }
+
     /** What stops an arena from hosting a match, besides edit mode. Empty if nothing does. */
     public List<String> problems(String name) throws ArenaException {
         return ArenaValidator.problems(require(name), grid);

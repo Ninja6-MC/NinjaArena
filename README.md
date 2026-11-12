@@ -236,6 +236,16 @@ other room or waiting room holds. Nothing in a room counts down. The host, or an
 presses start with `/narena room start` once the room has its required player count;
 below it the start is refused.
 
+Hosts with `ninjaarena.map.change` (default op, inherited from `ninjaarena.admin`)
+can use `/narena map set <arena>` while their room is in the lobby. Admins mark a
+hand-built arena with `/narena arena pickable <arena> <on|off>`; `arena info` shows the
+flag. It is saved as optional `pickable: true` in `arenas.yml`, still format 1; missing
+means not pickable. A chosen arena needs at least two team spawns. Everyone in the room
+hears the old map, new map and who changed it, plus the queue position if it is busy.
+Changing maps moves the lease and lowers the team count to fit the new arena. Any room
+member can use `/narena map list` to see pickable arenas, with the current map marked.
+Hosts without the node keep the default arena selection described above.
+
 The host sets the room up with `/narena room settings`:
 
 - `players`: the players needed to start (1 to 64; by default `waiting-room.min-players`).

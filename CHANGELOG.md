@@ -13,6 +13,12 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+
+- Room hosts with `ninjaarena.map.change` can choose a hand-built map with
+  `/narena map set <arena>`; room members can browse `/narena map list`. Admins mark
+  arenas with `/narena arena pickable <arena> <on|off>`, stored as optional
+  `pickable: true` in `arenas.yml` format 1. Map changes move the room's slot lease,
+  adjust its team count and tell every member who changed it and its queue position.
 - Host-started rooms. `/narena room create` opens a room in the lobby; its host sets the
   required player count, teams, team size and privacy with `/narena room settings`,
   invites with a clickable join button, removes players with a button or

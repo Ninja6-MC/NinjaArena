@@ -24,7 +24,8 @@ public record Arena(
         ArenaBounds bounds,
         ArenaPoint waitingRoom,
         List<ArenaPoint> teamSpawns,
-        List<ArenaPoint> enemySpawns) {
+        List<ArenaPoint> enemySpawns,
+        boolean pickable) {
 
     public static final int MIN_TEAMS = 2;
     public static final int MAX_TEAMS = 4;
@@ -45,6 +46,16 @@ public record Arena(
         }
     }
 
+    /** Existing definitions and newly created arenas are not pickable by default. */
+    public Arena(String name, GridCell cell, ArenaBounds bounds, ArenaPoint waitingRoom,
+            List<ArenaPoint> teamSpawns, List<ArenaPoint> enemySpawns) {
+        this(name, cell, bounds, waitingRoom, teamSpawns, enemySpawns, false);
+    }
+
+    public Arena withPickable(boolean value) {
+        return new Arena(name, cell, bounds, waitingRoom, teamSpawns, enemySpawns, value);
+    }
+
     /** A new, empty arena in the given cell. */
     public static Arena create(String name, GridCell cell) {
         return new Arena(name, cell, null, null, List.of(), List.of());
@@ -61,11 +72,11 @@ public record Arena(
     }
 
     public Arena withBounds(ArenaBounds newBounds) {
-        return new Arena(name, cell, newBounds, waitingRoom, teamSpawns, enemySpawns);
+        return new Arena(name, cell, newBounds, waitingRoom, teamSpawns, enemySpawns, pickable);
     }
 
     public Arena withWaitingRoom(ArenaPoint point) {
-        return new Arena(name, cell, bounds, point, teamSpawns, enemySpawns);
+        return new Arena(name, cell, bounds, point, teamSpawns, enemySpawns, pickable);
     }
 
     /**
@@ -83,7 +94,7 @@ public record Arena(
         } else {
             spawns.add(point);
         }
-        return new Arena(name, cell, bounds, waitingRoom, spawns, enemySpawns);
+        return new Arena(name, cell, bounds, waitingRoom, spawns, enemySpawns, pickable);
     }
 
     /** Removes the last team's spawn. Only the last can go, so team numbers never shift. */
@@ -91,13 +102,14 @@ public record Arena(
         if (teamSpawns.isEmpty()) {
             throw new KeyedArgumentException("no team spawns to remove", "arena.invalid.no-team-spawns");
         }
-        return new Arena(name, cell, bounds, waitingRoom, teamSpawns.subList(0, teamSpawns.size() - 1), enemySpawns);
+        return new Arena(name, cell, bounds, waitingRoom, teamSpawns.subList(0, teamSpawns.size() - 1),
+                enemySpawns, pickable);
     }
 
     public Arena withEnemySpawn(ArenaPoint point) {
         List<ArenaPoint> spawns = new ArrayList<>(enemySpawns);
         spawns.add(point);
-        return new Arena(name, cell, bounds, waitingRoom, teamSpawns, spawns);
+        return new Arena(name, cell, bounds, waitingRoom, teamSpawns, spawns, pickable);
     }
 
     /** Removes an enemy spawn point, numbered from 1 as {@code info} lists them. */
@@ -108,6 +120,6 @@ public record Arena(
         }
         List<ArenaPoint> spawns = new ArrayList<>(enemySpawns);
         spawns.remove(number - 1);
-        return new Arena(name, cell, bounds, waitingRoom, teamSpawns, spawns);
+        return new Arena(name, cell, bounds, waitingRoom, teamSpawns, spawns, pickable);
     }
 }

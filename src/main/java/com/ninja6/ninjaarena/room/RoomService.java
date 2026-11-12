@@ -639,6 +639,61 @@ public final class RoomService implements RoomCommands, Listener {
         }
     }
 
+    @Override
+    public List<String> pickableMaps() {
+        return arenas.all().stream().filter(Arena::pickable).map(Arena::name).toList();
+    }
+
+    @Override
+    public void mapList(Player player) {
+        Room room = roomOf.get(player.getUniqueId());
+        if (room == null) {
+            tell(player, "room.not-in-room");
+            return;
+        }
+        List<String> maps = pickableMaps();
+        tell(player, maps.isEmpty() ? "room.map-list-empty" : "room.map-list-header");
+        for (String arena : maps) {
+            tell(player, arena.equals(room.arena()) ? "room.map-list-current" : "room.map-list-entry",
+                    "arena", arena);
+        }
+    }
+
+    @Override
+    public void mapSet(Player player, String arena) {
+        if (!player.hasPermission(NinjaArenaCommand.MAP_CHANGE)) {
+            tell(player, "room.map-no-permission");
+            return;
+        }
+        Room room = hostRoom(player);
+        if (room == null) {
+            return;
+        }
+        if (room.isPlaying()) {
+            tell(player, "room.map-playing");
+            return;
+        }
+        Arena target = arenas.get(arena).orElse(null);
+        if (target == null) {
+            tell(player, "room.map-unknown", "arena", arena);
+            return;
+        }
+        if (!target.pickable()) {
+            tell(player, "room.map-not-pickable", "arena", target.name());
+            return;
+        }
+        if (target.teamSpawns().size() < Arena.MIN_TEAMS) {
+            tell(player, "room.map-too-few-teams", "arena", target.name());
+            return;
+        }
+        String old = room.arena();
+        setArena(room, target.name());
+        broadcast(room, msg("room.map-changed", "old", old, "arena", room.arena(), "player", player.getName()));
+        if (position(room).isPresent()) {
+            broadcast(room, queued(room));
+        }
+    }
+
     /**
      * Moves a room in the lobby to another hand-built arena. Its lease moves with it: the old
      * slot is given up and the room asks for one on the new arena, queueing if it must. The
