@@ -428,7 +428,7 @@ match:
   returning: "<gray>Returning in <seconds> seconds."
 
 # Titles, the boss bar and the action bar of a match. team-score and team-separator
-# are plain text; status is the complete action bar, including each player's points.
+# are plain text; status includes each player's points.
 hud:
   fight-title: "<red>Fight!"
   fight-subtitle: "Round <round>"
@@ -448,6 +448,11 @@ hud:
   team-score: "T<team>: <score>"
   team-separator: "  "
   status: "<yellow><totals>  |  Enemies left: <enemies>  |  Points: <points>"
+  # Thrown-tool hints are appended only while cooling down or used up this round.
+  tool-cooldown: "<tool> <seconds>s"
+  tool-used-up: "<tool> used up this round"
+  tool-separator: "  |  "
+  status-with-tools: "<status>  |  <tools>"
 
 # The final score table. entry, points and rounds are plain text.
 score:

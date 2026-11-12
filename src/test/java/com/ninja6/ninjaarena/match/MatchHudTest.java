@@ -14,6 +14,11 @@ import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.message.Messages;
+import com.ninja6.ninjaarena.tool.NinjaTool;
+import com.ninja6.ninjaarena.tool.NinjaTools.ThrowState;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import java.util.List;
 import java.util.LinkedHashMap;
 import net.kyori.adventure.bossbar.BossBar;
@@ -27,6 +32,7 @@ class MatchHudTest extends MatchFixture {
     private TeamScores scores;
     private PlayerPoints points;
     private int enemies;
+    private final Map<UUID, Map<NinjaTool, ThrowState>> toolStates = new HashMap<>();
 
     private void useHud(MatchSettings settings) {
         scores = new TeamScores();
@@ -48,7 +54,8 @@ class MatchHudTest extends MatchFixture {
             }
         }, player -> readied.add(player.getUniqueId()));
         matches.setStandings(scores);
-        hud = new MatchHud(matches::matches, plugin.getServer()::getPlayer, scores, points, match -> enemies);
+        hud = new MatchHud(matches::matches, plugin.getServer()::getPlayer, scores, points, match -> enemies,
+                (player, tool) -> toolStates.getOrDefault(player, Map.of()).getOrDefault(tool, new ThrowState(0, false)));
     }
 
     private void advance(int seconds) {
@@ -151,6 +158,56 @@ class MatchHudTest extends MatchFixture {
             hud.tick();
             assertEquals("Coins 2; mobs 7; Team 1=2, Team 2=0", players.get(ALICE).actionBars.getLast());
             assertEquals("Coins 0; mobs 7; Team 1=2, Team 2=0", players.get(BOB).actionBars.getLast());
+        } finally {
+            Messages.use(Messages.bundled());
+        }
+    }
+
+    @Test
+    void actionbarAddsOnlyEachPlayersUnavailableThrownToolsAndRemovesReadyHints() {
+        useHud(SETTINGS);
+        startTwoOnTwo();
+        String status = "T1: 0  T2: 0  |  Enemies left: 0  |  Points: 0";
+        assertEquals(status, players.get(ALICE).actionBars.getLast());
+        toolStates.put(ALICE, Map.of(NinjaTool.SHURIKEN, new ThrowState(2, false)));
+        toolStates.put(BOB, Map.of(NinjaTool.SMOKE_BOMB, new ThrowState(3, false)));
+        hud.tick();
+        assertEquals(status + "  |  Shuriken 2s", players.get(ALICE).actionBars.getLast());
+        assertEquals(status + "  |  Smoke Bomb 3s", players.get(BOB).actionBars.getLast());
+        assertEquals(status, players.get(CAROL).actionBars.getLast());
+        toolStates.put(ALICE, Map.of(NinjaTool.SHURIKEN, new ThrowState(2, true),
+                NinjaTool.SMOKE_BOMB, new ThrowState(1, false), NinjaTool.DASH, new ThrowState(8, true)));
+        hud.tick();
+        assertEquals(status + "  |  Shuriken used up this round  |  Smoke Bomb 1s",
+                players.get(ALICE).actionBars.getLast());
+        toolStates.put(ALICE, Map.of(NinjaTool.SMOKE_BOMB, new ThrowState(0, true)));
+        hud.tick();
+        assertEquals(status + "  |  Smoke Bomb used up this round", players.get(ALICE).actionBars.getLast());
+        toolStates.clear();
+        hud.tick();
+        assertEquals(status, players.get(ALICE).actionBars.getLast());
+        assertEquals(status, players.get(BOB).actionBars.getLast());
+    }
+
+    @Test
+    void hintsUseCustomNamesTemplatesAndSeparatorsWithoutChangingCustomStatus() {
+        var templates = new LinkedHashMap<String, Object>(Messages.defaults());
+        templates.put("hud.status", "<green>Score <points> / <enemies> / <totals>");
+        templates.put("hud.tool-cooldown", "<tool>: wait <seconds>");
+        templates.put("hud.tool-used-up", "<tool>: empty");
+        templates.put("hud.tool-separator", ", ");
+        templates.put("hud.status-with-tools", "<status> [<tools>]");
+        templates.put("tool.shuriken", "Star");
+        templates.put("tool.smoke-bomb", "Smoke");
+        try {
+            Messages.use(Messages.of(templates, warning -> { throw new AssertionError(warning); }));
+            useHud(SETTINGS);
+            toolStates.put(ALICE, Map.of(NinjaTool.SHURIKEN, new ThrowState(3, false),
+                    NinjaTool.SMOKE_BOMB, new ThrowState(2, true)));
+            startTwoOnTwo();
+            assertEquals("Score 0 / 0 / T1: 0  T2: 0 [Star: wait 3, Smoke: empty]",
+                    players.get(ALICE).actionBars.getLast());
+            assertEquals("Score 0 / 0 / T1: 0  T2: 0", players.get(BOB).actionBars.getLast());
         } finally {
             Messages.use(Messages.bundled());
         }

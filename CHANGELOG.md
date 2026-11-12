@@ -13,6 +13,11 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Per-player shuriken and smoke bomb cooldown and per-round limit hints in the match
+  action bar on Java and Bedrock. Used-up hints take priority over cooldown seconds;
+  ready tools leave the existing status unchanged. Hint text and separators are
+  configurable in `messages.yml` without changing `hud.status`.
+
 - Separate shuriken and smoke bomb cooldown groups and configurable per-round limits.
   Both tools default to unlimited, non-consuming throws. Each has `cooldown-seconds`
   (0-60, default 0) and `uses-per-round` (0-64, default 0) under `tools`; kit amounts

@@ -224,6 +224,84 @@ class NinjaToolsTest extends MatchFixture {
     }
 
     @Test
+    void throwStateRoundsUpCooldownSecondsAndDoesNotAdvanceDeadlines() {
+        fight();
+        tools.setSettings(throwSettings(2, 0, 3, 0));
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            assertEquals(new NinjaTools.ThrowState(0, false), tools.throwState(ALICE, tool));
+            launch(ALICE, tool);
+        }
+        tick = 1;
+        assertEquals(new NinjaTools.ThrowState(2, false), tools.throwState(ALICE, NinjaTool.SHURIKEN));
+        assertEquals(new NinjaTools.ThrowState(3, false), tools.throwState(ALICE, NinjaTool.SMOKE_BOMB));
+        tick = 20;
+        assertEquals(new NinjaTools.ThrowState(1, false), tools.throwState(ALICE, NinjaTool.SHURIKEN));
+        tick = 39;
+        assertEquals(new NinjaTools.ThrowState(1, false), tools.throwState(ALICE, NinjaTool.SHURIKEN));
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        tick = 40;
+        assertEquals(new NinjaTools.ThrowState(0, false), tools.throwState(ALICE, NinjaTool.SHURIKEN));
+        assertEquals(new NinjaTools.ThrowState(1, false), tools.throwState(ALICE, NinjaTool.SMOKE_BOMB));
+        tick = 80;
+        assertEquals(new NinjaTools.ThrowState(0, false), tools.throwState(ALICE, NinjaTool.SHURIKEN));
+        assertEquals(new NinjaTools.ThrowState(0, false), tools.throwState(ALICE, NinjaTool.SMOKE_BOMB));
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+    }
+
+    @Test
+    void throwStateUsesCurrentLimitsAndAgreesWithRefusedThrowsAndHud() {
+        fight();
+        tools.setSettings(throwSettings(0, 2, 0, 2));
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            launch(ALICE, tool);
+            assertFalse(tools.throwState(ALICE, tool).usedUp());
+            assertFalse(launch(ALICE, tool).event().isCancelled());
+            assertTrue(tools.throwState(ALICE, tool).usedUp());
+            assertTrue(launch(ALICE, tool).event().isCancelled());
+            assertFalse(tools.throwState(BOB, tool).usedUp());
+        }
+        var hud = new MatchHud(matches::matches, plugin.getServer()::getPlayer, new TeamScores(),
+                new PlayerPoints(PointsSettings.DEFAULTS), match -> 0, tools::throwState);
+        hud.tick();
+        assertEquals("T1: 0  T2: 0  |  Enemies left: 0  |  Points: 0  |  Shuriken used up this round"
+                + "  |  Smoke Bomb used up this round", players.get(ALICE).actionBars.getLast());
+        tools.setSettings(throwSettings(0, 3, 0, 1));
+        assertFalse(tools.throwState(ALICE, NinjaTool.SHURIKEN).usedUp());
+        assertTrue(tools.throwState(ALICE, NinjaTool.SMOKE_BOMB).usedUp());
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        assertTrue(launch(ALICE, NinjaTool.SMOKE_BOMB).event().isCancelled());
+        tools.setSettings(ToolSettings.DEFAULTS);
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            assertFalse(tools.throwState(ALICE, tool).usedUp());
+            assertFalse(launch(ALICE, tool).event().isCancelled());
+        }
+        hud.close();
+    }
+
+    @Test
+    void throwStateIsClearedOnRoundStartAndLeavingWithoutChangingOtherPlayers() {
+        fight();
+        tools.setSettings(throwSettings(3, 1, 3, 1));
+        for (UUID id : List.of(ALICE, BOB)) {
+            for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+                launch(id, tool);
+                assertEquals(new NinjaTools.ThrowState(3, true), tools.throwState(id, tool));
+            }
+        }
+        tools.onRoundStart(new RoundStartEvent(matches.matchOf(ALICE).orElseThrow(), 2, false));
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            assertEquals(new NinjaTools.ThrowState(0, false), tools.throwState(ALICE, tool));
+            assertFalse(launch(ALICE, tool).event().isCancelled());
+            launch(BOB, tool);
+        }
+        matches.leave(player(ALICE), MatchService.Exit.COMMAND);
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            assertEquals(new NinjaTools.ThrowState(0, false), tools.throwState(ALICE, tool));
+            assertEquals(new NinjaTools.ThrowState(3, true), tools.throwState(BOB, tool));
+        }
+    }
+
+    @Test
     void defaultsAllowRepeatedThrowsWithoutConsumingEitherStack() {
         fight();
         for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
