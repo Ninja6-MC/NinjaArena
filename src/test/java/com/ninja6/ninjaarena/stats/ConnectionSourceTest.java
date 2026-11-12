@@ -87,6 +87,27 @@ class ConnectionSourceTest {
     }
 
     @Test
+    void aTransactionStartsWithoutWaitingForAnotherServersWriteLock() throws Exception {
+        // commit() ends with the same statement that starts a transaction. If that statement
+        // needed the write lock, commit() could fail after the data was committed, and the
+        // store would write the batch again.
+        ConnectionSource source = ConnectionSource.sqlite(dir.resolve("stats.db"), ConnectionSource.SQLITE_DRIVER);
+        try (Connection other = source.connect(); Statement holding = other.createStatement();
+                Connection connection = source.connect(); Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE matches (id INTEGER)");
+            statement.execute("PRAGMA busy_timeout = 100");
+            holding.execute("BEGIN IMMEDIATE");
+            connection.setAutoCommit(false);
+            try (ResultSet rows = statement.executeQuery("SELECT COUNT(*) FROM matches")) {
+                assertTrue(rows.next());
+            }
+            connection.commit();
+            connection.setAutoCommit(true);
+            holding.execute("ROLLBACK");
+        }
+    }
+
+    @Test
     void serversCreatingTheFileTogetherWriteToOneDatabase() throws Exception {
         for (int round = 0; round < 50; round++) {
             Path file = dir.resolve("stats-" + round + ".db");

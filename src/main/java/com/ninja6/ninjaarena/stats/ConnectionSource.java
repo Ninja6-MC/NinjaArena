@@ -49,13 +49,9 @@ public interface ConnectionSource {
     public static ConnectionSource sqlite(Path file, String driverClass) throws MissingDriver {
         Driver driver = driver(driverClass, "SQLite");
         String url = "jdbc:sqlite:" + file.toAbsolutePath();
-        Properties properties = new Properties();
-        // Take the write lock when a transaction begins. A deferred one reads first, and when
-        // another server commits before it writes, SQLite fails it at once instead of waiting.
-        properties.setProperty("transaction_mode", "IMMEDIATE");
         return () -> {
             createIfMissing(file);
-            Connection connection = connect(driver, url, properties);
+            Connection connection = connect(driver, url, new Properties());
             try (Statement statement = connection.createStatement()) {
                 // Another server or a backup tool may hold the file briefly.
                 statement.execute("PRAGMA busy_timeout = " + BUSY_TIMEOUT_MILLIS);
