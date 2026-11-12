@@ -2,7 +2,8 @@ package com.ninja6.ninjaarena.match;
 
 /**
  * Where a {@link Match} is in its round loop. A match goes WAITING, then PREP, COMBAT,
- * optionally OVERRUN, and ROUND_END for each round, then MATCH_END.
+ * optionally OVERRUN, and ROUND_END for each round, with SHOP before each round after the
+ * first when the shop is on, then MATCH_END.
  */
 public enum MatchPhase {
 
@@ -22,6 +23,13 @@ public enum MatchPhase {
     OVERRUN,
     /** A round has been decided; a short pause before the next round or the match end. */
     ROUND_END,
+    /**
+     * Between a round end and the next round, when another round follows and the shop is on
+     * ({@link ShopSettings}). Players spend their points in the lobby world's shop area; it
+     * ends at its time limit, or sooner once everyone is ready, but never before the next
+     * map is ready. No damage is taken and nobody is alive in a round.
+     */
+    SHOP,
     /** The match is over and its result known; players are sent home when it runs out. */
     MATCH_END;
 

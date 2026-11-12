@@ -434,6 +434,61 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void theLeaseIsKeptThroughTheShopAndTheRoomComesBackWhenTheMatchCloses() {
+        matches.setShopSettings(new ShopSettings(true, 30, 5, 10));
+        Location shop = new Location(lobbyWorld, 31, 65, 12.5, 180, 0);
+        matches.setShopArea(() -> shop);
+        // As the plugin registers it.
+        transfers.allow(matches::crossesWorlds);
+        Room room = openWith(ALICE, BOB, CAROL, DAVE);
+        rooms.start(player(ALICE), null);
+        MatchView match = matches.match("dojo").orElseThrow();
+        ticks(SETTINGS.prepSeconds());
+        List<UUID> losers = match.playersOf(2);
+        List<UUID> winners = match.playersOf(1);
+        assertEquals(2, losers.size());
+        for (UUID id : losers) {
+            matches.died(player(id), null);
+        }
+        runNextTick();
+        ticks(SETTINGS.roundEndSeconds());
+        assertEquals(MatchPhase.SHOP, match.phase());
+        rooms.tick();
+        for (UUID id : match.players()) {
+            assertTrue(PluginWorlds.isLobby(players.get(id).location), players.get(id).name + " is in the shop");
+            assertTrue(rooms.isMember(id), "still in the room");
+            assertFalse(lobby.contains(id), "a match player, not a lobby member");
+        }
+        assertTrue(rooms.hasLease(room));
+        assertTrue(room.isPlaying());
+
+        // A disconnect in the shop: out of the match and the room; the lease stays.
+        UUID quitter = losers.getFirst();
+        PlayerQuitEvent quit = new PlayerQuitEvent(player(quitter), Component.empty(),
+                PlayerQuitEvent.QuitReason.DISCONNECTED);
+        new MatchListener(matches, deaths, transfers).onQuit(quit);
+        rooms.onQuit(quit);
+        players.get(quitter).online = false;
+        assertFalse(matches.isInMatch(quitter));
+        assertFalse(rooms.isMember(quitter));
+        assertEquals(MatchPhase.SHOP, match.phase());
+        assertTrue(rooms.hasLease(room));
+
+        // The last player of team 2 leaves: a forfeit, and the lease lasts until the match closes.
+        assertTrue(rooms.leaveRoom(player(losers.getLast())));
+        assertTrue(lobby.contains(losers.getLast()));
+        assertEquals(MatchPhase.MATCH_END, match.phase());
+        assertTrue(rooms.hasLease(room));
+        assertTrue(room.isPlaying());
+        playToTheEnd("dojo");
+        assertFalse(room.isPlaying());
+        for (UUID id : winners) {
+            assertTrue(lobby.contains(id), "back in the lobby from the shop");
+            assertTrue(players.get(id).messages.contains("The match is over and the room is back in the lobby."));
+        }
+    }
+
+    @Test
     void quittingTakesThePlayerOutOfTheRoomAndHandsItOn() {
         Room room = openWith(ALICE, BOB, CAROL);
         players.get(BOB).permissions.remove(RoomService.CREATE);

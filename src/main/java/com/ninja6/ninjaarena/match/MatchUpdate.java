@@ -43,6 +43,30 @@ public sealed interface MatchUpdate {
     record RoundEnded(RoundResult result) implements MatchUpdate {
     }
 
+    /**
+     * A player in the shop pressed Ready.
+     *
+     * @param ready   players ready now
+     * @param players players in the match
+     */
+    record PlayerReady(UUID player, int ready, int players) implements MatchUpdate {
+    }
+
+    /** Everyone in the shop is ready: the next round comes in {@code seconds}, the map permitting. */
+    record QuickStart(int seconds) implements MatchUpdate {
+    }
+
+    /** The shop's time is up but the next map is not ready; it waits up to {@code seconds} more. */
+    record MapWait(int seconds) implements MatchUpdate {
+    }
+
+    /**
+     * The next map was still not ready at the end of the wait: the next round is played on
+     * the current arena, which is reset first. Comes just before the phase change to PREP.
+     */
+    record MapReplay() implements MatchUpdate {
+    }
+
     /** The match ended; {@link MatchPhase#MATCH_END} has begun. */
     record MatchEnded(MatchResult result) implements MatchUpdate {
     }

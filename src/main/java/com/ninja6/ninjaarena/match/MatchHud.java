@@ -184,6 +184,8 @@ public final class MatchHud implements Listener {
             case COMBAT -> match.settings().roundSeconds();
             case OVERRUN -> match.settings().overrunLimitSeconds();
             case ROUND_END -> match.settings().roundEndSeconds();
+            case SHOP -> match.isWaitingForMap() ? match.shopSettings().mapWaitLimitSeconds()
+                    : match.shopSettings().maxSeconds();
             default -> 0;
         };
         Component label = switch (match.phase()) {
@@ -193,10 +195,19 @@ public final class MatchHud implements Listener {
                     ? msg("hud.bar-overrun-timed", "round", round, "time", clock(match.secondsLeft()))
                     : msg("hud.bar-overrun", "round", round);
             case ROUND_END -> msg("hud.bar-round-end", "seconds", match.secondsLeft());
+            case SHOP -> match.isWaitingForMap()
+                    ? msg("hud.bar-shop-map-wait", "time", clock(match.secondsLeft()))
+                    : msg("hud.bar-shop", "time", clock(match.secondsLeft()),
+                            "ready", match.readyPlayers().size(), "players", match.players().size());
             default -> Component.empty();
         };
         display.bar.name(label);
-        display.bar.color(match.phase() == MatchPhase.OVERRUN ? BossBar.Color.RED : BossBar.Color.YELLOW);
+        display.bar.color(switch (match.phase()) {
+            case OVERRUN -> BossBar.Color.RED;
+            case SHOP -> BossBar.Color.GREEN;
+            default -> BossBar.Color.YELLOW;
+        });
+
         display.bar.progress(duration == 0 ? 1 : Math.clamp((float) match.secondsLeft() / duration, 0, 1));
         for (UUID id : new ArrayList<>(display.viewers.keySet())) {
             Player player = players.apply(id);

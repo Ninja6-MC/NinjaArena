@@ -8,7 +8,9 @@ import org.bukkit.event.HandlerList;
  * The match moved to another phase. For PREP, the teams are already at their spawns and
  * {@link RoundStartEvent} follows; for ROUND_END and MATCH_END, {@link RoundEndEvent} and
  * {@link MatchEndEvent} follow with the result. {@code to().isMaxIntensity()} is true when
- * OVERRUN begins.
+ * OVERRUN begins. A shop between rounds goes ROUND_END to SHOP, with the players already in
+ * the lobby world's shop area, and then SHOP to PREP; with the shop off, ROUND_END goes
+ * straight to PREP as before.
  */
 public final class MatchPhaseChangeEvent extends MatchEvent {
 

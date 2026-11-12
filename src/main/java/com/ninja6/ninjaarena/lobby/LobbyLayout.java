@@ -112,6 +112,15 @@ public record LobbyLayout(ArenaBounds build, ArenaBounds bounds, ArenaPoint spaw
         return new Location(world, spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch());
     }
 
+    /**
+     * Where match players stand during a shop phase: the middle of the shop area's floor,
+     * facing north towards the shop board.
+     */
+    public Location shop(World world) {
+        return new Location(world, (shopArea.minX() + shopArea.maxX() + 1) / 2.0, shopArea.minY(),
+                (shopArea.minZ() + shopArea.maxZ() + 1) / 2.0, 180, 0);
+    }
+
     private static ConfigurationSection section(ConfigurationSection parent, String key) {
         ConfigurationSection section = parent.getConfigurationSection(key);
         if (section == null) {

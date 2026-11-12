@@ -501,7 +501,7 @@ class NinjaArenaCommandTest {
         messages.clear();
         run(player, "arena list");
         assertEquals(List.of("You do not have permission to use this command."), messages);
-        assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room"),
+        assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room", "shop"),
                 command.onTabComplete(player, null, "narena", new String[] {""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
     }
@@ -589,16 +589,17 @@ class NinjaArenaCommandTest {
                 "/ninjaarena intro - show the lobby introduction again",
                 "/ninjaarena accept <host> - accept an invitation to the Arena",
                 "/ninjaarena room [create|settings|invite|accept|kick|start|leave] - open a room, invite players and"
-                        + " start its match"), messages);
+                        + " start its match",
+                "/ninjaarena shop ready - say you are ready in the shop between rounds"), messages);
 
         messages.clear();
         Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
         run(host, "HELP");
-        assertEquals(9, messages.size());
+        assertEquals(10, messages.size());
         assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena host <arena>")));
         assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena invite <player>")));
         assertFalse(messages.stream().anyMatch(message -> message.contains("admin") || message.contains("portal")));
-        assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room", "host", "invite"),
+        assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room", "shop", "host", "invite"),
                 command.onTabComplete(host, null, "narena", new String[] {""}));
         assertEquals(List.of("help", "host"), command.onTabComplete(host, null, "narena", new String[] {"H"}));
         assertEquals(List.of("accept"), command.onTabComplete(player, null, "narena", new String[] {"AC"}));
@@ -786,6 +787,44 @@ class NinjaArenaCommandTest {
                 new String[] {"room", "settings", "pr"}));
         assertEquals(List.of("public", "invite"), command.onTabComplete(player, null, "narena",
                 new String[] {"room", "settings", "privacy", ""}));
+    }
+
+    @Test
+    void shopReadyTellsThePlayerWhatTheButtonDid() {
+        run(playerWithPlay(), "shop ready");
+        assertEquals(List.of("The shop is not available yet in the Arena."), messages);
+
+        List<com.ninja6.ninjaarena.match.MatchService.Ready> answers = new ArrayList<>(List.of(
+                com.ninja6.ninjaarena.match.MatchService.Ready.READY,
+                com.ninja6.ninjaarena.match.MatchService.Ready.ALREADY_READY,
+                com.ninja6.ninjaarena.match.MatchService.Ready.NOT_IN_SHOP));
+        List<Player> asked = new ArrayList<>();
+        command.setShopReady(player -> {
+            asked.add(player);
+            return answers.removeFirst();
+        });
+        Player player = playerWithPlay();
+        messages.clear();
+        run(player, "shop ready");
+        run(player, "SHOP READY");
+        run(player, "shop ready");
+        assertEquals(List.of("You are ready for the next round.", "You are already ready.",
+                "You can only get ready while your match is in the shop."), messages);
+        assertEquals(List.of(player, player, player), asked);
+
+        messages.clear();
+        run(player, "shop");
+        run(player, "shop ready now");
+        assertEquals(List.of("Usage: /narena shop ready", "Usage: /narena shop ready"), messages);
+        assertEquals(3, asked.size());
+        assertEquals(List.of("ready"), command.onTabComplete(player, null, "narena", new String[] {"shop", "r"}));
+        assertEquals(List.of(), command.onTabComplete(playerWithPermissions("ninjaarena.spectate"), null, "narena",
+                new String[] {"shop", ""}));
+
+        messages.clear();
+        run(playerWithPermissions("ninjaarena.spectate"), "shop ready");
+        assertEquals(List.of("You do not have permission to use this command."), messages);
+        assertEquals(3, asked.size(), "the route needs the play node");
     }
 
     @Test

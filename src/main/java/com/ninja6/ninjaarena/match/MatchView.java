@@ -46,6 +46,24 @@ public interface MatchView {
 
     MatchSettings settings();
 
+    /** The shop settings the match started with; {@link ShopSettings#OFF} when it has no shop. */
+    default ShopSettings shopSettings() {
+        return ShopSettings.OFF;
+    }
+
+    /** Players in the match who are ready in the current SHOP; empty in any other phase. */
+    default List<UUID> readyPlayers() {
+        return List.of();
+    }
+
+    /**
+     * Whether the SHOP has run out of time and waits for the next map; {@link #secondsLeft()}
+     * is then the wait left before the round is played on the current map.
+     */
+    default boolean isWaitingForMap() {
+        return false;
+    }
+
     /** The number of teams the match was set up with, including any that started empty. */
     int teamCount();
 

@@ -154,6 +154,51 @@ class SpectatorLifecycleTest extends MatchFixture {
     }
 
     @Test
+    void viewersGoToTheShopAreaAndBackToTheArenaAtTheNextPrep() throws Exception {
+        org.bukkit.World lobbyWorld = world(LobbyWorld.NAME);
+        Location shop = new Location(lobbyWorld, 31, 65, 12.5, 180, 0);
+        com.ninja6.ninjaarena.arena.ArenaBounds lobbyBounds = new com.ninja6.ninjaarena.arena.ArenaBounds(0, 60, 0,
+                40, 80, 40);
+        viewers.setShopArea(() -> shop, to -> com.ninja6.ninjaarena.world.PluginWorlds.isLobby(to)
+                && lobbyBounds.contains(to.getBlockX(), to.getBlockY(), to.getBlockZ()));
+        matches.setShopSettings(new ShopSettings(true, 3, 1, 0));
+        matches.setShopArea(() -> shop);
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        snapshots.save(snapshot(DAVE));
+        viewers.arrived(player(DAVE), "dojo");
+        assertTrue(viewers.contains(DAVE));
+        ticks(SETTINGS.prepSeconds());
+        matches.died(player(BOB), player(ALICE));
+        runNextTick();
+        ticks(SETTINGS.roundEndSeconds());
+        MatchView match = matches.match("dojo").orElseThrow();
+        assertEquals(MatchPhase.SHOP, match.phase());
+
+        viewers.onPhase(events(com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent.class).getLast());
+        Location at = players.get(DAVE).location;
+        assertEquals(lobbyWorld, at.getWorld());
+        assertEquals(shop.getX(), at.getX());
+        assertTrue(players.get(DAVE).ownMarks.getLast());
+        assertTrue(viewers.contains(DAVE), "still watching");
+        assertEquals(GameMode.SPECTATOR, players.get(DAVE).gameMode);
+        var inLobby = new PlayerMoveEvent(player(DAVE), at, new Location(lobbyWorld, 10, 66, 10));
+        viewers.onMove(inLobby);
+        assertFalse(inLobby.isCancelled(), "free to fly about the lobby");
+        var outOfLobby = new PlayerMoveEvent(player(DAVE), at, new Location(lobbyWorld, 100, 66, 10));
+        viewers.onMove(outOfLobby);
+        assertTrue(outOfLobby.isCancelled());
+        assertTrue(viewers.destination("dojo").isEmpty(), "nobody new is let in during the shop");
+
+        ticks(3);
+        assertEquals(MatchPhase.PREP, match.phase());
+        viewers.onPhase(events(com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent.class).getLast());
+        assertAt(SPAWN_1, players.get(DAVE).location);
+        assertTrue(viewers.contains(DAVE));
+        assertTrue(snapshots.exists(DAVE), "the snapshot is kept throughout");
+        assertTrue(restored.isEmpty());
+    }
+
+    @Test
     void whenTheLobbyCannotTakeAViewerTheyAreSentHome() throws Exception {
         viewers.setLobby(player -> false);
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));

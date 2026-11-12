@@ -30,7 +30,10 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
-/** Personal round purchases. All methods run on the server thread. Buying is closed until a phase owns it. */
+/**
+ * Personal round purchases. All methods run on the server thread. Buying is open only while
+ * the injected predicate allows it: on a server, while the buyer's match is in SHOP.
+ */
 public final class Shop implements Listener {
     public enum Result {
         BOUGHT, NOT_ENOUGH_POINTS, LIMIT_REACHED, UNKNOWN_ITEM, NO_PERMISSION, CLOSED;

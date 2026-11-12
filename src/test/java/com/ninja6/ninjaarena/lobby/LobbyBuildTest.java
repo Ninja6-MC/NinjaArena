@@ -78,6 +78,27 @@ class LobbyBuildTest {
     }
 
     @Test
+    void theShopSpotStandsOnTheFloorInTheMiddleOfTheShopArea() throws IOException {
+        LobbyLayout layout = LobbyLayout.bundled();
+        var spot = layout.shop(null);
+        assertEquals(11.0, spot.getX());
+        assertEquals(65.0, spot.getY());
+        assertEquals(-3.5, spot.getZ());
+        assertEquals(180f, spot.getYaw(), "facing the shop board on the north wall");
+        assertTrue(layout.shopArea().contains(spot.getBlockX(), spot.getBlockY(), spot.getBlockZ()));
+        byte[] nbt;
+        try (var reader = Files.newBufferedReader(SPEC, StandardCharsets.UTF_8)) {
+            nbt = LobbyBuildGenerator.generate(reader);
+        }
+        int x = spot.getBlockX() - layout.build().minX();
+        int y = spot.getBlockY() - 1 - layout.build().minY();
+        int z = spot.getBlockZ() - layout.build().minZ();
+        assertTrue(containsPos(nbt, x, y, z), x + " " + y + " " + z);
+        assertFalse(containsPos(nbt, x, y + 1, z));
+        assertFalse(containsPos(nbt, x, y + 2, z));
+    }
+
+    @Test
     void aSpecWithMarksOutsideTheBuildIsRefused() {
         String spec = """
                 data-version: 1

@@ -46,12 +46,14 @@ import com.ninja6.ninjaarena.message.MessageMigration;
 import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.match.MatchHud;
 import com.ninja6.ninjaarena.match.MatchListener;
+import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchProtectionListener;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.PlayerPoints;
 import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.match.ShopSettings;
 import com.ninja6.ninjaarena.match.TeamScores;
 import com.ninja6.ninjaarena.match.TeamScoringListener;
 import com.ninja6.ninjaarena.portal.ArenaAdmission;
@@ -137,6 +139,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private final ArenaBusy busy = new ArenaBusy(() -> this.matches, () -> this.waitingRooms, () -> this.spectators,
             () -> this.lobbyMembers);
     private final CrossWorldTransfers transfers = new CrossWorldTransfers();
+    /** Lets match players cross to the shop area and back; released on disable. */
+    private Runnable shopCrossing;
     private ArenaChunkUnloader chunkUnloader;
     private RestoreService restores;
     private Spectators spectators;
@@ -214,6 +218,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         matches = new MatchService(this, arenas, arenaWorld::world,
                 MatchSettings.from(getConfig().getConfigurationSection("match")), restores::restore,
                 getServer().getPluginManager()::callEvent, MatchService::readyForRound);
+        // The shop phase between rounds, in the lobby's shop area; its moves keep the match.
+        matches.setShopSettings(ShopSettings.from(getConfig().getConfigurationSection("shop")));
+        LobbyMembers shopLobby = lobbyMembers;
+        matches.setShopArea(() -> shopLobby.layout().shop(lobbyWorld.world()));
+        shopCrossing = transfers.allow(matches::crossesWorlds);
         deaths = new MatchDeathListener(this, matches, arenas);
         getServer().getPluginManager().registerEvents(deaths, this);
         getServer().getPluginManager().registerEvents(new MatchListener(matches, deaths, transfers), this);
@@ -307,8 +316,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 getDataFolder().toPath().resolve(ShopCatalogue.FILE), getLogger(),
                 () -> saveResource(ShopCatalogue.FILE, false),
                 kitItems, ToolSettings.from(getConfig().getConfigurationSection("tools")));
+        // Buying is open only while the buyer's match is in its shop phase.
         shop = new Shop(matches, points, kitItems, tools,
-                getServer()::getPlayer, getLogger(), catalogue);
+                getServer()::getPlayer, getLogger(), catalogue, match -> match.phase() == MatchPhase.SHOP);
         roundKits.setAfterKit(shop::apply);
         getServer().getPluginManager().registerEvents(shop, this);
         roundKits.warnToolAmounts(ToolSettings.from(getConfig().getConfigurationSection("tools")));
@@ -336,6 +346,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         }
         spectators = new Spectators(this, arenas, matches, waitingRooms, restores, arenaWorld::world, spectating);
         Spectators watching = spectators;
+        watching.setShopArea(() -> shopLobby.layout().shop(lobbyWorld.world()), shopLobby.layout()::contains);
         getServer().getPluginManager().registerEvents(watching, this);
         arenas.onEditOrDelete(watching::closeArena);
         // Waiting players and lobby members are locked like match players: by membership, never
@@ -445,6 +456,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void shopPhase(ShopSettings settings) {
+                        inMatch.setShopSettings(settings);
+                    }
+
+                    @Override
                     public void spectating(SpectatorSettings settings) {
                         watching.setSettings(settings);
                     }
@@ -533,6 +549,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         command.setLobby(lobbyEditing);
         command.setIntro(lobbyIntro::open);
         command.setRooms(roomList);
+        command.setShopReady(inMatch::ready);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -870,6 +887,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             matches.close();
             matches = null;
         }
+        if (shopCrossing != null) {
+            shopCrossing.run();
+            shopCrossing = null;
+        }
         // After the matches: stopping them records what they had so far.
         if (stats != null) {
             stats.close();
@@ -966,7 +987,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         return scores;
     }
 
-    /** Round purchases; closed until a shop phase is supplied, and null while disabled. */
+    /** Round purchases, open while the buyer's match is in its shop phase; null while disabled. */
     public Shop shop() {
         return shop;
     }
