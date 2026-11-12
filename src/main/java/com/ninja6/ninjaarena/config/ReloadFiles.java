@@ -208,6 +208,8 @@ public final class ReloadFiles {
             case "match.overrun-limit-seconds" -> new double[] {0, 3600};
             case "match.rounds" -> new double[] {1, 25};
             case "match.extra-rounds" -> new double[] {0, 10};
+            case "points.player-kill", "points.enemy-kill-per-cost", "points.round-survive", "points.round-win"
+                    -> new double[] {Integer.MIN_VALUE, Integer.MAX_VALUE};
             case "scoring.round-win-points", "scoring.player-kill-points" -> new double[] {0, Integer.MAX_VALUE};
             case "stability.max-concurrent-matches", "stability.spawns-per-tick" -> new double[] {1, 100};
             case "stability.match-mob-cap", "stability.global-mob-cap", "stability.pause-spawning-above-mspt",

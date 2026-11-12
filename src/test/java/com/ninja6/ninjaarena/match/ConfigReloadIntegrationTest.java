@@ -22,14 +22,15 @@ class ConfigReloadIntegrationTest extends MatchFixture {
     @Test
     void reloadDuringRunningMatchValidatesBothFilesAndPreservesOldMatchWhileQueuingNewDefaults() throws Exception {
         var scores = new TeamScores();
+        var points = new PlayerPoints(PointsSettings.DEFAULTS);
         var awards = new TeamScoringListener(scores, ScoringSettings.DEFAULTS, plugin.getServer()::getPlayer);
         matches = new MatchService(plugin, arenas, () -> arenaWorld, SETTINGS, player -> RestoreResult.RESTORED,
                 event -> {
                     events.add(event);
                     switch (event) {
-                        case PlayerEliminatedEvent out -> awards.onEliminated(out);
-                        case RoundEndEvent end -> awards.onRoundEnd(end);
-                        case MatchEndEvent end -> awards.onMatchEnd(end);
+                        case PlayerEliminatedEvent out -> { awards.onEliminated(out); points.onEliminated(out); }
+                        case RoundEndEvent end -> { awards.onRoundEnd(end); points.onRoundEnd(end); }
+                        case MatchEndEvent end -> { awards.onMatchEnd(end); points.onMatchEnd(end); }
                         default -> { }
                     }
                 }, player -> { });
@@ -50,6 +51,9 @@ class ConfigReloadIntegrationTest extends MatchFixture {
                 awards.setSettings(scoring, matches.matches());
                 matches.setSettings(settings);
             }
+            @Override public void points(PointsSettings settings) {
+                points.setSettings(settings, matches.matches());
+            }
             @Override public void world(ArenaWorldSettings settings) { throw new AssertionError("world unchanged"); }
             @Override public void grid(int cellSize, double borderSize) { throw new AssertionError("grid unchanged"); }
             @Override public void waiting(WaitingRoomSettings settings) { throw new AssertionError("room unchanged"); }
@@ -63,6 +67,10 @@ class ConfigReloadIntegrationTest extends MatchFixture {
         initial.set("match.friendly-fire", true);
         initial.set("scoring.round-win-points", 50);
         initial.set("scoring.player-kill-points", 20);
+        initial.set("points.player-kill", 10);
+        initial.set("points.enemy-kill-per-cost", 4);
+        initial.set("points.round-survive", 8);
+        initial.set("points.round-win", 20);
         Files.writeString(dir.resolve("config.yml"), initial.saveToString());
         Files.writeString(dir.resolve("kits.yml"), "format: 1\nitems:\n  - slot: 99\n    material: WOODEN_SWORD\n");
         assertTrue(reloader.reload().getFirst().contains("kits.yml: line 3"));
@@ -75,6 +83,7 @@ class ConfigReloadIntegrationTest extends MatchFixture {
         matches.died(player(DAVE), player(ALICE));
         runNextTick();
         assertEquals(9, scores.score(matches.match("dojo").orElseThrow(), 1));
+        assertEquals(9, points.points(matches.match("dojo").orElseThrow(), ALICE));
         matches.close();
         startTwoOnTwo();
         assertEquals(1, matches.match("dojo").orElseThrow().settings().prepSeconds());
@@ -85,5 +94,6 @@ class ConfigReloadIntegrationTest extends MatchFixture {
         matches.died(player(DAVE), player(ALICE));
         runNextTick();
         assertEquals(90, scores.score(matches.match("dojo").orElseThrow(), 1));
+        assertEquals(38, points.points(matches.match("dojo").orElseThrow(), ALICE));
     }
 }

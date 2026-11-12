@@ -13,7 +13,9 @@ import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
+import com.ninja6.ninjaarena.message.Messages;
 import java.util.List;
+import java.util.LinkedHashMap;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -23,10 +25,12 @@ class MatchHudTest extends MatchFixture {
 
     private MatchHud hud;
     private TeamScores scores;
+    private PlayerPoints points;
     private int enemies;
 
     private void useHud(MatchSettings settings) {
         scores = new TeamScores();
+        points = new PlayerPoints(PointsSettings.DEFAULTS);
         var scoring = new TeamScoringListener(scores, ScoringSettings.DEFAULTS, plugin.getServer()::getPlayer);
         matches = new MatchService(plugin, arenas, () -> arenaWorld, settings, player -> {
             restored.add(player.getUniqueId());
@@ -34,17 +38,17 @@ class MatchHudTest extends MatchFixture {
         }, event -> {
             events.add(event);
             switch (event) {
-                case PlayerEliminatedEvent out -> scoring.onEliminated(out);
+                case PlayerEliminatedEvent out -> { scoring.onEliminated(out); points.onEliminated(out); }
                 case RoundStartEvent start -> hud.onRoundStart(start);
                 case MatchPhaseChangeEvent phase -> hud.onPhase(phase);
-                case RoundEndEvent end -> { scoring.onRoundEnd(end); hud.onRoundEnd(end); }
-                case MatchEndEvent end -> { scoring.onMatchEnd(end); hud.onMatchEnd(end); }
-                case PlayerLeaveMatchEvent leave -> hud.onLeave(leave);
+                case RoundEndEvent end -> { scoring.onRoundEnd(end); points.onRoundEnd(end); hud.onRoundEnd(end); }
+                case MatchEndEvent end -> { scoring.onMatchEnd(end); points.onMatchEnd(end); hud.onMatchEnd(end); }
+                case PlayerLeaveMatchEvent leave -> { points.onLeave(leave); hud.onLeave(leave); }
                 default -> { }
             }
         }, player -> readied.add(player.getUniqueId()));
         matches.setStandings(scores);
-        hud = new MatchHud(matches::matches, plugin.getServer()::getPlayer, scores, match -> enemies);
+        hud = new MatchHud(matches::matches, plugin.getServer()::getPlayer, scores, points, match -> enemies);
     }
 
     private void advance(int seconds) {
@@ -118,15 +122,38 @@ class MatchHudTest extends MatchFixture {
         enemies = 7;
         matches.died(player(BOB), player(ALICE));
         hud.tick();
-        assertEquals("T1: 2  T2: 13  |  Enemies left: 7", players.get(BOB).actionBars.getLast());
+        assertEquals("T1: 2  T2: 13  |  Enemies left: 7  |  Points: 0", players.get(BOB).actionBars.getLast());
+        assertEquals("T1: 2  T2: 13  |  Enemies left: 7  |  Points: 2",
+                players.get(ALICE).actionBars.getLast());
         assertEquals(1, players.get(BOB).bossBars.size());
         matches.died(player(DAVE), player(ALICE));
         runNextTick();
-        assertEquals("T1: 9  T2: 13  |  Enemies left: 7", players.get(ALICE).actionBars.getLast());
+        assertEquals("T1: 9  T2: 13  |  Enemies left: 7  |  Points: 9", players.get(ALICE).actionBars.getLast());
         assertEquals("Team 1 wins!", text(players.get(ALICE).titles.getLast().title()));
         enemies = 0;
         hud.tick();
-        assertTrue(players.get(ALICE).actionBars.getLast().endsWith("Enemies left: 0"));
+        assertTrue(players.get(ALICE).actionBars.getLast().endsWith("Enemies left: 0  |  Points: 9"));
+    }
+
+    @Test
+    void actionbarUsesTheWholeCustomMessageWithEachPlayersPoints() {
+        var templates = new LinkedHashMap<String, Object>(Messages.defaults());
+        templates.put("hud.status", "<aqua>Coins <points>; mobs <enemies>; <totals>");
+        templates.put("hud.team-score", "Team <team>=<score>");
+        templates.put("hud.team-separator", ", ");
+        try {
+            Messages.use(Messages.of(templates, warning -> { throw new AssertionError(warning); }));
+            useHud(SETTINGS);
+            startTwoOnTwo();
+            advance(2);
+            enemies = 7;
+            matches.died(player(BOB), player(ALICE));
+            hud.tick();
+            assertEquals("Coins 2; mobs 7; Team 1=2, Team 2=0", players.get(ALICE).actionBars.getLast());
+            assertEquals("Coins 0; mobs 7; Team 1=2, Team 2=0", players.get(BOB).actionBars.getLast());
+        } finally {
+            Messages.use(Messages.bundled());
+        }
     }
 
     @Test

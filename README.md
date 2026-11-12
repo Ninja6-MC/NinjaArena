@@ -241,7 +241,7 @@ match.
 | :--- | :--- |
 | Waiting-room minimum, countdown and radius | Apply immediately to waiting rooms and the hub; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
 | Default lobby and player caps | Apply immediately. The lobby applies to the next portal entry; players already waiting stay where they are. A lower cap turns away later arrivals but never removes waiting players. |
-| Match timers, rounds, extra rounds, friendly fire and scoring | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
 | Player-built portals | Apply to the next portal lit; the curtain colour changes immediately. Portals already built stay, with their own frame block. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
@@ -575,6 +575,22 @@ Other features can award team points on the server thread through
 `plugin.matches()`. Awards are accepted from PREP through ROUND_END for teams that started
 with players. Totals stop at `Integer.MAX_VALUE`. Once the match ends its result keeps the
 final scores, further awards are refused, and a new match starts at zero.
+
+## Player points
+
+Each player also earns personal points, separate from team scoring and match standings.
+The action bar shows their own total alongside team scores and enemies left. Configure
+awards under `points`: `player-kill: 2` for an opposing player kill,
+`enemy-kill-per-cost: 1` times the enemy's configured cost for a kill while alive during a
+fight, `round-survive: 2` for surviving a round (draws included), and `round-win: 6` as a
+pool shared by the winning team's players still in the match, alive or eliminated.
+Integer shares are equal, with remaining points handed out in roster order. Draws award
+no win pool; teamkills, suicides, environmental deaths and leaving award no kill points.
+Zero disables each award and negatives become zero. Reloaded values apply to new matches.
+
+Personal points carry over across rounds, including extra rounds, and stop at
+`Integer.MAX_VALUE`. Leaving discards that player's points; match end clears the ledger.
+Spending and the round shop are planned separately.
 
 ## Player stats
 

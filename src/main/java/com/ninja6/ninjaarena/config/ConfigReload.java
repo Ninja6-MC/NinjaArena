@@ -6,6 +6,7 @@ import static com.ninja6.ninjaarena.message.Messages.text;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
+import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
@@ -36,6 +37,8 @@ public final class ConfigReload {
         void grid(int cellSize, double borderSize);
         void waiting(WaitingRoomSettings settings);
         void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring);
+        default void points(PointsSettings settings) {
+        }
         void tools(ToolSettings settings);
         default void spectating(SpectatorSettings settings) {
         }
@@ -126,7 +129,7 @@ public final class ConfigReload {
                     refused.add(text("reload.resize-refused", "path", path));
                     next.set(path, effective.get(path));
                 }
-            } else if (path.startsWith("match.") || path.startsWith("scoring.")) {
+            } else if (path.startsWith("match.") || path.startsWith("scoring.") || path.startsWith("points.")) {
                 postponed.add(text("reload.next-match", "path", path));
             } else {
                 changed.add(path);
@@ -174,6 +177,9 @@ public final class ConfigReload {
         if (differs("match.", next) || differs("scoring.", next)) {
             target.match(MatchSettings.from(next.getConfigurationSection("match")), next.getBoolean("match.friendly-fire"),
                     ScoringSettings.from(next.getConfigurationSection("scoring")));
+        }
+        if (differs("points.", next)) {
+            target.points(PointsSettings.from(next.getConfigurationSection("points")));
         }
         if (differs("tools.", next)) {
             target.tools(ToolSettings.from(next.getConfigurationSection("tools")));

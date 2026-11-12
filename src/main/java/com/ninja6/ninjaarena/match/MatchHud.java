@@ -51,16 +51,18 @@ public final class MatchHud implements Listener {
     private final Supplier<List<MatchView>> matches;
     private final Function<UUID, Player> players;
     private final MatchStandings scores;
+    private final PlayerPoints points;
     private final ToIntFunction<MatchView> enemies;
     private final Map<MatchView, Display> displays = new IdentityHashMap<>();
     private BukkitTask ticker;
     private boolean closed;
 
-    public MatchHud(Supplier<List<MatchView>> matches, Function<UUID, Player> players, MatchStandings scores,
+    public MatchHud(Supplier<List<MatchView>> matches, Function<UUID, Player> players, MatchStandings scores, PlayerPoints points,
             ToIntFunction<MatchView> enemies) {
         this.matches = Objects.requireNonNull(matches, "matches");
         this.players = Objects.requireNonNull(players, "players");
         this.scores = Objects.requireNonNull(scores, "scores");
+        this.points = Objects.requireNonNull(points, "points");
         this.enemies = Objects.requireNonNull(enemies, "enemies");
     }
 
@@ -200,14 +202,18 @@ public final class MatchHud implements Listener {
         for (int team : match.startingTeams()) {
             totals.add(text("hud.team-score", "team", team, "score", scores.score(match, team)));
         }
-        Component status = msg("hud.status", "scores", String.join("  ", totals),
-                "enemies", Math.max(0, enemies.applyAsInt(match)));
+        int livingEnemies = Math.max(0, enemies.applyAsInt(match));
         each(match, player -> {
             if (display.viewers.putIfAbsent(player.getUniqueId(), player) == null) {
                 player.showBossBar(display.bar);
             }
-            player.sendActionBar(status);
+            player.sendActionBar(statusLine(totals, livingEnemies, match, player.getUniqueId()));
         });
+    }
+
+    private Component statusLine(List<String> totals, int livingEnemies, MatchView match, UUID player) {
+        return msg("hud.status", "totals", String.join(text("hud.team-separator"), totals),
+                "enemies", livingEnemies, "points", points.points(match, player));
     }
 
     private void title(MatchView match, Component title, Component subtitle) {

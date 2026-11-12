@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
@@ -50,6 +51,7 @@ class ConfigReloadTest {
         MatchSettings match;
         boolean friendlyFire;
         ScoringSettings scoring;
+        PointsSettings points;
         ToolSettings tools;
         SpectatorSettings spectating;
         PlayerPortalSettings playerPortals;
@@ -70,6 +72,7 @@ class ConfigReloadTest {
         @Override public void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring) {
             calls.add("match"); match = settings; this.friendlyFire = friendlyFire; this.scoring = scoring;
         }
+        @Override public void points(PointsSettings settings) { calls.add("points"); points = settings; }
         @Override public void tools(ToolSettings settings) { calls.add("tools"); tools = settings; }
         @Override public void spectating(SpectatorSettings settings) { spectating = settings; }
         @Override public void playerPortals(PlayerPortalSettings settings) {
@@ -96,6 +99,16 @@ class ConfigReloadTest {
 
     private ReloadFiles.Candidate candidate() throws Exception {
         return ReloadFiles.read(dir.resolve("config.yml"), dir.resolve("kits.yml"), items);
+    }
+
+    @Test
+    void personalPointsOnlyReloadIsPostponedAndClampsNegatives() throws Exception {
+        write("points: {player-kill: 7, enemy-kill-per-cost: 3, round-survive: -2, round-win: 9}", EMPTY_KIT);
+        var messages = reload.reload();
+        assertEquals(new PointsSettings(7, 3, 0, 9), target.points);
+        assertTrue(messages.get(2).contains("points.player-kill (next match)"));
+        assertTrue(messages.get(2).contains("points.round-survive (next match)"));
+        assertEquals(List.of("points"), target.calls);
     }
 
     @Test

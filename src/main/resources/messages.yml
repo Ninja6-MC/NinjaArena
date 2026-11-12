@@ -427,7 +427,8 @@ match:
   team-separator: " and "
   returning: "<gray>Returning in <seconds> seconds."
 
-# Titles, the boss bar and the action bar of a match. team-score is plain text.
+# Titles, the boss bar and the action bar of a match. team-score and team-separator
+# are plain text; status is the complete action bar, including each player's points.
 hud:
   fight-title: "<red>Fight!"
   fight-subtitle: "Round <round>"
@@ -445,7 +446,8 @@ hud:
   bar-overrun-timed: "<round> - OVERRUN <time>"
   bar-round-end: "Next round in <seconds>s"
   team-score: "T<team>: <score>"
-  status: "<yellow><scores>  |  Enemies left: <enemies>"
+  team-separator: "  "
+  status: "<yellow><totals>  |  Enemies left: <enemies>  |  Points: <points>"
 
 # The final score table. entry, points and rounds are plain text.
 score:
