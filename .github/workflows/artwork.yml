@@ -12,8 +12,6 @@ on:
       - 'build.gradle.kts'
   merge_group:
   workflow_dispatch:
-  release:
-    types: [published]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,13 +42,13 @@ jobs:
         with:
           node-version: '22'
 
+      # CI builds snapshot packs only. Release packs are built by Release Candidate and
+      # published by Publish Release; see RELEASE_PROCESS.md.
       - name: Identify Candidate
         id: identity
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           source=$(git rev-parse HEAD)
-          version="${RELEASE_TAG:-ci-$source}"
+          version="ci-$source"
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
@@ -148,48 +146,3 @@ jobs:
             build/bedrock-pack-verification.json
           if-no-files-found: error
           retention-days: 30
-
-  publish:
-    name: Attach Verified Packs To Release
-    if: github.event_name == 'release'
-    needs: [validate, verify]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: release
-    permissions:
-      actions: read
-      contents: write
-    steps:
-      - name: Checkout Verified Source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.validate.outputs.source }}
-          persist-credentials: false
-
-      - name: Download Same Candidate
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: ${{ needs.validate.outputs.candidate }}
-          path: build/resourcepacks
-
-      - name: Download Passing Artifact Evidence
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: ${{ needs.validate.outputs.candidate }}-verification
-          path: build
-
-      - name: Download Same Bedrock Candidate
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: ${{ needs.validate.outputs.candidate }}-bedrock
-          path: build/bedrock-resourcepacks
-
-      - name: Reconcile And Publish Missing Assets Without Rebuilding
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PACK_VERSION: ${{ needs.validate.outputs.version }}
-          SOURCE: ${{ needs.validate.outputs.source }}
-          CANDIDATE_ATTEMPT: ${{ needs.validate.outputs.attempt }}
-        run: |
-          python artwork/tools/java-packs.py publish --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"
-          python artwork/tools/bedrock-packs.py publish --source "$SOURCE" --attempt "$CANDIDATE_ATTEMPT"

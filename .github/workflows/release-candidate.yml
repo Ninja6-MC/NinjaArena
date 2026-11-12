@@ -1,0 +1,183 @@
+name: Release Candidate
+
+# No run-name: the API reports a run's name as its run-name, and Publish Release identifies
+# candidate runs by this workflow's name and path.
+#
+# Builds the plugin JAR, the Java and Bedrock packs and the Geyser mappings once, retains
+# them for 90 days with a manifest of their digests, then downloads them again and runs the
+# artifact checks and the unit suite on those bytes. It publishes nothing: Publish Release
+# (release.yml) promotes a successful first-attempt run of this workflow. RELEASE_PROCESS.md
+# has the procedure.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Intended release tag, such as v0.5.0-rc.1 (do not create it yet)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Candidate Once
+    # A re-run would retain a second candidate under the same run ID; the publisher accepts
+    # first attempts only, so a failed candidate is replaced by a new dispatch.
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Intended Tag
+        id: tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/release_candidate.py details --tag "$RELEASE_TAG" --output "$GITHUB_OUTPUT"
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Set up Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Test Release Scripts And Pack Sources
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_release_*.py' -v
+          node artwork/tools/validate-exports.js
+          node artwork/tools/validate-pack.js
+          python3 -m unittest discover -s artwork/tools -p 'test_*packs.py' -v
+
+      - name: Test And Build The JAR Once
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew test build -PreleaseVersion="$VERSION" --no-daemon
+
+      - name: Build The Java And Bedrock Packs Once
+        env:
+          PACK_VERSION: ${{ inputs.tag }}
+        run: |
+          python3 artwork/tools/bedrock-packs.py convert
+          python3 artwork/tools/bedrock-packs.py mappings
+          python3 artwork/tools/bedrock-packs.py build --source "$GITHUB_SHA"
+          python3 artwork/tools/java-packs.py build --source "$GITHUB_SHA"
+
+      - name: Assemble Candidate
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          python3 scripts/release_candidate.py assemble --tag "$RELEASE_TAG" --jar "build/libs/NinjaArena-$VERSION.jar" \
+            --java build/resourcepacks --bedrock build/bedrock-resourcepacks --directory candidate
+
+      - name: Retain Candidate
+        id: candidate
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-candidate
+          path: candidate/*
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Record Candidate Manifest
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          ARTIFACT_ID: ${{ steps.candidate.outputs.artifact-id }}
+        run: |
+          python3 scripts/release_candidate.py create --tag "$RELEASE_TAG" --source "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --artifact-id "$ARTIFACT_ID" \
+            --directory candidate --output candidate-manifest.json
+
+      - name: Retain Manifest
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-candidate-manifest
+          path: candidate-manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  verify:
+    name: Verify Downloaded Candidate
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Candidate Source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download Retained Candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-candidate
+          path: candidate
+
+      - name: Download Retained Manifest
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-candidate-manifest
+
+      - name: Inspect Every Downloaded File Against The Manifest And Source
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python3 scripts/release_candidate.py verify --tag "$RELEASE_TAG" --source "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --manifest candidate-manifest.json --directory candidate
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Set up Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      # The suite runs with the downloaded JAR in place of the compiled classes and
+      # resources; PluginDescriptionTest checks that the classes came from that JAR.
+      - name: Run The Unit Suite On The Downloaded JAR
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew test -PreleaseVersion="$VERSION" -PreleaseJar="$PWD/candidate/NinjaArena-$VERSION.jar" --no-daemon
+
+      - name: Bind Passing Evidence To The Candidate
+        run: |
+          python3 scripts/release_candidate.py evidence --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --manifest candidate-manifest.json --directory candidate \
+            --test-results build/test-results/test --output candidate-evidence.json
+
+      - name: Retain Evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-candidate-evidence
+          path: candidate-evidence.json
+          if-no-files-found: error
+          retention-days: 90

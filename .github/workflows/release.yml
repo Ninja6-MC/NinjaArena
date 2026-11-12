@@ -1,0 +1,271 @@
+name: Publish Release
+run-name: Publish ${{ inputs.tag }} to ${{ inputs.destinations }} [${{ inputs.nonce }}]
+
+# Dispatched on the release tag ref with a successful Release Candidate run. `plan` needs no
+# approval and holds no write permission. `publish-github` waits at the `release`
+# environment and creates the GitHub release from the retained candidate. `shared-state`
+# then needs a second `release` approval and moves the "latest" marker only for the tag
+# that owns it. A pending shared-state approval holds the cross-tag group: approve or
+# reject it promptly. RELEASE_PROCESS.md has the procedure and the retry table.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag; dispatch on that tag ref
+        required: true
+        type: string
+      candidate_run_id:
+        description: Successful Release Candidate run ID for this tag
+        required: true
+        type: string
+      destinations:
+        description: github, or shared-state alone to recover the latest marker
+        required: true
+        default: github
+        type: string
+      nonce:
+        description: Label shown in the run name, to find this dispatch
+        required: false
+        default: manual
+        type: string
+
+permissions:
+  contents: read
+
+# Keyed on the ref, not on the tag input: a workflow-level group is evaluated when the run
+# is queued, before any step can validate the input. Every workflow able to write releases
+# uses this group.
+concurrency:
+  group: publish-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.ref == format('refs/tags/{0}', inputs.tag) && startsWith(inputs.tag, 'v')
+    name: Plan Promotion
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      github: ${{ steps.plan.outputs.github }}
+      destinations: ${{ steps.plan.outputs.destinations }}
+      channel: ${{ steps.plan.outputs.channel }}
+      shared_needed: ${{ steps.plan.outputs.shared_needed }}
+    steps:
+      - name: Require The Release Tag Ref
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.[1-9][0-9]*)?$ ]] || { echo 'Invalid release tag'; exit 1; }
+          [[ "$GITHUB_REF" == "refs/tags/$RELEASE_TAG" ]] || { echo 'Dispatch on the release tag ref'; exit 1; }
+
+      - name: Checkout Exact Release Tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Fetch And Verify The Retained Candidate And Evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid candidate run ID'; exit 1; }
+          python3 scripts/release_promotion.py fetch --repository "$GITHUB_REPOSITORY" --run-id "$CANDIDATE_RUN_ID" --tag "$RELEASE_TAG"
+
+      - name: Check Release Notes
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/release_promotion.py notes --tag "$RELEASE_TAG" --output release-notes.md
+
+      - name: Check Public State, Gate And Latest Owner
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          DESTINATIONS: ${{ inputs.destinations }}
+        run: |
+          python3 scripts/release_promotion.py plan --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
+            --destinations "$DESTINATIONS" --output "$GITHUB_OUTPUT"
+
+      - name: Record Promotion For Review
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          DESTINATIONS: ${{ steps.plan.outputs.destinations }}
+          CHANNEL: ${{ steps.plan.outputs.channel }}
+          GITHUB_PUBLIC: ${{ steps.plan.outputs.github_public }}
+          LATEST_OWNER: ${{ steps.plan.outputs.latest_owner }}
+          SHARED_NEEDED: ${{ steps.plan.outputs.shared_needed }}
+          SOURCE: ${{ github.sha }}
+        run: |
+          {
+            echo '## Promotion awaiting release environment review'
+            printf 'Tag: `%s` (%s)\n\nSource: `%s`\n\nCandidate run: `%s`\n\nPublisher run/attempt: `%s/%s`\n\n' "$RELEASE_TAG" "$CHANNEL" "$SOURCE" "$CANDIDATE_RUN_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'Destinations: `%s`\n\nGitHub release: `%s`\n\n' "$DESTINATIONS" "$GITHUB_PUBLIC"
+            printf 'Drafts are not visible to the read-only plan token. publish-github checks for a draft after approval and before the create.\n\n'
+            printf 'Assets: the plugin JAR, both Java packs, both Bedrock packs, the Geyser mappings, SHA1SUMS, BEDROCK-SHA1SUMS, both pack manifests and SHA256SUMS.\n\n'
+            printf 'Latest marker owner before this run: `%s`. Shared-state job needed: **%s**. The marker follows the highest stable release only; a pre-release never takes it.\n\n' "$LATEST_OWNER" "$SHARED_NEEDED"
+            printf 'Approvals: the first for publish-github, a second for shared-state when it is needed. Pending shared-state approval holds the cross-tag group: approve or reject it promptly.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-github:
+    needs: plan
+    if: github.ref == format('refs/tags/{0}', inputs.tag) && startsWith(inputs.tag, 'v') && needs.plan.outputs.github == 'true'
+    name: Publish To GitHub Releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Require The Release Tag Ref
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.[1-9][0-9]*)?$ ]] || { echo 'Invalid release tag'; exit 1; }
+          [[ "$GITHUB_REF" == "refs/tags/$RELEASE_TAG" ]] || { echo 'Dispatch on the release tag ref'; exit 1; }
+
+      - name: Checkout Exact Release Tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Fetch And Verify The Retained Candidate And Evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid candidate run ID'; exit 1; }
+          python3 scripts/release_promotion.py fetch --repository "$GITHUB_REPOSITORY" --run-id "$CANDIDATE_RUN_ID" --tag "$RELEASE_TAG"
+
+      - name: Check Credentials For Every Selected Destination
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          DESTINATIONS: ${{ needs.plan.outputs.destinations }}
+        run: python3 scripts/release_promotion.py preflight --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --destinations "$DESTINATIONS"
+
+      - name: Check Existing GitHub Release
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/release_promotion.py reconcile --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --output "$GITHUB_OUTPUT"
+
+      - name: Write Release Notes
+        if: steps.state.outputs.state == 'absent'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release_promotion.py notes --tag "$RELEASE_TAG" --output release-notes.md
+          printf '\n' >> release-notes.md
+          gh api -X POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$RELEASE_TAG" \
+            -f target_commitish="$(git rev-parse HEAD)" --jq .body >> release-notes.md
+
+      # The guard and the create share one step, so nothing runs between them. A re-run of
+      # this job is attempt 2 or later and is refused here; dispatch a new run instead.
+      - name: Guard And Create The GitHub Release
+        if: steps.state.outputs.state == 'absent'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release_promotion.py guard --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+          channel=()
+          if [ -n "$(python3 scripts/release_promotion.py prerelease --tag "$RELEASE_TAG")" ]; then channel=(--prerelease); fi
+          gh release create "$RELEASE_TAG" candidate/* --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --target "$(git rev-parse HEAD)" --title "NinjaArena $RELEASE_TAG" --notes-file release-notes.md \
+            --latest=false "${channel[@]}"
+
+      - name: Verify What Consumers Download
+        if: steps.state.outputs.state == 'absent'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/release_promotion.py verify-published --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG"
+
+  shared-state:
+    needs: [plan, publish-github]
+    if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.shared_needed == 'true' && github.ref == format('refs/tags/{0}', inputs.tag) && startsWith(inputs.tag, 'v')
+    name: Reconcile The Latest Marker
+    # One group for every tag, so two tags published together cannot both decide they own
+    # the marker. Ownership is checked again inside this group, directly before the write.
+    concurrency:
+      group: release-shared-state
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Require The Release Tag Ref
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.[1-9][0-9]*)?$ ]] || { echo 'Invalid release tag'; exit 1; }
+          [[ "$GITHUB_REF" == "refs/tags/$RELEASE_TAG" ]] || { echo 'Dispatch on the release tag ref'; exit 1; }
+
+      - name: Checkout Exact Release Tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Fetch And Verify The Retained Candidate And Evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid candidate run ID'; exit 1; }
+          python3 scripts/release_promotion.py fetch --repository "$GITHUB_REPOSITORY" --run-id "$CANDIDATE_RUN_ID" --tag "$RELEASE_TAG"
+
+      - name: Check Credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/release_promotion.py preflight --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --destinations github
+
+      - name: Recheck Ownership And Set The Latest Marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/release_promotion.py shared-write --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG"
+
+  report-shared-state:
+    needs: [plan, shared-state]
+    if: always() && needs.plan.result == 'success' && github.ref == format('refs/tags/{0}', inputs.tag) && startsWith(inputs.tag, 'v')
+    name: Report Shared-State Result
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Summarize The Shared-State Result Even When Skipped Or Rejected
+        env:
+          SHARED_RESULT: ${{ needs.shared-state.result }}
+          SHARED_NEEDED: ${{ needs.plan.outputs.shared_needed }}
+        run: |
+          {
+            printf '## Shared-state result: %s\n\n' "$SHARED_RESULT"
+            printf 'Planned latest-marker update: **%s**. A skipped job attempted no write.\n\n' "$SHARED_NEEDED"
+            printf 'Rejecting the shared-state approval, or a failure or cancellation of that job, leaves the latest marker where it was. Recover with a shared-state-only dispatch for the tag that owns the marker: scripts/release.sh publish <version> <candidate-run-id> --destinations shared-state\n'
+          } >> "$GITHUB_STEP_SUMMARY"

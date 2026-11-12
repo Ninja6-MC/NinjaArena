@@ -81,5 +81,10 @@ jobs:
       - name: Test Icon Exporter
         run: node --test scripts/export-icons.test.mjs
 
+      # The release candidate and publisher guards, including the refusal paths N6-REL-05
+      # lists. They run on every pull request, not only when a release is cut.
+      - name: Test Release Scripts
+        run: python3 -m unittest discover -s scripts/tests -p 'test_release_*.py' -v
+
       - name: Verify Committed Icons
         run: node scripts/export-icons.mjs --check

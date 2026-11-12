@@ -1,4 +1,4 @@
-"""Checks the actual downloadable ZIPs, checksums and promotion guards."""
+"""Checks the actual downloadable ZIPs and checksums."""
 
 import importlib.util
 import json
@@ -6,7 +6,6 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
-from unittest.mock import patch
 import zipfile
 
 SPEC = importlib.util.spec_from_file_location("java_packs", Path(__file__).with_name("java-packs.py"))
@@ -14,8 +13,6 @@ packs = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(packs)
 SOURCE = "a" * 40
 VERSION = "v0.1.0-rc.1"
-GATE = json.dumps({"protection_rules": [{"type": "required_reviewers", "reviewers": [
-    {"type": "User", "reviewer": {"login": "BharathASL"}}]}]})
 
 
 class JavaPacksTest(unittest.TestCase):
@@ -135,83 +132,6 @@ class JavaPacksTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "256x256 PNG"):
                 packs.source_files(root, variant, VERSION)
             icon.write_bytes(original)
-
-    def test_publication_requires_matching_passing_evidence_before_network(self):
-        evidence = Path(self.temp.name) / "evidence.json"
-        packs.write_json(evidence, {"result": "failed"})
-        with patch.object(packs.subprocess, "check_output") as network:
-            with self.assertRaisesRegex(ValueError, "verification evidence"):
-                packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-            network.assert_not_called()
-
-    def evidence(self):
-        file = Path(self.temp.name) / "evidence.json"
-        value = self.verify()
-        value.update(verification_run_id="42", verification_attempt="1")
-        packs.write_json(file, value)
-        return file
-
-    def test_moved_tag_and_channel_mismatch_stop_before_upload(self):
-        evidence = self.evidence()
-        with patch.object(packs.subprocess, "check_output", side_effect=[GATE, f'{"b" * 40}\trefs/tags/{VERSION}\n']), \
-                patch.object(packs.subprocess, "run") as upload:
-            with self.assertRaisesRegex(ValueError, "no longer points"):
-                packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-            upload.assert_not_called()
-        release = {"tagName": VERSION, "isPrerelease": False, "isDraft": False, "assets": []}
-        with patch.object(packs.subprocess, "check_output", side_effect=[GATE, f'{SOURCE}\trefs/tags/{VERSION}\n', json.dumps(release)]), \
-                patch.object(packs.subprocess, "run") as upload:
-            with self.assertRaisesRegex(ValueError, "channel mismatch"):
-                packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-            upload.assert_not_called()
-
-    def test_conflicting_public_asset_is_never_overwritten(self):
-        evidence = self.evidence()
-        release = {"tagName": VERSION, "isPrerelease": True, "isDraft": False, "assets": [{"name": "SHA1SUMS"}]}
-
-        def download(command, **kwargs):
-            self.assertEqual(["gh", "release", "download"], command[:3])
-            (Path(command[-1]) / "SHA1SUMS").write_bytes(b"conflicting public bytes")
-
-        with patch.object(packs.subprocess, "check_output", side_effect=[GATE, f'{SOURCE}\trefs/tags/{VERSION}\n', json.dumps(release)]), \
-                patch.object(packs.subprocess, "run", side_effect=download) as network:
-            with self.assertRaisesRegex(ValueError, "never overwrite"):
-                packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-            self.assertEqual(1, network.call_count)
-
-    def test_partial_publication_uploads_only_missing_bytes_and_reads_back_all(self):
-        evidence = self.evidence()
-        release = {"tagName": VERSION, "isPrerelease": True, "isDraft": False, "assets": [{"name": "SHA1SUMS"}]}
-        uploads = []
-        downloads = []
-
-        def network(command, **kwargs):
-            if command[:3] == ["gh", "release", "download"]:
-                name = command[command.index("--pattern") + 1]
-                downloads.append(name)
-                shutil.copyfile(self.output / name, Path(command[-1]) / name)
-            elif command[:3] == ["gh", "release", "upload"]:
-                uploads.extend(Path(name).name for name in command[6:])
-                self.assertNotIn("--clobber", command)
-            else:
-                self.fail(f"unexpected external command: {command}")
-
-        with patch.object(packs.subprocess, "check_output", side_effect=[GATE, f'{SOURCE}\trefs/tags/{VERSION}\n', json.dumps(release)]), \
-                patch.object(packs.subprocess, "run", side_effect=network):
-            packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-        self.assertEqual((set(self.manifest["files"]) | {"manifest.json"}) - {"SHA1SUMS"}, set(uploads))
-        self.assertEqual(2, downloads.count("SHA1SUMS"))
-        self.assertEqual(set(self.manifest["files"]) | {"manifest.json"}, set(downloads))
-
-    def test_missing_or_unprotected_release_environment_cannot_publish(self):
-        evidence = self.evidence()
-        for environment in ({}, {"protection_rules": []}, {"protection_rules": [{"type": "required_reviewers", "reviewers": []}]}):
-            with patch.object(packs.subprocess, "check_output", return_value=json.dumps(environment)) as checks, \
-                    patch.object(packs.subprocess, "run") as upload:
-                with self.assertRaisesRegex(ValueError, "must require maintainer review"):
-                    packs.publish(packs.ROOT, self.output, evidence, VERSION, SOURCE, "42", "1")
-                self.assertEqual(1, checks.call_count)
-                upload.assert_not_called()
 
     def test_versions_and_channels_cannot_be_paths_or_stable_prereleases(self):
         self.assertEqual("stable", packs.version_channel("v0.1.0"))

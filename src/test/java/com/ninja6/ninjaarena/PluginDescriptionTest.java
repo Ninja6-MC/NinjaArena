@@ -9,7 +9,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Proxy;
+import java.net.JarURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +23,7 @@ import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.InvalidDescriptionException;
 import org.bukkit.plugin.PluginDescriptionFile;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 class PluginDescriptionTest {
@@ -47,6 +51,28 @@ class PluginDescriptionTest {
     @Test
     void versionIsExpandedByTheBuild() throws Exception {
         assertFalse(description().getVersion().contains("${"), "plugin.yml version was not expanded");
+    }
+
+    /**
+     * Runs only when the release candidate points the suite at its downloaded JAR. Without
+     * this the suite could pass on the compiled classes and say nothing about the JAR.
+     */
+    @Test
+    void releaseRunLoadsTheCandidateJarAndItsVersion() throws Exception {
+        String releaseJar = System.getProperty("ninjaarena.releaseJar");
+        Assumptions.assumeTrue(releaseJar != null, "not a release candidate run");
+        Path expected = Path.of(releaseJar).toRealPath();
+        Path pluginClass = Path.of(NinjaArenaPlugin.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+                .toRealPath();
+        assertEquals(expected, pluginClass, "plugin classes did not load from the release JAR");
+        URL descriptor = PluginDescriptionTest.class.getClassLoader().getResource("plugin.yml");
+        assertNotNull(descriptor, "plugin.yml is not on the classpath");
+        assertEquals("jar", descriptor.getProtocol(), "plugin.yml did not load from a JAR");
+        JarURLConnection connection = (JarURLConnection) descriptor.openConnection();
+        assertEquals("plugin.yml", connection.getEntryName());
+        assertEquals(expected, Path.of(connection.getJarFileURL().toURI()).toRealPath(),
+                "plugin.yml did not load from the release JAR");
+        assertEquals(System.getProperty("ninjaarena.releaseVersion"), description().getVersion());
     }
 
     @Test

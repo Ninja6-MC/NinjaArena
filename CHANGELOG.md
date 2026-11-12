@@ -13,6 +13,13 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Each release is one GitHub release carrying the plugin JAR with the Java and Bedrock
+  resource packs, the Geyser mappings and a `SHA256SUMS` file, all built once from the
+  tagged commit. The release candidate tests the downloaded JAR and packs before a
+  gated publisher, approved by the maintainer, uploads those same bytes. Alpha, beta
+  and rc tags are published as pre-releases, and only the highest stable release is
+  marked latest. `RELEASE_PROCESS.md` describes the procedure and how to retry it.
+
 - Separate shuriken and smoke bomb cooldown groups and configurable per-round limits.
   Both tools default to unlimited, non-consuming throws. Each has `cooldown-seconds`
   (0-60, default 0) and `uses-per-round` (0-64, default 0) under `tools`; kit amounts
