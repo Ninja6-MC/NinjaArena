@@ -77,10 +77,12 @@ waiting-room:
 player-portals:
   # Players with ninjaarena.play build their own way in: a frame of frame-material shaped
   # like a nether portal (an opening 2 to 21 wide and 3 to 21 tall, corners optional), lit
-  # with flint and steel. It leads to the lobby, where the player joins the open public room
-  # with the most players, or waits to create or be invited to one. Changes apply to the
-  # next portal lit; portals already built stay until a frame block breaks or an admin
-  # deletes them with /narena portal delete.
+  # with flint and steel. It leads to the lobby, where the player joins an open room with
+  # space that admits them (a public room, or an invite-only one that invited them): one on
+  # an event's featured map first, then the one with the most players. With none, they wait
+  # in the lobby to create or be invited to one. Changes apply to the next portal lit;
+  # portals already built stay until a frame block breaks or an admin deletes them with
+  # /narena portal delete.
   # Worlds players may build in, by name. An empty list turns building off. The arena world
   # is never allowed.
   worlds:
@@ -155,9 +157,9 @@ arenas:
   # Arena slots in use at once (1 to 100), never more than the arena grid has cells. A room
   # leases a slot for its arena when it is created and keeps it through its whole match;
   # while every slot is leased, more rooms queue and see their place. Every match is a
-  # room's, so every running match holds a lease. Applies on reload; lowering it never ends a lease already granted. This was
-  # stability.max-concurrent-matches, which is still read, with a warning, when this is
-  # not set.
+  # room's, so every running match holds a lease. Applies on reload; lowering it never
+  # ends a lease already granted. This was stability.max-concurrent-matches, which is
+  # still read, with a warning, when this is not set.
   max-active: 4
 
 stability:

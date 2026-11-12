@@ -117,9 +117,10 @@ nether portal, but from crying obsidian:
 3. Walking through it takes the player to the lobby with the same checks, snapshot and
    empty inventory as an admin portal.
 
-A player-built portal belongs to no arena: it puts the player in the open public room
-with the most players, featured map first, or leaves them in the lobby to create or be
-invited to one. Vanilla does nothing with crying obsidian, so these portals never clash
+A player-built portal belongs to no arena: it puts the player in an open room with space
+that admits them (a public room, or an invite-only one that invited them), one on an
+event's featured map first, then the one with the most players. With none, it leaves them
+in the lobby to create or be invited to one. Vanilla does nothing with crying obsidian, so these portals never clash
 with nether portals; obsidian cannot be chosen as the frame block.
 
 Breaking, burning, blowing up or pushing any block of the frame removes the portal; the
