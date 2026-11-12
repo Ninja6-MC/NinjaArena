@@ -49,6 +49,11 @@ public enum NinjaTool {
         return material;
     }
 
+    /** Independent throw groups; dash keeps the vanilla feather group for Geyser. */
+    public NamespacedKey cooldownGroup() {
+        return this == DASH ? NamespacedKey.minecraft("feather") : model;
+    }
+
     /** Whether the tool is thrown as a projectile rather than used in place. */
     public boolean thrown() {
         return this != DASH;
@@ -82,12 +87,23 @@ public enum NinjaTool {
         item.editMeta(meta -> {
             meta.itemName(msg("tool." + key));
             appearance(meta, custom, color);
-            if (this == DASH) {
-                meta.setMaxStackSize(1);
-            }
+            configureUse(meta);
         });
         item.editPersistentDataContainer(data -> data.set(KEY, PersistentDataType.STRING, key));
         return item;
+    }
+
+    /** Adds throw groups without changing dash's vanilla cooldown component. */
+    void configureUse(org.bukkit.inventory.meta.ItemMeta meta) {
+        meta.setMaxStackSize(this == DASH ? 1 : 64);
+        if (thrown()) {
+            var cooldown = meta.getUseCooldown();
+            cooldown.setCooldownGroup(cooldownGroup());
+            // Paper requires a positive value; below one tick rounds to no automatic wait.
+            // Each accepted throw sets the configured duration explicitly by group.
+            cooldown.setCooldownSeconds(0.01f);
+            meta.setUseCooldown(cooldown);
+        }
     }
 
     /** Only the accent layer reads the first custom-model-data colour. */

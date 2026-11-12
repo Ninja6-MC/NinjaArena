@@ -13,6 +13,14 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Separate shuriken and smoke bomb cooldown groups and configurable per-round limits.
+  Both tools default to unlimited, non-consuming throws. Each has `cooldown-seconds`
+  (0-60, default 0) and `uses-per-round` (0-64, default 0) under `tools`; kit amounts
+  that disagree warn once per load. Reload keeps running cooldown deadlines.
+
+- The texture chest menu now opens during a match while inventory lockdown still
+  prevents kit transfers through it.
+
 - Personal points for player and enemy kills, round survival and shared round wins,
   configurable under `points` and shown per player in the match action bar. Points carry
   across rounds and reset on leaving or match end; team scoring is unchanged.

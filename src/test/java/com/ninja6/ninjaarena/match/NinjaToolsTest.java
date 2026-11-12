@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent;
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
+import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
@@ -87,6 +90,10 @@ class NinjaToolsTest extends MatchFixture {
         }, event -> {
             events.add(event);
             switch (event) {
+                case RoundStartEvent started -> {
+                    deaths.onRoundStart(started);
+                    tools.onRoundStart(started);
+                }
                 case RoundEndEvent ended -> tools.onRoundEnd(ended);
                 case MatchEndEvent ended -> tools.onMatchEnd(ended);
                 case PlayerEliminatedEvent out -> tools.onEliminated(out);
@@ -208,6 +215,147 @@ class NinjaToolsTest extends MatchFixture {
         var event = new AreaEffectCloudApplyEvent((AreaEffectCloud) cloud.proxy, new ArrayList<>(inside));
         tools.onCloud(event);
         return event;
+    }
+
+    private static ToolSettings throwSettings(int shurikenCooldown, int shurikenLimit,
+            int smokeCooldown, int smokeLimit) {
+        return new ToolSettings(4, 3, 2, 2, 3, 8, 1, 0.3,
+                shurikenCooldown, shurikenLimit, smokeCooldown, smokeLimit);
+    }
+
+    @Test
+    void defaultsAllowRepeatedThrowsWithoutConsumingEitherStack() {
+        fight();
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            for (int i = 0; i < 70; i++) {
+                Launch shot = launch(ALICE, tool);
+                assertFalse(shot.event().isCancelled());
+                assertFalse(shot.event().shouldConsume());
+                assertEquals(2, shot.event().getItemStack().getAmount());
+            }
+        }
+    }
+
+    @Test
+    void throwCooldownsAreIndependentAndLeaveDashOnFeather() {
+        fight();
+        tools.setSettings(throwSettings(2, 0, 3, 0));
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        assertFalse(launch(ALICE, NinjaTool.SMOKE_BOMB).event().isCancelled());
+        assertTrue(launch(ALICE, NinjaTool.SMOKE_BOMB).event().isCancelled());
+        assertFalse(launch(BOB, NinjaTool.SMOKE_BOMB).event().isCancelled());
+        assertFalse(launch(BOB, NinjaTool.SHURIKEN).event().isCancelled());
+        use(ALICE, item(NinjaTool.DASH, 1));
+        assertEquals(160, players.get(ALICE).cooldowns.get(Material.FEATHER));
+        assertEquals(40, players.get(ALICE).cooldowns.get(NinjaTool.SHURIKEN.cooldownGroup()));
+        assertEquals(60, players.get(ALICE).cooldowns.get(NinjaTool.SMOKE_BOMB.cooldownGroup()));
+        tick = 40;
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        assertTrue(launch(ALICE, NinjaTool.SMOKE_BOMB).event().isCancelled());
+        tick = 60;
+        assertFalse(launch(ALICE, NinjaTool.SMOKE_BOMB).event().isCancelled());
+    }
+
+    @Test
+    void automaticComponentCooldownKeepsTheThrowDeadlineAndNeverChangesDash() {
+        fight();
+        tools.setSettings(throwSettings(5, 0, 0, 0));
+        launch(ALICE, NinjaTool.SHURIKEN);
+        tools.setSettings(throwSettings(1, 0, 0, 0));
+        tick = 10;
+        var automatic = new io.papermc.paper.event.player.PlayerItemGroupCooldownEvent(
+                player(ALICE), NinjaTool.SHURIKEN.cooldownGroup(), 0);
+        tools.onCooldown(automatic);
+        assertEquals(90, automatic.getCooldown());
+        var feather = new io.papermc.paper.event.player.PlayerItemGroupCooldownEvent(
+                player(ALICE), NinjaTool.DASH.cooldownGroup(), 160);
+        tools.onCooldown(feather);
+        assertEquals(160, feather.getCooldown());
+        tick = 100;
+        tools.onCooldown(automatic);
+        assertEquals(0, automatic.getCooldown());
+        launch(ALICE, NinjaTool.SHURIKEN);
+        matches.leave(player(ALICE), MatchService.Exit.COMMAND);
+        var unrelated = new io.papermc.paper.event.player.PlayerItemGroupCooldownEvent(
+                player(ALICE), NinjaTool.SHURIKEN.cooldownGroup(), 7);
+        tools.onCooldown(unrelated);
+        assertEquals(7, unrelated.getCooldown());
+        assertEquals(0, players.get(ALICE).cooldowns.get(NinjaTool.SHURIKEN.cooldownGroup()));
+    }
+
+    @Test
+    void threeThrowsPerToolRefillAtNextRoundIncludingDelayedRespawn() {
+        fight();
+        tools.setSettings(throwSettings(0, 3, 0, 3));
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            for (int i = 0; i < 3; i++) {
+                Launch shot = launch(ALICE, tool);
+                assertFalse(shot.event().isCancelled());
+                assertTrue(shot.event().shouldConsume());
+            }
+            Launch refused = launch(ALICE, tool);
+            assertTrue(refused.event().isCancelled());
+            assertEquals(2, refused.event().getItemStack().getAmount());
+        }
+        players.get(ALICE).dead = true;
+        out(ALICE);
+        out(BOB);
+        out(DAVE);
+        runNextTick();
+        for (int i = 0; i < 10 && !matches.matchOf(ALICE).orElseThrow().phase().isFighting(); i++) ticks(1);
+        assertEquals(2, matches.matchOf(ALICE).orElseThrow().round());
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        players.get(ALICE).dead = false;
+        var post = new PlayerPostRespawnEvent(player(ALICE), player(ALICE).getLocation(), false, false, false,
+                PlayerRespawnEvent.RespawnReason.DEATH);
+        deaths.onPostRespawn(post);
+        tools.onPostRespawn(post);
+        for (NinjaTool tool : List.of(NinjaTool.SHURIKEN, NinjaTool.SMOKE_BOMB)) {
+            for (int i = 0; i < 3; i++) assertFalse(launch(ALICE, tool).event().isCancelled());
+            assertTrue(launch(ALICE, tool).event().isCancelled());
+            for (int i = 0; i < 3; i++) assertFalse(launch(CAROL, tool).event().isCancelled());
+            assertTrue(launch(CAROL, tool).event().isCancelled());
+        }
+    }
+
+    @Test
+    void reloadPreservesDeadlinesAndCountsAndUsesNewValuesOnLaterThrows() {
+        fight();
+        tools.setSettings(throwSettings(5, 3, 4, 3));
+        launch(ALICE, NinjaTool.SHURIKEN);
+        launch(ALICE, NinjaTool.SMOKE_BOMB);
+        tools.setSettings(throwSettings(1, 1, 0, 0));
+        tick = 80;
+        assertFalse(launch(ALICE, NinjaTool.SMOKE_BOMB).event().isCancelled());
+        assertFalse(launch(ALICE, NinjaTool.SMOKE_BOMB).event().shouldConsume());
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        tools.setSettings(throwSettings(1, 3, 0, 0));
+        tick = 99;
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        tick = 100;
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        assertEquals(20, players.get(ALICE).cooldowns.get(NinjaTool.SHURIKEN.cooldownGroup()));
+        tick = 120;
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        tick = 140;
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        tools.setSettings(ToolSettings.DEFAULTS);
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+    }
+
+    @Test
+    void cancelledByAnotherListenerDoesNotSpendAUseOrStartCooldown() {
+        fight();
+        tools.setSettings(throwSettings(2, 1, 2, 1));
+        Spawned projectile = spawn(Snowball.class, player(ALICE).getLocation(), player(ALICE));
+        var event = new PlayerLaunchProjectileEvent(player(ALICE), item(NinjaTool.SHURIKEN, 1),
+                (Projectile) projectile.proxy);
+        tools.onLaunchAttempt(event);
+        event.setCancelled(true);
+        // Paper skips the MONITOR handler when another listener cancels the event.
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
     }
 
     @Test
@@ -518,7 +666,7 @@ class NinjaToolsTest extends MatchFixture {
         use(ALICE, item(NinjaTool.DASH, 1));
         var centre = player(ALICE).getLocation();
         assertFalse(tools.inSmoke(centre.clone().add(4, 0, 0)));
-        tools.setSettings(new ToolSettings(9, 6, 4, 7, 8, 3, 1.5, 0.4));
+        tools.setSettings(new ToolSettings(9, 6, 4, 7, 8, 3, 1.5, 0.4, 0, 0, 0, 0));
         assertFalse(tools.inSmoke(centre.clone().add(4, 0, 0)));
         assertEquals(80, clouds.getFirst().values.get("setDuration"));
         players.get(ALICE).velocity = null;

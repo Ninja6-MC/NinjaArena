@@ -259,7 +259,7 @@ and stability settings are validated but remain restart-only. An invalid value i
 even in a setting whose valid change would require a restart.
 
 Kit reload validation does not call player-dependent item factories. The built-in tool
-providers declare stack limits of 16 for shuriken and smoke bombs and 1 for dash. Custom
+providers declare stack limits of 64 for shuriken and smoke bombs and 1 for dash. Custom
 providers can declare a safe limit with `kitItems.register(id, maxStackSize, provider)`;
 the existing two-argument registration conservatively permits one item during reload
 validation. Item providers still resolve at round-kit application time.
@@ -380,10 +380,10 @@ items:
     material: WOODEN_SWORD
   - slot: 1
     id: ninjaarena:shuriken
-    amount: 8
+    amount: 1
   - slot: 2
     id: ninjaarena:smoke-bomb
-    amount: 2
+    amount: 1
   - slot: 3
     id: ninjaarena:dash
 ```
@@ -427,8 +427,8 @@ each player receives per round, and leaving an entry out turns that tool off for
 
 | Kit ID | Item | Default kit | Effect |
 | :--- | :--- | :--- | :--- |
-| `ninjaarena:smoke-bomb` | Snowball | 2 | Thrown. Where it lands, a 3-block cloud lasts 4 seconds and blinds rival players inside it. |
-| `ninjaarena:shuriken` | Snowball | 8 | Thrown. A hit deals 2 damage and makes a rival glow for 3 seconds. |
+| `ninjaarena:smoke-bomb` | Snowball | 1 (unlimited) | Thrown. Where it lands, a 3-block cloud lasts 4 seconds and blinds rival players inside it. |
+| `ninjaarena:shuriken` | Snowball | 1 (unlimited) | Thrown. A hit deals 2 damage and makes a rival glow for 3 seconds. |
 | `ninjaarena:dash` | Feather | 1 | Right-click for a short forward burst. 8-second cooldown, shown on the item on Java and, with the Geyser mappings installed, on Bedrock (see the Bedrock note below). Not consumed. |
 
 Bedrock shows the dash cooldown on the hotbar slot only when the Geyser mappings
@@ -448,6 +448,20 @@ gliding, flying, riptiding or riding. Flying tools, clouds, cooldowns and glow m
 cleared at the end of each round and match, when a player leaves or is eliminated, and on
 plugin disable. Durations, radius, damage, cooldown and dash speed are under `tools` in
 `config.yml`.
+
+Each thrown tool has its own Java item cooldown group, so using a shuriken never greys
+out a smoke bomb. Under each of `tools.shuriken` and `tools.smoke-bomb`:
+
+- `cooldown-seconds`: 0-60, default `0` (no cooldown).
+- `uses-per-round`: 0-64, default `0` (unlimited throws without consuming the stack).
+
+A positive limit consumes one item per throw and refuses throws after that many uses in
+the round. Counts refill at round start, including delayed respawns into the new round.
+`kits.yml` still decides which tools are available. Give one item for unlimited use, or
+match its total `amount` to the limit; a mismatch logs one warning per tool per load.
+Reload changes the settings for new throws and keeps running cooldown deadlines and
+throws already counted this round. Match the kit amount when changing a limit; kit
+changes apply next round. Bedrock cooldown mappings for thrown tools are pending.
 
 `plugin.tools().isMarked(uuid)` reports whether a player is glowing from a shuriken hit,
 and `plugin.tools().inSmoke(location)` whether a place is inside a smoke cloud, for enemy

@@ -4,8 +4,8 @@ import org.bukkit.configuration.ConfigurationSection;
 
 /**
  * Tunable values for the ninja kit tools, read from the {@code tools} section of
- * {@code config.yml}. Out-of-range values are clamped. How many of each tool a player gets,
- * and whether they get it at all, is set by the kit in {@code kits.yml}.
+ * {@code config.yml}. Out-of-range values are clamped. The kit in {@code kits.yml} decides
+ * which tools a player gets and their initial stack amounts.
  *
  * @param smokeSeconds        how long a smoke cloud lasts
  * @param smokeRadius         smoke cloud radius in blocks
@@ -15,9 +15,14 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param dashCooldownSeconds time between dashes
  * @param dashStrength        horizontal speed of a dash, in blocks per tick
  * @param dashLift            upward speed of a dash, in blocks per tick
+ * @param shurikenCooldownSeconds time between shuriken throws; zero disables the cooldown
+ * @param shurikenUsesPerRound maximum throws per round; zero means unlimited
+ * @param smokeCooldownSeconds time between smoke bomb throws; zero disables the cooldown
+ * @param smokeUsesPerRound maximum throws per round; zero means unlimited
  */
 public record ToolSettings(int smokeSeconds, double smokeRadius, int blindnessSeconds, double shurikenDamage,
-        int glowSeconds, int dashCooldownSeconds, double dashStrength, double dashLift) {
+        int glowSeconds, int dashCooldownSeconds, double dashStrength, double dashLift,
+        int shurikenCooldownSeconds, int shurikenUsesPerRound, int smokeCooldownSeconds, int smokeUsesPerRound) {
 
     private static final double DEFAULT_SMOKE_RADIUS = 3.0;
     private static final double DEFAULT_SHURIKEN_DAMAGE = 2.0;
@@ -25,7 +30,7 @@ public record ToolSettings(int smokeSeconds, double smokeRadius, int blindnessSe
     private static final double DEFAULT_DASH_LIFT = 0.3;
 
     public static final ToolSettings DEFAULTS = new ToolSettings(4, DEFAULT_SMOKE_RADIUS, 2,
-            DEFAULT_SHURIKEN_DAMAGE, 3, 8, DEFAULT_DASH_STRENGTH, DEFAULT_DASH_LIFT);
+            DEFAULT_SHURIKEN_DAMAGE, 3, 8, DEFAULT_DASH_STRENGTH, DEFAULT_DASH_LIFT, 0, 0, 0, 0);
 
     static final int MAX_SECONDS = 60;
     static final double MAX_RADIUS = 8;
@@ -35,6 +40,10 @@ public record ToolSettings(int smokeSeconds, double smokeRadius, int blindnessSe
     static final double MAX_DASH_LIFT = 0.6;
 
     public ToolSettings {
+        shurikenCooldownSeconds = Math.clamp(shurikenCooldownSeconds, 0, MAX_SECONDS);
+        smokeCooldownSeconds = Math.clamp(smokeCooldownSeconds, 0, MAX_SECONDS);
+        shurikenUsesPerRound = Math.clamp(shurikenUsesPerRound, 0, 64);
+        smokeUsesPerRound = Math.clamp(smokeUsesPerRound, 0, 64);
         smokeSeconds = Math.clamp(smokeSeconds, 1, MAX_SECONDS);
         smokeRadius = clamp(smokeRadius, 1, MAX_RADIUS, DEFAULT_SMOKE_RADIUS);
         blindnessSeconds = Math.clamp(blindnessSeconds, 1, MAX_SECONDS);
@@ -61,7 +70,21 @@ public record ToolSettings(int smokeSeconds, double smokeRadius, int blindnessSe
                 section.getInt("shuriken.glow-seconds", DEFAULTS.glowSeconds()),
                 section.getInt("dash.cooldown-seconds", DEFAULTS.dashCooldownSeconds()),
                 section.getDouble("dash.strength", DEFAULTS.dashStrength()),
-                section.getDouble("dash.lift", DEFAULTS.dashLift()));
+                section.getDouble("dash.lift", DEFAULTS.dashLift()),
+                section.getInt("shuriken.cooldown-seconds", 0),
+                section.getInt("shuriken.uses-per-round", 0),
+                section.getInt("smoke-bomb.cooldown-seconds", 0),
+                section.getInt("smoke-bomb.uses-per-round", 0));
+    }
+
+    /** Cooldown for a thrown tool; dash retains its own settings and material group. */
+    public int cooldownSeconds(NinjaTool tool) {
+        return tool == NinjaTool.SHURIKEN ? shurikenCooldownSeconds : smokeCooldownSeconds;
+    }
+
+    /** Maximum throws per round, or zero for unlimited throws. */
+    public int usesPerRound(NinjaTool tool) {
+        return tool == NinjaTool.SHURIKEN ? shurikenUsesPerRound : smokeUsesPerRound;
     }
 
     private static double clamp(double value, double min, double max, double fallback) {

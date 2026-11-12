@@ -22,8 +22,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class KitDefinitionTest {
     private static final KitDefinition DEFAULT_KIT = new KitDefinition(List.of(
-            new KitDefinition.Entry(1, null, "ninjaarena:shuriken", 8),
-            new KitDefinition.Entry(2, null, "ninjaarena:smoke-bomb", 2),
+            new KitDefinition.Entry(1, null, "ninjaarena:shuriken", 1),
+            new KitDefinition.Entry(2, null, "ninjaarena:smoke-bomb", 1),
             new KitDefinition.Entry(3, null, "ninjaarena:dash", 1)));
     @TempDir Path dir;
     private final List<String> warnings = new ArrayList<>();
@@ -50,6 +50,29 @@ class KitDefinitionTest {
         Path file = dir.resolve("kits.yml");
         Files.writeString(file, text);
         return KitDefinition.load(file, logger);
+    }
+
+    @Test
+    void defaultsAgreeAndMismatchesWarnOncePerToolPerLoad() throws Exception {
+        try (var stream = getClass().getResourceAsStream("/config.yml")) {
+            var config = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                    new java.io.InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8));
+            var settings = com.ninja6.ninjaarena.tool.ToolSettings.from(config.getConfigurationSection("tools"));
+            DEFAULT_KIT.warnToolAmounts(settings, logger);
+            assertTrue(warnings.isEmpty());
+            var mismatched = new KitDefinition(List.of(
+                    new KitDefinition.Entry(1, null, "ninjaarena:shuriken", 8),
+                    new KitDefinition.Entry(2, null, "ninjaarena:shuriken", 1),
+                    new KitDefinition.Entry(3, null, "ninjaarena:smoke-bomb", 2)));
+            mismatched.warnToolAmounts(settings, logger);
+            assertEquals(2, warnings.size());
+            assertTrue(warnings.stream().anyMatch(warning -> warning.contains("shuriken is 9")));
+            warnings.clear();
+            var limited = new com.ninja6.ninjaarena.tool.ToolSettings(4, 3, 2, 2, 3, 8, 1, 0.3, 0, 9, 0, 2);
+            mismatched.warnToolAmounts(limited, logger);
+            KitDefinition.EMPTY.warnToolAmounts(limited, logger);
+            assertTrue(warnings.isEmpty());
+        }
     }
 
     @Test

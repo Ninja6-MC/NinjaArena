@@ -280,10 +280,14 @@ director:
     leader-bias: 2.0
 
 tools:
-  # The ninja kit tools. Which tools a player gets, and how many, is set by the kit in
+  # The ninja kit tools. Which tools a player gets is set by the kit in
   # kits.yml: leave a tool's entry out to turn it off. Tools work only in COMBAT and OVERRUN
   # for players still alive in the round.
   smoke-bomb:
+    # Time between throws (0 to 60); 0 means no cooldown.
+    cooldown-seconds: 0
+    # Maximum throws each round (0 to 64); 0 means unlimited and keeps the stack.
+    uses-per-round: 0
     # How long the cloud lasts where the bomb lands (1 to 60).
     cloud-seconds: 4
     # Cloud radius in blocks (1 to 8).
@@ -292,6 +296,10 @@ tools:
     # 60). Teammates, the thrower and anyone outside the match are never affected.
     blindness-seconds: 2
   shuriken:
+    # Time between throws (0 to 60); 0 means no cooldown.
+    cooldown-seconds: 0
+    # Maximum throws each round (0 to 64); 0 means unlimited and keeps the stack.
+    uses-per-round: 0
     # Damage per hit in half hearts, before armour (0 to 20). Damage rules and friendly
     # fire apply as for any other attack.
     damage: 2.0

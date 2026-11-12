@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.tool;
 
 import com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent;
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchService;
@@ -9,7 +10,10 @@ import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
+import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import io.papermc.paper.event.player.PlayerItemGroupCooldownEvent;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -21,6 +25,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.damage.DamageSource;
@@ -103,6 +108,8 @@ public final class NinjaTools implements Listener {
     private final Map<UUID, Smoke> smoke = new HashMap<>();
     /** The tick at which each player may dash again. */
     private final Map<UUID, Long> dashReady = new HashMap<>();
+    private final Map<UUID, Map<NinjaTool, Long>> throwReady = new HashMap<>();
+    private final Map<UUID, Map<NinjaTool, Integer>> throwUses = new HashMap<>();
     /** The tick at which each marked player's mark runs out. */
     private final Map<UUID, Long> marks = new HashMap<>();
 
@@ -139,13 +146,13 @@ public final class NinjaTools implements Listener {
     /** Registers every tool's kit item, such as {@code ninjaarena:shuriken}. */
     public static void registerItems(KitItems items) {
         for (NinjaTool tool : NinjaTool.values()) {
-            items.register(tool.kitId(), tool == NinjaTool.DASH ? 1 : 16, player -> tool.create());
+            items.register(tool.kitId(), tool == NinjaTool.DASH ? 1 : 64, player -> tool.create());
         }
     }
 
     public static void registerItems(KitItems items, ToolVisuals visuals) {
         for (NinjaTool tool : NinjaTool.values()) {
-            items.register(tool.kitId(), tool == NinjaTool.DASH ? 1 : 16, player -> visuals.give(tool, player));
+            items.register(tool.kitId(), tool == NinjaTool.DASH ? 1 : 64, player -> visuals.give(tool, player));
         }
     }
 
@@ -222,9 +229,19 @@ public final class NinjaTools implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onLaunchAttempt(PlayerLaunchProjectileEvent event) {
         Optional<NinjaTool> tool = NinjaTool.of(event.getItemStack());
-        if (tool.isPresent() && tool.get().thrown() && !usable(event.getPlayer())) {
-            event.setCancelled(true);
+        if (tool.isEmpty() || !tool.get().thrown()) {
+            return;
         }
+        NinjaTool kind = tool.get();
+        UUID id = event.getPlayer().getUniqueId();
+        int limit = settings.usesPerRound(kind);
+        if (!usable(event.getPlayer())
+                || ticks.getAsLong() < throwReady.getOrDefault(id, Map.of()).getOrDefault(kind, 0L)
+                || limit > 0 && throwUses.getOrDefault(id, Map.of()).getOrDefault(kind, 0) >= limit) {
+            event.setCancelled(true);
+            return;
+        }
+        event.setShouldConsume(limit > 0);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -234,12 +251,35 @@ public final class NinjaTools implements Listener {
         if (tool.isEmpty() || !tool.get().thrown() || !usable(player)) {
             return;
         }
+        UUID id = player.getUniqueId();
+        NinjaTool kind = tool.get();
+        throwUses.computeIfAbsent(id, ignored -> new EnumMap<>(NinjaTool.class)).merge(kind, 1,
+                (used, added) -> Math.min(64, used + added));
+        int cooldown = settings.cooldownSeconds(kind) * TICKS_PER_SECOND;
+        throwReady.computeIfAbsent(id, ignored -> new EnumMap<>(NinjaTool.class))
+                .put(kind, ticks.getAsLong() + cooldown);
+        player.setCooldown(kind.cooldownGroup(), cooldown);
         Projectile projectile = event.getProjectile();
         String arena = matches.matchOf(player.getUniqueId()).orElseThrow().arena();
         if (visuals != null && projectile instanceof Snowball snowball) {
             visuals.flight(snowball, tool.get(), matches.match(arena).orElseThrow(), player.getUniqueId());
         }
         thrown.put(projectile.getUniqueId(), new Thrown(tool.get(), player.getUniqueId(), arena, projectile));
+    }
+
+    /** Keep the item component's after-use cooldown on the accepted throw's deadline. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onCooldown(PlayerItemGroupCooldownEvent event) {
+        Map<NinjaTool, Long> ready = throwReady.get(event.getPlayer().getUniqueId());
+        if (ready == null) {
+            return;
+        }
+        for (var entry : ready.entrySet()) {
+            if (entry.getKey().cooldownGroup().equals(event.getCooldownGroup())) {
+                event.setCooldown((int) Math.max(0, entry.getValue() - ticks.getAsLong()));
+                return;
+            }
+        }
     }
 
     /**
@@ -308,6 +348,21 @@ public final class NinjaTools implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
+    public void onRoundStart(RoundStartEvent event) {
+        event.match().players().forEach(this::forget);
+    }
+
+    /** A delayed respawn is eligible only after the match has readied it for a new round. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPostRespawn(PlayerPostRespawnEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isDead() && player.isOnline() && player.getGameMode() != GameMode.SPECTATOR
+                && matches.matchOf(player.getUniqueId()).filter(match -> match.isAlive(player.getUniqueId())).isPresent()) {
+            forget(player.getUniqueId());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onRoundEnd(RoundEndEvent event) {
         clear(event.match());
     }
@@ -333,6 +388,8 @@ public final class NinjaTools implements Listener {
         removeEntities(smoke, cloud -> true);
         Set<UUID> tracked = new HashSet<>(dashReady.keySet());
         tracked.addAll(marks.keySet());
+        tracked.addAll(throwReady.keySet());
+        tracked.addAll(throwUses.keySet());
         tracked.forEach(this::forget);
     }
 
@@ -424,11 +481,16 @@ public final class NinjaTools implements Listener {
     }
 
     private void forget(UUID id) {
+        Map<NinjaTool, Long> throwsCooling = throwReady.remove(id);
+        throwUses.remove(id);
         boolean cooling = dashReady.remove(id) != null;
         boolean marked = marks.remove(id) != null;
         Player player = players.apply(id);
         if (player == null) {
             return;
+        }
+        if (throwsCooling != null) {
+            throwsCooling.keySet().forEach(tool -> player.setCooldown(tool.cooldownGroup(), 0));
         }
         if (cooling) {
             player.setCooldown(NinjaTool.DASH.material(), 0);
