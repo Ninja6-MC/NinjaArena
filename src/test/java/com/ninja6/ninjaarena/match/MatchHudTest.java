@@ -16,6 +16,8 @@ import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.tool.NinjaTool;
 import com.ninja6.ninjaarena.tool.NinjaTools.ThrowState;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -23,6 +25,9 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.junit.jupiter.api.Test;
 
@@ -187,6 +192,34 @@ class MatchHudTest extends MatchFixture {
         hud.tick();
         assertEquals(status, players.get(ALICE).actionBars.getLast());
         assertEquals(status, players.get(BOB).actionBars.getLast());
+    }
+
+    @Test
+    void defaultHintInheritsYellowForSeparatorsAndTextButKeepsGrayToolNames() {
+        useHud(SETTINGS);
+        toolStates.put(ALICE, Map.of(NinjaTool.SHURIKEN, new ThrowState(2, false),
+                NinjaTool.SMOKE_BOMB, new ThrowState(1, true)));
+        startTwoOnTwo();
+        Component line = players.get(ALICE).actionBarComponents.getLast();
+        String rendered = text(line);
+        assertEquals("T1: 0  T2: 0  |  Enemies left: 0  |  Points: 0  |  Shuriken 2s"
+                + "  |  Smoke Bomb used up this round", rendered);
+        List<TextColor> colours = new ArrayList<>();
+        collectColours(line, NamedTextColor.WHITE, colours);
+        for (int i = 0; i < rendered.length(); i++) {
+            boolean toolName = i >= rendered.indexOf("Shuriken") && i < rendered.indexOf("Shuriken") + 8
+                    || i >= rendered.indexOf("Smoke Bomb") && i < rendered.indexOf("Smoke Bomb") + 10;
+            assertEquals(toolName ? NamedTextColor.GRAY : NamedTextColor.YELLOW, colours.get(i),
+                    "Colour at character " + i);
+        }
+    }
+
+    private static void collectColours(Component component, TextColor inherited, List<TextColor> colours) {
+        TextColor colour = component.color() == null ? inherited : component.color();
+        if (component instanceof TextComponent text) {
+            colours.addAll(Collections.nCopies(text.content().length(), colour));
+        }
+        component.children().forEach(child -> collectColours(child, colour, colours));
     }
 
     @Test

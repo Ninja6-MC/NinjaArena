@@ -452,7 +452,7 @@ hud:
   tool-cooldown: "<tool> <seconds>s"
   tool-used-up: "<tool> used up this round"
   tool-separator: "  |  "
-  status-with-tools: "<status>  |  <tools>"
+  status-with-tools: "<status><yellow>  |  <tools>"
 
 # The final score table. entry, points and rounds are plain text.
 score:
