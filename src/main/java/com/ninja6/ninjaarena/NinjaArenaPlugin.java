@@ -40,6 +40,8 @@ import com.ninja6.ninjaarena.match.MatchListener;
 import com.ninja6.ninjaarena.match.MatchProtectionListener;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchSettings;
+import com.ninja6.ninjaarena.match.PlayerPoints;
+import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.match.TeamScores;
 import com.ninja6.ninjaarena.match.TeamScoringListener;
@@ -120,6 +122,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private MatchService matches;
     private MatchDeathListener deaths;
     private TeamScores scores;
+    private PlayerPoints points;
     private MatchHud hud;
     private DirectorService directors;
     private EnemyLifecycle enemyLifecycle;
@@ -181,6 +184,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         TeamScoringListener scoring = new TeamScoringListener(scores,
                 ScoringSettings.from(getConfig().getConfigurationSection("scoring")), getServer()::getPlayer);
         getServer().getPluginManager().registerEvents(scoring, this);
+        points = new PlayerPoints(PointsSettings.from(getConfig().getConfigurationSection("points")));
+        getServer().getPluginManager().registerEvents(points, this);
         // Starts and stops each match's spawn loop with its fights; closed before the matches.
         StalkerSettings stalker = StalkerSettings.from(getConfig().getConfigurationSection("director.shadow-stalker"));
         directors = new DirectorService(this,
@@ -197,6 +202,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")), System::nanoTime);
         getServer().getPluginManager().registerEvents(enemyLifecycle, this);
         enemyLifecycle.start(this);
+        enemyLifecycle.setKills(points::enemyKilled);
         startStats(enemyLifecycle);
         startPlaceholders();
         ResourcePackSettings packSettings;
@@ -293,7 +299,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         // from each match's director. Set before any fight can create a director.
         StabilitySettings stability = StabilitySettings.from(getConfig().getConfigurationSection("stability"));
         DirectorService enemyDirectors = directors;
-        hud = new MatchHud(inMatch::matches, getServer()::getPlayer, scores,
+        hud = new MatchHud(inMatch::matches, getServer()::getPlayer, scores, points,
                 match -> enemyDirectors.director(match).map(director -> (int) director.enemies().stream()
                         .filter(MatchDirector.Enemy::isAlive).count()).orElse(0));
         getServer().getPluginManager().registerEvents(hud, this);
@@ -371,6 +377,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         protection.setFriendlyFire(friendlyFire);
                         scoring.setSettings(awards, inMatch.matches());
                         inMatch.setSettings(settings);
+                    }
+
+                    @Override
+                    public void points(PointsSettings settings) {
+                        points.setSettings(settings, inMatch.matches());
                     }
 
                     @Override
@@ -498,7 +509,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             }
         }, getServer()::getPlayer, Instant::now);
         getServer().getPluginManager().registerEvents(tracker, this);
-        enemies.setKills(tracker::enemyKilled);
+        enemies.setKills((match, killer, cost) -> {
+            points.enemyKilled(match, killer, cost);
+            tracker.enemyKilled(match, killer);
+        });
         RewardSettings rewardSettings;
         try {
             rewardSettings = RewardSettings.from(getConfig());
@@ -691,6 +705,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             tools = null;
         }
         scores = null;
+        points = null;
         kitItems = null;
         if (deaths != null) {
             deaths.close();
@@ -755,6 +770,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Team points and the award API for live matches; {@code null} while disabled. */
     public TeamScores scores() {
         return scores;
+    }
+
+    /** Personal points for live matches; {@code null} while disabled. Read on the server thread. */
+    public PlayerPoints points() {
+        return points;
     }
 
     /**

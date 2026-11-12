@@ -140,6 +140,17 @@ scoring:
   # environmental deaths and leaving award nothing. 0 disables this award.
   player-kill-points: 2
 
+points:
+  # Personal points for killing an opposing player in the match; 0 disables it.
+  player-kill: 2
+  # Personal points per enemy cost, for an alive killer during a fight; 0 disables it.
+  enemy-kill-per-cost: 1
+  # Personal points for each round survivor, including draws; 0 disables it.
+  round-survive: 2
+  # Pool split among winning teammates still in the match, alive or not; 0 disables it.
+  # Remainders go in roster order. Draws award no pool. Negative awards become zero.
+  round-win: 6
+
 stability:
   # Matches running at once (1 to 100). A waiting room whose countdown ends while this many
   # run holds at its last second until one finishes.

@@ -23,10 +23,12 @@ class MatchHudTest extends MatchFixture {
 
     private MatchHud hud;
     private TeamScores scores;
+    private PlayerPoints points;
     private int enemies;
 
     private void useHud(MatchSettings settings) {
         scores = new TeamScores();
+        points = new PlayerPoints(PointsSettings.DEFAULTS);
         var scoring = new TeamScoringListener(scores, ScoringSettings.DEFAULTS, plugin.getServer()::getPlayer);
         matches = new MatchService(plugin, arenas, () -> arenaWorld, settings, player -> {
             restored.add(player.getUniqueId());
@@ -34,17 +36,17 @@ class MatchHudTest extends MatchFixture {
         }, event -> {
             events.add(event);
             switch (event) {
-                case PlayerEliminatedEvent out -> scoring.onEliminated(out);
+                case PlayerEliminatedEvent out -> { scoring.onEliminated(out); points.onEliminated(out); }
                 case RoundStartEvent start -> hud.onRoundStart(start);
                 case MatchPhaseChangeEvent phase -> hud.onPhase(phase);
-                case RoundEndEvent end -> { scoring.onRoundEnd(end); hud.onRoundEnd(end); }
-                case MatchEndEvent end -> { scoring.onMatchEnd(end); hud.onMatchEnd(end); }
-                case PlayerLeaveMatchEvent leave -> hud.onLeave(leave);
+                case RoundEndEvent end -> { scoring.onRoundEnd(end); points.onRoundEnd(end); hud.onRoundEnd(end); }
+                case MatchEndEvent end -> { scoring.onMatchEnd(end); points.onMatchEnd(end); hud.onMatchEnd(end); }
+                case PlayerLeaveMatchEvent leave -> { points.onLeave(leave); hud.onLeave(leave); }
                 default -> { }
             }
         }, player -> readied.add(player.getUniqueId()));
         matches.setStandings(scores);
-        hud = new MatchHud(matches::matches, plugin.getServer()::getPlayer, scores, match -> enemies);
+        hud = new MatchHud(matches::matches, plugin.getServer()::getPlayer, scores, points, match -> enemies);
     }
 
     private void advance(int seconds) {
@@ -118,15 +120,17 @@ class MatchHudTest extends MatchFixture {
         enemies = 7;
         matches.died(player(BOB), player(ALICE));
         hud.tick();
-        assertEquals("T1: 2  T2: 13  |  Enemies left: 7", players.get(BOB).actionBars.getLast());
+        assertEquals("T1: 2  T2: 13  |  Enemies left: 7  |  Points: 0", players.get(BOB).actionBars.getLast());
+        assertEquals("T1: 2  T2: 13  |  Enemies left: 7  |  Points: 2",
+                players.get(ALICE).actionBars.getLast());
         assertEquals(1, players.get(BOB).bossBars.size());
         matches.died(player(DAVE), player(ALICE));
         runNextTick();
-        assertEquals("T1: 9  T2: 13  |  Enemies left: 7", players.get(ALICE).actionBars.getLast());
+        assertEquals("T1: 9  T2: 13  |  Enemies left: 7  |  Points: 9", players.get(ALICE).actionBars.getLast());
         assertEquals("Team 1 wins!", text(players.get(ALICE).titles.getLast().title()));
         enemies = 0;
         hud.tick();
-        assertTrue(players.get(ALICE).actionBars.getLast().endsWith("Enemies left: 0"));
+        assertTrue(players.get(ALICE).actionBars.getLast().endsWith("Enemies left: 0  |  Points: 9"));
     }
 
     @Test

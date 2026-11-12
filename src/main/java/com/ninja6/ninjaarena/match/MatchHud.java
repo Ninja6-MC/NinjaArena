@@ -49,16 +49,18 @@ public final class MatchHud implements Listener {
     private final Supplier<List<MatchView>> matches;
     private final Function<UUID, Player> players;
     private final MatchStandings scores;
+    private final PlayerPoints points;
     private final ToIntFunction<MatchView> enemies;
     private final Map<MatchView, Display> displays = new IdentityHashMap<>();
     private BukkitTask ticker;
     private boolean closed;
 
-    public MatchHud(Supplier<List<MatchView>> matches, Function<UUID, Player> players, MatchStandings scores,
+    public MatchHud(Supplier<List<MatchView>> matches, Function<UUID, Player> players, MatchStandings scores, PlayerPoints points,
             ToIntFunction<MatchView> enemies) {
         this.matches = Objects.requireNonNull(matches, "matches");
         this.players = Objects.requireNonNull(players, "players");
         this.scores = Objects.requireNonNull(scores, "scores");
+        this.points = Objects.requireNonNull(points, "points");
         this.enemies = Objects.requireNonNull(enemies, "enemies");
     }
 
@@ -194,14 +196,18 @@ public final class MatchHud implements Listener {
         for (int team : match.startingTeams()) {
             totals.add("T" + team + ": " + scores.score(match, team));
         }
-        Component status = Component.text(String.join("  ", totals) + "  |  Enemies left: "
-                + Math.max(0, enemies.applyAsInt(match)), NamedTextColor.YELLOW);
+        int livingEnemies = Math.max(0, enemies.applyAsInt(match));
         each(match, player -> {
             if (display.viewers.putIfAbsent(player.getUniqueId(), player) == null) {
                 player.showBossBar(display.bar);
             }
-            player.sendActionBar(status);
+            player.sendActionBar(statusLine(totals, livingEnemies, match, player.getUniqueId()));
         });
+    }
+
+    private Component statusLine(List<String> totals, int livingEnemies, MatchView match, UUID player) {
+        return Component.text(String.join("  ", totals) + "  |  Enemies left: " + livingEnemies
+                + "  |  Points: " + points.points(match, player), NamedTextColor.YELLOW);
     }
 
     private void title(MatchView match, String title, String subtitle, NamedTextColor color) {

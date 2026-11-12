@@ -13,6 +13,10 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Personal points for player and enemy kills, round survival and shared round wins,
+  configurable under `points` and shown per player in the match action bar. Points carry
+  across rounds and reset on leaving or match end; team scoring is unchanged.
+
 - Players choose Standard (16x16) or Detailed (32x32) tool textures in the
   "Arena Texture Quality" menu, opened with `/ninjaarena textures` (permission
   `ninjaarena.play`). Standard is the default; Detailed is used only after an

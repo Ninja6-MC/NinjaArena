@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -33,6 +32,12 @@ import org.bukkit.scheduler.BukkitTask;
 /** Enemy maintenance, kill scoring and stats, and arena teardown. Call only on the server thread. */
 public final class EnemyLifecycle implements Listener {
 
+    /** Receives the enemy cost alongside each credited kill, on the server thread. */
+    @FunctionalInterface
+    public interface KillConsumer {
+        void accept(MatchView match, UUID killer, int cost);
+    }
+
     private final Supplier<List<MatchView>> matches;
     private final Function<MatchView, Optional<MatchDirector>> directors;
     private final Function<String, Optional<ArenaBounds>> bounds;
@@ -40,7 +45,7 @@ public final class EnemyLifecycle implements Listener {
     private final TeamScores scores;
     private final EnemyCosts costs;
     private final LongSupplier clock;
-    private BiConsumer<MatchView, UUID> kills = (match, killer) -> { };
+    private KillConsumer kills = (match, killer, cost) -> { };
     private BukkitTask loop;
 
     public EnemyLifecycle(Supplier<List<MatchView>> matches,
@@ -58,9 +63,9 @@ public final class EnemyLifecycle implements Listener {
 
     /**
      * Told of every enemy kill that earns points: the killer was alive in the match during a
-     * fight. Called on the server thread, after the points are awarded.
+     * fight. Receives the configured enemy cost after team points are awarded.
      */
-    public void setKills(BiConsumer<MatchView, UUID> kills) {
+    public void setKills(KillConsumer kills) {
         this.kills = Objects.requireNonNull(kills, "kills");
     }
 
@@ -134,8 +139,9 @@ public final class EnemyLifecycle implements Listener {
                 if (enemy.claimDeath()) {
                     Player killer = event.getEntity().getKiller();
                     if (killer != null && match.phase().isFighting() && match.isAlive(killer.getUniqueId())) {
-                        scores.addPoints(match, match.teamOf(killer.getUniqueId()), enemy.kind().cost(costs));
-                        kills.accept(match, killer.getUniqueId());
+                        int cost = enemy.kind().cost(costs);
+                        scores.addPoints(match, match.teamOf(killer.getUniqueId()), cost);
+                        kills.accept(match, killer.getUniqueId(), cost);
                     }
                 }
                 return;

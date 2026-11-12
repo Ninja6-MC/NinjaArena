@@ -8,6 +8,8 @@ import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchResult;
 import com.ninja6.ninjaarena.match.TeamScores;
+import com.ninja6.ninjaarena.match.PlayerPoints;
+import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.support.TestItemStack;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import java.lang.reflect.Proxy;
@@ -73,6 +75,16 @@ class EnemyLifecycleTest {
             view -> hasDirector ? Optional.of(director) : Optional.empty(),
             name -> hasBounds ? Optional.of(new ArenaBounds(0, 0, 0, 10, 100, 10)) : Optional.empty(),
             () -> world, scores, costs, () -> now);
+
+    private final PlayerPoints points = new PlayerPoints(new PointsSettings(0, 2, 0, 0));
+    private final List<UUID> kills = new ArrayList<>();
+
+    {
+        lifecycle.setKills((view, killer, cost) -> {
+            points.enemyKilled(view, killer, cost);
+            kills.add(killer);
+        });
+    }
 
     private static <T> T proxy(Class<T> type, java.lang.reflect.InvocationHandler handler) {
         return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, handler));
@@ -221,6 +233,8 @@ class EnemyLifecycleTest {
         assertEquals(List.of(), event.getDrops());
         assertEquals(0, event.getDroppedExp());
         assertEquals(3, scores.score(match, 2), "zombie uses the configured cost");
+        assertEquals(6, points.points(match, B));
+        assertEquals(List.of(B), kills, "the stats callback still receives one kill");
         assertEquals(0, scores.score(match, 1));
     }
 
@@ -237,6 +251,7 @@ class EnemyLifecycleTest {
             lifecycle.onDeath(death(body));
             total += kind.cost(costs);
             assertEquals(total, scores.score(match, 1));
+            assertEquals(total * 2, points.points(match, A));
             body.removed = true;
         }
     }
@@ -266,6 +281,9 @@ class EnemyLifecycleTest {
         }
         assertEquals(0, scores.score(match, 1));
         assertEquals(0, scores.score(match, 2));
+        assertEquals(0, points.points(match, A));
+        assertEquals(0, points.points(match, B));
+        assertTrue(kills.isEmpty());
     }
 
     @Test
