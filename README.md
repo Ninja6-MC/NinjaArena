@@ -119,9 +119,10 @@ nether portal, but from crying obsidian:
 
 A player-built portal belongs to no arena: it puts the player in an open room with space
 that admits them (a public room, or an invite-only one that invited them), one on an
-event's featured map first, then the one with the most players. With none, it leaves them
-in the lobby to create or be invited to one. Vanilla does nothing with crying obsidian, so these portals never clash
-with nether portals; obsidian cannot be chosen as the frame block.
+event's featured map first, then the one with the most players. With none, it leaves
+them in the lobby to create or be invited to one. Vanilla does nothing with crying
+obsidian, so these portals never clash with nether portals; obsidian cannot be chosen as
+the frame block.
 
 Breaking, burning, blowing up or pushing any block of the frame removes the portal; the
 corners, the opening and blocks around the frame do not count, so ordinary block updates
