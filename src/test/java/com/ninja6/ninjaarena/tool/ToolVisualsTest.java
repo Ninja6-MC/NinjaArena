@@ -151,6 +151,32 @@ class ToolVisualsTest {
     }
 
     @Test
+    void thrownToolsHaveIndependentCooldownComponentsAndDashKeepsVanillaFeather() {
+        for (NinjaTool tool : NinjaTool.values()) {
+            Map<String, Object> changed = new java.util.HashMap<>();
+            var cooldown = proxy(org.bukkit.inventory.meta.components.UseCooldownComponent.class, (name, args) -> {
+                changed.put(name, args[0]); return null;
+            });
+            ItemMeta meta = proxy(ItemMeta.class, (name, args) -> {
+                if (name.equals("getUseCooldown")) return cooldown;
+                changed.put(name, args[0]); return null;
+            });
+            tool.configureUse(meta);
+            assertEquals(tool == NinjaTool.DASH ? 1 : 64, changed.get("setMaxStackSize"));
+            if (tool.thrown()) {
+                assertEquals(tool.cooldownGroup(), changed.get("setCooldownGroup"));
+                assertSame(cooldown, changed.get("setUseCooldown"));
+                assertEquals(0.01f, changed.get("setCooldownSeconds"));
+            } else {
+                assertEquals(NamespacedKey.minecraft("feather"), tool.cooldownGroup());
+                assertEquals(1, changed.size());
+            }
+        }
+        assertEquals(new NamespacedKey("ninjaarena", "shuriken"), NinjaTool.SHURIKEN.cooldownGroup());
+        assertEquals(new NamespacedKey("ninjaarena", "smoke_bomb"), NinjaTool.SMOKE_BOMB.cooldownGroup());
+    }
+
+    @Test
     void appearanceUsesNamespacedModelAndOnlyTheFirstAccentColor() {
         for (NinjaTool tool : NinjaTool.values()) {
             Map<String, Object> changed = new java.util.HashMap<>();

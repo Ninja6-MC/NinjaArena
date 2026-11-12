@@ -265,6 +265,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         var kitFile = getDataFolder().toPath().resolve("kits.yml");
         var kit = KitDefinition.open(kitFile, getLogger(), () -> saveResource("kits.yml", false));
         RoundKitListener roundKits = new RoundKitListener(matches, getServer()::getPlayer, kit, kitItems, getLogger());
+        roundKits.warnToolAmounts(ToolSettings.from(getConfig().getConfigurationSection("tools")));
         getServer().getPluginManager().registerEvents(roundKits, this);
         matches.start();
         deaths.start();
@@ -435,6 +436,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
                     @Override
                     public void configuration(org.bukkit.configuration.ConfigurationSection settings) {
+                        roundKits.warnToolAmounts(ToolSettings.from(settings.getConfigurationSection("tools")));
                         if (placeholders != null) {
                             placeholders.setCacheSeconds(settings.getInt(StatsPlaceholders.CACHE_SECONDS));
                         }

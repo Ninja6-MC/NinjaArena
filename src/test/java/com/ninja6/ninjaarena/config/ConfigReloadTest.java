@@ -396,6 +396,29 @@ class ConfigReloadTest {
     }
 
     @Test
+    void thrownToolLimitsAndCooldownsReloadWithStrictBounds() throws Exception {
+        for (String tool : List.of("shuriken", "smoke-bomb")) {
+            for (String key : List.of("cooldown-seconds", "uses-per-round")) {
+                int max = key.equals("cooldown-seconds") ? 60 : 64;
+                for (int value : List.of(-1, max + 1)) {
+                    write("tools:\n  " + tool + ":\n    " + key + ": " + value + "\n", EMPTY_KIT);
+                    assertThrows(ReloadYaml.Invalid.class, this::candidate);
+                }
+            }
+        }
+        write("tools: {shuriken: {cooldown-seconds: 60, uses-per-round: 64}, "
+                + "smoke-bomb: {cooldown-seconds: 9, uses-per-round: 3}}", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertEquals(60, target.tools.shurikenCooldownSeconds());
+        assertEquals(64, target.tools.shurikenUsesPerRound());
+        assertEquals(9, target.tools.smokeCooldownSeconds());
+        assertEquals(3, target.tools.smokeUsesPerRound());
+        assertEquals(64, items.stackLimit("ninjaarena:shuriken"));
+        assertEquals(64, items.stackLimit("ninjaarena:smoke-bomb"));
+        assertEquals(1, items.stackLimit("ninjaarena:dash"));
+    }
+
+    @Test
     void everyConfigLeafHasStrictTypeValidation() throws Exception {
         var defaults = ReloadFiles.defaults();
         for (String key : defaults.getKeys(true)) {

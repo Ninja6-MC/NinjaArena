@@ -2,13 +2,14 @@
 format: 1
 items:
   # The ninja kit tools. Remove an entry to turn that tool off; amount is how many each
-  # player gets per round. Their behaviour is tuned under tools in config.yml.
+  # player gets per round. Use 1 for unlimited throws, or match uses-per-round under
+  # tools in config.yml for limited throws. Mismatches warn once when loaded.
   - slot: 1
     id: ninjaarena:shuriken
-    amount: 8
+    amount: 1
   - slot: 2
     id: ninjaarena:smoke-bomb
-    amount: 2
+    amount: 1
   - slot: 3
     id: ninjaarena:dash
     amount: 1

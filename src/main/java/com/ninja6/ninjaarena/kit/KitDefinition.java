@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.kit;
 
+import com.ninja6.ninjaarena.tool.NinjaTool;
+import com.ninja6.ninjaarena.tool.ToolSettings;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -31,6 +33,24 @@ public record KitDefinition(List<Entry> items) {
 
     public KitDefinition {
         items = List.copyOf(items);
+    }
+
+    /** Warns once per tool per load, comparing the total across all of its kit slots. */
+    public void warnToolAmounts(ToolSettings settings, Logger logger) {
+        for (NinjaTool tool : NinjaTool.values()) {
+            if (!tool.thrown()) {
+                continue;
+            }
+            int amount = items.stream().filter(entry -> tool.kitId().equals(entry.id()))
+                    .mapToInt(Entry::amount).sum();
+            int limit = settings.usesPerRound(tool);
+            int expected = limit == 0 ? 1 : limit;
+            if (amount > 0 && amount != expected) {
+                logger.warning("kits.yml amount for " + tool.kitId() + " is " + amount
+                        + "; tools." + tool.key() + ".uses-per-round is " + limit
+                        + " (expected kit amount " + expected + ").");
+            }
+        }
     }
 
     /** Installs the default before loading on a fresh install; write failures remain non-fatal. */

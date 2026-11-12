@@ -242,6 +242,8 @@ public final class ReloadFiles {
             case "director.shadow-stalker.blink.behind" -> new double[] {1, 6};
             case "director.shadow-stalker.blink.cooldown-seconds" -> new double[] {1, 120};
             case "director.shadow-stalker.glow-seconds" -> new double[] {1, 60};
+            case "tools.shuriken.cooldown-seconds", "tools.smoke-bomb.cooldown-seconds" -> new double[] {0, 60};
+            case "tools.shuriken.uses-per-round", "tools.smoke-bomb.uses-per-round" -> new double[] {0, 64};
             case "tools.smoke-bomb.radius" -> new double[] {1, 8};
             case "tools.shuriken.damage" -> new double[] {0, 20};
             case "tools.dash.strength" -> new double[] {0.1, 2};

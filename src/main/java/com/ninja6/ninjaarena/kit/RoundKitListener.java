@@ -5,6 +5,7 @@ import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
+import com.ninja6.ninjaarena.tool.ToolSettings;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -36,6 +37,11 @@ public final class RoundKitListener implements Listener {
         this.definition = Objects.requireNonNull(definition, "definition");
         this.items = Objects.requireNonNull(items, "items");
         this.logger = Objects.requireNonNull(logger, "logger");
+    }
+
+    /** Checks the loaded kit once, never when handing items to players. */
+    public void warnToolAmounts(ToolSettings settings) {
+        definition.warnToolAmounts(settings, logger);
     }
 
     /** The current round, including its delayed respawns, keeps its kit definition. */

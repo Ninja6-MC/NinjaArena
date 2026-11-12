@@ -93,7 +93,7 @@ abstract class MatchFixture {
         /** Whether each teleport was made inside an OwnTeleports mark. */
         final List<Boolean> ownMarks = new ArrayList<>();
         final List<PotionEffect> effects = new ArrayList<>();
-        final Map<Material, Integer> cooldowns = new HashMap<>();
+        final Map<Object, Integer> cooldowns = new HashMap<>();
         Vector velocity;
         boolean gliding;
         int fireTicks;
@@ -307,7 +307,7 @@ abstract class MatchFixture {
                     case "setVelocity" -> { fake.velocity = (Vector) args[0]; yield null; }
                     case "isGliding" -> fake.gliding;
                     case "isFlying", "isRiptiding", "isInsideVehicle" -> false;
-                    case "setCooldown" -> { fake.cooldowns.put((Material) args[0], (Integer) args[1]); yield null; }
+                    case "setCooldown" -> { fake.cooldowns.put(args[0], (Integer) args[1]); yield null; }
                     case "addPotionEffect" -> fake.effects.add((PotionEffect) args[0]);
                     case "removePotionEffect" -> fake.effects.removeIf(effect -> effect.getType() == args[0]);
                     case "setGliding", "setFallDistance", "closeInventory",
