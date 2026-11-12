@@ -14,9 +14,10 @@ TerrainModel fitted = TerrainGenerator.generate(seed, difficulty, size);
 ## The model
 
 `TerrainModel` is immutable. Each cell holds a `BlockKind`: `AIR`, `ROCK`, `SOIL`,
-`SURFACE`, `CLIFF`, `PLATFORM` or `SPAWN_PAD`. The model carries a `TerrainTheme` picked
-by the seed, and `ThemePalette` turns a theme and a kind into a `Material` when the side
-is placed. `ThemePalette` is the only class in the package that names a Bukkit type, so
+`SURFACE`, `CLIFF`, `PLATFORM`, `SPAWN_PAD`, `LAVA_SOURCE`, `LAVA`,
+`HANGING_LAVA`, `CRUMBLE` or `CRUMBLE_PLATFORM`. The model carries a `TerrainTheme`
+picked by the seed, and `ThemePalette` turns a theme and a kind into a `Material` when
+the side is placed. `ThemePalette` is the only class in the package that names a Bukkit type, so
 the model can be compared, hashed and transformed without one.
 
 Axes, as seen by a player at the spawn facing the centre:
@@ -89,6 +90,65 @@ Generating a default side takes about 2 ms per difficulty after warm-up, and abo
 for the first call in a JVM, on a 6-core desktop CPU. `TerrainGeneratorTest` checks that
 these measures grow with difficulty; it does not assert times.
 
+## Hazard layout
+
+After labelling the terrain, hazards run in fixed order: gaps, rivers, ceiling lava,
+then collapsing ledges. They use new streams, leaving streams 1 (theme), 2 (height),
+3 (cliffs), 4 (ravines), 5 (overhangs) and 6 (platforms) unchanged. Ceiling and river
+candidates read a snapshot of the original geometry. Existing hazards take precedence;
+later passes do not overwrite them. Every candidate draws a fixed number of values,
+including skipped candidates. Both flat zones and their entire blend rows stay clear.
+This leaves a clear apron outside spawn, but does not certify crossability; #159 must
+check that independently.
+
+| Hazard | Stream | Placement and scaling from difficulty 1 to 5 |
+| :--- | ---: | :--- |
+| Falls | 7 | 1% to 5% per ceiling candidate; fill air down to the first obstacle |
+| Rivers | 8 | 0.2% to 1% per low column; runs up to 4 to 12 cells long |
+| Hanging lava | 9 | 0.8% to 4% per ceiling candidate with a solid roof above |
+| Gaps | 10 | 3 to 15 attempts at default size; span 3–6 to 3–10, breadth 1 to 1–3 |
+| Collapsing rims | 11 | 4% to 20% per exposed ground or platform rim cell |
+
+Rivers occupy the air immediately above low ground (at least three blocks below the
+base), following consecutive rows whose floors differ by at most one block. Falls
+start directly below a ceiling with at least three air cells underneath it, including
+platform undersides and overhang lips. Hanging lava replaces the underside of a
+ceiling, retaining a solid block above. As with overhangs, some ceiling candidates may
+lie in sealed hollows; consumers must check reachability when they need it. Rims are
+solid top cells beside air one block below. Gaps cut short strips across the ground,
+targeting depths of 4 to 8 blocks, clipped at `y = 2` or extended through an existing
+hollow to its solid floor. They are ordinary `AIR`: placement and the solver already
+inspect air and require no separate gap marker.
+The exposed floor is labelled `SURFACE`; no supporting blocks are added to hollows.
+
+Totals over sixteen seeds `0 * 7919` through `15 * 7919` at the default size:
+
+| Difficulty | Sources | Lava | Hanging | Crumble | Platform crumble | Gap cells |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 14 | 88 | 14 | 277 | 29 | 547 |
+| 2 | 62 | 625 | 49 | 1,085 | 85 | 2,312 |
+| 3 | 185 | 1,658 | 126 | 2,085 | 166 | 4,199 |
+| 4 | 327 | 2,973 | 227 | 3,194 | 303 | 7,993 |
+| 5 | 572 | 4,994 | 470 | 4,534 | 487 | 10,878 |
+
+All lava kinds have `solid() == false`; both collapse kinds are solid until activated.
+`terrainTopY` ignores lava, platforms and collapsing platform rims, so it still reports
+solid ground. `CRUMBLE_PLATFORM` preserves the distinction between floating platforms
+and ground when a rim changes kind. A lava-covered floor can therefore have a reported
+top below lava: the solver must inspect `at`, not treat the height alone as safe.
+
+Placement (#160) must preserve these distinctions while mapping all three lava kinds
+to lava and both collapse kinds to the theme's distinct tell block. Flow and collapse
+control (#161) must register `LAVA_SOURCE` as a fall head, `LAVA` as the intended river
+or fall footprint, `HANGING_LAVA` as a held ceiling cell and both collapse kinds as
+removable ledges. Held lava needs containment until release; no kind authorizes vanilla
+fluid physics on placement. All flow and collapse activation, bounds, limits and cleanup
+belong to #161. Growth and warning timing belong to #162. This package touches no world.
+
+The two generator golden digests changed deliberately for these passes. The digest byte
+layout is unchanged, so `TerrainModel.DIGEST_FORMAT` remains 1. Tests also retain both
+old digests for the pre-hazard passes to pin streams 1 through 6.
+
 ## Determinism rules
 
 The same seed, difficulty and dimensions must give a byte-identical model on every run,
@@ -128,11 +188,11 @@ If the digest's byte layout changes, bump `TerrainModel.DIGEST_FORMAT` as well.
 
 ## How later tasks use it
 
-* Hazards (lava falls, rivers, gaps, collapsing ledges) are added as new `BlockKind`s
-  from their own seed stream, as part of the model.
+* Hazards are already part of the model, with kinds and control responsibilities above.
 * Mirroring and rotation map `(x, z)` into the centre square's frame; the spawn and
   centre edges say which way each side faces.
 * The movement solver paths from the spawn zone to the centre ledge over `SURFACE`,
-  `SPAWN_PAD` and `PLATFORM` tops, using `terrainTopY` and `at`.
+  `SPAWN_PAD`, `PLATFORM`, `CRUMBLE` and `CRUMBLE_PLATFORM` tops, using
+  `terrainTopY` and `at` and checking adjacent hazards.
 * Placement runs the generator off the main thread and writes the model column by
   column, turning kinds into blocks with `ThemePalette`.

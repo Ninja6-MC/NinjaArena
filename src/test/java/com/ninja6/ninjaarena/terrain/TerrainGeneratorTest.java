@@ -22,11 +22,12 @@ class TerrainGeneratorTest {
      * which must be deliberate: every seed then gives a different map. To update them on
      * purpose, run this test, copy the actual digests from the failure into these constants
      * and say in the pull request that existing seeds now generate different maps.
+     * Updated deliberately for the hazard passes (streams 7 through 11).
      */
     private static final String GOLDEN_SEED_42_DIFFICULTY_3 =
-            "bdb34038419eb0b69a1e2b6dac8b907e514f83d032c4ed5dbb4625ea8079dc3b";
+            "42b185aa1cde7c72a637f7edc9a73c18d9a3fcc0d48fe953b0ceda5eac48f874";
     private static final String GOLDEN_SEED_MINUS_7_DIFFICULTY_5 =
-            "f4687f2b8d415d4a68d9badc1215e6e4fd0d78418950219c34d6664e8708afeb";
+            "318a93c6d3478f087806e6a092ba376864af338b2a78500fb6f5912a414d0531";
 
     @Test
     void goldenDigestsAreUnchanged() {
@@ -124,6 +125,137 @@ class TerrainGeneratorTest {
     }
 
     @Test
+    void hazardsGrowWithEveryDifficulty() throws Exception {
+        BlockKind[] hazards = {BlockKind.LAVA_SOURCE, BlockKind.LAVA, BlockKind.HANGING_LAVA,
+                BlockKind.CRUMBLE, BlockKind.CRUMBLE_PLATFORM};
+        long[] previous = new long[hazards.length];
+        long previousGaps = 0;
+        for (int difficulty = 1; difficulty <= 5; difficulty++) {
+            long[] counts = new long[hazards.length];
+            long gaps = 0;
+            for (long seed = 0; seed < 16; seed++) {
+                TerrainModel model = TerrainGenerator.generate(seed * 7919, difficulty);
+                for (int i = 0; i < hazards.length; i++) {
+                    counts[i] += model.count(hazards[i]);
+                }
+                gaps += gapCells(model, terrainBeforeHazards(seed * 7919, difficulty));
+            }
+            for (int i = 0; i < hazards.length; i++) {
+                assertTrue(counts[i] > previous[i], hazards[i] + " at difficulty " + difficulty
+                        + ": " + counts[i] + " <= " + previous[i]);
+            }
+            assertTrue(gaps > previousGaps, "gap cells at difficulty " + difficulty);
+            System.out.println("Hazard census d" + difficulty + ": " + java.util.Arrays.toString(counts)
+                    + ", gap cells " + gaps);
+            previous = counts;
+            previousGaps = gaps;
+        }
+    }
+
+    /** Compare against the pre-hazard passes without adding a production bypass. */
+    private static TerrainModel terrainBeforeHazards(long seed, int difficulty) throws Exception {
+        Class<?> build = Class.forName(TerrainGenerator.class.getName() + "$Build");
+        var constructor = build.getDeclaredConstructor(long.class, int.class, SideDimensions.class);
+        constructor.setAccessible(true);
+        Object state = constructor.newInstance(seed, difficulty, SideDimensions.DEFAULT);
+        for (String pass : new String[] {"shapeHeight", "cutRavines", "hollowOverhangs",
+                "placePlatforms", "labelKinds"}) {
+            var method = build.getDeclaredMethod(pass);
+            method.setAccessible(true);
+            method.invoke(state);
+        }
+        var cells = build.getDeclaredField("cells");
+        cells.setAccessible(true);
+        int base = SideDimensions.DEFAULT.height() * 3 / 8;
+        return new TerrainModel(seed, difficulty, SideDimensions.DEFAULT, TerrainGenerator.themeFor(seed),
+                base, base, (byte[]) cells.get(state));
+    }
+
+    private static long gapCells(TerrainModel model, TerrainModel before) {
+        SideDimensions size = model.dimensions();
+        long count = 0;
+        for (int z = 0; z < size.length(); z++) {
+            boolean protectedRow = z < size.spawnDepth() + size.blendDepth()
+                    || z >= size.length() - size.centreDepth() - size.blendDepth();
+            for (int x = 0; x < size.width(); x++) {
+                for (int y = 0; y < size.height(); y++) {
+                    BlockKind old = before.at(x, y, z);
+                    BlockKind now = model.at(x, y, z);
+                    if (protectedRow) {
+                        assertEquals(old, now, "protected row changed");
+                    }
+                    if (old == now) {
+                        continue;
+                    }
+                    if (now == BlockKind.AIR) {
+                        assertTrue(old.solid(), "only solid terrain can be carved");
+                        count++;
+                    } else if (now == BlockKind.SURFACE) {
+                        assertTrue(old.solid(), "gap floor must already be solid");
+                    } else {
+                        assertTrue(now.ordinal() > BlockKind.SPAWN_PAD.ordinal(), "existing feature changed");
+                    }
+                    assertNotEquals(BlockKind.SPAWN_PAD, old, "spawn pad changed");
+                }
+            }
+        }
+        return count;
+    }
+
+    @Test
+    void originalStreamsStillGiveTheirGoldenModelsBeforeHazards() throws Exception {
+        assertEquals("bdb34038419eb0b69a1e2b6dac8b907e514f83d032c4ed5dbb4625ea8079dc3b",
+                terrainBeforeHazards(42, 3).digest());
+        assertEquals("f4687f2b8d415d4a68d9badc1215e6e4fd0d78418950219c34d6664e8708afeb",
+                terrainBeforeHazards(-7, 5).digest());
+    }
+
+    @Test
+    void hazardsHaveSupportsAndLeaveTheSpawnAndCentreApronsClear() {
+        for (int difficulty = 1; difficulty <= 5; difficulty++) {
+            for (long seed : new long[] {0, 7919, 42, -7}) {
+                TerrainModel model = TerrainGenerator.generate(seed, difficulty);
+                SideDimensions size = model.dimensions();
+                for (int z = 0; z < size.length(); z++) {
+                    boolean protectedRow = z < size.spawnDepth() + size.blendDepth()
+                            || z >= size.length() - size.centreDepth() - size.blendDepth();
+                    for (int x = 0; x < size.width(); x++) {
+                        for (int y = 0; y < size.height(); y++) {
+                            BlockKind kind = model.at(x, y, z);
+                            if (protectedRow) {
+                                assertTrue(kind.ordinal() <= BlockKind.SPAWN_PAD.ordinal());
+                            }
+                            if (kind == BlockKind.LAVA_SOURCE) {
+                                assertTrue(model.at(x, y + 1, z).solid(), "fall needs a ceiling");
+                                assertEquals(BlockKind.LAVA, model.at(x, y - 1, z));
+                            } else if (kind == BlockKind.HANGING_LAVA) {
+                                assertTrue(model.at(x, y + 1, z).solid(), "hanging lava needs a roof");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void everyNewKindHasTheExpectedCollisionAndPalette() {
+        for (TerrainTheme theme : TerrainTheme.values()) {
+            for (BlockKind kind : new BlockKind[] {BlockKind.LAVA_SOURCE, BlockKind.LAVA,
+                    BlockKind.HANGING_LAVA}) {
+                assertTrue(!kind.solid());
+                assertEquals(org.bukkit.Material.LAVA, ThemePalette.material(theme, kind));
+            }
+            for (BlockKind kind : new BlockKind[] {BlockKind.CRUMBLE, BlockKind.CRUMBLE_PLATFORM}) {
+                assertTrue(kind.solid());
+                assertTrue(ThemePalette.material(theme, kind).isSolid());
+                assertNotEquals(ThemePalette.material(theme, BlockKind.SURFACE), ThemePalette.material(theme, kind));
+                assertNotEquals(ThemePalette.material(theme, BlockKind.PLATFORM), ThemePalette.material(theme, kind));
+            }
+        }
+    }
+
+    @Test
     void themeComesFromTheSeedAlone() {
         Set<TerrainTheme> seen = EnumSet.noneOf(TerrainTheme.class);
         for (long seed = 0; seed < 200; seed++) {
@@ -192,7 +324,9 @@ class TerrainGeneratorTest {
                 int top = model.terrainTopY(x, z);
                 assertTrue(top >= TerrainGenerator.FLOOR && top <= maxTop, where + "ground out of range at " + x
                         + ", " + z + ": " + top);
-                assertEquals(BlockKind.SURFACE, surfaceOrPad(model.at(x, top, z)), where + "column top kind");
+                assertTrue(model.at(x, top, z).solid(), where + "column top must be solid ground");
+                assertNotEquals(BlockKind.PLATFORM, model.at(x, top, z));
+                assertNotEquals(BlockKind.CRUMBLE_PLATFORM, model.at(x, top, z));
                 if (spawnZone || centreZone) {
                     int level = spawnZone ? model.spawnSurfaceY() : model.centreSurfaceY();
                     assertEquals(level, top, where + "flat zone height at " + x + ", " + z);
@@ -206,10 +340,10 @@ class TerrainGeneratorTest {
                 }
                 for (int y = 0; y < size.height(); y++) {
                     BlockKind kind = model.at(x, y, z);
-                    if (kind == BlockKind.PLATFORM) {
+                    if (kind == BlockKind.PLATFORM || kind == BlockKind.CRUMBLE_PLATFORM) {
                         assertTrue(y > top + TerrainGenerator.PLATFORM_GAP, where + "platform on the ground");
                     } else if (y > top) {
-                        assertEquals(BlockKind.AIR, kind, where + "terrain above the column top");
+                        assertTrue(!kind.solid(), where + "solid terrain above the column top");
                     } else if (kind == BlockKind.SPAWN_PAD) {
                         assertTrue(spawnZone && y == top, where + "spawn pad outside the spawn zone");
                     }
@@ -218,7 +352,4 @@ class TerrainGeneratorTest {
         }
     }
 
-    private static BlockKind surfaceOrPad(BlockKind kind) {
-        return kind == BlockKind.SPAWN_PAD ? BlockKind.SURFACE : kind;
-    }
 }

@@ -5,8 +5,7 @@ package com.ninja6.ninjaarena.terrain;
  * {@link TerrainTheme} turns each kind into a block through {@link ThemePalette}.
  *
  * <p>The model stores each cell as this enum's ordinal, and the golden digests hash those
- * bytes, so constants are only ever appended (hazard kinds from later tasks go after
- * {@link #SPAWN_PAD}); never reorder or remove one.
+ * bytes, so constants are only ever appended; never reorder or remove one.
  */
 public enum BlockKind {
     /** Nothing; placed as air. */
@@ -22,13 +21,23 @@ public enum BlockKind {
     /** A floating platform, never touching the terrain below it. */
     PLATFORM,
     /** The top block of the flat spawn zone. */
-    SPAWN_PAD;
+    SPAWN_PAD,
+    /** The head of a lava fall, directly below a solid ceiling or overhang lip. */
+    LAVA_SOURCE,
+    /** A river or pool cell, or the column descending from a lava source. */
+    LAVA,
+    /** Lava held in the underside of a ceiling until a later controlled release. */
+    HANGING_LAVA,
+    /** A solid ground ledge that a later collapse may remove. */
+    CRUMBLE,
+    /** A solid floating platform rim that may collapse; excluded from terrain height. */
+    CRUMBLE_PLATFORM;
 
     private static final BlockKind[] VALUES = values();
 
     /** Whether a player can stand on or collide with this kind. */
     public boolean solid() {
-        return this != AIR;
+        return this != AIR && this != LAVA_SOURCE && this != LAVA && this != HANGING_LAVA;
     }
 
     static BlockKind ofOrdinal(int ordinal) {
