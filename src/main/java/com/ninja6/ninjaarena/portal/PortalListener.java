@@ -6,7 +6,6 @@ import static com.ninja6.ninjaarena.message.Messages.text;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.portal.PortalEntry.Refusal;
-import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -29,15 +28,14 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Sends players who walk into a portal to its waiting room, the shared hub or a live match.
- * {@link PortalEntry} decides which; everything below applies to each. A player-built portal
- * is routed to an arena as the player walks in ({@link PortalEntry#route}) and the entry keeps
- * that arena: a room that fills while the chunk loads refuses them as for any portal.
+ * Sends players who walk into a portal on: through a play portal to the lobby, through a
+ * spectator portal to a live match. {@link PortalEntry} decides whether they may; everything
+ * below applies to both.
  *
  * <p><b>Detection.</b> Only a move that crosses into another block is looked at, and the
  * portal is found through the registry's chunk index. Entry fires when the new block is in
  * a portal and the old one was not in the same portal, so walking around inside a portal
- * does nothing. Players in spectator mode are ignored by waiting-room portals.
+ * does nothing. Players in spectator mode are ignored by play portals.
  *
  * <p><b>Teleports.</b> A teleport that lands inside a portal does not enter it: commands,
  * other plugins and the restore path all teleport players, and a player returned home next
@@ -51,17 +49,16 @@ import org.bukkit.plugin.Plugin;
  * into the edge again does not flood chat. The message for a failed teleport shares that
  * cooldown.
  *
- * <p><b>Entry.</b> The waiting room's chunk is loaded first. Entry then runs in a scheduled
- * task on a later tick, never inside the move event that crossed into the portal, even when
- * the chunk was already loaded: the event is not done with the player yet, and the waiting
- * room's own move listener would see the player in the room with the event's destination
- * still next to the portal. In that task the checks run again, the player's inventory screen
- * is closed so the cursor and crafting grid go back into the saved inventory, the snapshot is
- * written and the player is teleported, all in the same tick, so nothing the player does can
- * fall between the snapshot and the teleport. A player who is by then offline, dead, or no
- * longer in or next to the portal, or whose portal has changed, is dropped silently. A
- * teleport that fails is logged and deletes the snapshot again, since the player never left;
- * one that succeeds hands the player to the waiting room, which empties their inventory.
+ * <p><b>Entry.</b> Entry runs in a scheduled task on a later tick, never inside the move
+ * event that crossed into the portal: the event is not done with the player yet. A player
+ * who is by then offline, dead, or no longer in or next to the portal, or whose portal has
+ * changed, is dropped silently. A play portal then hands the player to the lobby
+ * ({@link #setLobby}), which saves their snapshot, takes them in and puts them in an open
+ * room if there is one ({@link PortalEntry#roomArena}). A spectator portal loads the match's
+ * chunk first; in the task the checks run again, the player's inventory screen is closed so
+ * the cursor and crafting grid go back into the saved inventory, the snapshot is written and
+ * the player is teleported, all in the same tick. A teleport that fails is logged and
+ * deletes the snapshot again, since the player never left.
  */
 public final class PortalListener implements Listener {
 
@@ -75,27 +72,16 @@ public final class PortalListener implements Listener {
     private final ArenaAdmission admission;
     private final Consumer<UUID> onQuit;
     private final BiConsumer<Player, String> onSpectate;
+    private PortalLobby lobby = (player, arena) -> Optional.of(text("entry.lobby-unavailable"));
 
-    /** Players whose entry is waiting for the waiting room's chunk. */
+    /** Players whose entry waits for the next tick or, at a spectator portal, the match's chunk. */
     private final Map<UUID, Object> entering = new HashMap<>();
     private final Map<UUID, Long> lastMessage = new HashMap<>();
 
     /**
-     * @param onQuit  also told when a player leaves, to drop per-player command state
-     * @param onEnter told the player and the arena's name once the player is in its waiting room
+     * @param onQuit     also told when a player leaves, to drop per-player command state
+     * @param onSpectate told the player and the arena once a spectator portal has seated them
      */
-    public PortalListener(Plugin plugin, PortalRegistry portals, PortalEntry entry, Supplier<World> arenaWorld,
-            SnapshotService snapshots, Consumer<UUID> onQuit, BiConsumer<Player, String> onEnter) {
-        this(plugin, portals, entry, arenaWorld, snapshots, onQuit, onEnter, () -> () -> { });
-    }
-
-    public PortalListener(Plugin plugin, PortalRegistry portals, PortalEntry entry, Supplier<World> arenaWorld,
-            SnapshotService snapshots, Consumer<UUID> onQuit, BiConsumer<Player, String> onEnter,
-            Supplier<Runnable> acquireWorld) {
-        this(plugin, portals, entry, arenaWorld, new ArenaAdmission(plugin, entry, arenaWorld, snapshots, onEnter),
-                onQuit, acquireWorld, (player, arena) -> { });
-    }
-
     public PortalListener(Plugin plugin, PortalRegistry portals, PortalEntry entry, Supplier<World> arenaWorld,
             ArenaAdmission admission, Consumer<UUID> onQuit, Supplier<Runnable> acquireWorld,
             BiConsumer<Player, String> onSpectate) {
@@ -107,6 +93,11 @@ public final class PortalListener implements Listener {
         this.admission = Objects.requireNonNull(admission, "admission");
         this.onSpectate = Objects.requireNonNull(onSpectate, "onSpectate");
         this.onQuit = Objects.requireNonNull(onQuit, "onQuit");
+    }
+
+    /** Where play portals lead; by default they turn everyone away. */
+    public void setLobby(PortalLobby lobby) {
+        this.lobby = Objects.requireNonNull(lobby, "lobby");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -133,11 +124,15 @@ public final class PortalListener implements Listener {
             tell(player, refusal.get());
             return;
         }
-        // A player-built portal is bound to an arena for this entry; the checks above routed it
-        // the same way in this tick.
-        Portal target = entry.route(portal).orElseThrow();
-        ArenaPoint room = entry.destination(target).orElseThrow();
         Object request = new Object();
+        if (!portal.spectator()) {
+            entering.put(playerId, request);
+            if (!later(() -> enterLobby(playerId, request, portal, outside))) {
+                entering.remove(playerId, request);
+            }
+            return;
+        }
+        ArenaPoint seat = entry.destination(portal).orElseThrow();
         Runnable releaseWorld;
         try {
             releaseWorld = acquireWorld.get();
@@ -147,12 +142,12 @@ public final class PortalListener implements Listener {
         }
         entering.put(playerId, request);
         try {
-            arenaWorld.get().getChunkAtAsync(Math.floorDiv(room.blockX(), 16), Math.floorDiv(room.blockZ(), 16))
+            arenaWorld.get().getChunkAtAsync(Math.floorDiv(seat.blockX(), 16), Math.floorDiv(seat.blockZ(), 16))
                     .whenComplete((chunk, error) -> {
                         try {
                             if (!later(() -> {
                                 try {
-                                    enter(playerId, request, portal, target, outside, error);
+                                    enter(playerId, request, portal, outside, error);
                                 } finally {
                                     releaseWorld.run();
                                 }
@@ -187,9 +182,23 @@ public final class PortalListener implements Listener {
         onQuit.accept(playerId);
     }
 
-    /** @param target the portal as routed when the player walked in, which the admission uses */
-    private void enter(UUID playerId, Object request, Portal portal, Portal target, Location outside,
-            Throwable error) {
+    /** Takes a player who walked into a play portal to the lobby, on the tick after. */
+    private void enterLobby(UUID playerId, Object request, Portal portal, Location outside) {
+        if (!entering.remove(playerId, request)) {
+            return;
+        }
+        Player player = plugin.getServer().getPlayer(playerId);
+        if (!stillAt(player, portal)) {
+            return;
+        }
+        Optional<Refusal> refusal = entry.check(player, portal);
+        Optional<String> refused = refusal.isPresent() ? refusal.map(Refusal::message)
+                : lobby.enter(player, entry.roomArena(portal));
+        refused.ifPresent(message -> putBack(player, portal, outside, message));
+    }
+
+    /** Seats a player who walked into a spectator portal, once the match's chunk has loaded. */
+    private void enter(UUID playerId, Object request, Portal portal, Location outside, Throwable error) {
         if (!entering.remove(playerId, request)) {
             // The player left while the chunk loaded.
             return;
@@ -201,19 +210,27 @@ public final class PortalListener implements Listener {
             }
             return;
         }
-        // The player must still be where they walked in. One teleported away while the chunk
-        // loaded would otherwise be snapshotted, and later restored, wherever they ended up.
-        if (player == null || !player.isOnline() || player.isDead()
-                || !portal.equals(portals.get(portal.name()).orElse(null))
-                || !isAt(portal, player.getLocation())) {
+        if (!stillAt(player, portal)) {
             return;
         }
-        admission.enter(player, target, onSpectate, message -> {
-            if (portal.equals(portals.at(player.getLocation()))) {
-                OwnTeleports.teleport(player, outside, TeleportCause.PLUGIN);
-            }
-            tell(player, message);
-        });
+        admission.enter(player, portal, onSpectate, message -> putBack(player, portal, outside, message));
+    }
+
+    /**
+     * Whether the player is still where they walked in. One teleported away meanwhile would
+     * otherwise be snapshotted, and later restored, wherever they ended up.
+     */
+    private boolean stillAt(Player player, Portal portal) {
+        return player != null && player.isOnline() && !player.isDead()
+                && portal.equals(portals.get(portal.name()).orElse(null)) && isAt(portal, player.getLocation());
+    }
+
+    /** Puts a refused player back outside the portal, if they still stand in it, and tells them why. */
+    private void putBack(Player player, Portal portal, Location outside, String message) {
+        if (portal.equals(portals.at(player.getLocation()))) {
+            OwnTeleports.teleport(player, outside, TeleportCause.PLUGIN);
+        }
+        tell(player, message);
     }
 
     /** Whether the location is in the portal or in a block touching it, in the portal's world. */

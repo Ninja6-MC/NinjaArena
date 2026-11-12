@@ -89,7 +89,7 @@ public final class JoinRestore {
     }
 
     /**
-     * @param busy whether the player is in a match, a waiting room or the hub, or spectating;
+     * @param busy whether the player is in a match or the lobby, or spectating;
      *             nothing is undone for them
      */
     public JoinRestore(RestoreService restores, Delayer delayer, Function<UUID, Player> online,
@@ -173,7 +173,7 @@ public final class JoinRestore {
 
     /**
      * Another plugin moved a player who was just restored. Teleports NinjaArena starts itself
-     * ({@link OwnTeleports}) and players in a match, waiting room, hub or spectating are never
+     * ({@link OwnTeleports}) and players in a match or the lobby, or spectating, are never
      * undone.
      * Any other plugin's teleport in the window moves the player back to the restored spot
      * once, a tick later so that teleport has finished.

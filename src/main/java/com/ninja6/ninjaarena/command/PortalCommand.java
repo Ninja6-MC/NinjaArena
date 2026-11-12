@@ -5,13 +5,10 @@ import static com.ninja6.ninjaarena.message.Messages.msg;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
-import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.Portal;
 import com.ninja6.ninjaarena.portal.PortalRegistry;
-import com.ninja6.ninjaarena.world.ArenaExtent;
-import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,18 +26,19 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 /**
- * {@code /ninjaarena portal ...}: marking out portals, binding them to arenas and choosing
- * where they lead. The caller has already checked the admin permission.
+ * {@code /ninjaarena portal ...}: marking out portals and binding them to arenas. The caller
+ * has already checked the admin permission.
  *
  * <p>An admin selects a region with {@code setcorner 1} and {@code setcorner 2}, each taken
  * from where they stand or from coordinates in their current world, then {@code create}s
  * the portal from it. Selections are per player and dropped when they leave. {@code delete},
  * {@code list} and {@code info} also run from the console.
  *
- * <p>{@code lobby} sets whether a portal leads to its arena's waiting room or the shared hub,
- * or back to the server default. {@code sethub} sets the hub point in the arena world, like
- * {@code arena setwaitingroom}: where the admin stands, or coordinates from the console;
- * {@code removehub} clears it.
+ * <p>A play portal leads to the lobby. {@code lobby} is a deprecated alias that still sets
+ * the portal's old lobby choice, which now only decides which open rooms a player joins
+ * there: those on the portal's arena (dedicated) or any (shared). {@code sethub} is a
+ * deprecated alias that changes nothing, since the lobby took the shared hub's place;
+ * {@code removehub} clears a hub point an older version saved.
  */
 public final class PortalCommand {
 
@@ -199,7 +197,6 @@ public final class PortalCommand {
         }
         tell(sender, "portal.created", "portal", portal.name(), "world", portal.world(),
                 "region", portal.region().describe(), "destination", destination(portal));
-        warnUnavailable(sender, portal);
     }
 
     private void lobby(CommandSender sender, String[] args, String usage) throws ArenaException {
@@ -210,25 +207,16 @@ public final class PortalCommand {
         LobbyMode lobby = LobbyMode.parse(args[1]).orElse(null);
         Portal portal = portals.setLobby(args[0], lobby);
         tell(sender, "portal.lobby-set", "portal", portal.name(), "destination", destination(portal));
-        warnUnavailable(sender, portal);
+        tell(sender, "portal.lobby-deprecated");
     }
 
+    /**
+     * Deprecated: the lobby took the shared hub's place, so there is no hub point to set. The
+     * arguments are still checked as before; nothing is saved.
+     */
     private void setHub(CommandSender sender, String[] args, String usage) throws ArenaException {
-        ArenaPoint point = ArenaCommand.position(sender, args, usage + "sethub " + POSITION);
-        if (!ArenaExtent.contains(point.x(), point.z(), arenas.grid().borderSize())) {
-            throw new ArenaException("portal.error.hub-outside");
-        }
-        for (Arena arena : arenas.all()) {
-            if (arena.bounds() != null && arena.bounds().contains(point)) {
-                throw new ArenaException("portal.error.hub-in-arena", "arena", arena.name());
-            }
-        }
-        portals.setHub(point);
-        tell(sender, "portal.hub-set", "point", point.describe(), "world", ArenaWorld.NAME);
-        if (defaultLobby.get() != LobbyMode.SHARED
-                && portals.all().stream().noneMatch(portal -> portal.lobby() == LobbyMode.SHARED)) {
-            tell(sender, "portal.hub-unused");
-        }
+        ArenaCommand.position(sender, args, usage + "sethub " + POSITION);
+        tell(sender, "portal.sethub-deprecated");
     }
 
     private void removeHub(CommandSender sender, String[] args, String usage) throws ArenaException {
@@ -243,26 +231,12 @@ public final class PortalCommand {
         tell(sender, "portal.hub-removed");
     }
 
-    /** Where a non-spectator portal sends players now, for chat. */
+    /** Where a play portal sends players now, for chat: the lobby, and which rooms they join there. */
     private Component destination(Portal portal) {
-        Component destination = portal.lobby(defaultLobby.get()) == LobbyMode.SHARED ? msg("portal.destination.hub")
-                : portal.arena() == null ? msg("portal.destination.any")
-                : msg("portal.destination.arena", "arena", portal.arena());
-        return portal.lobby() == null ? msg("portal.destination.server-default", "destination", destination)
-                : destination;
-    }
-
-    private void warnUnavailable(CommandSender sender, Portal portal) {
-        if (portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
-            if (portals.hub().isEmpty()) {
-                tell(sender, "portal.no-hub");
-            }
-        } else if (portal.arena() == null) {
-            // A player-built portal is routed per entry; status says whether any arena is open.
-            return;
-        } else if (!arenas.isAvailable(portal.arena())) {
-            tell(sender, "portal.arena-unavailable", "arena", portal.arena());
-        }
+        Component destination = portal.arena() == null || portal.lobby(defaultLobby.get()) == LobbyMode.SHARED
+                ? msg("portal.destination.any") : msg("portal.destination.arena", "arena", portal.arena());
+        return portal.lobby() == null && portal.arena() != null
+                ? msg("portal.destination.server-default", "destination", destination) : destination;
     }
 
     private void delete(CommandSender sender, String[] args, String usage) throws ArenaException {
@@ -276,9 +250,7 @@ public final class PortalCommand {
     }
 
     private void list(CommandSender sender) {
-        tell(sender, defaultLobby.get() == LobbyMode.SHARED ? "portal.list-header-shared"
-                : "portal.list-header-dedicated", "hub", portals.hub().<Object>map(ArenaPoint::describe)
-                .orElseGet(() -> msg("arena.not-set")));
+        tell(sender, "portal.list-header");
         if (portals.all().isEmpty()) {
             tell(sender, "portal.list-empty");
             return;
@@ -321,29 +293,10 @@ public final class PortalCommand {
         if (!worldLoaded.test(portal.world())) {
             return "world-unloaded";
         }
-        if (!portal.spectator() && portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
-            return portals.hub().isPresent() ? "hub-open" : "hub-closed";
+        if (!portal.spectator()) {
+            return "lobby";
         }
-        if (portal.arena() == null) {
-            return "any";
-        }
-        Arena arena = arenas.get(portal.arena()).orElse(null);
-        if (arena == null) {
-            return "arena-missing";
-        }
-        if (portal.spectator()) {
-            return "spectator";
-        }
-        if (arenas.isAvailable(arena.name())) {
-            return "open";
-        }
-        if (arenas.isHeld(arena.name())) {
-            return "in-use";
-        }
-        if (!arenas.editing().isEmpty()) {
-            return "editing";
-        }
-        return "not-ready";
+        return arenas.get(portal.arena()).isPresent() ? "spectator" : "arena-missing";
     }
 
     List<String> complete(CommandSender sender, String[] args) {

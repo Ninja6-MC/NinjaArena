@@ -16,12 +16,12 @@ import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.spectate.Spectators;
-import com.ninja6.ninjaarena.waiting.WaitingRoomListener;
-import com.ninja6.ninjaarena.waiting.WaitingRoomService;
-import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.LobbyWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
@@ -37,7 +37,8 @@ class SpectatorLifecycleTest extends MatchFixture {
 
     private SnapshotStore snapshots;
     private RestoreListener restoreListener;
-    private WaitingRoomService waiting;
+    /** Lobby members, as the lobby keeps them: a teleport out of the lobby world ends membership. */
+    private final Set<UUID> lobby = new HashSet<>();
     private Spectators viewers;
 
     @BeforeEach
@@ -50,15 +51,13 @@ class SpectatorLifecycleTest extends MatchFixture {
             player.setGameMode(snapshot.gameMode());
         }, plugin.getLogger());
         restoreListener = new RestoreListener(plugin, restores);
-        waiting = new WaitingRoomService(plugin, arenas, WaitingRoomSettings.from(null), restores::restore,
-                player -> player.setGameMode(GameMode.ADVENTURE), matches);
-        viewers = new Spectators(plugin, arenas, matches, waiting, restores, () -> arenaWorld,
+        viewers = new Spectators(plugin, arenas, matches, restores, () -> arenaWorld,
                 new SpectatorSettings(true, 1));
-        var waitingListener = new WaitingRoomListener(waiting);
+        viewers.setLobbyMembers(lobby::contains);
         teleportEvents = event -> {
             viewers.onTeleport(event);
-            if (!event.isCancelled()) {
-                waitingListener.onTeleport(event);
+            if (!event.isCancelled() && !PluginWorlds.isLobby(event.getTo())) {
+                lobby.remove(event.getPlayer().getUniqueId());
             }
             if (!event.isCancelled()) {
                 restoreListener.onTeleport(event);
@@ -67,20 +66,32 @@ class SpectatorLifecycleTest extends MatchFixture {
         gameModeChanges = viewers::onGameMode;
     }
 
+    /** Puts a player in the lobby with their snapshot saved, as the lobby entry does. */
+    private void inLobby(UUID id) throws Exception {
+        snapshots.save(snapshot(id));
+        players.get(id).location = new Location(world(LobbyWorld.NAME), 0, 64, 0);
+        lobby.add(id);
+    }
+
     @Test
-    void waitingTransferRetainsSnapshotUntilMatchEndAndDoesNotChangeTheRoster() throws Exception {
-        snapshots.save(snapshot(CAROL));
-        arenas.create("garden", new GridCell(1, 0));
-        arenas.update("garden", a -> a.withWaitingRoom(new ArenaPoint(300, 64, 50, 0, 0)));
-        players.get(CAROL).location = new Location(arenaWorld, 300, 64, 50);
-        arenas.finishEdit("garden");
+    void spectatingFromTheLobbyNeedsALobbyMemberInNoRoom() throws Exception {
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
         players.get(CAROL).canSpectate = true;
-        waiting.join(player(CAROL), "garden");
+        viewers.fromLobby(player(CAROL), "dojo");
+        assertFalse(viewers.contains(CAROL));
+        assertEquals("You must be in the lobby, and in no room, to spectate with this command.",
+                players.get(CAROL).messages.getLast());
+    }
 
-        viewers.fromWaitingRoom(player(CAROL), "dojo");
+    @Test
+    void lobbyTransferRetainsSnapshotUntilMatchEndAndDoesNotChangeTheRoster() throws Exception {
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        players.get(CAROL).canSpectate = true;
+        inLobby(CAROL);
 
-        assertFalse(waiting.isWaiting(CAROL));
+        viewers.fromLobby(player(CAROL), "dojo");
+
+        assertFalse(lobby.contains(CAROL), "the lobby's own teleport out ends membership");
         assertFalse(matches.isInMatch(CAROL));
         assertEquals(List.of(ALICE, BOB), matches.match("dojo").orElseThrow().players());
         assertEquals(GameMode.SPECTATOR, players.get(CAROL).gameMode);
@@ -291,17 +302,12 @@ class SpectatorLifecycleTest extends MatchFixture {
 
     @Test
     void spectatorTransferInsideTheSettleWindowIsNeitherUndoneNorRestoredAgain() throws Exception {
-        arenas.create("garden", new GridCell(1, 0));
-        arenas.update("garden", a -> a.withWaitingRoom(new ArenaPoint(300, 64, 50, 0, 0)));
-        arenas.finishEdit("garden");
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
         restoreOnJoin(CAROL);
-        snapshots.save(snapshot(CAROL));
         players.get(CAROL).canSpectate = true;
-        players.get(CAROL).location = new Location(arenaWorld, 300, 64, 50);
-        waiting.join(player(CAROL), "garden");
+        inLobby(CAROL);
 
-        viewers.fromWaitingRoom(player(CAROL), "dojo");
+        viewers.fromLobby(player(CAROL), "dojo");
         runNextTick();
 
         assertTrue(viewers.contains(CAROL));
@@ -322,11 +328,8 @@ class SpectatorLifecycleTest extends MatchFixture {
     }
 
     @Test
-    void theBusyPredicateCoversMatchWaitingRoomAndSpectators() throws Exception {
-        arenas.create("garden", new GridCell(1, 0));
-        arenas.update("garden", a -> a.withWaitingRoom(new ArenaPoint(300, 64, 50, 0, 0)));
-        arenas.finishEdit("garden");
-        var busy = new ArenaBusy(() -> matches, () -> waiting, () -> viewers);
+    void theBusyPredicateCoversMatchAndSpectators() throws Exception {
+        var busy = new ArenaBusy(() -> matches, () -> viewers);
         assertFalse(busy.test(ALICE));
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
         assertTrue(busy.test(ALICE));
@@ -335,10 +338,7 @@ class SpectatorLifecycleTest extends MatchFixture {
         viewers.arrived(player(DAVE), "dojo");
         assertTrue(busy.test(DAVE));
 
-        waiting.join(player(CAROL), "garden");
-        assertTrue(busy.test(CAROL));
-
-        var unset = new ArenaBusy(() -> null, () -> null, () -> null);
+        var unset = new ArenaBusy(() -> null, () -> null);
         assertFalse(unset.test(ALICE));
     }
 

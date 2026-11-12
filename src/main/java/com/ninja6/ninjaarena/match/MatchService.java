@@ -31,7 +31,6 @@ import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.sound.Sounds.Cue;
-import com.ninja6.ninjaarena.waiting.MatchStart;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,13 +59,13 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 /**
- * Runs every match: takes over the players of a finished waiting-room countdown
- * ({@link MatchStart}), ticks each {@link Match} once a second, teleports teams to their
+ * Runs every match: takes over the players of a room its host or an admin has started
+ * ({@link #start(String, List)}), ticks each {@link Match} once a second, teleports teams to their
  * spawns at the start of every round, and sends everyone to the lobby when the match closes
  * ({@link #setLobby}). The round rules are in {@link Match}.
  *
- * <p><b>Arena.</b> A match holds its arena from start to close, so no other match, waiting
- * room or edit can use it. The arena is reset from its saved copy before the players arrive
+ * <p><b>Arena.</b> A match holds its arena from start to close, so no other match or edit
+ * can use it. The arena is reset from its saved copy before the players arrive
  * and again when the match closes. If it cannot be held or the first reset fails, the
  * match does not start and its players go back; a failed reset at the close is logged,
  * and the registry keeps the arena unavailable until a reset succeeds.
@@ -97,7 +96,7 @@ import org.bukkit.scheduler.BukkitTask;
  *
  * <p>Not thread-safe: call it from the server thread.
  */
-public final class MatchService implements MatchStart {
+public final class MatchService {
 
     /** How a player left a match. */
     public enum Exit {
@@ -265,13 +264,12 @@ public final class MatchService implements MatchStart {
     }
 
     /**
-     * Starts a match with the players of a finished countdown or a room's start: holds the
+     * Starts a match with the players of a room its host or an admin started: holds the
      * arena, resets it, and starts round 1, which teleports every team to its spawn. If the
      * arena cannot be held or reset, the players are told and sent to the lobby, or home, and
      * nothing is thrown. Anything else that goes wrong releases the arena and is thrown, so the
      * caller can deal with its players.
      */
-    @Override
     public void start(String arenaName, List<List<UUID>> teams) {
         String name = Arena.normalizeName(arenaName);
         List<List<UUID>> online = new ArrayList<>();

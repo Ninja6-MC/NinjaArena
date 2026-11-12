@@ -52,7 +52,7 @@ permissions:
     default: true
     children: {}
   ninjaarena.host:
-    description: Host and run arena matches
+    description: Open invite-only rooms on any arena with /narena host
     default: op
     children:
       ninjaarena.play: true

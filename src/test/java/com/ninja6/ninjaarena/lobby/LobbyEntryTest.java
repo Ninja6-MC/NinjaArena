@@ -63,7 +63,7 @@ class LobbyEntryTest extends LobbyFixture {
     void aBusyPlayerOrOneWhoseSnapshotCannotBeSavedIsTurnedAway() {
         Player alice = add(ALICE, "Alice", new Location(overworld, 5, 70, 5));
         busyElsewhere.add(ALICE);
-        assertEquals(Optional.of("Leave your match, waiting room or spectating first."), entry.join(alice));
+        assertEquals(Optional.of("Leave your match or spectating first."), entry.join(alice));
         assertEquals(List.of(), captured);
 
         busyElsewhere.clear();

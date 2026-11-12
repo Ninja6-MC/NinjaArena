@@ -9,7 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 
 /**
- * Marks the teleports NinjaArena starts itself (restore, admission, waiting room, match,
+ * Marks the teleports NinjaArena starts itself (restore, admission, lobby, match,
  * portal), so {@link JoinRestore} can tell them from another plugin's. The teleport event
  * fires inside the call, so the mark only has to cover the call. An asynchronous teleport can complete
  * off the server thread, so the map is concurrent.

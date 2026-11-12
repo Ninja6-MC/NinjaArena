@@ -320,7 +320,7 @@ class NinjaArenaCommandTest {
         List<String> help = List.of(
                 "/narena help - show the commands you can use",
                 "/narena arena <subcommand> - create, edit and set up arenas",
-                "/narena portal <subcommand> - mark out portals that lead to arenas",
+                "/narena portal <subcommand> - mark out portals that lead to the lobby or a live match",
                 "/narena director [arena] - show the enemy director of a running match",
                 "/narena pack status - show Java and Bedrock resource pack state",
                 "/narena admin <reload|lobby <edit|done|reset>|textures reset <java|bedrock> <id>> - reload the"
@@ -587,7 +587,7 @@ class NinjaArenaCommandTest {
                 "/ninjaarena leave - leave your room, match or spectating for the lobby, or leave the lobby for home",
                 "/ninjaarena textures - choose Standard or Detailed ninja tool textures",
                 "/ninjaarena intro - show the lobby introduction again",
-                "/ninjaarena accept <host> - accept an invitation to the Arena",
+                "/ninjaarena accept <host> - join a room you were invited to; same as room accept",
                 "/ninjaarena room [create|settings|invite|accept|kick|start|leave] - open a room, invite players and"
                         + " start its match",
                 "/ninjaarena map <list|set <arena>> - list pickable maps or change your room map",

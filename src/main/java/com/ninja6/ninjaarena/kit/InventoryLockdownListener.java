@@ -29,7 +29,7 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.InventoryView;
 
 /**
- * Locks the inventory of a player in a match or a waiting room: no drops, pickups, containers,
+ * Locks the inventory of a player in a match or the lobby: no drops, pickups, containers,
  * ender chests (as a block or through any command that opens one) or armour stands. Membership,
  * never world or edit mode, decides whether an inventory is locked. Plugin menus whose
  * holders implement {@link PluginMenuHolder} are exempt.

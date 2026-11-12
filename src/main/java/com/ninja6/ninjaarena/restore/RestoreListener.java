@@ -27,7 +27,7 @@ public final class RestoreListener implements Listener {
         this(plugin, restores, id -> false);
     }
 
-    /** @param busy whether the player is in a match, a waiting room, the hub or spectating */
+    /** @param busy whether the player is in a match or the lobby, or spectating */
     public RestoreListener(Plugin plugin, RestoreService restores, Predicate<UUID> busy) {
         this(plugin, restores, busy, JoinRestore.Rejoin.NONE);
     }

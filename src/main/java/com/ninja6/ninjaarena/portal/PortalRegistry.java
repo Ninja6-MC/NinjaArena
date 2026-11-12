@@ -5,8 +5,10 @@ import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -18,7 +20,7 @@ import org.bukkit.Location;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Every portal and the shared hub point, kept in memory and in {@code portals.yml}, with a
+ * Every portal and an old shared hub point, kept in memory and in {@code portals.yml}, with a
  * chunk index for the per-move lookup. Each change is written to disk before it is accepted;
  * a failed write leaves the registry as it was. Portals never overlap, so a block belongs to
  * at most one.
@@ -90,9 +92,35 @@ public final class PortalRegistry {
         hub = loaded.hub();
     }
 
-    /** The shared hub point in the arena world, if an admin has set one. */
+    /**
+     * The shared hub point an older version saved in the arena world, if any. Nothing leads
+     * there any more: the lobby took the hub's place.
+     */
     public Optional<ArenaPoint> hub() {
         return Optional.ofNullable(hub);
+    }
+
+    /**
+     * Server log lines for what {@code portals.yml} still holds from before rooms: portals with
+     * their own {@code lobby:} choice and a shared hub point. Both load and keep working
+     * through the lobby; the lines say what they do now.
+     *
+     * @param docs where the migration is described, named at the end of each line
+     */
+    public List<String> oldLobbyWarnings(String docs) {
+        List<String> warnings = new ArrayList<>();
+        List<String> chose = portals.values().stream().filter(portal -> portal.lobby() != null)
+                .map(Portal::name).toList();
+        if (!chose.isEmpty()) {
+            warnings.add("portals.yml: portal(s) " + String.join(", ", chose) + " set the deprecated lobby:"
+                    + " value. Every play portal now leads to the lobby; dedicated joins an open room on the"
+                    + " portal's arena there and shared joins any open room. See " + docs + ".");
+        }
+        if (hub != null) {
+            warnings.add("portals.yml: the shared hub point is no longer used; portals that led to the hub"
+                    + " now lead to the lobby. /narena portal removehub clears it. See " + docs + ".");
+        }
+        return warnings;
     }
 
     /**

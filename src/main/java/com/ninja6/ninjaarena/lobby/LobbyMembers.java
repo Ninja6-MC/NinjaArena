@@ -24,14 +24,14 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
 
 /**
- * Who is in the lobby: a player state like a waiting room. A member's inventory is locked,
+ * Who is in the lobby, where players wait between matches. A member's inventory is locked,
  * the join restore and trophy delivery treat them as busy, and they stay inside the lobby
- * bounds ({@link LobbyLayout#bounds()}), which take the place of the waiting-room radius here.
+ * bounds ({@link LobbyLayout#bounds()}), which keep them in.
  *
  * <p>{@link #enter} is the way in and {@link #leave} the way out. The caller of {@code enter}
- * has already saved the player's snapshot, as a portal does before a waiting room, because
- * leaving sends the player home from it. A player in a match, a waiting room or spectating
- * cannot enter.
+ * has already saved the player's snapshot, as a portal does, because
+ * leaving sends the player home from it. A player in a match or spectating cannot
+ * enter.
  */
 public final class LobbyMembers {
 
@@ -63,8 +63,8 @@ public final class LobbyMembers {
 
     /**
      * @param world     the lobby world
-     * @param elsewhere whether a player is in a match, a waiting room or the hub, or spectating
-     * @param empty     readies an arriving player, as for a waiting room
+     * @param elsewhere whether a player is in a match or spectating
+     * @param empty     readies an arriving player, {@code KitInventory#emptyForWaiting}
      * @param home      sends a player home from their snapshot
      */
     public LobbyMembers(Plugin plugin, LobbyLayout layout, Supplier<World> world, Predicate<UUID> elsewhere,
@@ -93,7 +93,7 @@ public final class LobbyMembers {
 
     /**
      * Takes a player whose snapshot is saved to the lobby spawn and makes them a member. Their
-     * inventory is emptied, as in a waiting room. Nothing changes for a player who is already
+     * inventory is emptied. Nothing changes for a player who is already
      * a member or busy elsewhere, or whom the teleport does not move.
      *
      * @return whether the player is now a member

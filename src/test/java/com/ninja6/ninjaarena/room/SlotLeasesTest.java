@@ -89,17 +89,12 @@ class SlotLeasesTest {
     }
 
     @Test
-    void slotsAndArenasUsedOutsideTheLeasesCount() {
-        int[] others = {1};
+    void anArenaThatCannotBeLeasedNowWaitsInTheQueue() {
         Set<String> taken = new HashSet<>(Set.of("dojo"));
-        slots.setOthers(() -> others[0], taken::contains);
+        slots.setArenaTaken(taken::contains);
         assertTrue(slots.request("a", "temple"));
-        assertFalse(slots.request("b", "garden"), "a waiting-room match uses the second slot");
-        others[0] = 0;
-        assertEquals(List.of("b"), slots.pump());
-
-        slots.release("a");
-        assertFalse(slots.request("c", "dojo"), "the arena is in use outside the rooms");
+        assertEquals(1, slots.used(), "only leases use slots");
+        assertFalse(slots.request("c", "dojo"), "the arena is in edit mode");
         taken.clear();
         assertEquals(List.of("c"), slots.pump());
     }

@@ -11,6 +11,7 @@ import com.ninja6.ninjaarena.reward.RewardSettings;
 import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
 import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
 import com.ninja6.ninjaarena.room.MaxActive;
+import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -33,16 +34,19 @@ public final class ReloadFiles {
      * @param renamed old setting names the config file uses in place of the new one, such as
      *                {@link MaxActive#OLD_KEY}
      * @param ignored old setting names it sets beside the new one, which wins
+     * @param deprecated old waiting-room settings it still sets, {@link WaitingRoomSettings#DEPRECATED}
      */
-    public record Candidate(YamlConfiguration config, KitDefinition kit, List<String> renamed, List<String> ignored) {
+    public record Candidate(YamlConfiguration config, KitDefinition kit, List<String> renamed, List<String> ignored,
+            List<String> deprecated) {
 
         public Candidate {
             renamed = List.copyOf(renamed);
             ignored = List.copyOf(ignored);
+            deprecated = List.copyOf(deprecated);
         }
 
         public Candidate(YamlConfiguration config, KitDefinition kit) {
-            this(config, kit, List.of(), List.of());
+            this(config, kit, List.of(), List.of(), List.of());
         }
     }
 
@@ -58,8 +62,9 @@ public final class ReloadFiles {
         ReloadYaml kit = ReloadYaml.read(kits);
         List<String> old = settings.has(MaxActive.OLD_KEY) ? List.of(MaxActive.OLD_KEY) : List.of();
         boolean both = settings.has(MaxActive.KEY);
+        List<String> deprecated = WaitingRoomSettings.DEPRECATED.stream().filter(settings::has).toList();
         return new Candidate(config(settings, arenaExists), kit(kit, items), both ? List.of() : old,
-                both ? old : List.of());
+                both ? old : List.of(), deprecated);
     }
 
     public static YamlConfiguration defaults() {
@@ -87,6 +92,9 @@ public final class ReloadFiles {
             }
             if (path.equals(MaxActive.OLD_KEY)) {
                 continue; // Read below as arenas.max-active when that is not set.
+            }
+            if (WaitingRoomSettings.DEPRECATED.contains(path)) {
+                continue; // Old waiting-room settings: the lobby is read below, the rest ignored.
             }
             int dot = path.lastIndexOf('.');
             if (dot > 0 && defaults.isList(path.substring(0, dot))) {
@@ -124,9 +132,7 @@ public final class ReloadFiles {
                     throw document.invalid(path, "expected text; quote it if it looks like a number");
                 }
                 String problem;
-                if (path.equals("waiting-room.lobby")) {
-                    problem = LobbyMode.parse(text).isPresent() ? null : "expected dedicated or shared";
-                } else if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
+                if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
                     problem = PlayerPortalSettings.problem(path, text);
                 } else if (path.startsWith("resource-pack.")) {
                     problem = null; // Validated together below, including enabled-pack completeness.
@@ -199,10 +205,12 @@ public final class ReloadFiles {
         } catch (IllegalArgumentException e) {
             throw document.invalid("events", e.getMessage());
         }
-        int maxPlayers = result.getInt("waiting-room.max-players");
-        if (maxPlayers != 0 && maxPlayers < result.getInt("waiting-room.min-players")) {
-            throw document.invalid(document.has("waiting-room.max-players") ? "waiting-room.max-players"
-                    : "waiting-room.min-players", "max-players must be 0 or at least min-players");
+        if (document.has(WaitingRoomSettings.LOBBY)) {
+            // Deprecated, but still read for which open rooms a portal joins.
+            if (!(document.value(WaitingRoomSettings.LOBBY) instanceof String text) || LobbyMode.parse(text).isEmpty()) {
+                throw document.invalid(WaitingRoomSettings.LOBBY, "expected dedicated or shared");
+            }
+            result.set(WaitingRoomSettings.LOBBY, text);
         }
         double pause = result.getDouble("stability.pause-spawning-above-mspt");
         if (result.getDouble("stability.resume-below-mspt") > pause) {
@@ -229,9 +237,6 @@ public final class ReloadFiles {
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};
             case "arena-grid.cell-size" -> new double[] {32, 4096};
             case "spectating.max-per-match", "waiting-room.min-players" -> new double[] {1, 64};
-            case "waiting-room.countdown-seconds" -> new double[] {1, 600};
-            case "waiting-room.radius" -> new double[] {2, 64};
-            case "waiting-room.max-players" -> new double[] {0, 256};
             case "waiting-room.team-size" -> new double[] {0, 64};
             case "match.prep-seconds", "match.round-seconds", "match.round-end-seconds", "match.match-end-seconds"
                     -> new double[] {1, 3600};

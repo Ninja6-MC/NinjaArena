@@ -263,6 +263,10 @@ public final class ConfigReload {
             target.warning(MaxActive.warning(true));
             lines.add(text("reload.renamed-ignored", "old", old, "path", MaxActive.KEY));
         }
+        for (String old : candidate.deprecated()) {
+            target.warning(WaitingRoomSettings.warning(old));
+            lines.add(text("reload.deprecated", "path", old));
+        }
         return List.copyOf(lines);
     }
 

@@ -249,8 +249,7 @@ public final class ArenaWorld {
      * not retired again while the hold lasts. Running the handle again does nothing.
      *
      * <p>Rooms take one: their players wait in the lobby world, so the rooms take a hold when
-     * the first one opens and run it when the last one closes. Waiting rooms need none: their
-     * players stand in the world, which already keeps it open.
+     * the first one opens and run it when the last one closes.
      *
      * @throws IllegalStateException if the world cannot be opened; no hold is kept then
      */

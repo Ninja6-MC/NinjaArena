@@ -48,8 +48,8 @@ class MessagesTest {
 
     @Test
     void aCustomTextIsUsedWithItsPlaceholders() {
-        Messages messages = with("waiting.joined", "<aqua>Team <team> of <arena>!");
-        Component joined = messages.render("waiting.joined", "arena", "dojo", "team", 2);
+        Messages messages = with("room.queued-arena", "<aqua>Team <position> of <arena>!");
+        Component joined = messages.render("room.queued-arena", "arena", "dojo", "position", 2);
         assertEquals("Team 2 of dojo!", plain(joined));
         assertEquals(NamedTextColor.AQUA, joined.color());
         assertTrue(warnings.isEmpty());
@@ -57,10 +57,12 @@ class MessagesTest {
 
     @Test
     void aMissingKeyFallsBackToTheDefaultWithOneWarning() {
-        Messages messages = with("waiting.joined", null);
-        assertEquals("You joined arena dojo on team 1.", messages.plain("waiting.joined", "arena", "dojo", "team", 1));
-        assertEquals("You joined arena dojo on team 2.", messages.plain("waiting.joined", "arena", "dojo", "team", 2));
-        assertEquals(List.of("messages.yml: waiting.joined is missing; using the default."), warnings);
+        Messages messages = with("room.queued-arena", null);
+        assertEquals("Arena dojo is in use. Your room is number 1 in the queue.",
+                messages.plain("room.queued-arena", "arena", "dojo", "position", 1));
+        assertEquals("Arena dojo is in use. Your room is number 2 in the queue.",
+                messages.plain("room.queued-arena", "arena", "dojo", "position", 2));
+        assertEquals(List.of("messages.yml: room.queued-arena is missing; using the default."), warnings);
     }
 
     @Test
@@ -75,8 +77,9 @@ class MessagesTest {
 
     @Test
     void anUnknownPlaceholderOrAValueThatIsNotTextFallsBack() {
-        Messages unknown = with("waiting.joined", "Joined <arenaa>.");
-        assertEquals("You joined arena dojo on team 1.", unknown.plain("waiting.joined", "arena", "dojo", "team", 1));
+        Messages unknown = with("room.queued-arena", "Queued for <arenaa>.");
+        assertEquals("Arena dojo is in use. Your room is number 1 in the queue.",
+                unknown.plain("room.queued-arena", "arena", "dojo", "position", 1));
         Messages list = with("match.fight", List.of("Fight!"));
         assertEquals("Fight!", list.plain("match.fight"));
         assertEquals(2, warnings.size());
@@ -93,7 +96,7 @@ class MessagesTest {
     @Test
     void userInputIsInsertedAsPlainTextNeverAsTags() {
         String name = "<red><click:run_command:'/op Mallory'><bold>Mallory";
-        Component message = Messages.bundled().render("hosting.no-player", "player", name);
+        Component message = Messages.bundled().render("room.no-player", "player", name);
         assertEquals("No online player called " + name + ".", plain(message));
         assertNoClicks(message);
         assertEquals(NamedTextColor.YELLOW, message.color());
