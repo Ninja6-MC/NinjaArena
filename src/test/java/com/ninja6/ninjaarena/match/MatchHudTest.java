@@ -108,6 +108,43 @@ class MatchHudTest extends MatchFixture {
     }
 
     @Test
+    void theShopShowsItsCountdownReadyCountAndTheWaitForTheMap() {
+        useHud(SETTINGS);
+        matches.setShopSettings(new ShopSettings(true, 4, 2, 3));
+        boolean[] mapReady = {false};
+        matches.setMapReady(match -> mapReady[0]);
+        startTwoOnTwo();
+        advance(2);
+        matches.died(player(BOB), player(ALICE));
+        matches.died(player(DAVE), player(ALICE));
+        runNextTick();
+        advance(1);
+        assertEquals(MatchPhase.SHOP, matches.match("dojo").orElseThrow().phase());
+        hud.tick();
+        assertEquals("Shop - next round in 0:04 - ready 0/4", text(bar().name()));
+        assertEquals(BossBar.Color.GREEN, bar().color());
+        assertEquals(1f, bar().progress());
+        assertEquals("T1: 9  T2: 0  |  Enemies left: 0  |  Points: 9", players.get(ALICE).actionBars.getLast(),
+                "points stay in view for buying");
+        for (var id : List.of(BOB, DAVE)) {
+            assertEquals(1, players.get(id).bossBars.size(), "eliminated players see it too");
+        }
+
+        matches.ready(player(ALICE));
+        hud.tick();
+        assertEquals("Shop - next round in 0:04 - ready 1/4", text(bar().name()));
+        advance(1);
+        assertEquals(0.75f, bar().progress());
+        advance(3);
+        assertEquals("Shop - waiting for the map 0:03", text(bar().name()));
+        assertEquals(1f, bar().progress());
+        mapReady[0] = true;
+        advance(1);
+        assertEquals("Round 2 - Prep 0:02", text(bar().name()));
+        assertEquals(BossBar.Color.YELLOW, bar().color());
+    }
+
+    @Test
     void unlimitedOverrunKeepsAFullBarAndExtraRoundsHaveTheirOwnLabel() {
         useHud(new MatchSettings(1, 1, 0, 1, 1, 1, 1));
         startTwoOnTwo();

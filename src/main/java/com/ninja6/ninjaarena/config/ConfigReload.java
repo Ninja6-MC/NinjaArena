@@ -8,6 +8,7 @@ import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
+import com.ninja6.ninjaarena.match.ShopSettings;
 import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.room.MaxActive;
@@ -47,6 +48,9 @@ public final class ConfigReload {
         }
         void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring);
         default void points(PointsSettings settings) {
+        }
+        /** New {@code shop} phase settings, for matches started from now on. */
+        default void shopPhase(ShopSettings settings) {
         }
         void tools(ToolSettings settings);
         default void spectating(SpectatorSettings settings) {
@@ -161,7 +165,8 @@ public final class ConfigReload {
                     refused.add(text("reload.resize-refused", "path", path));
                     next.set(path, effective.get(path));
                 }
-            } else if (path.startsWith("match.") || path.startsWith("scoring.") || path.startsWith("points.")) {
+            } else if (path.startsWith("match.") || path.startsWith("scoring.") || path.startsWith("points.")
+                    || path.startsWith("shop.")) {
                 postponed.add(text("reload.next-match", "path", path));
             } else {
                 changed.add(path);
@@ -219,6 +224,9 @@ public final class ConfigReload {
         }
         if (differs("points.", next)) {
             target.points(PointsSettings.from(next.getConfigurationSection("points")));
+        }
+        if (differs("shop.", next)) {
+            target.shopPhase(ShopSettings.from(next.getConfigurationSection("shop")));
         }
         if (differs("tools.", next)) {
             target.tools(ToolSettings.from(next.getConfigurationSection("tools")));

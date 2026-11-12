@@ -11,7 +11,9 @@ import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
+import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
 import com.ninja6.ninjaarena.portal.PortalEntry;
+import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.restore.RestoreService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomService;
 import com.ninja6.ninjaarena.world.PluginWorlds;
@@ -38,6 +40,7 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -45,6 +48,10 @@ import org.bukkit.plugin.Plugin;
  * command, by the match ending or by its arena closing, goes to the lobby with their snapshot
  * kept ({@link #setLobby}); only a failed arrival and the plugin shutting down send them
  * home. All operations run on the server thread.
+ *
+ * <p>During a shop phase between rounds, viewers go with the players to the lobby world's
+ * shop area ({@link #setShopArea}) and may fly within the lobby bounds; the next PREP
+ * brings them back to the arena. Nobody new is let in to watch while the shop is open.
  */
 public final class Spectators implements Listener {
 
@@ -60,6 +67,8 @@ public final class Spectators implements Listener {
     private final Map<UUID, Seat> viewers = new HashMap<>();
     private SpectatorSettings settings;
     private Predicate<Player> lobby = player -> false;
+    private Supplier<Location> shopArea = () -> null;
+    private Predicate<Location> lobbyArea = location -> false;
 
     public Spectators(Plugin plugin, ArenaRegistry arenas, MatchService matches, WaitingRoomService waiting,
             RestoreService restores, Supplier<World> world, SpectatorSettings settings) {
@@ -78,6 +87,16 @@ public final class Spectators implements Listener {
      */
     public void setLobby(Predicate<Player> lobby) {
         this.lobby = java.util.Objects.requireNonNull(lobby, "lobby");
+    }
+
+    /**
+     * Where viewers wait while their match is in its shop phase, and the lobby bounds they
+     * may fly in meanwhile. While {@code shop} gives {@code null}, the default, they stay in
+     * the arena.
+     */
+    public void setShopArea(Supplier<Location> shop, Predicate<Location> lobbyArea) {
+        this.shopArea = java.util.Objects.requireNonNull(shop, "shop");
+        this.lobbyArea = java.util.Objects.requireNonNull(lobbyArea, "lobbyArea");
     }
 
     public void setSettings(SpectatorSettings settings) {
@@ -108,7 +127,36 @@ public final class Spectators implements Listener {
     }
 
     static boolean watchable(MatchPhase phase) {
-        return phase != MatchPhase.WAITING && phase != MatchPhase.MATCH_END;
+        return phase != MatchPhase.WAITING && phase != MatchPhase.SHOP && phase != MatchPhase.MATCH_END;
+    }
+
+    /** Takes a match's viewers to the shop area as it opens, and back to the arena at the next PREP. */
+    @EventHandler
+    public void onPhase(MatchPhaseChangeEvent event) {
+        boolean opening = event.to() == MatchPhase.SHOP;
+        if (!opening && !(event.from() == MatchPhase.SHOP && event.to() == MatchPhase.PREP)) {
+            return;
+        }
+        Location shop = shopArea.get();
+        if (shop == null) {
+            return;
+        }
+        for (var viewer : Map.copyOf(viewers).entrySet()) {
+            Seat seat = viewer.getValue();
+            Player player = seat.match() == event.match() ? plugin.getServer().getPlayer(viewer.getKey()) : null;
+            if (player == null || !player.isOnline() || player.isDead()) {
+                continue;
+            }
+            ArenaPoint point = seat.point();
+            Location to = opening ? shop.clone()
+                    : new Location(world.get(), point.x(), point.y(), point.z(), point.yaw(), point.pitch());
+            if (!OwnTeleports.teleport(player, to, TeleportCause.PLUGIN)) {
+                plugin.getLogger().warning("Could not move the viewer " + player.getName() + (opening
+                        ? " to the shop area" : " back to arena " + seat.match().arena())
+                        + "; sending them to the lobby.");
+                leave(player);
+            }
+        }
     }
 
     /** A waiting player already has a durable snapshot. Transfer only after teleport succeeds. */
@@ -223,6 +271,9 @@ public final class Spectators implements Listener {
     }
 
     private boolean inside(Seat seat, Location to) {
+        if (seat.match().phase() == MatchPhase.SHOP && shopArea.get() != null) {
+            return lobbyArea.test(to);
+        }
         return PluginWorlds.isArena(to) && contains(seat.bounds(), to.getX(), to.getY(), to.getZ());
     }
 

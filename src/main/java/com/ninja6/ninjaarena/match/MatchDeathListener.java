@@ -64,11 +64,14 @@ public final class MatchDeathListener implements Listener {
         eliminated.clear();
     }
 
-    /** Used by the game-mode guard; round winners are never treated as eliminated. */
+    /**
+     * Used by the game-mode guard; round winners are never treated as eliminated. Nobody
+     * spectates during SHOP: everyone in the match is in the shop area in Adventure mode.
+     */
     public boolean isSpectating(UUID id) {
         MatchView match = eliminated.get(id);
         return match != null && matches.matchOf(id).filter(current -> current == match).isPresent()
-                && !match.isAlive(id);
+                && !match.isAlive(id) && match.phase() != MatchPhase.SHOP;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

@@ -79,6 +79,11 @@ class ConfigReloadTest {
             calls.add("match"); match = settings; this.friendlyFire = friendlyFire; this.scoring = scoring;
         }
         @Override public void points(PointsSettings settings) { calls.add("points"); points = settings; }
+        com.ninja6.ninjaarena.match.ShopSettings shopPhase;
+        @Override public void shopPhase(com.ninja6.ninjaarena.match.ShopSettings settings) {
+            calls.add("shopPhase");
+            shopPhase = settings;
+        }
         @Override public void tools(ToolSettings settings) { calls.add("tools"); tools = settings; }
         @Override public void spectating(SpectatorSettings settings) { spectating = settings; }
         @Override public void playerPortals(PlayerPortalSettings settings) {
@@ -209,6 +214,27 @@ class ConfigReloadTest {
         write(valid.replace("2.5", "2.555"), EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("rejected"));
         assertEquals(accepted, target.published);
+    }
+
+    @Test
+    void shopPhaseSettingsApplyToTheNextMatchAndBadValuesAreRejected() throws Exception {
+        write("shop: {enabled: false, max-seconds: 60, quick-start-seconds: 10, map-wait-limit-seconds: 0}\n",
+                EMPTY_KIT);
+        var messages = reload.reload();
+        assertTrue(messages.getFirst().contains("complete"), messages.toString());
+        assertEquals(new com.ninja6.ninjaarena.match.ShopSettings(false, 60, 10, 0), target.shopPhase);
+        assertTrue(messages.get(2).contains("shop.enabled (next match)"));
+        assertTrue(messages.get(2).contains("shop.map-wait-limit-seconds (next match)"));
+        assertEquals(List.of("shopPhase"), target.calls);
+
+        target.calls.clear();
+        for (String bad : List.of("shop: {max-seconds: 0}", "shop: {quick-start-seconds: 3601}",
+                "shop: {map-wait-limit-seconds: -1}", "shop: {enabled: yes please}", "shop: {max-seconds: 1.5}")) {
+            write(bad + "\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("rejected"), bad);
+        }
+        assertEquals(List.of(), target.calls);
+        assertEquals(new com.ninja6.ninjaarena.match.ShopSettings(false, 60, 10, 0), target.shopPhase);
     }
 
     @Test

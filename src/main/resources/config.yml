@@ -151,6 +151,21 @@ points:
   # Remainders go in roster order. Draws award no pool. Negative awards become zero.
   round-win: 6
 
+shop:
+  # A shop phase between rounds, in the lobby world's shop area. Players, eliminated
+  # players and spectators go there after each round that another round follows, and
+  # come back at the next prep. false goes straight from one round to the next.
+  enabled: true
+  # How long the shop stays open (1 to 3600 seconds).
+  max-seconds: 45
+  # Once every player in the match is ready (/narena shop ready), the time left is cut
+  # to this, if it is shorter (1 to 3600 seconds).
+  quick-start-seconds: 5
+  # The shop never closes before the next map is ready. When it is still not ready this
+  # many seconds after the time limit, the round is played on the current arena again,
+  # reset first. 0 does that at the time limit (0 to 3600 seconds).
+  map-wait-limit-seconds: 30
+
 arenas:
   # Arena slots in use at once (1 to 100), never more than the arena grid has cells. A room
   # leases a slot for its arena when it is created and keeps it through its whole match;

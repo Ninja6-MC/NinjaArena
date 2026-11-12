@@ -50,6 +50,7 @@ command:
     reload: "Configuration reload"
     lobby: "Lobby editing"
     rooms: "Rooms"
+    shop: "The shop"
   usage-full: "<red>Usage: <usage>"
   unknown-subcommand: "<red>Unknown subcommand <subcommand>. Use one of: <subcommands>."
   error: "<red><message>"
@@ -71,6 +72,7 @@ help:
   accept: "accept an invitation to the Arena"
   map: "list pickable maps or change your room map"
   room: "open a room, invite players and start its match"
+  shop: "say you are ready in the shop between rounds"
   host: "open a match in the Arena"
   invite: "invite a player to the Arena"
   arena: "create, edit and set up arenas"
@@ -566,6 +568,8 @@ hud:
   bar-overrun: "<round> - OVERRUN"
   bar-overrun-timed: "<round> - OVERRUN <time>"
   bar-round-end: "Next round in <seconds>s"
+  bar-shop: "Shop - next round in <time> - ready <ready>/<players>"
+  bar-shop-map-wait: "Shop - waiting for the map <time>"
   team-score: "T<team>: <score>"
   team-separator: "  "
   status: "<yellow><totals>  |  Enemies left: <enemies>  |  Points: <points>"
@@ -772,8 +776,17 @@ reload:
   renamed: "<old> has been renamed <path>. It still works for now; rename it in config.yml."
   renamed-ignored: "<old> is the old name of <path>, which is also set, so it is ignored. Remove it."
 
-# Shop purchase results, displayed by the shop screen when available.
+# The shop phase between rounds and shop purchase results, which the shop screen will
+# show when it is available.
 shop:
+  open: "<gold>Shop open: spend your points before round <round>. It closes in <seconds> seconds; /narena shop ready when you are done."
+  ready: "<green>You are ready for the next round."
+  already-ready: "<yellow>You are already ready."
+  not-in-shop: "<red>You can only get ready while your match is in the shop."
+  player-ready: "<gray><player> is ready (<ready>/<players>)."
+  quick-start: "<gold>Everyone is ready: the next round starts in <seconds> seconds."
+  map-wait: "<yellow>Waiting for the next map, for at most <seconds> seconds."
+  map-replay: "<yellow>The next map is not ready: the round is played on <arena> again after a reset."
   bought: "<green>Purchase queued for the next round."
   not-enough-points: "<red>You do not have enough points."
   limit-reached: "<red>You reached this item's buy limit for the round."

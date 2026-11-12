@@ -11,10 +11,14 @@ import com.ninja6.ninjaarena.event.EventSettings.Bonus;
 import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.match.MatchResult.Reason;
 import com.ninja6.ninjaarena.match.MatchUpdate.Closed;
+import com.ninja6.ninjaarena.match.MatchUpdate.MapReplay;
+import com.ninja6.ninjaarena.match.MatchUpdate.MapWait;
 import com.ninja6.ninjaarena.match.MatchUpdate.MatchEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.PhaseChanged;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerEliminated;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerLeft;
+import com.ninja6.ninjaarena.match.MatchUpdate.PlayerReady;
+import com.ninja6.ninjaarena.match.MatchUpdate.QuickStart;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundStarted;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
@@ -73,6 +77,14 @@ import org.bukkit.scheduler.BukkitTask;
  * that teleport is not seen as another exit. Disabling the plugin stops every match and
  * sends everyone home.
  *
+ * <p><b>Shop.</b> When a match goes to SHOP ({@link ShopSettings}), every player still in it,
+ * eliminated players included, is put back in Adventure mode and moved to the lobby world's
+ * shop area ({@link #setShopArea}); a player on the death screen respawns there. They stay
+ * in the match, keep their inventory and snapshot, and take no damage. The next PREP brings
+ * them back to their team spawns. Those moves cross between the plugin's two worlds and
+ * keep the match only while {@link #crossesWorlds} accepts the player. {@link #ready} is
+ * the Ready button, and {@link #setMapReady} keeps the shop open until the next map is ready.
+ *
  * <p><b>Elimination.</b> Dying in a round takes the player out of that round. Death handling
  * builds on {@link PlayerEliminatedEvent} and {@link #respawnPoint(UUID)} to retain their
  * belongings and spectate their team until the next round.
@@ -101,10 +113,23 @@ public final class MatchService implements MatchStart {
     private record Running(Match match, List<ArenaPoint> spawns) {
     }
 
+    /** What {@link #ready} did. */
+    public enum Ready {
+        /** The player is now ready. */
+        READY,
+        /** The player was ready already. */
+        ALREADY_READY,
+        /** The player is in no match, or their match is not in SHOP. */
+        NOT_IN_SHOP
+    }
+
     private Function<String, Bonus> eventBonus = arena -> Bonus.NONE;
     private Predicate<Player> lobby = player -> false;
     private Consumer<String> closed = arena -> { };
     private boolean closing;
+    private ShopSettings shopSettings = ShopSettings.OFF;
+    private Predicate<MatchView> mapReady = match -> true;
+    private Supplier<Location> shopArea = () -> null;
 
     /**
      * Where players go when the match ends or they leave it with the command: the lobby,
@@ -128,6 +153,35 @@ public final class MatchService implements MatchStart {
         };
     }
 
+    /**
+     * The shop phase for matches started from now on; a running match keeps its own. Off
+     * until set, so each round end leads straight to the next round.
+     */
+    public void setShopSettings(ShopSettings shopSettings) {
+        this.shopSettings = Objects.requireNonNull(shopSettings, "shopSettings");
+    }
+
+    public ShopSettings shopSettings() {
+        return shopSettings;
+    }
+
+    /**
+     * Where players stand during SHOP: the lobby world's shop area on a server. While it gives
+     * {@code null}, the default, they stay where the round left them.
+     */
+    public void setShopArea(Supplier<Location> shopArea) {
+        this.shopArea = Objects.requireNonNull(shopArea, "shopArea");
+    }
+
+    /**
+     * Whether the map for a match's next round is ready, asked once a SHOP is due to end.
+     * Nothing prepares another map yet, so the default is always ready and every round is
+     * played on the match's own arena.
+     */
+    public void setMapReady(Predicate<MatchView> mapReady) {
+        this.mapReady = Objects.requireNonNull(mapReady, "mapReady");
+    }
+
     public void setEventBonus(Function<String, Bonus> eventBonus) {
         this.eventBonus = Objects.requireNonNull(eventBonus, "eventBonus");
     }
@@ -147,6 +201,8 @@ public final class MatchService implements MatchStart {
     private final Set<UUID> homeBound = new HashSet<>();
     /** Matches with eliminations this server tick, waiting for {@link Match#settle()}. */
     private final Set<Running> unsettled = new HashSet<>();
+    /** Matches whose players are being brought back from the shop to their team spawns. */
+    private final Set<Running> returning = new HashSet<>();
     private BukkitTask ticker;
 
     /**
@@ -257,7 +313,9 @@ public final class MatchService implements MatchStart {
         }
         Running running = null;
         try {
-            running = new Running(new Match(name, online, settings, standings, eventBonus.apply(name)), arena.get().teamSpawns());
+            Match match = new Match(name, online, settings, standings, eventBonus.apply(name), shopSettings);
+            match.setMapReady(() -> mapReady.test(match));
+            running = new Running(match, arena.get().teamSpawns());
             matches.put(name, running);
             for (UUID playerId : everyone) {
                 matchOf.put(playerId, running);
@@ -311,14 +369,50 @@ public final class MatchService implements MatchStart {
         return running != null && !running.match().isAlive(playerId);
     }
 
-    /** Where a player in a match respawns: their team spawn. Empty for a player not in a match. */
+    /**
+     * Where a player in a match respawns: their team spawn, or the shop area during SHOP.
+     * Empty for a player not in a match.
+     */
     public Optional<Location> respawnPoint(UUID playerId) {
         Running running = matchOf.get(playerId);
         if (running == null) {
             return Optional.empty();
         }
+        if (running.match().phase() == MatchPhase.SHOP) {
+            Location shop = shopArea.get();
+            if (shop != null) {
+                return Optional.of(shop.clone());
+            }
+        }
         int team = running.match().teamOf(playerId);
         return Optional.of(location(running.spawns().get(team - 1)));
+    }
+
+    /**
+     * Whether a player in a match keeps it when NinjaArena moves them between the arena and
+     * lobby worlds: during SHOP, and while the next PREP brings them back. Register it with
+     * {@code CrossWorldTransfers#allow}.
+     */
+    public boolean crossesWorlds(UUID playerId) {
+        Running running = matchOf.get(playerId);
+        return running != null && (running.match().phase() == MatchPhase.SHOP || returning.contains(running));
+    }
+
+    /**
+     * The player pressed Ready in the shop. Once everyone in the match is ready, the shop's
+     * time left is cut to its quick start.
+     */
+    public Ready ready(Player player) {
+        Running running = matchOf.get(player.getUniqueId());
+        if (running == null || running.match().phase() != MatchPhase.SHOP) {
+            return Ready.NOT_IN_SHOP;
+        }
+        List<MatchUpdate> updates = running.match().ready(player.getUniqueId());
+        if (updates.isEmpty()) {
+            return Ready.ALREADY_READY;
+        }
+        apply(running, updates);
+        return Ready.READY;
     }
 
     /**
@@ -427,7 +521,16 @@ public final class MatchService implements MatchStart {
             switch (update) {
                 case PhaseChanged changed -> {
                     if (changed.to() == MatchPhase.PREP) {
-                        place(running);
+                        if (changed.from() == MatchPhase.SHOP) {
+                            returning.add(running);
+                        }
+                        try {
+                            place(running);
+                        } finally {
+                            returning.remove(running);
+                        }
+                    } else if (changed.to() == MatchPhase.SHOP) {
+                        toShop(running);
                     }
                     announce(running, changed.to());
                     events.accept(new MatchPhaseChangeEvent(match, changed.from(), changed.to()));
@@ -445,6 +548,11 @@ public final class MatchService implements MatchStart {
                     broadcast(running, msg("match.player-left", "player", name(left.player())));
                     events.accept(new PlayerLeaveMatchEvent(match, left.player(), left.team()));
                 }
+                case PlayerReady ready -> broadcast(running, msg("shop.player-ready", "player",
+                        name(ready.player()), "ready", ready.ready(), "players", ready.players()));
+                case QuickStart quick -> broadcast(running, msg("shop.quick-start", "seconds", quick.seconds()));
+                case MapWait wait -> broadcast(running, msg("shop.map-wait", "seconds", wait.seconds()));
+                case MapReplay replay -> replay(running);
                 case RoundEnded ended -> {
                     RoundResult result = ended.result();
                     broadcast(running, result.isDraw()
@@ -487,6 +595,51 @@ public final class MatchService implements MatchStart {
     }
 
     /**
+     * Moves every player in the match to the shop area, out of spectator mode. A player on
+     * the death screen is placed there by their respawn; one the teleport does not move stays
+     * where they are, still in the match.
+     */
+    private void toShop(Running running) {
+        Location shop = shopArea.get();
+        if (shop == null) {
+            return;
+        }
+        Match match = running.match();
+        for (UUID playerId : match.players()) {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player == null || !player.isOnline() || player.isDead()) {
+                continue;
+            }
+            if (player.getGameMode() == GameMode.SPECTATOR) {
+                if (player.getSpectatorTarget() != null) {
+                    player.setSpectatorTarget(null);
+                }
+                player.setGameMode(GameMode.ADVENTURE);
+            }
+            player.setFireTicks(0);
+            player.setFallDistance(0);
+            if (!OwnTeleports.teleport(player, shop.clone(), TeleportCause.PLUGIN)) {
+                plugin.getLogger().warning("Could not teleport " + player.getName() + " to the shop area for the match"
+                        + " in arena " + match.arena() + ".");
+            }
+        }
+    }
+
+    /** The next map was not ready in time: the round is played on the current arena, reset first. */
+    private void replay(Running running) {
+        String arena = running.match().arena();
+        plugin.getLogger().info("The next map for the match in arena " + arena + " was not ready in time; replaying"
+                + " on arena " + arena + " after a reset.");
+        broadcast(running, msg("shop.map-replay", "arena", arena));
+        try {
+            arenas.reset(arena);
+        } catch (ArenaException e) {
+            plugin.getLogger().log(Level.SEVERE, "Could not reset arena " + arena + " before the replayed round; the"
+                    + " round is played on it as it is.", e);
+        }
+    }
+
+    /**
      * Sends everyone still in the match to the lobby, or home on plugin disable, resets the
      * arena and releases it.
      */
@@ -498,6 +651,7 @@ public final class MatchService implements MatchStart {
         List<UUID> remaining = match.players();
         forget(running);
         unsettled.remove(running);
+        returning.remove(running);
         for (UUID playerId : remaining) {
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null && player.isOnline()) {
@@ -559,6 +713,8 @@ public final class MatchService implements MatchStart {
                     : msg("match.prep", "round", match.round(), "rounds", match.settings().rounds(),
                             "seconds", match.secondsLeft()));
             case COMBAT -> broadcast(running, msg("match.fight"));
+            case SHOP -> broadcast(running, msg("shop.open", "round", match.round() + 1,
+                    "seconds", match.secondsLeft()));
             case OVERRUN -> broadcast(running, match.settings().overrunLimitSeconds() > 0
                     ? msg("match.overrun-limited", "seconds", match.settings().overrunLimitSeconds())
                     : msg("match.overrun"));

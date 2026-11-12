@@ -13,12 +13,23 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
-
 - Room hosts with `ninjaarena.map.change` can choose a hand-built map with
   `/narena map set <arena>`; room members can browse `/narena map list`. Admins mark
   arenas with `/narena arena pickable <arena> <on|off>`, stored as optional
   `pickable: true` in `arenas.yml` format 1. Map changes move the room's slot lease,
   adjust its team count and tell every member who changed it and its queue position.
+- A shop phase between rounds. After each round that another round follows, extra
+  rounds included, players, eliminated players and spectators go to the lobby world's
+  shop area, stay in the match with their inventory, snapshot and points, and come back
+  at the next prep. Buying from `shop.yml` is open only then. It lasts
+  `shop.max-seconds` (45); once everyone has run the new `/narena shop ready`, it ends
+  after `shop.quick-start-seconds` (5). It never ends before the next map is ready, and
+  after `shop.map-wait-limit-seconds` (30) past its time limit the round is played on the
+  current arena, reset first. No shop follows the last round, the final extra round or a
+  forfeit, and a team leaving during the shop forfeits at once. A room keeps its slot
+  lease through the shop. `shop.enabled: false` keeps the direct round-to-round flow.
+  Shop settings apply to the next match on reload; the boss bar shows the shop countdown
+  and the ready count, and `MatchPhaseChangeEvent` reports `MatchPhase.SHOP`.
 - First-time lobby help covering tools, the shop and arena hazards, remembered across
   restarts. `/narena intro` shows it again in the lobby; servers using chest menus get
   the same help in chat.
@@ -38,7 +49,7 @@ Java 25, and does not run on Folia.
   armour, extra thrown-tool uses, potion effects and consumables. Purchases apply after
   round kits; undelivered purchases are refunded while the ledger exists. The new
   `ninjaarena.shop.use` permission defaults to true and is a child of `ninjaarena.play`.
-  Buying remains closed until the between-round shop phase is available.
+  Buying is open during the shop phase between rounds.
 
 - A prebuilt obsidian lobby, placed in `ninjaarena_lobby` the first time the plugin
   finds that world without it. Restarts and arena-world retirements leave the lobby

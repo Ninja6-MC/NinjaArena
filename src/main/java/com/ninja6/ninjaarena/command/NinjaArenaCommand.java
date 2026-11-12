@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.command;
 
 import static com.ninja6.ninjaarena.message.Messages.msg;
 
+import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.message.Keyed;
 import com.ninja6.ninjaarena.portal.PortalEntry;
 import com.ninja6.ninjaarena.texture.PlayerKey;
@@ -11,6 +12,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -38,6 +40,9 @@ public final class NinjaArenaCommand implements TabExecutor {
     private static final List<String> ROOM_ACTIONS = List.of("create", "settings", "invite", "accept", "kick",
             "start", "leave");
     private static final List<String> ROOM_SETTINGS = List.of("players", "teams", "team-size", "privacy");
+    /** The shop phase between rounds: {@code shop ready}. */
+    public static final String SHOP = "shop";
+    private static final String SHOP_USAGE = "shop ready";
     public static final String TEXTURES = "textures";
     public static final String ADMIN_ROUTE = "admin";
     private static final String LOBBY_USAGE = "admin lobby <edit|done|reset>";
@@ -55,6 +60,7 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route("accept", PLAY, "accept <host>"),
             new Route(ROOM, PLAY, ROOM_USAGE),
             new Route("map", PLAY, "map <list|set <arena>>"),
+            new Route(SHOP, PLAY, SHOP_USAGE),
             new Route("host", HOST, "host <arena>"),
             new Route("invite", HOST, "invite <player>"),
             new Route(ArenaCommand.NAME, ADMIN, ArenaCommand.NAME + " <subcommand>"),
@@ -80,9 +86,15 @@ public final class NinjaArenaCommand implements TabExecutor {
     private LobbyCommands lobby;
     private RoomCommands rooms;
     private Consumer<Player> intro;
+    private Function<Player, MatchService.Ready> shopReady;
 
     public void setIntro(Consumer<Player> intro) {
         this.intro = Objects.requireNonNull(intro, "intro");
+    }
+
+    /** The shop's Ready button, {@code MatchService#ready}; without it the shop route is unavailable. */
+    public void setShopReady(Function<Player, MatchService.Ready> shopReady) {
+        this.shopReady = shopReady;
     }
 
     /** Without it the room subcommands say the feature is unavailable. */
@@ -230,6 +242,21 @@ public final class NinjaArenaCommand implements TabExecutor {
                 }
                 case "map" -> map(sender, label, args);
                 case ROOM -> room(sender, label, args);
+                case SHOP -> {
+                    if (args.length != 2 || !args[1].equalsIgnoreCase("ready")) {
+                        usage(sender, label, route.usage());
+                    } else if (!(sender instanceof Player player)) {
+                        sender.sendMessage(msg("command.players-only"));
+                    } else if (shopReady == null) {
+                        unavailable(sender, msg("command.feature.shop"));
+                    } else {
+                        player.sendMessage(msg(switch (shopReady.apply(player)) {
+                            case READY -> "shop.ready";
+                            case ALREADY_READY -> "shop.already-ready";
+                            case NOT_IN_SHOP -> "shop.not-in-shop";
+                        }));
+                    }
+                }
                 case "pack" -> {
                     if (args.length == 2 && args[1].equalsIgnoreCase("status")) {
                         sender.sendMessage(msg("pack.status", "status", packStatus.get()));
@@ -501,6 +528,10 @@ public final class NinjaArenaCommand implements TabExecutor {
             }
             return args.length == 3 && args[1].equalsIgnoreCase("set") && sender.hasPermission(MAP_CHANGE)
                     && rooms != null ? ArenaCommand.matching(rooms.pickableMaps(), args[2]) : List.of();
+        }
+        if (args[0].equalsIgnoreCase(SHOP)) {
+            return args.length == 2 && sender.hasPermission(PLAY)
+                    && "ready".startsWith(args[1].toLowerCase(Locale.ROOT)) ? List.of("ready") : List.of();
         }
         if (args[0].equalsIgnoreCase(ROOM)) {
             if (!sender.hasPermission(PLAY)) {

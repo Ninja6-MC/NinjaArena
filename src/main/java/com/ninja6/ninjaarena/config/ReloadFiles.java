@@ -233,6 +233,8 @@ public final class ReloadFiles {
             case "match.overrun-limit-seconds" -> new double[] {0, 3600};
             case "match.rounds" -> new double[] {1, 25};
             case "match.extra-rounds" -> new double[] {0, 10};
+            case "shop.max-seconds", "shop.quick-start-seconds" -> new double[] {1, 3600};
+            case "shop.map-wait-limit-seconds" -> new double[] {0, 3600};
             case "points.player-kill", "points.enemy-kill-per-cost", "points.round-survive", "points.round-win"
                     -> new double[] {Integer.MIN_VALUE, Integer.MAX_VALUE};
             case "scoring.round-win-points", "scoring.player-kill-points" -> new double[] {0, Integer.MAX_VALUE};

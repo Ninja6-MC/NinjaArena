@@ -4,10 +4,14 @@ import com.ninja6.ninjaarena.match.MatchResult.Reason;
 import com.ninja6.ninjaarena.match.MatchResult.Standing;
 import com.ninja6.ninjaarena.match.MatchUpdate.Cause;
 import com.ninja6.ninjaarena.match.MatchUpdate.Closed;
+import com.ninja6.ninjaarena.match.MatchUpdate.MapReplay;
+import com.ninja6.ninjaarena.match.MatchUpdate.MapWait;
 import com.ninja6.ninjaarena.match.MatchUpdate.MatchEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.PhaseChanged;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerEliminated;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerLeft;
+import com.ninja6.ninjaarena.match.MatchUpdate.PlayerReady;
+import com.ninja6.ninjaarena.match.MatchUpdate.QuickStart;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundStarted;
 import com.ninja6.ninjaarena.event.EventSettings.Bonus;
@@ -22,6 +26,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
 /**
  * One match's round loop: phases, timers, who is alive, round results and the match result.
@@ -35,6 +40,16 @@ import java.util.UUID;
  * {@link MatchSettings#roundEndSeconds()}, and then to the next round or to MATCH_END,
  * which lasts {@link MatchSettings#matchEndSeconds()} before the match closes. Each call
  * to {@link #tick()} is one second.
+ *
+ * <p><b>Shop.</b> With the shop on ({@link ShopSettings#enabled()}), a round end that leads
+ * to another round, an extra round included, goes to SHOP first. It lasts
+ * {@link ShopSettings#maxSeconds()}, cut to {@link ShopSettings#quickStartSeconds()} once
+ * every player in the match is {@link #ready}. It never ends before the next map is ready
+ * ({@link #setMapReady}): past its time limit it waits for the map, and when the map is
+ * still not ready {@link ShopSettings#mapWaitLimitSeconds()} later, the round is played on
+ * the current arena after a reset ({@link MatchUpdate.MapReplay}). A round end that ends
+ * the match, by the last round or a forfeit, never has a shop, and a shop that loses every
+ * team but one to departures ends the match as a forfeit at once.
  *
  * <p><b>Winning a round.</b> The teams that started with players are the match's
  * <i>starting teams</i>. With two or more, a round is won by the last team with a player
@@ -78,6 +93,11 @@ public final class Match implements MatchView {
     private MatchResult result;
     private boolean closed;
     private final Bonus eventBonus;
+    private final ShopSettings shop;
+    /** Players ready in the current SHOP. */
+    private final Set<UUID> ready = new HashSet<>();
+    private boolean waitingForMap;
+    private BooleanSupplier mapReady = () -> true;
 
     /**
      * @param arena     the arena's name
@@ -90,7 +110,13 @@ public final class Match implements MatchView {
     }
 
     Match(String arena, List<List<UUID>> teams, MatchSettings settings, MatchStandings standings, Bonus eventBonus) {
+        this(arena, teams, settings, standings, eventBonus, ShopSettings.OFF);
+    }
+
+    Match(String arena, List<List<UUID>> teams, MatchSettings settings, MatchStandings standings, Bonus eventBonus,
+            ShopSettings shop) {
         this.eventBonus = eventBonus;
+        this.shop = Objects.requireNonNull(shop, "shop");
         this.arena = Objects.requireNonNull(arena, "arena");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.standings = Objects.requireNonNull(standings, "standings");
@@ -133,6 +159,14 @@ public final class Match implements MatchView {
         return updates;
     }
 
+    /**
+     * Whether the map for the next round is ready, asked while a SHOP is due to end. The
+     * default is always ready, so every round is played on this arena as before.
+     */
+    void setMapReady(BooleanSupplier mapReady) {
+        this.mapReady = Objects.requireNonNull(mapReady, "mapReady");
+    }
+
     /** Advances the match by one second. */
     public List<MatchUpdate> tick() {
         List<MatchUpdate> updates = new ArrayList<>();
@@ -173,6 +207,7 @@ public final class Match implements MatchView {
                     next(updates);
                 }
             }
+            case SHOP -> tickShop(updates);
             case MATCH_END -> {
                 if (--secondsLeft == 0) {
                     close(updates);
@@ -216,13 +251,72 @@ public final class Match implements MatchView {
             updates.add(new PlayerEliminated(player, team, Cause.LEFT, null));
         }
         updates.add(new PlayerLeft(player, team));
+        ready.remove(player);
         if (present.isEmpty()) {
             if (phase != MatchPhase.MATCH_END) {
                 endMatch(Reason.ABANDONED, updates);
             }
             close(updates);
+        } else if (phase == MatchPhase.SHOP) {
+            if (startingTeams.size() >= 2 && remainingTeams().size() < 2) {
+                endMatch(Reason.FORFEIT, updates);
+            } else {
+                quickStart(updates);
+            }
         }
         return updates;
+    }
+
+    /**
+     * Marks a player in the match ready in the current SHOP. Once everyone in the match is
+     * ready, the time left is cut to {@link ShopSettings#quickStartSeconds()}. Does nothing
+     * outside SHOP, for a player not in the match, or for one already ready.
+     */
+    public List<MatchUpdate> ready(UUID player) {
+        List<MatchUpdate> updates = new ArrayList<>();
+        if (closed || phase != MatchPhase.SHOP || !present.contains(player) || !ready.add(player)) {
+            return updates;
+        }
+        updates.add(new PlayerReady(player, ready.size(), present.size()));
+        quickStart(updates);
+        return updates;
+    }
+
+    /** In SHOP, cuts the time left to the quick start once everyone is ready. */
+    private void quickStart(List<MatchUpdate> updates) {
+        if (waitingForMap || !ready.containsAll(present)) {
+            return;
+        }
+        if (secondsLeft > shop.quickStartSeconds()) {
+            secondsLeft = shop.quickStartSeconds();
+            updates.add(new QuickStart(secondsLeft));
+        }
+    }
+
+    private void tickShop(List<MatchUpdate> updates) {
+        if (!waitingForMap) {
+            if (--secondsLeft > 0) {
+                return;
+            }
+            if (mapReady.getAsBoolean()) {
+                startRound(updates);
+            } else if (shop.mapWaitLimitSeconds() == 0) {
+                replay(updates);
+            } else {
+                waitingForMap = true;
+                secondsLeft = shop.mapWaitLimitSeconds();
+                updates.add(new MapWait(secondsLeft));
+            }
+        } else if (mapReady.getAsBoolean()) {
+            startRound(updates);
+        } else if (--secondsLeft == 0) {
+            replay(updates);
+        }
+    }
+
+    private void replay(List<MatchUpdate> updates) {
+        updates.add(new MapReplay());
+        startRound(updates);
     }
 
     /**
@@ -261,6 +355,8 @@ public final class Match implements MatchView {
 
     private void startRound(List<MatchUpdate> updates) {
         round++;
+        ready.clear();
+        waitingForMap = false;
         alive.clear();
         alive.addAll(present);
         roundElapsed = 0;
@@ -298,11 +394,22 @@ public final class Match implements MatchView {
         if (startingTeams.size() >= 2 && remainingTeams().size() < 2) {
             endMatch(Reason.FORFEIT, updates);
         } else if (round < settings.rounds()) {
-            startRound(updates);
+            nextRound(updates);
         } else if (leaders().size() > 1 && round < settings.rounds() + settings.extraRounds()) {
-            startRound(updates);
+            nextRound(updates);
         } else {
             endMatch(Reason.COMPLETED, updates);
+        }
+    }
+
+    /** Another round follows: the shop first when it is on, otherwise the round at once. */
+    private void nextRound(List<MatchUpdate> updates) {
+        if (shop.enabled()) {
+            ready.clear();
+            waitingForMap = false;
+            setPhase(MatchPhase.SHOP, shop.maxSeconds(), updates);
+        } else {
+            startRound(updates);
         }
     }
 
@@ -319,6 +426,8 @@ public final class Match implements MatchView {
         table.sort(Comparator.comparingInt(Standing::score).reversed().thenComparingInt(Standing::team));
         result = new MatchResult(arena, reason, winners, table, results);
         alive.clear();
+        ready.clear();
+        waitingForMap = false;
         roundElapsed = 0;
         setPhase(MatchPhase.MATCH_END, settings.matchEndSeconds(), updates);
         updates.add(new MatchEnded(result));
@@ -401,6 +510,21 @@ public final class Match implements MatchView {
     @Override
     public MatchSettings settings() {
         return settings;
+    }
+
+    @Override
+    public ShopSettings shopSettings() {
+        return shop;
+    }
+
+    @Override
+    public List<UUID> readyPlayers() {
+        return phase == MatchPhase.SHOP ? inRosterOrder(ready) : List.of();
+    }
+
+    @Override
+    public boolean isWaitingForMap() {
+        return phase == MatchPhase.SHOP && waitingForMap;
     }
 
     @Override

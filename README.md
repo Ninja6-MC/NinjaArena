@@ -179,6 +179,8 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `room kick <player>` | Host | Remove a player from the room to the lobby |
 | `room start [host]` | Host, or `ninjaarena.admin` for any room | Start the room's match |
 | `room leave` | `ninjaarena.play` | Leave the room and stay in the lobby |
+| `map <list\|set <arena>>` | `ninjaarena.play`; `set` needs `ninjaarena.map.change` | List pickable maps, or change your room's map while it is in the lobby |
+| `shop ready` | `ninjaarena.play` | Say you are ready in the [shop between rounds](#shop-phase) |
 | `host <arena>` | `ninjaarena.host` | Open a free arena for a hosted match without moving |
 | `invite <player>` | `ninjaarena.host` | Invite an online player with a plain accept command |
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
@@ -333,8 +335,8 @@ give either `material` or a registered plugin `id`, plus an `amount` within its 
 limit. The bundled file includes examples and comments for each key.
 
 Buying requires `ninjaarena.shop.use`, default true and inherited by `ninjaarena.play`.
-The service is closed by default until the between-round shop phase is implemented;
-there is no buy command or shop screen yet. A match keeps its starting catalogue.
+It is open only while the buyer's match is in its [shop phase](#shop-phase); there is no
+buy command or shop screen yet. A match keeps its starting catalogue.
 Purchases apply after its round kit is rebuilt, including delayed respawns, and last
 one round. Potion effects and extra-use bonuses are explicitly cleared at round end;
 armour and consumables disappear at the next kit rebuild.
@@ -343,6 +345,42 @@ Pending purchases that cannot be delivered at round start (including players sti
 the death screen) are cancelled and refunded to an existing ledger. Failed item delivery,
 such as a full inventory, is also refunded. Leaving drops both the ledger and purchases;
 a refund never recreates a departed player's ledger.
+
+## Shop phase
+
+With `shop.enabled: true`, the default, a round end that another round follows, an extra
+round included, leads to a SHOP phase before the next prep. The last round, the final
+extra round and a forfeit end the match without one. Everyone still in the match goes to
+the lobby world's shop area, eliminated players out of spectator mode and players on the
+death screen when they respawn, and so do the match's spectators, who may fly within the
+lobby bounds meanwhile. They stay in the match: inventories stay locked and untouched,
+snapshots are kept, nobody takes damage and points are not lost. The next prep brings
+everyone back to their team spawns, and spectators to the arena. While the shop is open
+nobody new is let in to watch.
+
+The shop lasts `shop.max-seconds` (default 45). `/narena shop ready` says a player is
+done; once everyone in the match is ready, the time left is cut to
+`shop.quick-start-seconds` (default 5), if it is shorter. The boss bar counts down and
+shows how many are ready.
+
+The shop never closes before the map for the next round is ready. Nothing prepares
+another map yet, so today the map is always ready and every round is played on the
+match's arena as before. Once a later feature does, a shop whose time is up waits for the
+map, and when it is still not ready `shop.map-wait-limit-seconds` (default 30) after the
+time limit, the round is played on the current arena, reset from its saved copy first. 30
+seconds caps the whole pause between rounds at well over a minute without leaving players
+waiting on a map that is stuck; 0 replays at the time limit.
+
+Leaving during the shop works as in a round: `/narena leave` goes to the lobby, a
+teleport by another plugin or a disconnect takes the player out of the match, and leaving
+drops their points and refunds nothing into a ledger they no longer have. When only one
+team is left, the match ends at once as a forfeit. A room keeps its arena slot lease
+through the shop until its match closes; matches from waiting rooms and the hub, which
+hold no lease, work the same way. `shop.enabled: false` goes straight from one round to
+the next as before, and buying never opens.
+
+Other plugins see the phase as `MatchPhase.SHOP` in `MatchPhaseChangeEvent`: ROUND_END
+to SHOP, with the players already in the shop area, then SHOP to PREP.
 
 ## Safe configuration reload
 
@@ -366,6 +404,7 @@ match players or restarts a match.
 | Waiting-room minimum, countdown and radius | Apply immediately to waiting rooms and the hub; a viable countdown keeps its remaining length. A new minimum can cancel or start a countdown, and players outside a reduced radius leave through normal restore. |
 | Default lobby and player caps | Apply immediately. The lobby applies to the next portal entry; players already waiting stay where they are. A lower cap turns away later arrivals but never removes waiting players. |
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
 | Player-built portals | Apply to the next portal lit; the curtain colour changes immediately. Portals already built stay, with their own frame block. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
@@ -516,8 +555,10 @@ spot there is skipped for the player's respawn point, and a respawn point there 
 main world's spawn. A match player teleported into the lobby world, by NinjaArena or by
 any other plugin, leaves the match and is restored, as with a teleport to any other
 world; only a room's own players are moved between the two worlds without leaving their
-match. Portals cannot be created in either world. A claimed season trophy is delivered
-only once the player is outside both worlds and not a lobby member.
+match, and a match's shop phase moves its players and spectators to the lobby world and
+back without taking them out of it. Portals cannot be created in either world. A claimed
+season trophy is delivered only once the player is outside both worlds and not a lobby
+member.
 
 See the [plugin compatibility audit](docs/plugin-compatibility.md) for setup and
 exclusions when running NinjaArena alongside other server plugins.
@@ -727,8 +768,9 @@ inside the arena, spectators wait near their own team base.
 Spectators can detach the camera to move within that limit or choose another teammate;
 the tether reattaches only after an invalid target or movement outside the allowed area.
 
-The next round returns spectators to Adventure mode at their team base. A player still
-on the death screen at round start is placed and readied when they respawn. Use
+The next round returns spectators to Adventure mode at their team base; with the
+[shop phase](#shop-phase) on, that happens when the shop opens, in its area. A player
+still on the death screen at round start is placed and readied when they respawn. Use
 `/narena leave` to leave while spectating for the lobby; leaving the lobby then returns the
 saved belongings, game mode and location. Quitting puts the player back in the lobby on
 their next join.
@@ -740,10 +782,12 @@ Adventure mode while their snapshot remains available for a retry.
 
 During a match, the bossbar shows the round and the time left in preparation or combat.
 Overrun turns it red and shows its remaining time; an unlimited Overrun keeps a full bar
-without a countdown. Between rounds it shows the next-round countdown. The actionbar
-shows each starting team's points and the number of living enemies currently in play,
-including enemies carried over from an earlier round; it is not a fixed wave total.
-Eliminated teammates keep seeing this feedback while spectating.
+without a countdown. Between rounds it shows the next-round countdown. During a shop
+phase it turns green and shows the time left and how many players are ready, or the wait
+for the next map. The actionbar shows each starting team's points and the number of
+living enemies currently in play, including enemies carried over from an earlier round;
+it is not a fixed wave total. Eliminated teammates keep seeing this feedback while
+spectating.
 
 Titles mark preparation, the start of combat and the round result. A quiet cue announces
 each successful enemy spawn to that match, and a level-up sound marks each round end,
@@ -761,9 +805,10 @@ table is shown to the match's online players before they go back to the lobby.
 
 Other features can award team points on the server thread through
 `plugin.scores().addPoints(match, team, points)`, using the live `MatchView` from
-`plugin.matches()`. Awards are accepted from PREP through ROUND_END for teams that started
-with players. Totals stop at `Integer.MAX_VALUE`. Once the match ends its result keeps the
-final scores, further awards are refused, and a new match starts at zero.
+`plugin.matches()`. Awards are accepted from PREP through ROUND_END and SHOP for teams
+that started with players. Totals stop at `Integer.MAX_VALUE`. Once the match ends its
+result keeps the final scores, further awards are refused, and a new match starts at
+zero.
 
 ## Player points
 
@@ -782,7 +827,7 @@ Zero disables each award and negatives become zero. Reloaded values apply to new
 
 Personal points carry over across rounds, including extra rounds, and stop at
 `Integer.MAX_VALUE`. Leaving discards that player's points; match end clears the ledger.
-Spending and the round shop are planned separately.
+Points are spent in the [shop phase](#shop-phase) between rounds.
 
 ## Player stats
 
