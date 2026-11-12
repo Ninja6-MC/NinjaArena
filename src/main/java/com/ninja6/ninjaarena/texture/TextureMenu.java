@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.texture;
 
+import com.ninja6.ninjaarena.kit.PluginMenuHolder;
 import com.ninja6.ninjaarena.resourcepack.BedrockSelections.Quality;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -44,7 +45,7 @@ public final class TextureMenu {
     }
 
     /** Owns one opening of the menu. A stale holder is any that is not the player's current one. */
-    public static final class Holder implements InventoryHolder {
+    public static final class Holder implements PluginMenuHolder {
         private final UUID owner;
         private final long token;
         private Inventory inventory;
