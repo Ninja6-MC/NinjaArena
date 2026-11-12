@@ -215,6 +215,17 @@ class HostingServiceTest extends MatchFixture {
     }
 
     @Test
+    void anArenaARoomHoldsOrWaitsForCannotBeHosted() {
+        hosting.setRoomClaims("dojo"::equals);
+        hosting.host(player(ALICE), "dojo");
+        assertTrue(players.get(ALICE).messages.getLast().contains("not free"));
+        assertFalse(hosting.isReserved("dojo"));
+        hosting.setRoomClaims(arena -> false);
+        hosting.host(player(ALICE), "dojo");
+        assertTrue(hosting.isReserved("DOJO"));
+    }
+
+    @Test
     void acceptanceBeforeHostArrivalUsesSnapshotAndRestoreAndGroupsAsRoomGrows() throws Exception {
         inviteBob();
         hosting.accept(player(BOB), "Alice");

@@ -96,6 +96,17 @@ class PortalEntryTest {
     }
 
     @Test
+    void anArenaARoomHoldsOrWaitsForTurnsPortalPlayersAway() {
+        entry.setRoomClaims("dojo"::equals);
+        Optional<Refusal> refusal = entry.admit(player(true), LOBBY);
+        assertEquals(Reason.UNAVAILABLE, reason(refusal));
+        assertEquals("Arena dojo is reserved for a room right now.", refusal.get().message());
+        assertEquals(0, captures);
+        entry.setRoomClaims(arena -> false);
+        assertEquals(Optional.empty(), entry.check(player(true), LOBBY));
+    }
+
+    @Test
     void withoutThePlayNodeNothingIsSaved() {
         assertEquals(Reason.NO_PERMISSION, reason(entry.admit(player(false), LOBBY)));
         assertEquals(0, captures);

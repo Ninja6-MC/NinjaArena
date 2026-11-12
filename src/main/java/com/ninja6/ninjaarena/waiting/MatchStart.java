@@ -7,7 +7,7 @@ import java.util.UUID;
  * Takes over the players of a waiting room whose start countdown has finished. This is where
  * the match engine begins. By the time it is called the players are no longer in the waiting
  * room: leaving it no longer restores them, so whatever is called here owns them from now on,
- * including sending them home. Server thread only.
+ * including sending them back to the lobby or home. Server thread only.
  */
 @FunctionalInterface
 public interface MatchStart {

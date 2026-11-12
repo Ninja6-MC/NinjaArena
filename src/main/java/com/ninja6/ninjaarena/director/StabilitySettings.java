@@ -4,14 +4,13 @@ import org.bukkit.configuration.ConfigurationSection;
 
 /**
  * Limits that keep the server stable under load, read from the {@code stability} section of
- * {@code config.yml}: how many matches run at once, the enemy caps, the spawn rate and the
- * tick-time guard. Out-of-range values are clamped and non-finite ones fall back to the
+ * {@code config.yml}: the enemy caps, the spawn rate and the tick-time guard. How many
+ * matches run at once is {@code arenas.max-active}, read by {@code MaxActive}. Out-of-range values are clamped and non-finite ones fall back to the
  * default.
  *
  * <p>The tick-time thresholds are kept in order: {@code resumeBelowMspt} is lowered to
  * {@code pauseAboveMspt} and {@code dropTierAboveMspt} raised to it when they cross it.
  *
- * @param maxMatches        matches running at once; a waiting room holds its start until one ends
  * @param matchMobCap       enemies alive at once in one match
  * @param globalMobCap      enemies alive at once across every match
  * @param spawnsPerTick     enemies spawned in one server tick across every match
@@ -22,20 +21,18 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param tierRecoverySeconds how long the intensity stays a tier lower once spawning resumes
  *                          after a tier drop
  */
-public record StabilitySettings(int maxMatches, int matchMobCap, int globalMobCap, int spawnsPerTick,
+public record StabilitySettings(int matchMobCap, int globalMobCap, int spawnsPerTick,
         double pauseAboveMspt, double dropTierAboveMspt, double resumeBelowMspt, double intensityTier,
         int tierRecoverySeconds) {
 
-    static final int MAX_MATCHES = 100;
     static final int MAX_MOBS = 1000;
     static final int MAX_SPAWNS_PER_TICK = 100;
     static final double MAX_MSPT = 1000;
     static final int MAX_RECOVERY_SECONDS = 600;
 
-    public static final StabilitySettings DEFAULTS = new StabilitySettings(4, 25, 80, 4, 40, 45, 35, 0.25, 30);
+    public static final StabilitySettings DEFAULTS = new StabilitySettings(25, 80, 4, 40, 45, 35, 0.25, 30);
 
     public StabilitySettings {
-        maxMatches = Math.clamp(maxMatches, 1, MAX_MATCHES);
         matchMobCap = Math.clamp(matchMobCap, 1, MAX_MOBS);
         globalMobCap = Math.clamp(globalMobCap, 1, MAX_MOBS);
         spawnsPerTick = Math.clamp(spawnsPerTick, 1, MAX_SPAWNS_PER_TICK);
@@ -53,7 +50,6 @@ public record StabilitySettings(int maxMatches, int matchMobCap, int globalMobCa
         }
         StabilitySettings d = DEFAULTS;
         return new StabilitySettings(
-                section.getInt("max-concurrent-matches", d.maxMatches()),
                 section.getInt("match-mob-cap", d.matchMobCap()),
                 section.getInt("global-mob-cap", d.globalMobCap()),
                 section.getInt("spawns-per-tick", d.spawnsPerTick()),

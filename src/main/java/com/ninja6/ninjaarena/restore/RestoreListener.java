@@ -29,11 +29,16 @@ public final class RestoreListener implements Listener {
 
     /** @param busy whether the player is in a match, a waiting room, the hub or spectating */
     public RestoreListener(Plugin plugin, RestoreService restores, Predicate<UUID> busy) {
+        this(plugin, restores, busy, JoinRestore.Rejoin.NONE);
+    }
+
+    /** @param rejoin who goes back to the lobby on joining rather than home */
+    public RestoreListener(Plugin plugin, RestoreService restores, Predicate<UUID> busy, JoinRestore.Rejoin rejoin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.restores = Objects.requireNonNull(restores, "restores");
         this.joinRestore = new JoinRestore(restores,
                 (ticks, task) -> plugin.getServer().getScheduler().runTaskLater(plugin, task, ticks),
-                id -> plugin.getServer().getPlayer(id), busy);
+                id -> plugin.getServer().getPlayer(id), busy, rejoin);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

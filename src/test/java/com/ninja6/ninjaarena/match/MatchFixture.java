@@ -74,6 +74,8 @@ abstract class MatchFixture {
         boolean online = true;
         boolean dead;
         boolean canSpectate;
+        /** Permission nodes the player holds, besides spectating through {@link #canSpectate}. */
+        final java.util.Set<String> permissions = new java.util.HashSet<>();
         boolean canShop;
         GameMode gameMode = GameMode.SURVIVAL;
         Entity spectatorTarget;
@@ -86,6 +88,7 @@ abstract class MatchFixture {
         PlayerInventory inventory;
         InventoryView view;
         final List<String> messages = new ArrayList<>();
+        final List<Component> messageComponents = new ArrayList<>();
         final List<String> actionBars = new ArrayList<>();
         final List<Component> actionBarComponents = new ArrayList<>();
         final List<Title> titles = new ArrayList<>();
@@ -205,6 +208,9 @@ abstract class MatchFixture {
                         Fake fake = players.get((UUID) args[0]);
                         yield fake != null && fake.online ? fake.proxy : null;
                     }
+                    case "getPlayerExact" -> players.values().stream()
+                            .filter(fake -> fake.online && fake.name.equalsIgnoreCase((String) args[0]))
+                            .map(fake -> fake.proxy).findFirst().orElse(null);
                     case "getScheduler" -> scheduler;
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
@@ -280,7 +286,8 @@ abstract class MatchFixture {
                     case "isDead" -> fake.dead;
                     case "getKiller" -> fake.killer;
                     case "hasPermission" -> fake.canSpectate && "ninjaarena.spectate".equals(args[0])
-                            || fake.canShop && "ninjaarena.shop.use".equals(args[0]);
+                            || fake.canShop && "ninjaarena.shop.use".equals(args[0])
+                            || fake.permissions.contains(String.valueOf(args[0]));
                     case "getGameMode" -> fake.gameMode;
                     case "getSpectatorTarget" -> fake.spectatorTarget;
                     case "setSpectatorTarget" -> {
@@ -340,6 +347,7 @@ abstract class MatchFixture {
                         yield true;
                     }
                     case "sendMessage" -> {
+                        fake.messageComponents.add((Component) args[0]);
                         fake.messages.add(PlainTextComponentSerializer.plainText().serialize((Component) args[0]));
                         yield null;
                     }

@@ -13,6 +13,18 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Host-started rooms. `/narena room create` opens a room in the lobby; its host sets the
+  required player count, teams, team size and privacy with `/narena room settings`,
+  invites with a clickable join button, removes players with a button or
+  `/narena room kick`, and starts the match with `/narena room start` once enough have
+  joined. Nothing starts a room's match by itself; an admin may also press start. When
+  the host leaves, the longest-waiting player with the new `ninjaarena.room.create`
+  permission takes over, or the room closes. That permission defaults to everyone and is
+  granted by `ninjaarena.play`, so servers without ops can play.
+- Arena slot leases. A room leases a slot for its hand-built arena when it is created and
+  keeps it through every round to the end of the match; while every slot is leased, more
+  rooms queue and see their place. Portals, the shared hub and `/narena host` leave the
+  arenas rooms hold or wait for alone.
 - A validated `shop.yml` catalogue with personal-point purchases, per-round buy limits,
   armour, extra thrown-tool uses, potion effects and consumables. Purchases apply after
   round kits; undelivered purchases are refunded while the ledger exists. The new
@@ -36,7 +48,7 @@ Java 25, and does not run on Folia.
 - A second void world, `ninjaarena_lobby`, created or loaded at startup beside the
   arena world. It is saved normally and never unloaded, keeps inventories, has no
   mobs, weather or day cycle, and blocks environmental block changes at all times.
-  Nothing sends players there yet. A teleport into it takes a match player out of the
+  Rooms bring players there. Any other teleport into it takes a match player out of the
   match. Portals cannot be created in it. World-manager plugins must leave both worlds
   alone (see the plugin compatibility audit).
 
@@ -105,6 +117,16 @@ Java 25, and does not run on Folia.
   rejecting `config.yml` or `kits.yml` stay in English.
 
 ### Changed
+- `stability.max-concurrent-matches` is now `arenas.max-active` (default 4), at most the
+  cells of the arena grid. It counts room leases and waiting-room matches alike, applies
+  on reload, and a lower value never ends a lease already granted. The old name is still
+  read, with a warning, when the new one is not set.
+- The end of a match, and `/narena leave` from a room, a match or spectating, now lead to
+  the lobby with the snapshot kept rather than home; `/narena leave` from the lobby goes
+  home. A player who quits from the lobby, a room, a match or spectating rejoins in the
+  lobby while the server keeps running. A teleport out of the plugin's worlds still sends
+  players home, and waiting rooms and the shared hub keep their countdown.
+
 - No snapshot is taken in the arena or lobby world, and a restore never lands in either:
   entering an arena from them is refused, and a saved spot or respawn point there is
   skipped for the next fallback without reopening the arena world.

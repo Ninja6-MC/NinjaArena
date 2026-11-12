@@ -248,9 +248,9 @@ public final class ArenaWorld {
      * so the reset a reopen runs happens here rather than at the next match start, and it is
      * not retired again while the hold lasts. Running the handle again does nothing.
      *
-     * <p>Nothing takes a hold yet. Waiting rooms need none: their players stand in the world,
-     * which already keeps it open. A room that exists before anyone stands in the arena world
-     * takes a hold when the first one is created and runs it when the last one closes.
+     * <p>Rooms take one: their players wait in the lobby world, so the rooms take a hold when
+     * the first one opens and run it when the last one closes. Waiting rooms need none: their
+     * players stand in the world, which already keeps it open.
      *
      * @throws IllegalStateException if the world cannot be opened; no hold is kept then
      */
