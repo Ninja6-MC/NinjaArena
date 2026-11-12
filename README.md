@@ -395,6 +395,7 @@ match players or restarts a match.
 | Grid cell size and world border | Apply only before any arena exists and while no match runs. Otherwise refuse the change and require a restart. |
 | Placeholder cache | `placeholders.cache-seconds` applies to cached stats immediately. |
 | Stats season | A new `stats.season` archives the current season and starts it. Other stats settings require a restart. |
+| Sounds | `sounds.*` applies immediately, including to running matches. |
 | Messages | `messages.yml` applies immediately to every later message. Malformed YAML rejects the whole reload; a missing or unreadable key uses its default with one warning. |
 
 The reply separates changed settings, postponed changes (next match or round), and refused
@@ -407,6 +408,18 @@ providers declare stack limits of 64 for shuriken and smoke bombs and 1 for dash
 providers can declare a safe limit with `kitItems.register(id, maxStackSize, provider)`;
 the existing two-argument registration conservatively permits one item during reload
 validation. Item providers still resolve at round-kit application time.
+
+### Sounds
+
+`sounds:` configures `room-join`, `ready`, `match-start`, `shop-buy`,
+`cooldown-ready`, `enemy-spawn`, `round-end` and `hazard-warning`. Each has an
+`enabled` switch, a vanilla namespaced `sound`, `volume` (0 to 1) and `pitch`
+(0.5 to 2). Invalid fields warn once per load and use their bundled default.
+Reload applies immediately. `room-join` plays when someone joins your room,
+and reaches its members. Match cues include spectators. Purchases and cooldown
+completions reach only their owner. Cooldown resets at round boundaries or leaving
+are silent. `hazard-warning` is reserved
+for the hazard features and currently has no caller.
 
 ## Player messages
 

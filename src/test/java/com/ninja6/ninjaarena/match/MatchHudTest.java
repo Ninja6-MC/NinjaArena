@@ -79,6 +79,20 @@ class MatchHudTest extends MatchFixture {
     }
 
     @Test
+    void cooldownsAreCheckedOnlyOnTheScheduledRefresh() {
+        useHud(SETTINGS);
+        var checked = new ArrayList<MatchView>();
+        hud.setCooldownCheck(checked::add);
+        startTwoOnTwo();
+        assertTrue(checked.isEmpty());
+        hud.tick();
+        assertEquals(List.of(matches.matchOf(ALICE).orElseThrow()), checked);
+        matches.tick();
+        matches.tick();
+        assertEquals(1, checked.size());
+    }
+
+    @Test
     void timerTracksPrepCombatAndFiniteOverrunWithoutAdvancingTheRound() {
         useHud(SETTINGS);
         startTwoOnTwo();

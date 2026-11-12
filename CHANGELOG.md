@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Configurable personal sound cues for rooms, ready, match starts, purchases, tool
+  cooldown completions, enemy spawns and round results, plus a future hazard warning.
+  Each cue can be disabled and reload applies immediately to running matches.
 - Room hosts with `ninjaarena.map.change` can choose a hand-built map with
   `/narena map set <arena>`; room members can browse `/narena map list`. Admins mark
   arenas with `/narena arena pickable <arena> <on|off>`, stored as optional
