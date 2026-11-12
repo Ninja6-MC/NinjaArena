@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.command;
 
+import java.util.List;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -26,6 +27,13 @@ public interface RoomCommands {
      * which only an admin may do for someone else's room.
      */
     void start(CommandSender sender, String host);
+
+    void mapSet(Player player, String arena);
+
+    void mapList(Player player);
+
+    /** Arena names offered for room map selection. */
+    List<String> pickableMaps();
 
     /** Leaves the room and stays in the lobby. */
     void leave(Player player);

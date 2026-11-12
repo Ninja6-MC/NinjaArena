@@ -501,7 +501,7 @@ class NinjaArenaCommandTest {
         messages.clear();
         run(player, "arena list");
         assertEquals(List.of("You do not have permission to use this command."), messages);
-        assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room", "shop"),
+        assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room", "map", "shop"),
                 command.onTabComplete(player, null, "narena", new String[] {""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
     }
@@ -590,16 +590,17 @@ class NinjaArenaCommandTest {
                 "/ninjaarena accept <host> - accept an invitation to the Arena",
                 "/ninjaarena room [create|settings|invite|accept|kick|start|leave] - open a room, invite players and"
                         + " start its match",
+                "/ninjaarena map <list|set <arena>> - list pickable maps or change your room map",
                 "/ninjaarena shop ready - say you are ready in the shop between rounds"), messages);
 
         messages.clear();
         Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
         run(host, "HELP");
-        assertEquals(10, messages.size());
+        assertEquals(11, messages.size());
         assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena host <arena>")));
         assertTrue(messages.stream().anyMatch(message -> message.startsWith("/narena invite <player>")));
         assertFalse(messages.stream().anyMatch(message -> message.contains("admin") || message.contains("portal")));
-        assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room", "shop", "host", "invite"),
+        assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room", "map", "shop", "host", "invite"),
                 command.onTabComplete(host, null, "narena", new String[] {""}));
         assertEquals(List.of("help", "host"), command.onTabComplete(host, null, "narena", new String[] {"H"}));
         assertEquals(List.of("accept"), command.onTabComplete(player, null, "narena", new String[] {"AC"}));
@@ -730,9 +731,32 @@ class NinjaArenaCommandTest {
     }
 
     @Test
+    void pickableCommandPersistsTheFlagAndCompletesItsArguments() throws Exception {
+        CommandSender admin = console(true);
+        run(admin, "arena create dojo");
+        run(admin, "arena pickable dojo on");
+        assertTrue(registry.get("dojo").orElseThrow().pickable());
+        run(admin, "arena edit dojo off");
+        run(admin, "arena info dojo");
+        assertTrue(messages.contains("Pickable: true"));
+        run(admin, "arena pickable dojo off");
+        assertFalse(registry.get("dojo").orElseThrow().pickable());
+        assertFalse(new ArenaStore(dir.resolve("arenas.yml")).load().getFirst().pickable());
+        run(admin, "arena pickable dojo yes");
+        assertEquals("Usage: /narena arena pickable <arena> <on|off>", messages.getLast());
+        assertEquals(List.of("dojo"), command.onTabComplete(admin, null, "narena",
+                new String[] {"arena", "pickable", "d"}));
+        assertEquals(List.of("on", "off"), command.onTabComplete(admin, null, "narena",
+                new String[] {"arena", "pickable", "dojo", ""}));
+    }
+
+    @Test
     void roomSubcommandsDispatchOnlyAfterPermissionPlayerAndArityChecks() {
         List<String> calls = new ArrayList<>();
         command.setRooms(new RoomCommands() {
+            @Override public void mapSet(Player player, String arena) { calls.add("map " + arena); }
+            @Override public void mapList(Player player) { calls.add("maps"); }
+            @Override public List<String> pickableMaps() { return List.of("garden"); }
             @Override public void show(Player player) { calls.add("show"); }
             @Override public void create(Player player) { calls.add("create"); }
             @Override public void settings(Player player, String setting, String value) {
@@ -744,7 +768,26 @@ class NinjaArenaCommandTest {
             @Override public void start(CommandSender sender, String host) { calls.add("start " + host); }
             @Override public void leave(Player player) { calls.add("leave"); }
         });
+        Player chooser = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.MAP_CHANGE);
+        run(chooser, "MAP SET garden");
+        run(chooser, "map list");
+        assertEquals(List.of("map garden", "maps"), calls);
+        calls.clear();
         Player player = playerWithPlay();
+        run(player, "map set garden");
+        assertTrue(calls.isEmpty());
+        assertEquals("You do not have permission to change your room's map.", messages.getLast());
+        messages.clear();
+        for (String line : List.of("map", "map set", "map list extra", "map set garden extra", "map unknown")) {
+            run(chooser, line);
+            assertTrue(messages.getLast().startsWith("Usage: /narena map"));
+        }
+        assertTrue(calls.isEmpty());
+        messages.clear();
+        assertEquals(List.of("garden"), command.onTabComplete(chooser, null, "narena",
+                new String[] {"map", "set", ""}));
+        assertEquals(List.of("list"), command.onTabComplete(player, null, "narena", new String[] {"map", ""}));
+        assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"map", "set", ""}));
         for (String line : List.of("room", "ROOM create", "room settings", "room settings privacy invite",
                 "room invite", "room invite Bob", "room accept Alice", "room kick Bob", "room start",
                 "room start Alice", "room leave")) {

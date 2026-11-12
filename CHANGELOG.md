@@ -13,6 +13,11 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Room hosts with `ninjaarena.map.change` can choose a hand-built map with
+  `/narena map set <arena>`; room members can browse `/narena map list`. Admins mark
+  arenas with `/narena arena pickable <arena> <on|off>`, stored as optional
+  `pickable: true` in `arenas.yml` format 1. Map changes move the room's slot lease,
+  adjust its team count and tell every member who changed it and its queue position.
 - A shop phase between rounds. After each round that another round follows, extra
   rounds included, players, eliminated players and spectators go to the lobby world's
   shop area, stay in the match with their inventory, snapshot and points, and come back

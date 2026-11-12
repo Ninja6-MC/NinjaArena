@@ -70,6 +70,7 @@ help:
   textures: "choose Standard or Detailed ninja tool textures"
   intro: "show the lobby introduction again"
   accept: "accept an invitation to the Arena"
+  map: "list pickable maps or change your room map"
   room: "open a room, invite players and start its match"
   shop: "say you are ready in the shop between rounds"
   host: "open a match in the Arena"
@@ -93,6 +94,7 @@ arena:
   info:
     header: "<gray>Arena <arena>: <status>"
     cell: "<gray>Cell <cell> (<cell-bounds>)"
+    pickable: "<gray>Pickable: <pickable>"
     bounds: "<gray>Bounds: <bounds>"
     waiting-room: "<gray>Waiting room: <point>"
     team-spawn: "<gray>Team <team> spawn: <point>"
@@ -104,6 +106,7 @@ arena:
     incomplete-one: "incomplete (1 problem)"
     incomplete: "incomplete (<problems> problems)"
     unknown: "unknown"
+  pickable-set: "<green>Arena <arena> pickable: <pickable>."
   edit-on: "<green>Arena <arena> is in edit mode: the arena world saves and the arena takes no matches."
   edit-saved: "<green>Arena <arena> saved and ready for matches."
   edit-incomplete: "<yellow>Arena <arena> saved and left edit mode, but it cannot host a match yet:"
@@ -435,6 +438,17 @@ lobby:
 # reason. The button texts are clickable: they run a room subcommand. <kick>, <invite>,
 # <accept> and <start> are those buttons, or nothing where none applies.
 room:
+  map-no-permission: "<red>You do not have permission to change your room's map."
+  map-playing: "<red>The room's map cannot change while it is playing."
+  map-unknown: "<red>No arena called <arena>."
+  map-not-pickable: "<red>Arena <arena> is not pickable."
+  map-too-few-teams: "<red>Arena <arena> needs at least two team spawns to be chosen."
+  map-already: "<yellow>The room is already on map <arena>."
+  map-changed: "<green><player> changed the room's map from <old> to <arena>."
+  map-list-header: "<gold>Pickable maps:"
+  map-list-empty: "<yellow>No maps are pickable."
+  map-list-current: "<green>- <arena> (current)"
+  map-list-entry: "<gray>- <arena>"
   no-permission: "<red>You do not have permission to open a room."
   busy: "Leave your match, waiting room or spectating first."
   refused: "<red><message>"
