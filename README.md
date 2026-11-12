@@ -415,8 +415,8 @@ validation. Item providers still resolve at round-kit application time.
 `cooldown-ready`, `enemy-spawn`, `round-end` and `hazard-warning`. Each has an
 `enabled` switch, a vanilla namespaced `sound`, `volume` (0 to 1) and `pitch`
 (0.5 to 2). Invalid fields warn once per load and use their bundled default.
-Reload applies immediately. `room-join` plays when someone joins your room,
-and reaches its members. Match cues include spectators. Purchases and cooldown
+Reload applies immediately. `room-join` plays when someone joins your room, by
+`room accept`, `/narena accept` or a play portal, and reaches its members. Match cues include spectators. Purchases and cooldown
 completions reach only their owner. Cooldown resets at round boundaries or leaving
 are silent. `hazard-warning` is reserved
 for the hazard features and currently has no caller.

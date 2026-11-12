@@ -173,6 +173,31 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void portalAndHostingJoinsPlayTheJoinCueLikeCommandJoins() {
+        rooms.setSounds(new Sounds(plugin.getServer()::getPlayer));
+        rooms.create(player(ALICE));
+        players.values().forEach(fake -> fake.sounds.clear());
+        rooms.fromPortal(player(BOB), Optional.of("dojo"));
+        assertTrue(room(ALICE).contains(BOB));
+        assertEquals(1, players.get(ALICE).sounds.size());
+        assertEquals(1, players.get(BOB).sounds.size());
+
+        players.get(CAROL).permissions.add(NinjaArenaCommand.HOST);
+        HostingCommands hosting = rooms;
+        hosting.host(player(CAROL), "temple");
+        players.values().forEach(fake -> fake.sounds.clear());
+        hosting.invite(player(CAROL), "Dave");
+        hosting.accept(player(DAVE), "Carol");
+        assertEquals(1, players.get(CAROL).sounds.size());
+        assertEquals(1, players.get(DAVE).sounds.size());
+        assertTrue(players.get(ALICE).sounds.isEmpty() && players.get(BOB).sounds.isEmpty());
+
+        players.values().forEach(fake -> fake.sounds.clear());
+        rooms.fromPortal(player(EVE), Optional.of("garden"));
+        assertTrue(players.get(EVE).sounds.isEmpty(), "no room to join: no cue");
+    }
+
+    @Test
     void mapChangesRefuseEachInvalidChoiceWithoutMovingTheLease() throws Exception {
         Room room = openWith(ALICE, BOB);
         rooms.mapSet(player(ALICE), "garden");
