@@ -470,6 +470,10 @@ out a smoke bomb. Under each of `tools.shuriken` and `tools.smoke-bomb`:
 - `cooldown-seconds`: 0-60, default `0` (no cooldown).
 - `uses-per-round`: 0-64, default `0` (unlimited throws without consuming the stack).
 
+The match action bar shows each tool's name and remaining cooldown seconds, rounded up,
+or "used up this round" when its limit is reached. Used up takes priority over cooldown;
+ready tools add no hint. This works for Java and Bedrock players.
+
 A positive limit consumes one item per throw and refuses throws after that many uses in
 the round. Counts refill at round start, including delayed respawns into the new round.
 `kits.yml` still decides which tools are available. Give one item for unlimited use, or
@@ -608,8 +612,11 @@ final scores, further awards are refused, and a new match starts at zero.
 ## Player points
 
 Each player also earns personal points, separate from team scoring and match standings.
-The action bar shows their own total alongside team scores and enemies left. Configure
-awards under `points`: `player-kill: 2` for an opposing player kill,
+The action bar shows their own total alongside team scores and enemies left, followed by
+any shuriken or smoke bomb cooldown or per-round limit hints. The hints use the existing
+names under `tool` and the `hud.tool-cooldown`, `hud.tool-used-up`, `hud.tool-separator`
+and `hud.status-with-tools` messages; `hud.status` keeps its existing placeholders.
+Configure awards under `points`: `player-kill: 2` for an opposing player kill,
 `enemy-kill-per-cost: 1` times the enemy's configured cost for a kill while alive during a
 fight, `round-survive: 2` for surviving a round (draws included), and `round-win: 6` as a
 pool shared by the winning team's players still in the match, alive or eliminated.

@@ -316,6 +316,30 @@ class StatsDatabaseTest {
     }
 
     @Test
+    void aWriteBlockedByAnotherServerFailsWholeAndCountsOnceWhenRetried() throws Exception {
+        ConnectionSource real = Records.sqliteSource(dir.resolve("stats.db"));
+        ConnectionSource impatient = () -> {
+            Connection connection = real.connect();
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("PRAGMA busy_timeout = 100");
+            }
+            return connection;
+        };
+        StatsDatabase database = open(Dialect.SQLITE, impatient);
+        database.useSeason("Season 1", T0);
+        MatchRecord won = match(player(ALICE, "Alice", 1, 0, 0, 0, 0, 0));
+        try (Connection other = real.connect(); Statement holding = other.createStatement()) {
+            holding.execute("BEGIN IMMEDIATE");
+            assertThrows(SQLException.class, () -> database.write(List.of(won)));
+            holding.execute("ROLLBACK");
+        }
+        assertEquals(Optional.empty(), database.stats(ALICE, StatsScope.ALL_TIME));
+        database.write(List.of(won));
+        assertEquals(1, database.stats(ALICE, StatsScope.ALL_TIME).orElseThrow().wins());
+        assertEquals(1, database.stats(ALICE, StatsScope.CURRENT_SEASON).orElseThrow().wins());
+    }
+
+    @Test
     void sqliteNeedsItsDriverAndReportsItMissing() {
         var failure = assertThrows(ConnectionSource.MissingDriver.class,
                 () -> ConnectionSource.sqlite(dir.resolve("stats.db"), "org.example.NoSuchDriver"));

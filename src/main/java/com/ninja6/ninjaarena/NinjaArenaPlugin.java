@@ -308,7 +308,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         DirectorService enemyDirectors = directors;
         hud = new MatchHud(inMatch::matches, getServer()::getPlayer, scores, points,
                 match -> enemyDirectors.director(match).map(director -> (int) director.enemies().stream()
-                        .filter(MatchDirector.Enemy::isAlive).count()).orElse(0));
+                        .filter(MatchDirector.Enemy::isAlive).count()).orElse(0), tools::throwState);
         getServer().getPluginManager().registerEvents(hud, this);
         hud.start(this);
         directors.setGate(hud.withSpawnCues(new StabilityGate(stability,
