@@ -42,7 +42,7 @@ public final class ArenaCommand {
     public static final String NAME = "arena";
 
     private static final List<String> SUBCOMMANDS = List.of(
-            "create", "delete", "list", "info", "edit", "tp", "setbounds", "setwaitingroom",
+            "create", "delete", "list", "info", "edit", "pickable", "tp", "setbounds", "setwaitingroom",
             "setteamspawn", "removeteamspawn", "addenemyspawn", "removeenemyspawn");
 
     private static final String POSITION = "[<x> <y> <z> [<yaw> <pitch>]]";
@@ -94,6 +94,7 @@ public final class ArenaCommand {
                 case "delete" -> delete(sender, rest, usagePrefix);
                 case "list" -> list(sender);
                 case "info" -> info(sender, rest, usagePrefix);
+                case "pickable" -> pickable(sender, rest, usagePrefix);
                 case "edit" -> edit(sender, label, rest, usagePrefix);
                 case "tp" -> teleport(sender, rest, usagePrefix);
                 case "setbounds" -> setBounds(sender, rest, usagePrefix);
@@ -154,6 +155,7 @@ public final class ArenaCommand {
         tell(sender, "arena.info.header", "arena", arena.name(), "status", status(arena));
         tell(sender, "arena.info.cell", "cell", arena.cell().describe(),
                 "cell-bounds", registry.grid().cellBounds(arena.cell()).describe());
+        tell(sender, "arena.info.pickable", "pickable", arena.pickable());
         tell(sender, "arena.info.bounds", "bounds", bounds(arena));
         tell(sender, "arena.info.waiting-room", "point", arena.waitingRoom() == null ? msg("arena.not-set")
                 : arena.waitingRoom().describe());
@@ -166,6 +168,15 @@ public final class ArenaCommand {
         for (String problem : registry.problems(arena.name())) {
             tell(sender, "command.warning", "message", problem);
         }
+    }
+
+    private void pickable(CommandSender sender, String[] args, String usage) throws ArenaException {
+        if (args.length != 2 || !(args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("off"))) {
+            tell(sender, "command.usage-full", "usage", usage + "pickable <arena> <on|off>");
+            return;
+        }
+        Arena changed = registry.setPickable(args[0], args[1].equalsIgnoreCase("on"));
+        tell(sender, "arena.pickable-set", "arena", changed.name(), "pickable", changed.pickable());
     }
 
     private void edit(CommandSender sender, String label, String[] args, String usage) throws ArenaException {
@@ -375,7 +386,7 @@ public final class ArenaCommand {
         }
         Arena arena = registry.get(args[1]).orElse(null);
         return switch (sub) {
-            case "edit" -> position == 1 ? matching(List.of("on", "off"), current) : List.of();
+            case "edit", "pickable" -> position == 1 ? matching(List.of("on", "off"), current) : List.of();
             case "setbounds" -> position <= 6 ? coordinate(sender, (position - 1) % 3, current) : List.of();
             case "setwaitingroom", "addenemyspawn" -> position <= 3
                     ? coordinate(sender, position - 1, current) : List.of();

@@ -129,10 +129,58 @@ class PluginDescriptionTest {
         assertEquals(Map.of(), nodes.get("ninjaarena.room.create").getChildren());
         assertEquals(Map.of("ninjaarena.play", true), nodes.get("ninjaarena.host").getChildren());
         assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.event.manage").getDefault());
-        assertEquals(Map.of("ninjaarena.host", true, "ninjaarena.event.manage", true, "ninjaarena.admin.lobby", true),
+        assertEquals(Map.of("ninjaarena.host", true, "ninjaarena.event.manage", true, "ninjaarena.admin.lobby", true,
+                "ninjaarena.map.change", true),
                 nodes.get("ninjaarena.admin").getChildren());
+        assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.map.change").getDefault());
+        assertEquals(Map.of(), nodes.get("ninjaarena.map.change").getChildren());
         assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.admin.lobby").getDefault());
         assertEquals(Map.of(), nodes.get("ninjaarena.admin.lobby").getChildren());
+    }
+
+    @Test
+    void anAdminGrantGivesANonOperatorTheEffectiveMapPermission() throws Exception {
+        Map<String, Permission> nodes = new HashMap<>();
+        description().getPermissions().forEach(permission -> nodes.put(permission.getName(), permission));
+        org.bukkit.plugin.PluginManager manager = (org.bukkit.plugin.PluginManager) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[] {org.bukkit.plugin.PluginManager.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getPermission" -> nodes.get(args[0]);
+                    case "getDefaultPermissions" -> java.util.Set.of();
+                    case "subscribeToPermission", "unsubscribeFromPermission", "subscribeToDefaultPerms",
+                            "unsubscribeFromDefaultPerms" -> null;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        org.bukkit.Server server = (org.bukkit.Server) Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] {org.bukkit.Server.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("getPluginManager")) {
+                        return manager;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+        org.bukkit.plugin.Plugin plugin = (org.bukkit.plugin.Plugin) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[] {org.bukkit.plugin.Plugin.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("isEnabled")) {
+                        return true;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+        var field = org.bukkit.Bukkit.class.getDeclaredField("server");
+        field.setAccessible(true);
+        Object previous = field.get(null);
+        try {
+            field.set(null, server);
+            var admin = new org.bukkit.permissions.PermissibleBase(null);
+            assertFalse(admin.isOp());
+            assertFalse(admin.hasPermission("ninjaarena.map.change"));
+            var grant = admin.addAttachment(plugin, "ninjaarena.admin", true);
+            assertTrue(admin.hasPermission("ninjaarena.map.change"));
+            admin.removeAttachment(grant);
+            assertFalse(admin.hasPermission("ninjaarena.map.change"));
+        } finally {
+            field.set(null, previous);
+        }
     }
 
     @Test
@@ -141,7 +189,7 @@ class PluginDescriptionTest {
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(stream, StandardCharsets.UTF_8));
             for (String tier : List.of("shop.use", "spectate", "leaderboard", "rewards.payout", "room.create",
-                    "event.manage", "play", "host", "admin", "admin.lobby")) {
+                    "event.manage", "map.change", "play", "host", "admin", "admin.lobby")) {
                 assertTrue(yaml.isConfigurationSection("permissions.ninjaarena." + tier + ".children"), tier);
             }
             assertTrue(yaml.getBoolean("permissions.ninjaarena.admin.children.ninjaarena.host"));

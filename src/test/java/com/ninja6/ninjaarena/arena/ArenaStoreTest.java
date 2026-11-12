@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.arena;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -37,6 +38,25 @@ class ArenaStoreTest {
 
         assertEquals(List.of(complete, empty), new ArenaStore(file()).load());
         assertEquals(Set.of("arenas.yml"), fileNames());
+    }
+
+    @Test
+    void pickableIsOptionalAndRoundTripsWithoutChangingTheFormat() throws Exception {
+        Arena original = Arenas.complete("dojo");
+        String legacy = ArenaCodec.encode(List.of(original));
+        assertFalse(legacy.contains("pickable"));
+        assertFalse(ArenaCodec.decode(legacy).getFirst().pickable());
+        Arena pickable = original.withPickable(true);
+        new ArenaStore(file()).save(List.of(pickable));
+        assertEquals(List.of(pickable), new ArenaStore(file()).load());
+        assertTrue(Files.readString(file()).contains("pickable: true"));
+        assertTrue(Files.readString(file()).contains("format: 1"));
+        assertEquals(pickable, pickable.withBounds(pickable.bounds()).withWaitingRoom(pickable.waitingRoom())
+                .withTeamSpawn(1, pickable.teamSpawns().getFirst())
+                .withEnemySpawn(pickable.enemySpawns().getFirst()).withoutEnemySpawn(3));
+        new ArenaStore(file()).save(List.of(pickable.withPickable(false)));
+        assertEquals(List.of(original), new ArenaStore(file()).load());
+        assertFalse(Files.readString(file()).contains("pickable"));
     }
 
     @Test

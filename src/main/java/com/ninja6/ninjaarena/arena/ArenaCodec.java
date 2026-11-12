@@ -41,6 +41,9 @@ public final class ArenaCodec {
         ConfigurationSection root = yaml.createSection("arenas");
         for (Arena arena : arenas) {
             ConfigurationSection section = root.createSection(arena.name());
+            if (arena.pickable()) {
+                section.set("pickable", true);
+            }
             section.set("cell.x", arena.cell().x());
             section.set("cell.z", arena.cell().z());
             ArenaBounds bounds = arena.bounds();
@@ -123,7 +126,8 @@ public final class ArenaCodec {
             waitingRoom = decodePoint(room);
         }
         return new Arena(name, cell, bounds, waitingRoom,
-                decodePoints(section, "team-spawns"), decodePoints(section, "enemy-spawns"));
+                decodePoints(section, "team-spawns"), decodePoints(section, "enemy-spawns"),
+                section.getBoolean("pickable", false));
     }
 
     private static Map<String, Object> encodePoint(ArenaPoint point) {
