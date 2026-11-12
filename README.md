@@ -234,16 +234,44 @@ Set `spectating.enabled` to control admission and `spectating.max-per-match` to 
 number of viewers per match (1 to 64, default 16). Both options apply to new admissions
 on a successful reload. Current viewers can stay until they leave or the match ends.
 
+## Shop catalogue
+
+`plugins/NinjaArena/shop.yml` uses `format: 1` and an `items` list. Each entry has a
+unique `id`, positive points `price`, per-round `limit` of at least one, `category`
+(`armour`, `tools`, `potions`, `consumables`) and `gives`. Armour gives a `tier` of
+leather, chain, iron or diamond. Tools give a thrown `tool` id and extra-use `count`;
+unlimited tools warn because they gain no benefit. Supply enough tool items in the kit.
+Potions give an `effect` id, zero-based `amplifier` and `duration` in ticks. Consumables
+give either `material` or a registered plugin `id`, plus an `amount` within its stack
+limit. The bundled file includes examples and comments for each key.
+
+Buying requires `ninjaarena.shop.use`, default true and inherited by `ninjaarena.play`.
+The service is closed by default until the between-round shop phase is implemented;
+there is no buy command or shop screen yet. A match keeps its starting catalogue.
+Purchases apply after its round kit is rebuilt, including delayed respawns, and last
+one round. Potion effects and extra-use bonuses are explicitly cleared at round end;
+armour and consumables disappear at the next kit rebuild.
+
+Pending purchases that cannot be delivered at round start (including players still on
+the death screen) are cancelled and refunded to an existing ledger. Failed item delivery,
+such as a full inventory, is also refunded. Leaving drops both the ledger and purchases;
+a refund never recreates a departed player's ledger.
+
 ## Safe configuration reload
 
-Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml`, `kits.yml`
-or `messages.yml`. All three are read and validated before anything changes. A missing
-config or kit file, malformed YAML, duplicate or unknown key, wrong type, out-of-range or
-non-finite number, invalid kit entry, unregistered item ID or excessive stack amount
-rejects the whole reload. The reply names the file, setting and source line; the previous
-settings and kit remain active. Omitted config settings use the bundled defaults. Reload
-never reads arenas, portals or snapshots, and never moves match players or restarts a
-match.
+Run `/narena admin reload` with `ninjaarena.admin` after editing `config.yml`,
+`kits.yml`, `shop.yml` or `messages.yml`. All four are read and validated before
+anything changes. For config and kit files, a missing file, malformed YAML, duplicate or
+unknown key, wrong type, out-of-range or non-finite number, invalid kit entry,
+unregistered item ID or excessive stack amount rejects the whole reload. The reply names
+the file, setting and source line; the previous settings and kit remain active. Omitted
+config settings use the bundled defaults.
+
+For `shop.yml`, whole-file problems such as a missing file, malformed YAML or wrong
+format reject the reload and keep the previous catalogue. A bad item is skipped with one
+server log warning; the remaining valid items load. Shop diagnostics do not necessarily
+include a source line. Reload never reads arenas, portals or snapshots, and never moves
+match players or restarts a match.
 
 | Settings | Reload behavior |
 | :--- | :--- |
@@ -254,6 +282,7 @@ match.
 | Player-built portals | Apply to the next portal lit; the curtain colour changes immediately. Portals already built stay, with their own frame block. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |
 | Resource packs | `resource-pack.thrown-visuals` applies to the next throw. All delivery settings, URLs, hashes and identities require a restart. |
+| Shop catalogue | `shop.yml` applies to the next match. Bad entries warn and are skipped; a broken file rejects reload and keeps the previous catalogue. |
 | Kits | Apply from the next round. Delayed respawns receive the definition selected for their current round. |
 | Arena-world view and simulation distance | Apply immediately without resetting world rules, time or saving. |
 | Grid cell size and world border | Apply only before any arena exists and while no match runs. Otherwise refuse the change and require a restart. |

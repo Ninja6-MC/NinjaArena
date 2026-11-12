@@ -110,6 +110,8 @@ public final class NinjaTools implements Listener {
     private final Map<UUID, Long> dashReady = new HashMap<>();
     private final Map<UUID, Map<NinjaTool, Long>> throwReady = new HashMap<>();
     private final Map<UUID, Map<NinjaTool, Integer>> throwUses = new HashMap<>();
+    private final Map<UUID, Map<NinjaTool, Integer>> throwBonuses = new HashMap<>();
+
     /** The tick at which each marked player's mark runs out. */
     private final Map<UUID, Long> marks = new HashMap<>();
 
@@ -143,6 +145,19 @@ public final class NinjaTools implements Listener {
         this.settings = Objects.requireNonNull(settings, "settings");
     }
 
+    /** Round purchases extend limited throws; unlimited tools remain unlimited. */
+    public void addRoundUses(UUID player, NinjaTool tool, int count) {
+        if (tool.thrown() && count > 0) {
+            throwBonuses.computeIfAbsent(player, ignored -> new EnumMap<>(NinjaTool.class)).merge(tool, count,
+                    (old, added) -> (int) Math.min(Integer.MAX_VALUE, (long) old + added));
+        }
+    }
+
+    /** Also used by the kit hook after a delayed respawn has been readied. */
+    public void prepareRound(UUID player) {
+        forget(player);
+    }
+
     /** A read-only snapshot of one thrown tool, with remaining seconds rounded up. */
     public record ThrowState(long cooldownSeconds, boolean usedUp) {
     }
@@ -159,7 +174,9 @@ public final class NinjaTools implements Listener {
 
     private boolean usedUp(UUID player, NinjaTool tool) {
         int limit = settings.usesPerRound(tool);
-        return limit > 0 && throwUses.getOrDefault(player, Map.of()).getOrDefault(tool, 0) >= limit;
+        long total = Math.min(Integer.MAX_VALUE,
+                (long) limit + throwBonuses.getOrDefault(player, Map.of()).getOrDefault(tool, 0));
+        return limit > 0 && throwUses.getOrDefault(player, Map.of()).getOrDefault(tool, 0) >= total;
     }
 
     /** Registers every tool's kit item, such as {@code ninjaarena:shuriken}. */
@@ -273,7 +290,7 @@ public final class NinjaTools implements Listener {
         UUID id = player.getUniqueId();
         NinjaTool kind = tool.get();
         throwUses.computeIfAbsent(id, ignored -> new EnumMap<>(NinjaTool.class)).merge(kind, 1,
-                (used, added) -> Math.min(64, used + added));
+                (used, added) -> (int) Math.min(Integer.MAX_VALUE, (long) used + added));
         int cooldown = settings.cooldownSeconds(kind) * TICKS_PER_SECOND;
         throwReady.computeIfAbsent(id, ignored -> new EnumMap<>(NinjaTool.class))
                 .put(kind, ticks.getAsLong() + cooldown);
@@ -366,13 +383,13 @@ public final class NinjaTools implements Listener {
                 || !rival(match, cloud.team(), player));
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.HIGH)
     public void onRoundStart(RoundStartEvent event) {
         event.match().players().forEach(this::forget);
     }
 
     /** A delayed respawn is eligible only after the match has readied it for a new round. */
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.HIGH)
     public void onPostRespawn(PlayerPostRespawnEvent event) {
         Player player = event.getPlayer();
         if (!player.isDead() && player.isOnline() && player.getGameMode() != GameMode.SPECTATOR
@@ -409,6 +426,7 @@ public final class NinjaTools implements Listener {
         tracked.addAll(marks.keySet());
         tracked.addAll(throwReady.keySet());
         tracked.addAll(throwUses.keySet());
+        tracked.addAll(throwBonuses.keySet());
         tracked.forEach(this::forget);
     }
 
@@ -502,6 +520,7 @@ public final class NinjaTools implements Listener {
     private void forget(UUID id) {
         Map<NinjaTool, Long> throwsCooling = throwReady.remove(id);
         throwUses.remove(id);
+        throwBonuses.remove(id);
         boolean cooling = dashReady.remove(id) != null;
         boolean marked = marks.remove(id) != null;
         Player player = players.apply(id);

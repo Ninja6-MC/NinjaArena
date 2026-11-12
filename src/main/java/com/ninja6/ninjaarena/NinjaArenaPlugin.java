@@ -33,6 +33,8 @@ import com.ninja6.ninjaarena.kit.InventoryLockdownListener;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.shop.Shop;
+import com.ninja6.ninjaarena.shop.ShopCatalogue;
 import com.ninja6.ninjaarena.kit.RoundKitListener;
 import com.ninja6.ninjaarena.lobby.LobbyBuild;
 import com.ninja6.ninjaarena.lobby.LobbyEditing;
@@ -139,6 +141,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private MatchDeathListener deaths;
     private TeamScores scores;
     private PlayerPoints points;
+    private Shop shop;
     private MatchHud hud;
     private DirectorService directors;
     private EnemyLifecycle enemyLifecycle;
@@ -280,6 +283,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         var kitFile = getDataFolder().toPath().resolve("kits.yml");
         var kit = KitDefinition.open(kitFile, getLogger(), () -> saveResource("kits.yml", false));
         RoundKitListener roundKits = new RoundKitListener(matches, getServer()::getPlayer, kit, kitItems, getLogger());
+        var catalogue = ShopCatalogue.open(
+                getDataFolder().toPath().resolve(ShopCatalogue.FILE), getLogger(),
+                () -> saveResource(ShopCatalogue.FILE, false),
+                kitItems, ToolSettings.from(getConfig().getConfigurationSection("tools")));
+        shop = new Shop(matches, points, kitItems, tools,
+                getServer()::getPlayer, getLogger(), catalogue);
+        roundKits.setAfterKit(shop::apply);
+        getServer().getPluginManager().registerEvents(shop, this);
         roundKits.warnToolAmounts(ToolSettings.from(getConfig().getConfigurationSection("tools")));
         getServer().getPluginManager().registerEvents(roundKits, this);
         matches.start();
@@ -426,6 +437,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void shop(ShopCatalogue catalogue) {
+                        shop.setDefinition(catalogue);
+                    }
+
+                    @Override
                     public void season(String name) {
                         if (stats != null) {
                             stats.useSeason(name);
@@ -467,6 +483,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         }
                     }
                 });
+        reloader.enableShop(catalogue, getLogger());
         ArenaCommand arenaCommand = new ArenaCommand(arenas, arenaWorld::world, arenaWorld::acquire,
                 task -> getServer().getScheduler().runTask(this, task));
         arenaCommand.setHub(() -> portals == null ? Optional.empty() : portals.hub());
@@ -782,6 +799,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         }
         scores = null;
         points = null;
+        shop = null;
         kitItems = null;
         if (deaths != null) {
             deaths.close();
@@ -864,6 +882,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** Team points and the award API for live matches; {@code null} while disabled. */
     public TeamScores scores() {
         return scores;
+    }
+
+    /** Round purchases; closed until a shop phase is supplied, and null while disabled. */
+    public Shop shop() {
+        return shop;
     }
 
     /** Personal points for live matches; {@code null} while disabled. Read on the server thread. */

@@ -666,3 +666,12 @@ reload:
   next-round: "<path> (next round)"
   line: "<yellow><line>"
   messages-unreadable: "<file>: <reason>"
+
+# Shop purchase results, displayed by the shop screen when available.
+shop:
+  bought: "<green>Purchase queued for the next round."
+  not-enough-points: "<red>You do not have enough points."
+  limit-reached: "<red>You reached this item's buy limit for the round."
+  unknown-item: "<red>This shop item is unavailable."
+  no-permission: "<red>You do not have permission to use the shop."
+  closed: "<red>The shop is closed."

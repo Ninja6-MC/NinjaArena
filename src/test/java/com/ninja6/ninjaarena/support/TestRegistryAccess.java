@@ -52,7 +52,7 @@ public final class TestRegistryAccess implements RegistryAccess {
                                         case "getMaxStackSize" -> switch (value) {
                                             case "wooden_sword" -> 1;
                                             case "snowball" -> 16;
-                                            case "stone" -> 64;
+                                            case "stone", "cooked_beef" -> 64;
                                             default -> throw new UnsupportedOperationException("stack limit: " + value);
                                         };
                                         default -> throw new UnsupportedOperationException(m.getName());

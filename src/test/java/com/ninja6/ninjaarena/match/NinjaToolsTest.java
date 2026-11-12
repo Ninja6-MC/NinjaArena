@@ -224,6 +224,25 @@ class NinjaToolsTest extends MatchFixture {
     }
 
     @Test
+    void purchasedBonusesExtendBothThrowRefusalAndHudForOneRoundOnly() {
+        fight();
+        tools.setSettings(throwSettings(0, 1, 0, 1));
+        tools.addRoundUses(ALICE, NinjaTool.SHURIKEN, 2);
+        for (int i = 0; i < 3; i++) {
+            assertFalse(tools.throwState(ALICE, NinjaTool.SHURIKEN).usedUp());
+            assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        }
+        assertTrue(tools.throwState(ALICE, NinjaTool.SHURIKEN).usedUp());
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        assertFalse(launch(BOB, NinjaTool.SHURIKEN).event().isCancelled());
+        assertTrue(launch(BOB, NinjaTool.SHURIKEN).event().isCancelled());
+        tools.onRoundStart(new RoundStartEvent(matches.matchOf(ALICE).orElseThrow(), 2, false));
+        assertFalse(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+        assertTrue(tools.throwState(ALICE, NinjaTool.SHURIKEN).usedUp());
+        assertTrue(launch(ALICE, NinjaTool.SHURIKEN).event().isCancelled());
+    }
+
+    @Test
     void throwStateRoundsUpCooldownSecondsAndDoesNotAdvanceDeadlines() {
         fight();
         tools.setSettings(throwSettings(2, 0, 3, 0));
