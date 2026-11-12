@@ -110,6 +110,11 @@ public final class ReloadFiles {
             String source = path.equals(MaxActive.KEY) && !document.has(path) && document.has(MaxActive.OLD_KEY)
                     ? MaxActive.OLD_KEY : path;
             Object value = document.has(source) ? document.value(source) : fallback;
+            // Sound fields use warning-and-default validation in the live Sounds service.
+            if (path.startsWith("sounds.")) {
+                result.set(path, value);
+                continue;
+            }
             if (fallback instanceof Boolean) {
                 if (!(value instanceof Boolean)) {
                     throw document.invalid(path, "expected a boolean");

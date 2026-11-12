@@ -2,6 +2,8 @@ package com.ninja6.ninjaarena.match;
 
 import static com.ninja6.ninjaarena.message.Messages.msg;
 
+import com.ninja6.ninjaarena.sound.Sounds;
+import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaException;
@@ -190,6 +192,7 @@ public final class MatchService implements MatchStart {
     private final ArenaRegistry arenas;
     private final Supplier<World> arenaWorld;
     private MatchSettings settings;
+    private Sounds sounds;
     private final Function<Player, RestoreResult> restore;
     private final Consumer<? super MatchEvent> events;
     private final Consumer<Player> readyForRound;
@@ -322,6 +325,9 @@ public final class MatchService implements MatchStart {
             }
             plugin.getLogger().info("Match started in arena " + name + " with teams " + online + ".");
             apply(running, running.match().begin());
+            if (sounds != null) {
+                sounds.match(Cue.MATCH_START, running.match());
+            }
         } catch (RuntimeException e) {
             if (running != null) {
                 forget(running);
@@ -398,6 +404,10 @@ public final class MatchService implements MatchStart {
         return running != null && (running.match().phase() == MatchPhase.SHOP || returning.contains(running));
     }
 
+    public void setSounds(Sounds sounds) {
+        this.sounds = sounds;
+    }
+
     /**
      * The player pressed Ready in the shop. Once everyone in the match is ready, the shop's
      * time left is cut to its quick start.
@@ -412,6 +422,9 @@ public final class MatchService implements MatchStart {
             return Ready.ALREADY_READY;
         }
         apply(running, updates);
+        if (sounds != null) {
+            sounds.match(Cue.READY, running.match());
+        }
         return Ready.READY;
     }
 

@@ -41,6 +41,18 @@ public final class TestRegistryAccess implements RegistryAccess {
                 (proxy, method, args) -> {
                     if (method.getName().equals("get") || method.getName().equals("getOrThrow")) {
                         String value = ((Key) args[0]).value();
+                        if (name.equals("sound_event")) {
+                            if (!Set.of("block.note_block.pling", "block.note_block.hat", "block.note_block.chime",
+                                    "block.note_block.bell", "entity.experience_orb.pickup", "entity.enderman.teleport",
+                                    "entity.player.levelup", "ui.button.click").contains(value)) {
+                                return null;
+                            }
+                            return Proxy.newProxyInstance(org.bukkit.Sound.class.getClassLoader(),
+                                    new Class<?>[] {org.bukkit.Sound.class}, (p, m, a) -> switch (m.getName()) {
+                                        case "key", "getKey" -> NamespacedKey.minecraft(value);
+                                        default -> throw new UnsupportedOperationException(m.getName());
+                                    });
+                        }
                         if (name.equals("item")) {
                             if (Set.of("water", "fire", "nether_portal").contains(value)) {
                                 return null;

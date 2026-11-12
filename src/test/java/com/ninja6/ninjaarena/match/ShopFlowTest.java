@@ -165,6 +165,32 @@ class ShopFlowTest extends MatchFixture {
     }
 
     @Test
+    void startReadyAndPurchaseCuesReachOnlyTheirIntendedAudience() {
+        var sounds = new com.ninja6.ninjaarena.sound.Sounds(plugin.getServer()::getPlayer);
+        matches.setSounds(sounds);
+        shop.setSounds(sounds);
+        startTwoOnTwo();
+        for (var fake : players.values()) {
+            assertEquals(1, fake.sounds.size());
+            assertEquals("block.note_block.chime", fake.sounds.getLast().name().value());
+            fake.sounds.clear();
+        }
+        ticks(SETTINGS.prepSeconds());
+        matches.died(player(BOB), player(ALICE));
+        matches.died(player(DAVE), player(CAROL));
+        runNextTick();
+        ticks(SETTINGS.roundEndSeconds());
+        matches.ready(player(ALICE));
+        matches.ready(player(ALICE));
+        for (var fake : players.values()) assertEquals(1, fake.sounds.size());
+        points.refund(match(), ALICE, 4);
+        assertEquals(Shop.Result.BOUGHT, shop.buy(match(), player(ALICE), "potion"));
+        assertEquals(Shop.Result.LIMIT_REACHED, shop.buy(match(), player(ALICE), "potion"));
+        assertEquals(2, players.get(ALICE).sounds.size());
+        assertEquals(1, players.get(BOB).sounds.size());
+    }
+
+    @Test
     void everyoneGoesToTheShopAndComesBackAtTheNextPrep() {
         startTwoOnTwo();
         ticks(SETTINGS.prepSeconds());

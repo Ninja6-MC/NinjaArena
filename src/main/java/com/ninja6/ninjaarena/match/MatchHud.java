@@ -3,6 +3,8 @@ package com.ninja6.ninjaarena.match;
 import static com.ninja6.ninjaarena.message.Messages.msg;
 import static com.ninja6.ninjaarena.message.Messages.text;
 
+import com.ninja6.ninjaarena.sound.Sounds;
+import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.director.EnemyKind;
 import com.ninja6.ninjaarena.director.SpawnGate;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
@@ -27,8 +29,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 import net.kyori.adventure.bossbar.BossBar;
-import net.kyori.adventure.key.Key;
-import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.JoinConfiguration;
 import net.kyori.adventure.title.Title;
@@ -42,8 +42,6 @@ import org.bukkit.scheduler.BukkitTask;
 /** Round feedback, read from the match on the server thread without advancing it. */
 public final class MatchHud implements Listener {
 
-    private static final Sound SPAWN = Sound.sound(Key.key("entity.enderman.teleport"), Sound.Source.HOSTILE, 0.35f, 1.2f);
-    private static final Sound ROUND_END = Sound.sound(Key.key("entity.player.levelup"), Sound.Source.MASTER, 0.6f, 1f);
     private static final Title.Times TITLE_TIMES = Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(2),
             Duration.ofMillis(400));
 
@@ -59,6 +57,9 @@ public final class MatchHud implements Listener {
     private final ToIntFunction<MatchView> enemies;
     private final BiFunction<UUID, NinjaTool, ThrowState> tools;
     private final Map<MatchView, Display> displays = new IdentityHashMap<>();
+    private Sounds sounds;
+    private Consumer<MatchView> cooldowns = match -> { };
+
     private BukkitTask ticker;
     private boolean closed;
 
@@ -66,10 +67,15 @@ public final class MatchHud implements Listener {
             ToIntFunction<MatchView> enemies, BiFunction<UUID, NinjaTool, ThrowState> tools) {
         this.matches = Objects.requireNonNull(matches, "matches");
         this.players = Objects.requireNonNull(players, "players");
+        this.sounds = new Sounds(players);
         this.scores = Objects.requireNonNull(scores, "scores");
         this.points = Objects.requireNonNull(points, "points");
         this.enemies = Objects.requireNonNull(enemies, "enemies");
         this.tools = Objects.requireNonNull(tools, "tools");
+    }
+
+    public void setSounds(Sounds sounds) {
+        this.sounds = sounds;
     }
 
     /** Start after the match ticker so each refresh sees the current second. */
@@ -77,6 +83,10 @@ public final class MatchHud implements Listener {
         if (!closed && ticker == null) {
             ticker = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 20, 20);
         }
+    }
+
+    public void setCooldownCheck(Consumer<MatchView> cooldowns) {
+        this.cooldowns = cooldowns;
     }
 
     public void tick() {
@@ -90,6 +100,7 @@ public final class MatchHud implements Listener {
             }
         }
         for (MatchView match : live) {
+            cooldowns.accept(match);
             refresh(match);
         }
     }
@@ -119,7 +130,7 @@ public final class MatchHud implements Listener {
             title(event.match(), event.result().isDraw() ? msg("hud.draw-title")
                     : msg("hud.won-title", "team", event.result().winner()),
                     msg("hud.round-end-subtitle", "round", event.result().round()));
-            each(event.match(), player -> player.playSound(ROUND_END));
+            sounds.match(Cue.ROUND_END, event.match());
             refresh(event.match());
         }
     }
@@ -154,7 +165,7 @@ public final class MatchHud implements Listener {
             public void spawned(MatchView match, EnemyKind kind) {
                 gate.spawned(match, kind);
                 if (!closed) {
-                    each(match, player -> player.playSound(SPAWN));
+                    sounds.match(Cue.ENEMY_SPAWN, match);
                 }
             }
         };

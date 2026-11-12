@@ -393,3 +393,55 @@ events:
   messages:
     upcoming: 'Arena event {id} starts in {minutes} minute(s) at {arena}.'
     start: 'Arena event {id} has started at {arena}.'
+
+# Personal vanilla sound cues. Reload applies immediately, including to running matches.
+# Each enabled switch silences that cue; volume is 0 to 1 and pitch is 0.5 to 2.
+sounds:
+  # Someone joins the room, including its creator.
+  room-join:
+    enabled: true
+    sound: minecraft:block.note_block.pling
+    volume: 0.3
+    pitch: 1.2
+  # A player becomes ready in the shop.
+  ready:
+    enabled: true
+    sound: minecraft:block.note_block.hat
+    volume: 0.3
+    pitch: 1.2
+  # A match successfully starts.
+  match-start:
+    enabled: true
+    sound: minecraft:block.note_block.chime
+    volume: 0.4
+    pitch: 1.0
+  # A purchase succeeds; only the buyer hears it.
+  shop-buy:
+    enabled: true
+    sound: minecraft:entity.experience_orb.pickup
+    volume: 0.3
+    pitch: 1.2
+  # A thrown tool or dash cooldown expires; only its owner hears it.
+  cooldown-ready:
+    enabled: true
+    sound: minecraft:block.note_block.hat
+    volume: 0.2
+    pitch: 1.5
+  # An enemy successfully spawns; includes match spectators.
+  enemy-spawn:
+    enabled: true
+    sound: minecraft:entity.enderman.teleport
+    volume: 0.35
+    pitch: 1.2
+  # A round ends; includes match spectators.
+  round-end:
+    enabled: true
+    sound: minecraft:entity.player.levelup
+    volume: 0.6
+    pitch: 1.0
+  # Reserved for future hazard warnings; currently has no caller.
+  hazard-warning:
+    enabled: true
+    sound: minecraft:block.note_block.bell
+    volume: 0.4
+    pitch: 0.8

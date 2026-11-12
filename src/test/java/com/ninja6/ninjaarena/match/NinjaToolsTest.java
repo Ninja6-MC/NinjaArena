@@ -224,6 +224,62 @@ class NinjaToolsTest extends MatchFixture {
     }
 
     @Test
+    void reusingAToolBeforeTheHudCheckPreservesBothCooldownCompletions() {
+        fight();
+        tools.setSounds(new com.ninja6.ninjaarena.sound.Sounds(plugin.getServer()::getPlayer));
+        tools.setSettings(throwSettings(1, 0, 0, 0));
+        launch(ALICE, NinjaTool.SHURIKEN);
+        tick += 20;
+        launch(ALICE, NinjaTool.SHURIKEN);
+        var match = matches.matchOf(ALICE).orElseThrow();
+        tools.checkCooldowns(match);
+        assertEquals(1, players.get(ALICE).sounds.size());
+        tick += 20;
+        tools.checkCooldowns(match);
+        assertEquals(2, players.get(ALICE).sounds.size());
+    }
+
+    @Test
+    void cooldownCuesExpireOnceForTheirOwnerAndClearsStaySilent() {
+        fight();
+        tools.setSounds(new com.ninja6.ninjaarena.sound.Sounds(plugin.getServer()::getPlayer));
+        tools.setSettings(throwSettings(1, 0, 1, 0));
+        var match = matches.matchOf(ALICE).orElseThrow();
+        launch(ALICE, NinjaTool.SHURIKEN);
+        launch(ALICE, NinjaTool.SMOKE_BOMB);
+        use(ALICE, item(NinjaTool.DASH, 1));
+        tick += 19;
+        tools.checkCooldowns(match);
+        assertTrue(players.get(ALICE).sounds.isEmpty());
+        tick++;
+        tools.checkCooldowns(match);
+        tools.checkCooldowns(match);
+        assertEquals(2, players.get(ALICE).sounds.size());
+        tick += 140;
+        tools.checkCooldowns(match);
+        tools.checkCooldowns(match);
+        assertEquals(3, players.get(ALICE).sounds.size());
+        assertTrue(players.get(BOB).sounds.isEmpty());
+        assertTrue(players.get(EVE).sounds.isEmpty());
+
+        launch(ALICE, NinjaTool.SHURIKEN);
+        tools.onRoundStart(new RoundStartEvent(match, 2, false));
+        tick += 200;
+        tools.checkCooldowns(match);
+        assertEquals(3, players.get(ALICE).sounds.size());
+        launch(ALICE, NinjaTool.SHURIKEN);
+        tools.onRoundEnd(new RoundEndEvent(match, new RoundResult(1, 0, false, false, 1, List.of())));
+        tick += 200;
+        tools.checkCooldowns(match);
+        assertEquals(3, players.get(ALICE).sounds.size());
+        launch(ALICE, NinjaTool.SHURIKEN);
+        matches.leave(player(ALICE), MatchService.Exit.COMMAND);
+        tick += 200;
+        tools.checkCooldowns(match);
+        assertEquals(3, players.get(ALICE).sounds.size());
+    }
+
+    @Test
     void purchasedBonusesExtendBothThrowRefusalAndHudForOneRoundOnly() {
         fight();
         tools.setSettings(throwSettings(0, 1, 0, 1));

@@ -156,6 +156,20 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void joinCuesStayInsideTheirRoomIncludingTheJoiningPlayer() {
+        rooms.setSounds(new com.ninja6.ninjaarena.sound.Sounds(plugin.getServer()::getPlayer));
+        rooms.create(player(ALICE));
+        rooms.create(player(CAROL));
+        players.values().forEach(fake -> fake.sounds.clear());
+        rooms.invite(player(ALICE), "Bob");
+        rooms.accept(player(BOB), "Alice");
+        assertEquals(1, players.get(ALICE).sounds.size());
+        assertEquals(1, players.get(BOB).sounds.size());
+        assertTrue(players.get(CAROL).sounds.isEmpty());
+        assertTrue(players.get(DAVE).sounds.isEmpty());
+    }
+
+    @Test
     void mapChangesRefuseEachInvalidChoiceWithoutMovingTheLease() throws Exception {
         Room room = openWith(ALICE, BOB);
         rooms.mapSet(player(ALICE), "garden");
