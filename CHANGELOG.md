@@ -13,6 +13,22 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Slot cells for generated maps. `arenas.max-active` cells of the arena grid, farthest
+  from the origin first, are reserved for generated maps; `arena create` skips them and
+  refuses one named by hand (`arena.error.cell-reserved`), and a hand-built arena already
+  in one keeps it while the next free cell is reserved, with a log line. A reload never
+  moves a reserved cell or takes one a map still uses. Slot cells are cleared on startup,
+  when the arena world reopens after a retire and before every map is placed, and arena
+  edits are refused while one is in use (`arena.error.edit-while-generated`).
+- Internal: the generated map lifecycle. Rooms can play a generated map from a seed and
+  a difficulty (`RoomService#playGenerated`; commands come later): the map is searched
+  off the server thread, placed in a slot cell over several ticks, played like any
+  arena, and cleared and generated again after each match. When no map comes from the
+  seed, the room plays its last good seed, else a hand-built arena, and tells its players
+  which. Generated maps are held in memory only, under names no hand-built arena can
+  have, and never reach `arenas.yml`. Matches find maps through a new `MapSource`, and
+  read team spawns again at every round. New `room.map-generating` and `room.map-ready`
+  messages.
 - Rejoining a match after a disconnect. A player who disconnects before the match ends
   is held in it for `match.rejoin-grace-seconds` (60; 0 to 600, 0 keeps a disconnect a
   leave): still on their team and in their room, out of the round, with their points,

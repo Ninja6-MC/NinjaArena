@@ -4,6 +4,8 @@ import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaGrid;
 import com.ninja6.ninjaarena.arena.ArenaProtectionListener;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.arena.ChunkTickets;
+import com.ninja6.ninjaarena.arena.MapSource;
 import com.ninja6.ninjaarena.command.ArenaCommand;
 import com.ninja6.ninjaarena.command.DirectorCommand;
 import com.ninja6.ninjaarena.command.EventCommand;
@@ -41,6 +43,10 @@ import com.ninja6.ninjaarena.lobby.LobbyEditing;
 import com.ninja6.ninjaarena.lobby.LobbyLayout;
 import com.ninja6.ninjaarena.lobby.LobbyListener;
 import com.ninja6.ninjaarena.lobby.LobbyMembers;
+import com.ninja6.ninjaarena.map.ArenaMaps;
+import com.ninja6.ninjaarena.map.BlockAccess;
+import com.ninja6.ninjaarena.map.GeneratedMaps;
+import com.ninja6.ninjaarena.map.TickCellWriter;
 import com.ninja6.ninjaarena.match.MatchDeathListener;
 import com.ninja6.ninjaarena.message.MessageMigration;
 import com.ninja6.ninjaarena.message.Messages;
@@ -116,6 +122,7 @@ import java.util.SplittableRandom;
 import java.util.UUID;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.entity.Player;
@@ -142,6 +149,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private RestoreService restores;
     private Spectators spectators;
     private ArenaRegistry arenas;
+    /** Generated maps in the reserved slot cells; held in memory only. */
+    private GeneratedMaps generatedMaps;
+    /** Hand-built and generated maps by name, for everything a match looks up. */
+    private MapSource maps;
     private PortalRegistry portals;
     private PortalCurtains curtains;
     private MatchService matches;
@@ -208,12 +219,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         lobbyWorld = LobbyWorld.load(getLogger());
         startLobby();
         arenas = ArenaRegistry.open(this, arenaWorld);
+        startGeneratedMaps();
         chunkUnloader = new ArenaChunkUnloader(arenaWorld::currentWorld, arenaWorld::isSavingEnabled,
                 () -> arenaWorld.releaseIfIdle(arenas::canReleaseWorld), getLogger());
         chunkUnloader.start(this);
         portals = PortalRegistry.open(this);
         portals.oldLobbyWarnings(WaitingRoomSettings.MIGRATION_DOCS).forEach(getLogger()::warning);
-        matches = new MatchService(this, arenas, arenaWorld::world,
+        matches = new MatchService(this, maps, arenaWorld::world,
                 MatchSettings.from(getConfig().getConfigurationSection("match")), restores::restore,
                 getServer().getPluginManager()::callEvent, MatchService::readyForRound);
         // The shop phase between rounds, in the lobby's shop area; its moves keep the match.
@@ -223,7 +235,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         LobbyMembers shopLobby = lobbyMembers;
         matches.setShopArea(() -> shopLobby.layout().shop(lobbyWorld.world()));
         shopCrossing = transfers.allow(matches::crossesWorlds);
-        deaths = new MatchDeathListener(this, matches, arenas);
+        deaths = new MatchDeathListener(this, matches, maps);
         getServer().getPluginManager().registerEvents(deaths, this);
         getServer().getPluginManager().registerEvents(new MatchListener(matches, deaths, transfers), this);
         MatchProtectionListener protection = new MatchProtectionListener(matches,
@@ -242,13 +254,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 IntensitySettings.from(getConfig().getConfigurationSection("director.intensity")),
                 ThreatBudget.from(getConfig().getConfigurationSection("director.threat-budget")),
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")),
-                scores, matches::matchOf, MobSpawner.factory(arenas, arenaWorld::world, getServer()::getPlayer,
+                scores, matches::matchOf, MobSpawner.factory(maps, arenaWorld::world, getServer()::getPlayer,
                         SpawnSettings.from(getConfig().getConfigurationSection("director")),
                         new ShadowStalker(stalker, getServer().getMobGoals(), Bukkit::getCurrentTick), getLogger()),
                 new SplittableRandom()::nextDouble, stalker);
         getServer().getPluginManager().registerEvents(directors, this);
         enemyLifecycle = new EnemyLifecycle(matches::matches, directors::director,
-                name -> arenas.get(name).map(Arena::bounds), arenaWorld::world, scores,
+                name -> maps.get(name).map(Arena::bounds), arenaWorld::world, scores,
                 EnemyCosts.from(getConfig().getConfigurationSection("director.enemy-costs")), System::nanoTime);
         getServer().getPluginManager().registerEvents(enemyLifecycle, this);
         enemyLifecycle.start(this);
@@ -294,7 +306,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 name -> spectators == null ? List.of() : spectators.players(name), matches::matchOf);
         kitItems = new KitItems();
         NinjaTools.registerItems(kitItems, visuals);
-        tools = new NinjaTools(matches, getServer()::getPlayer, name -> arenas.get(name).map(Arena::bounds),
+        tools = new NinjaTools(matches, getServer()::getPlayer, name -> maps.get(name).map(Arena::bounds),
                 ToolSettings.from(getConfig().getConfigurationSection("tools")), Bukkit::getCurrentTick,
                 NinjaTools::damage, at -> at.getWorld().spawn(at, AreaEffectCloud.class));
         sounds = new Sounds(getServer()::getPlayer,
@@ -350,7 +362,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getLogger().warning("Spectating disabled: " + e.getMessage());
             spectating = new SpectatorSettings(false, 16);
         }
-        spectators = new Spectators(this, arenas, matches, restores, arenaWorld::world, spectating);
+        spectators = new Spectators(this, maps, matches, restores, arenaWorld::world, spectating);
         Spectators watching = spectators;
         watching.setShopArea(() -> shopLobby.layout().shop(lobbyWorld.world()), shopLobby.layout()::contains);
         getServer().getPluginManager().registerEvents(watching, this);
@@ -409,7 +421,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 new ConfigReload.Target() {
                     @Override
                     public boolean canResize() {
-                        return arenas.canResize() && inMatch.matches().isEmpty();
+                        return arenas.canResize() && inMatch.matches().isEmpty() && generatedMaps.inUse().isEmpty();
                     }
 
                     @Override
@@ -426,6 +438,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         ArenaGrid next = new ArenaGrid(cellSize, borderSize, old.minY(), old.maxY());
                         arenaWorld.setBorderSize(borderSize);
                         arenas.setGrid(next);
+                        generatedMaps.setGrid(next);
                         if (rooms != null) {
                             rooms.gridChanged();
                         }
@@ -576,6 +589,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         rooms = new RoomService(this, arenas, inMatch, lobbyEntry, () -> roomDefaults, transfers, arenaWorld::hold,
                 MaxActive.read(getConfig(), getLogger()::warning));
         rooms.setSounds(sounds);
+        // Reserves arenas.max-active slot cells and clears them before any room can use one.
+        rooms.setGeneratedMaps(generatedMaps);
         RoomService roomList = rooms;
         getServer().getPluginManager().registerEvents(roomList, this);
         inMatch.setLobby(roomList::enterLobby);
@@ -586,6 +601,55 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 || watching.contains(id), roomList::enterLobby);
         getServer().getPluginManager().registerEvents(lobbyReturns, this);
         roomList.start();
+    }
+
+    /**
+     * Generated maps in the arena world's reserved slot cells, and the map source in front of
+     * the arena registry that finds them by name next to the hand-built arenas. The rooms
+     * reserve the cells ({@code arenas.max-active}) and clear them when they start; the cells
+     * are cleared again whenever the arena world reopens. Arena edits are refused while a
+     * cell is in use, and {@code arena create} skips the reserved cells.
+     */
+    private void startGeneratedMaps() {
+        ArenaWorld world = arenaWorld;
+        TickCellWriter writer = new TickCellWriter(new BlockAccess() {
+            @Override
+            public Material get(int x, int y, int z) {
+                return world.world().getType(x, y, z);
+            }
+
+            @Override
+            public void set(int x, int y, int z, Material material) {
+                world.world().getBlockAt(x, y, z).setType(material, false);
+            }
+        });
+        writer.start(this);
+        ChunkTickets tickets = new ChunkTickets() {
+            @Override
+            public void add(int chunkX, int chunkZ) {
+                world.world().addPluginChunkTicket(chunkX, chunkZ, NinjaArenaPlugin.this);
+            }
+
+            @Override
+            public void remove(int chunkX, int chunkZ) {
+                world.currentWorld().ifPresent(current -> current.removePluginChunkTicket(chunkX, chunkZ,
+                        NinjaArenaPlugin.this));
+            }
+        };
+        ArenaRegistry registry = arenas;
+        // An unreadable arenas.yml hides where hand-built arenas are, so no cell is reserved then.
+        generatedMaps = new GeneratedMaps(registry.grid(),
+                () -> registry.all().stream().map(Arena::cell).toList(), registry::isReadable, writer, tickets,
+                task -> getServer().getScheduler().runTaskAsynchronously(this, task),
+                task -> {
+                    if (isEnabled()) {
+                        getServer().getScheduler().runTask(this, task);
+                    }
+                }, getLogger());
+        registry.setReservedCells(generatedMaps::isReserved);
+        registry.setSlotCellsInUse(generatedMaps::inUse);
+        world.afterReopen(generatedMaps::reopened);
+        maps = new ArenaMaps(registry, generatedMaps);
     }
 
     /**
@@ -890,6 +954,12 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (deaths != null) {
             deaths.close();
             deaths = null;
+        }
+        if (generatedMaps != null) {
+            // Queued placement stops and the tickets come off; the cells are cleared on the next start.
+            generatedMaps.close();
+            generatedMaps = null;
+            maps = null;
         }
         if (arenas != null) {
             arenas.close().forEach(getLogger()::warning);

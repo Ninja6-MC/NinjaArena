@@ -258,6 +258,25 @@ class ArenaWorldLifecycleTest {
     }
 
     @Test
+    void hooksAfterAReopenRunOnceTheWorldIsPublishedInOrder() {
+        Generation first = new Generation();
+        Generation second = new Generation();
+        var manager = new ArenaWorld(first.world, () -> second.world, world -> true);
+        List<String> calls = new ArrayList<>();
+        manager.onReopen(() -> calls.add("restore"));
+        manager.afterReopen(() -> calls.add("slot cells on " + manager.world().getUID()));
+        manager.afterReopen(() -> calls.add("second"));
+        manager.world();
+        assertEquals(List.of(), calls, "an open world runs no hook");
+
+        assertTrue(manager.releaseIfIdle(() -> true));
+        assertSame(second.world, manager.world());
+        assertEquals(List.of("restore", "slot cells on " + second.world.getUID(), "second"), calls);
+        manager.world();
+        assertEquals(3, calls.size(), "the hooks run once per reopen");
+    }
+
+    @Test
     void aHoldOnAnOpenWorldDoesNotReopenIt() {
         Generation first = new Generation();
         int[] loads = {0};

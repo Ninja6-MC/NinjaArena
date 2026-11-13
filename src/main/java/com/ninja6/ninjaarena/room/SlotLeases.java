@@ -172,4 +172,9 @@ public final class SlotLeases<K> {
     public int leased() {
         return leases.size();
     }
+
+    /** The arena of every lease held, in the order they were granted. */
+    public List<String> leasedArenas() {
+        return List.copyOf(leases.values());
+    }
 }

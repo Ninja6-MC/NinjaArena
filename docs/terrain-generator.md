@@ -3,7 +3,8 @@
 `com.ninja6.ninjaarena.terrain` turns a seed and a difficulty (1 to 5) into one team's
 side of a generated map. It is pure logic: no world, server, scheduler, clock or
 configuration, so it runs on any thread and later tasks can build a side off the main
-thread and place it afterwards. It is not wired into rooms or matches yet.
+thread and place it afterwards. Rooms play the maps it makes in reserved slot cells;
+see [Generated map lifecycle](#generated-map-lifecycle).
 
 ```java
 TerrainModel side = TerrainGenerator.generate(seed, difficulty); // default size
@@ -326,8 +327,8 @@ When a search fails, `MapSearch.fallback(lastGoodSeed)` decides what the room pl
 `LAST_GOOD_SEED` with that seed if the room has one, else `HAND_BUILT`. Each carries the
 `messages.yml` key that tells the room's players: `room.map-fallback-seed` (`<seed>`,
 `<attempts>`, `<last>`) or `room.map-fallback-hand-built` (`<seed>`, `<attempts>`,
-`<arena>`). Issue #155 owns the room wiring of this decision; this package provides the
-decision and the messages.
+`<arena>`). This package provides the decision and the messages; rooms apply them, as
+described under [Generated map lifecycle](#generated-map-lifecycle).
 
 Generating and checking a default side takes about 12 ms (median over 30 seeds at
 difficulty 5 after warm-up, with points for 2 or 4 teams), of which the solver is about
@@ -336,11 +337,11 @@ does not assert times.
 
 ### What later tasks do
 
-* **#155** owns the room wiring: it runs the search off the main thread when a room
-  needs a map, remembers the accepted seed as the room's last good seed, and on
-  `Failed` applies `MapSearch.fallback` and sends its message. Nothing in a room calls
-  the search yet.
-* **#160** places `map.layout()` and turns `map.points()` into world locations.
+* Rooms run the search off the main thread when they need a map, remember the accepted
+  seed as the room's last good seed, and on `Failed` apply `MapSearch.fallback` and send
+  its message ([Generated map lifecycle](#generated-map-lifecycle)).
+* **#160** replaces the simple cell writer with tick-budgeted placement of
+  `map.layout()`; the map's points are already turned into world locations.
 * **#161** and **#162** may collapse any crumbling blocks, in any order, at any time:
   an accepted map keeps a route from every team spawn to the centre that never relies
   on one, so they need no path check of their own. That guarantee covers crumbling
@@ -393,3 +394,101 @@ If the digest's byte layout changes, bump `TerrainModel.DIGEST_FORMAT` as well.
   the spawns, as described under Movement solver and challenge check.
 * Placement runs the generator off the main thread and writes the model column by
   column, turning kinds into blocks with `ThemePalette`.
+
+## Generated map lifecycle
+
+`com.ninja6.ninjaarena.map` plays generated maps in the arena world. It is the only part
+of the plugin that touches the world for them; this package stays pure.
+
+### Slot cells
+
+`SlotCells` reserves `arenas.max-active` cells of the `ArenaGrid`, one per arena slot,
+farthest from the origin first (the reverse of `cellsNearestFirst()`, which `arena
+create` fills). A cell that holds a hand-built arena is passed over, and the next free
+one is reserved instead, with a log line. The choice depends only on the grid, the count
+and the hand-built arenas' cells, so it is the same after every restart while the config
+and `arenas.yml` are unchanged. A reload keeps the cells already reserved: a higher
+count adds cells after them, a lower one drops the last ones, but never a cell a map
+still uses, which stays reserved until it is free. `ArenaRegistry.create` skips the
+reserved cells and refuses one named by hand (`arena.error.cell-reserved`).
+
+Within its cell a map uses a fixed region: centred, as wide and long as the cell's
+four-team map (`width + 2 * length` of `SideDimensions.forCell`), and the side's height
+from `GeneratedMaps.FLOOR_Y` (32). A two-team map is centred in the same region. Nothing
+outside the region is written or cleared.
+
+### Lifecycle
+
+`GeneratedMaps` holds one state per cell: free, clearing, preparing, failed, ready or
+held. Everything happens on the server thread except the search.
+
+1. **Lease.** A room on generated maps asks for an arena slot under its map's name
+   (`generated:<n>`, which no hand-built name can match). The slot is granted only while
+   a cell is free and no arena is in edit mode.
+2. **Prepare.** `prepare(name, request, done)` takes a free cell, puts plugin chunk
+   tickets on the region's chunks before any block is written, clears the region and
+   meanwhile runs `MapSearch` on an async executor. A chunk unloaded since its last use
+   comes back as the world save had it, so the clear is never skipped.
+3. **Place.** An accepted map is handed to the `CellWriter`. Once placed it is an
+   `Arena`: the cell, bounds from the layout's box at the map's origin, team spawns,
+   enemy spawns and the waiting room from `MapPoints.Point.toArenaPoint`. It passes
+   `ArenaValidator`, and `done` gets `Ready` with the accepted seed, which the room
+   keeps as its last good seed (with its difficulty), in memory only.
+4. **Fail.** A rejected search gives `Failed`; the cell stays the map's. The room
+   applies `MapSearch.fallback`: its last good seed, searched again at the difficulty it
+   was good at, in the same cell, else the hand-built arena a new room would get, after
+   freeing the cell. Its players get `room.map-fallback-seed` or
+   `room.map-fallback-hand-built`.
+5. **Play.** `ArenaMaps` is the `MapSource` in front of `ArenaRegistry`: generated names
+   go to `GeneratedMaps`, every other name to the registry. The match engine, death
+   handling, spectating, the enemy spawner, enemy cleanup and the tools look maps up
+   through it. `hold` and `release` mark the map as in use by a match; `reset` does
+   nothing, since a generated map is never restored from a copy. `MatchService` reads
+   the team spawns again at every round's PREP, so a map placed again between rounds can
+   move them.
+6. **Reset.** When the match closes, the room frees the map: `free` cancels any work left,
+   clears the region and takes the tickets off, and the cell is free again. The room
+   then asks for a slot again and its map is generated and placed anew for the next
+   match. A room that closes, changes map or changes between 2 and 4 teams frees its map
+   the same way.
+
+Generated maps are never written to `arenas.yml` (`ArenaCodec.encode` refuses a generated
+name). Every slot cell is cleared when it is reserved on startup or by a reload, and again
+when the arena world reopens after a retire (`ArenaWorld.afterReopen`), so nothing a world
+save kept from an earlier run survives. A cell being cleared counts as in use. While
+`arenas.yml` cannot be read, no cell is reserved or cleared, since the registry cannot
+say which cells hold hand-built arenas.
+
+While any cell is in use, `ArenaRegistry` refuses `create` and `startEdit`
+(`arena.error.edit-while-generated`), as it does during a match: edit mode turns
+protection off across the whole arena world, and a placed map may hold lava. The lock
+works both ways, since a generated slot is not granted while an arena is in edit mode.
+
+Each match regenerates its map; this task does not regenerate between rounds.
+`RoomService.playGenerated(room, seed, difficulty)` is the entry point; the commands,
+seed modes and per-slot settings that call it, and per-round regeneration through the
+shop phase's `MatchService.setMapReady`, belong to #163.
+
+### The placement seam
+
+`CellWriter` is what #160 fills in:
+
+```java
+CompletableFuture<Void> place(ArenaLayout layout, int originX, int originY, int originZ);
+CompletableFuture<Void> clear(ArenaBounds region);
+void close();
+```
+
+`place` writes every non-air block of the layout with `ThemePalette`; air is not written,
+since the region is always cleared first. `clear` sets every block of the region to air.
+Futures complete on the server thread; cancelling one drops the work left, and
+`GeneratedMaps` clears the region afterwards. Jobs run in the order they were asked for.
+
+`TickCellWriter` is the simple implementation used now: one queue, worked through every
+tick up to a fixed budget of `DEFAULT_BLOCKS_PER_TICK` (32,768) blocks visited, written
+or not, through a `BlockAccess` that sets blocks without physics. At the default cell
+size a clear visits 3,686,400 blocks (about 113 ticks) and a four-team placement as
+many again, so a map takes roughly 11 seconds to be ready. It does not watch tick times
+and has no size limit for shared hosts; #160 replaces the fixed budget with one that
+shrinks when `StabilityGate` reports high tick times, adds the size limit and reports
+progress for #164.

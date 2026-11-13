@@ -18,6 +18,8 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.logging.Level;
 import org.bukkit.World;
@@ -54,9 +56,15 @@ import org.bukkit.plugin.Plugin;
  * it enters edit mode or is deleted, the two ways its definition can change, so whatever
  * relies on it (such as players waiting in its waiting room) can let go first.
  *
+ * <p><b>Slot cells.</b> Generated maps are not in the registry: they are played in
+ * reserved slot cells and held in memory. {@link #setReservedCells} keeps {@link #create}
+ * out of those cells, and {@link #setSlotCellsInUse} refuses every edit while a generated
+ * map uses one, as a running match does, since edit mode turns protection off across the
+ * whole arena world.
+ *
  * <p>Not thread-safe: call it from the server thread.
  */
-public final class ArenaRegistry {
+public final class ArenaRegistry implements MapSource {
 
     private final ArenaStore store;
     private ArenaGrid grid;
@@ -74,6 +82,8 @@ public final class ArenaRegistry {
     private boolean unreadable;
     private BooleanSupplier worldAcceptingOperations = () -> true;
     private Runnable beforeFinishEdit = () -> { };
+    private Predicate<GridCell> reservedCells = cell -> false;
+    private Supplier<List<GridCell>> slotCellsInUse = List::of;
 
     private final List<Consumer<String>> editOrDeleteListeners = new ArrayList<>();
 
@@ -88,6 +98,31 @@ public final class ArenaRegistry {
         this.worldSaving = Objects.requireNonNull(worldSaving, "worldSaving");
         this.tickets = Objects.requireNonNull(tickets, "tickets");
         this.copies = Objects.requireNonNull(copies, "copies");
+    }
+
+    /**
+     * The cells reserved for generated maps. {@link #create} never picks one and refuses one
+     * named by hand. By default no cell is reserved.
+     */
+    public void setReservedCells(Predicate<GridCell> reservedCells) {
+        this.reservedCells = Objects.requireNonNull(reservedCells, "reservedCells");
+    }
+
+    /**
+     * The slot cells a generated map uses now, being generated, placed, played or cleared.
+     * While any is in use no edit can start, for the same reason as during a match. By
+     * default none is.
+     */
+    public void setSlotCellsInUse(Supplier<List<GridCell>> slotCellsInUse) {
+        this.slotCellsInUse = Objects.requireNonNull(slotCellsInUse, "slotCellsInUse");
+    }
+
+    /**
+     * Whether {@code arenas.yml} was read. While it was not, the registry holds no arena, so
+     * it cannot say which cells hand-built arenas are in.
+     */
+    public boolean isReadable() {
+        return !unreadable;
     }
 
     public boolean canResize() {
@@ -216,13 +251,15 @@ public final class ArenaRegistry {
         }
         if (cell == null) {
             cell = grid.cellsNearestFirst().stream()
-                    .filter(candidate -> !taken.contains(candidate))
+                    .filter(candidate -> !taken.contains(candidate) && !reservedCells.test(candidate))
                     .findFirst()
                     .orElseThrow(() -> new ArenaException("arena.error.no-free-cell"));
         } else if (!grid.insideBorder(cell)) {
             throw new ArenaException("arena.error.cell-outside", "cell", cell.describe());
         } else if (taken.contains(cell)) {
             throw new ArenaException("arena.error.cell-taken", "cell", cell.describe());
+        } else if (reservedCells.test(cell)) {
+            throw new ArenaException("arena.error.cell-reserved", "cell", cell.describe());
         }
         refuseEditWhileHeld();
         // A copy left by an earlier arena of this name must never be restored over this one.
@@ -580,6 +617,11 @@ public final class ArenaRegistry {
     private void refuseEditWhileHeld() throws ArenaException {
         if (!held.isEmpty()) {
             throw new ArenaException("arena.error.edit-while-match", "arenas", String.join(", ", new TreeSet<>(held)));
+        }
+        List<GridCell> slots = slotCellsInUse.get();
+        if (!slots.isEmpty()) {
+            throw new ArenaException("arena.error.edit-while-generated", "cells",
+                    String.join("; ", slots.stream().map(GridCell::describe).toList()));
         }
     }
 

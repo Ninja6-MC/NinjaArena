@@ -6,7 +6,7 @@ import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
-import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.arena.MapSource;
 import com.ninja6.ninjaarena.event.EventSettings.Bonus;
 import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.match.MatchResult.Reason;
@@ -71,7 +71,10 @@ import org.bukkit.scheduler.BukkitTask;
  * can use it. The arena is reset from its saved copy before the players arrive
  * and again when the match closes. If it cannot be held or the first reset fails, the
  * match does not start and its players go back; a failed reset at the close is logged,
- * and the registry keeps the arena unavailable until a reset succeeds.
+ * and the registry keeps the arena unavailable until a reset succeeds. Arenas are found
+ * through a {@link MapSource}, so a generated map in a slot cell plays the same way; its
+ * room clears and regenerates the cell after the match instead of restoring a copy. The
+ * team spawns are read from the map again at every round's PREP.
  *
  * <p><b>Leaving.</b> A player leaves the match by the leave command, by being teleported out
  * of the arena world for any reason, or by disconnecting. The leave command, like the end of
@@ -127,8 +130,28 @@ public final class MatchService {
     /** The longest rejoin grace period, in seconds. */
     public static final int MAX_REJOIN_GRACE_SECONDS = 600;
 
-    /** A running match and the team spawns it places players at, team 1 first. */
-    private record Running(Match match, List<ArenaPoint> spawns) {
+    /**
+     * A running match and the team spawns it places players at, team 1 first. The spawns
+     * are read again at every round's PREP, so a map that changes between rounds can move
+     * them. Compared by identity.
+     */
+    private static final class Running {
+
+        private final Match match;
+        private List<ArenaPoint> spawns;
+
+        Running(Match match, List<ArenaPoint> spawns) {
+            this.match = match;
+            this.spawns = List.copyOf(spawns);
+        }
+
+        Match match() {
+            return match;
+        }
+
+        List<ArenaPoint> spawns() {
+            return spawns;
+        }
     }
 
     /** What {@link #ready} did. */
@@ -205,7 +228,7 @@ public final class MatchService {
     }
 
     private final Plugin plugin;
-    private final ArenaRegistry arenas;
+    private final MapSource arenas;
     private final Supplier<World> arenaWorld;
     private MatchSettings settings;
     private Sounds sounds;
@@ -238,7 +261,7 @@ public final class MatchService {
      * @param readyForRound readies a living player for a round before they are placed at their
      *                      spawn; {@link #readyForRound(Player)} on a server
      */
-    public MatchService(Plugin plugin, ArenaRegistry arenas, Supplier<World> arenaWorld, MatchSettings settings,
+    public MatchService(Plugin plugin, MapSource arenas, Supplier<World> arenaWorld, MatchSettings settings,
             Function<Player, RestoreResult> restore, Consumer<? super MatchEvent> events,
             Consumer<Player> readyForRound) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -780,8 +803,25 @@ public final class MatchService {
         }
     }
 
+    /**
+     * Reads the match's team spawns from its map again, for a new round: a generated map
+     * placed again between rounds can have moved them. A map that is gone or now has fewer
+     * spawns than the match has teams keeps the spawns the match already has.
+     */
+    private void refreshSpawns(Running running) {
+        Match match = running.match();
+        Optional<List<ArenaPoint>> spawns = arenas.get(match.arena()).map(Arena::teamSpawns);
+        if (spawns.isPresent() && spawns.get().size() >= match.teamCount()) {
+            running.spawns = List.copyOf(spawns.get());
+        } else {
+            plugin.getLogger().warning("Arena " + match.arena() + " has no team spawn for every team now; the match"
+                    + " keeps its earlier spawns.");
+        }
+    }
+
     /** Readies every player in the match and teleports them to their team spawn. */
     private void place(Running running) {
+        refreshSpawns(running);
         Match match = running.match();
         for (UUID playerId : match.players()) {
             Player player = plugin.getServer().getPlayer(playerId);
