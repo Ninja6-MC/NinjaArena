@@ -17,11 +17,17 @@ class ArenaValidatorTest {
     }
 
     @Test
+    void completeArenaWithoutAWaitingRoomHasNoProblems() {
+        Arena arena = Arenas.complete("dojo").withWaitingRoom(null);
+        assertEquals(List.of(), ArenaValidator.problems(arena, GRID));
+        assertEquals(List.of(), ArenaValidator.outside(arena, GRID));
+    }
+
+    @Test
     void newArenaListsEverythingMissing() {
         List<String> problems = ArenaValidator.problems(Arena.create("dojo", new GridCell(0, 0)), GRID);
         assertEquals(List.of(
                 "Bounds are not set.",
-                "The waiting room is not set.",
                 "Needs 2 to 4 team spawns, has 0.",
                 "Needs at least one enemy spawn point: enemies spawn there during rounds."), problems);
     }

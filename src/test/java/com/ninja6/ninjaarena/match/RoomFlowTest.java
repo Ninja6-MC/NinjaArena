@@ -159,6 +159,19 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void aRoomCanStartAMatchWithoutAnArenaWaitingRoomPoint() throws Exception {
+        arenas.startEdit("dojo");
+        arenas.update("dojo", arena -> arena.withWaitingRoom(null));
+        arenas.finishEdit("dojo");
+        assertTrue(arenas.isAvailable("dojo"));
+        Room room = openWith(ALICE, BOB);
+        rooms.start(player(ALICE), null);
+        MatchView match = matches.match("dojo").orElseThrow();
+        assertEquals(Set.of(ALICE, BOB), Set.copyOf(match.players()));
+        assertTrue(room.isPlaying());
+    }
+
+    @Test
     void joinCuesStayInsideTheirRoomIncludingTheJoiningPlayer() {
         rooms.setSounds(new Sounds(plugin.getServer()::getPlayer));
         rooms.create(player(ALICE));
