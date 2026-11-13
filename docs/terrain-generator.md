@@ -118,9 +118,11 @@ more blocks under the base level):
 | 3 | 729 | 1,619 | 160 | 29.8 |
 | 5 | 1,488 | 3,585 | 260 | 62.7 |
 
-Generating a default side takes about 2 ms per difficulty after warm-up, and about 30 ms
-for the first call in a JVM, on a 6-core desktop CPU. `TerrainGeneratorTest` checks that
-these measures grow with difficulty; it does not assert times.
+Generating a default side takes about 3.2 to 4.1 ms after warm-up across difficulties
+1 to 5 on a desktop CPU (median of three 320-side batches per difficulty over sixteen
+fixed seeds). The hazard pass adds per-cell random draws in the ceiling and crumble
+scans. `TerrainGeneratorTest` checks that feature measures grow with difficulty; it does
+not assert times.
 
 ## Hazard layout
 

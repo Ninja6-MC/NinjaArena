@@ -145,8 +145,6 @@ class TerrainGeneratorTest {
                         + ": " + counts[i] + " <= " + previous[i]);
             }
             assertTrue(gaps > previousGaps, "gap cells at difficulty " + difficulty);
-            System.out.println("Hazard census d" + difficulty + ": " + java.util.Arrays.toString(counts)
-                    + ", gap cells " + gaps);
             previous = counts;
             previousGaps = gaps;
         }
