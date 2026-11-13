@@ -98,8 +98,8 @@ class GeneratedRoomFlowTest extends MatchFixture {
             fake.permissions.add(NinjaArenaCommand.PLAY);
             fake.permissions.add(RoomService.CREATE);
         }
-        generated = new GeneratedMaps(arenas.grid(), 0, () -> arenas.all().stream().map(Arena::cell).toList(), writer,
-                blocks.ticketsView(), Runnable::run, Runnable::run, plugin.getLogger());
+        generated = new GeneratedMaps(arenas.grid(), () -> arenas.all().stream().map(Arena::cell).toList(),
+                arenas::isReadable, writer, blocks.ticketsView(), Runnable::run, Runnable::run, plugin.getLogger());
         arenas.setReservedCells(generated::isReserved);
         arenas.setSlotCellsInUse(generated::inUse);
         maps = new ArenaMaps(arenas, generated);

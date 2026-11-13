@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -48,10 +49,12 @@ import java.util.logging.Logger;
  * generates again.
  *
  * <p><b>Nothing left behind.</b> Generated maps are held in memory only and never reach
- * {@code arenas.yml}. Every slot cell is cleared on startup ({@link #start}) and when the
- * arena world reopens after a retire ({@link #reopened}), so a map the world save kept
- * from an earlier run is gone before any cell is used, and every cell is cleared again
- * before each map is placed. A cell being cleared counts as in use.
+ * {@code arenas.yml}. Every slot cell is cleared when it is reserved ({@link #resize}, on
+ * startup and on reload) and when the arena world reopens after a retire
+ * ({@link #reopened}), so a map the world save kept from an earlier run is gone before
+ * any cell is used, and every cell is cleared again before each map is placed. A cell
+ * being cleared counts as in use. While the hand-built arenas cannot be read, no cell is
+ * reserved or cleared, since one might hold an arena nobody knows about.
  *
  * <p>Server thread only, apart from the searches, which run on the executor given.
  */
@@ -138,19 +141,23 @@ public final class GeneratedMaps {
     private final Logger logger;
     private Search search = Search.DEFAULT;
     private Runnable freed = () -> { };
+    private final BooleanSupplier handBuiltKnown;
     private int names;
     private boolean closed;
 
     /**
-     * Reserves the slot cells; {@link #start} clears them.
+     * Reserves no cell yet: {@link #resize} reserves and clears them.
      *
-     * @param count     {@code arenas.max-active}
-     * @param handBuilt the cells of the hand-built arenas, which are never reserved
-     * @param searches  runs seed searches off the server thread
-     * @param server    runs a task on the server thread
+     * @param handBuilt      the cells of the hand-built arenas, which are never reserved
+     * @param handBuiltKnown whether {@code handBuilt} is complete: false while
+     *                       {@code arenas.yml} could not be read
+     * @param searches       runs seed searches off the server thread
+     * @param server         runs a task on the server thread
      */
-    public GeneratedMaps(ArenaGrid grid, int count, Supplier<? extends Collection<GridCell>> handBuilt,
-            CellWriter writer, ChunkTickets tickets, Executor searches, Executor server, Logger logger) {
+    public GeneratedMaps(ArenaGrid grid, Supplier<? extends Collection<GridCell>> handBuilt,
+            BooleanSupplier handBuiltKnown, CellWriter writer, ChunkTickets tickets, Executor searches,
+            Executor server, Logger logger) {
+        this.handBuiltKnown = Objects.requireNonNull(handBuiltKnown, "handBuiltKnown");
         this.grid = Objects.requireNonNull(grid, "grid");
         this.writer = Objects.requireNonNull(writer, "writer");
         this.tickets = Objects.requireNonNull(tickets, "tickets");
@@ -158,8 +165,6 @@ public final class GeneratedMaps {
         this.server = Objects.requireNonNull(server, "server");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.cells = new SlotCells(grid, handBuilt, logger::warning);
-        cells.resize(count, this::inUse);
-        syncSlots();
     }
 
     /** Replaces the seed search; for tests. */
@@ -178,11 +183,6 @@ public final class GeneratedMaps {
     }
 
     // ---- Cells ----
-
-    /** Clears every slot cell. Called once on startup, before any room can use one. */
-    public void start() {
-        sweep("on startup");
-    }
 
     /**
      * The arena world reopened after a retire: the world save may hold maps from before, so
@@ -238,6 +238,11 @@ public final class GeneratedMaps {
      * map still uses is never given up, only once it is free. New cells are cleared.
      */
     public void resize(int count) {
+        if (!handBuiltKnown.getAsBoolean()) {
+            logger.warning("The hand-built arenas could not be read, so no slot cell is reserved for generated"
+                    + " maps and none is cleared until they can be.");
+            return;
+        }
         cells.resize(count, this::inUse);
         syncSlots().forEach(this::clear);
     }
@@ -346,10 +351,11 @@ public final class GeneratedMaps {
         target.work = cleared;
         SideDimensions size = SideDimensions.forCell(grid.cellSize());
         CompletableFuture<MapSearch.Outcome> searched = CompletableFuture
-                .supplyAsync(() -> search.search(request.seed(), request.difficulty(), request.teams(), size), searches)
-                .thenApplyAsync(outcome -> outcome, server);
+                .supplyAsync(() -> search.search(request.seed(), request.difficulty(), request.teams(), size), searches);
+        // Back on the server thread for every outcome, a search that threw included.
         cleared.thenCombine(searched, (ignored, outcome) -> outcome)
-                .whenComplete((outcome, error) -> searched(target, generation, request, outcome, error, done));
+                .whenCompleteAsync((outcome, error) -> searched(target, generation, request, outcome, error, done),
+                        server);
     }
 
     private void searched(Slot slot, int generation, Request request, MapSearch.Outcome outcome, Throwable error,

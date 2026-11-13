@@ -117,6 +117,14 @@ public final class ArenaRegistry implements MapSource {
         this.slotCellsInUse = Objects.requireNonNull(slotCellsInUse, "slotCellsInUse");
     }
 
+    /**
+     * Whether {@code arenas.yml} was read. While it was not, the registry holds no arena, so
+     * it cannot say which cells hand-built arenas are in.
+     */
+    public boolean isReadable() {
+        return !unreadable;
+    }
+
     public boolean canResize() {
         return worldAcceptingOperations.getAsBoolean() && arenas.isEmpty() && held.isEmpty() && !unreadable;
     }

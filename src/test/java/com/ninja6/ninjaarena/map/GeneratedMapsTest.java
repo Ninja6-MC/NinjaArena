@@ -20,6 +20,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Material;
@@ -40,9 +44,18 @@ class GeneratedMapsTest {
         return logger;
     }
 
-    private GeneratedMaps maps(int count) {
-        return new GeneratedMaps(GRID, count, () -> handBuilt, writer, blocks.ticketsView(), Runnable::run,
+    /** No cell reserved yet. */
+    private GeneratedMaps fresh() {
+        return new GeneratedMaps(GRID, () -> handBuilt, () -> true, writer, blocks.ticketsView(), Runnable::run,
                 Runnable::run, quiet());
+    }
+
+    /** Cells reserved and cleared, as on startup. */
+    private GeneratedMaps maps(int count) {
+        GeneratedMaps maps = fresh();
+        maps.resize(count);
+        drain();
+        return maps;
     }
 
     private void drain() {
@@ -82,10 +95,11 @@ class GeneratedMapsTest {
 
     @Test
     void startupClearsEverySlotCellAndTakesItsTicketsOffAfterwards() {
-        GeneratedMaps maps = maps(2);
+        GeneratedMaps maps = fresh();
+        assertEquals(List.of(), maps.cells(), "nothing is reserved until the slot count is applied");
+        maps.resize(2);
         junk(maps);
         blocks.set(0, 64, 0, Material.STONE);
-        maps.start();
         assertEquals(maps.cells(), maps.inUse(), "a cell being cleared is in use");
         assertFalse(blocks.tickets.isEmpty(), "tickets are on while the cells are cleared");
         drain();
@@ -183,9 +197,9 @@ class GeneratedMapsTest {
         assertTrue(blocks.tickets.isEmpty());
         assertTrue(blocks.countSolid() > 0);
 
-        GeneratedMaps after = maps(2);
+        GeneratedMaps after = fresh();
+        after.resize(2);
         assertEquals(before.cells(), after.cells(), "the same cells after a restart");
-        after.start();
         drain();
         assertEquals(0, blocks.countSolid());
         assertTrue(blocks.tickets.isEmpty());
@@ -270,5 +284,56 @@ class GeneratedMapsTest {
         Arena arena = assertInstanceOf(GeneratedMaps.Ready.class, outcomes.getLast()).arena();
         assertEquals(4, arena.teamSpawns().size());
         assertEquals(maps.region(arena.cell()), arena.bounds(), "a four-team map fills its region");
+    }
+
+    @Test
+    void noCellIsReservedOrClearedWhileTheHandBuiltArenasCannotBeRead() {
+        boolean[] readable = {false};
+        GeneratedMaps maps = new GeneratedMaps(GRID, () -> handBuilt, () -> readable[0], writer,
+                blocks.ticketsView(), Runnable::run, Runnable::run, quiet());
+        GridCell far = new ArrayList<>(GRID.cellsNearestFirst()).reversed().getFirst();
+        // An arena nobody could read sits in the cell that would be reserved first.
+        blocks.set(GRID.cellBounds(far).minX() + 100, 40, GRID.cellBounds(far).minZ() + 100, Material.STONE);
+        maps.resize(2);
+        drain();
+        assertEquals(List.of(), maps.cells());
+        assertEquals(0, maps.freeCells());
+        assertEquals(1, blocks.countSolid(), "nothing is cleared");
+        assertTrue(blocks.tickets.isEmpty());
+        readable[0] = true;
+        maps.resize(2);
+        assertEquals(2, maps.cells().size());
+    }
+
+    @Test
+    void aSearchThatThrowsIsReportedOnTheServerThread() throws Exception {
+        ExecutorService async = Executors.newSingleThreadExecutor(
+                task -> new Thread(task, "async-search"));
+        LinkedBlockingQueue<Runnable> server = new LinkedBlockingQueue<>();
+        try {
+            GeneratedMaps maps = new GeneratedMaps(GRID, () -> handBuilt, () -> true, writer, blocks.ticketsView(),
+                    async, server::add, quiet());
+            maps.resize(1);
+            drain();
+            maps.setSearch((seed, difficulty, teams, size) -> {
+                throw new IllegalStateException("search failed");
+            });
+            List<String> threads = new ArrayList<>();
+            maps.prepare("generated:1", new GeneratedMaps.Request(5, 1, 2), outcome -> {
+                threads.add(Thread.currentThread().getName());
+                outcomes.add(outcome);
+            });
+            drain();
+            Runnable task = server.poll(10, TimeUnit.SECONDS);
+            assertTrue(task != null, "the outcome is handed to the server thread");
+            assertEquals(List.of(), threads, "nothing runs before the server thread does");
+            task.run();
+            assertEquals(List.of(Thread.currentThread().getName()), threads);
+            GeneratedMaps.Failed failed = assertInstanceOf(GeneratedMaps.Failed.class, outcomes.getLast());
+            assertEquals(5, failed.requestedSeed());
+            assertTrue(maps.cellOf("generated:1").isPresent(), "the cell stays the map's for another seed");
+        } finally {
+            async.shutdownNow();
+        }
     }
 }

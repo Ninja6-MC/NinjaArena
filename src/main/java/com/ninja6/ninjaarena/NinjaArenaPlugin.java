@@ -637,8 +637,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             }
         };
         ArenaRegistry registry = arenas;
-        generatedMaps = new GeneratedMaps(registry.grid(), 0,
-                () -> registry.all().stream().map(Arena::cell).toList(), writer, tickets,
+        // An unreadable arenas.yml hides where hand-built arenas are, so no cell is reserved then.
+        generatedMaps = new GeneratedMaps(registry.grid(),
+                () -> registry.all().stream().map(Arena::cell).toList(), registry::isReadable, writer, tickets,
                 task -> getServer().getScheduler().runTaskAsynchronously(this, task),
                 task -> {
                     if (isEnabled()) {

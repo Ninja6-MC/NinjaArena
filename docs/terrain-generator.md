@@ -455,7 +455,9 @@ held. Everything happens on the server thread except the search.
 Generated maps are never written to `arenas.yml` (`ArenaCodec.encode` refuses a generated
 name). Every slot cell is cleared when it is reserved on startup or by a reload, and again
 when the arena world reopens after a retire (`ArenaWorld.afterReopen`), so nothing a world
-save kept from an earlier run survives. A cell being cleared counts as in use.
+save kept from an earlier run survives. A cell being cleared counts as in use. While
+`arenas.yml` cannot be read, no cell is reserved or cleared, since the registry cannot
+say which cells hold hand-built arenas.
 
 While any cell is in use, `ArenaRegistry` refuses `create` and `startEdit`
 (`arena.error.edit-while-generated`), as it does during a match: edit mode turns
