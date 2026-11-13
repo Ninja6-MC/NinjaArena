@@ -118,6 +118,11 @@ public final class TerrainModel {
         return count;
     }
 
+    /** A copy of the cells as kind ordinals, in the column order described above. */
+    byte[] copyCells() {
+        return cells.clone();
+    }
+
     /** Memory held by the cells, in bytes. */
     public int cellBytes() {
         return cells.length;

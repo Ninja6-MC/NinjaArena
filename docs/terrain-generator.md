@@ -183,6 +183,155 @@ The two generator golden digests changed deliberately for these passes. The dige
 layout is unchanged, so `TerrainModel.DIGEST_FORMAT` remains 1. Tests also retain both
 old digests for the pre-hazard passes to pin streams 1 through 6.
 
+## Movement solver and challenge check
+
+`MovementSolver.solve(side, movement)` checks one side and `MapSearch.search(seed,
+difficulty, teamCount)` turns a requested seed into an accepted map. Both are pure, like
+the generator: no world, server, scheduler, clock or configuration, safe on any thread,
+and the same input always gives the same answer.
+
+```java
+MapSearch.Outcome outcome = MapSearch.search(seed, difficulty, teamCount);
+if (outcome instanceof MapSearch.Accepted map) {
+    // map.seed(), map.layout(), map.points(), map.report()
+}
+```
+
+### Movement model
+
+A standing cell is the block a player's feet are in: `AIR`, with `AIR` above it for the
+head and a solid kind below it. Lava kinds are never stood on, stood in or passed
+through. `CRUMBLE` and `CRUMBLE_PLATFORM` are solid until they collapse, so they can be
+stood on, and they count as hazards. Moves go in the four horizontal directions.
+`MovementModel` holds the limits so they can be tuned; `MovementModel.DEFAULT` is
+cautious vanilla movement:
+
+| Move | Default |
+| :--- | :--- |
+| Walk to the next column at the same height | always |
+| Climb onto the next column | up to `jumpHeight` 1 block higher |
+| Drop off an edge into the next column | at most `safeFall` 3 blocks lower |
+| Jump a gap, landing level or lower | up to `maxGap` 3 columns, at most 3 lower |
+| Jump a gap, landing higher | up to `maxRisingGap` 2 columns, at most 1 higher |
+
+A climb needs air above the take-off for the rise. A jump starts only where the next
+column cannot be walked onto, and needs three blocks of air (`JUMP_CLEARANCE`) from each
+column's feet up to two blocks above the higher end's head, over the take-off, the gap
+and the landing. Drops fall through air only. Flood-filling from the team spawn over
+these moves is what makes a cell reachable, so sealed overhang hollows are standable
+but never reachable.
+
+### Crossing and the challenge measures
+
+A side is crossable when the centre ledge can be reached from the team spawn. It must
+also stay crossable with every crumbling block removed: collapses during a round
+(#161 and #162) may then fire in any order without stranding a team, and those tasks
+need no path check of their own. Across 300 seeds per difficulty this rejects at most
+three extra sides.
+
+Every team's side is the same model turned about the centre, and turns map the four move
+directions onto each other, so one side answers for every team. Outside a side the full
+map holds only air (beyond the spawn edge and in the empty corners of four teams) or the
+centre square (beyond the centre edge), so no route leaves a side except into the
+centre. `MovementSolver.crossLayout(layout, team, movement)` runs the same search over
+a whole `ArenaLayout`; tests compare it with the one-side answer for every team of 2 and
+4.
+
+The challenge is measured on the direct route: the shortest route by horizontal
+distance, and of those the one with the fewest jumps, then the least climb, then the
+fewest hazards. Its measures are what a player heading straight for the centre cannot
+avoid. A least-over-every-route measure was tried first and is 0 on most seeds at every
+difficulty, because a 96-block side always has a way round.
+
+* **Forced jumps:** jumps over a gap on the direct route.
+* **Climb:** blocks the direct route climbs, summed over climbs and rising jumps.
+* **Hazard exposure:** lava and crumbling blocks in the 3 by 3 columns around each
+  standing cell of the direct route, from the floor to the block above the head, summed
+  over the route.
+
+`CrossingReport` carries these with the spawn, crossing and enemy spawn results;
+`problems(minimums)` lists why a side is rejected: `SPAWN_UNSAFE`, `NOT_CROSSABLE`,
+`NOT_CROSSABLE_AFTER_COLLAPSE`, `NO_ENEMY_SPAWNS`, `TOO_FEW_JUMPS`,
+`TOO_LITTLE_CLIMB` or `TOO_FEW_HAZARDS`.
+
+### Minimums
+
+`ChallengeMinimums.forDifficulty(difficulty)` gives initial values, picked at or below
+about the 20th percentile of what the generator gives over 300 seeds per difficulty, so
+most seeds pass. Task 7.12 (#166) tunes them by play.
+
+| Difficulty | Forced jumps | Climb | Hazard exposure |
+| ---: | ---: | ---: | ---: |
+| 1 | 0 | 1 | 0 |
+| 2 | 0 | 2 | 0 |
+| 3 | 0 | 2 | 0 |
+| 4 | 0 | 2 | 1 |
+| 5 | 0 | 2 | 2 |
+
+Forced jumps stay at 0 for now: about four in ten direct routes need no jump at every
+difficulty, so any minimum would reject them; #166 decides whether the generator should
+force more gaps. Over the crossable sides of the same seeds, the direct route's median
+climb rises from 3 at difficulty 1 to about 8 at difficulty 5, and its median hazard
+exposure from 0 to about 12.
+
+### Spawn and enemy points
+
+`solver.points(layout)` gives `MapPoints` in the layout's map frame: block centres at
+feet height with a Minecraft yaw facing the centre (0 is positive z), assuming map x and
+z run along world x and z. Placement (#160) adds the map's world origin, for example
+with `Point.toArenaPoint(originX, originY, originZ)`.
+
+* **Team spawns**, team 1 first: the safe pad cell nearest the middle of the spawn
+  zone, turned to each team. Safe means `SPAWN_PAD` below, two blocks of air, and no
+  hazard in the 3 by 3 columns around it. `checkSpawn` says why a cell is not safe
+  (`IN_LAVA`, `IN_WALL`, `NOT_ON_SPAWN_PAD`, `BESIDE_HAZARD`); a side with no safe pad
+  cell is rejected.
+* **Enemy spawns:** `ENEMY_SPAWNS_PER_SIDE` (3) standing cells per side, reachable from
+  the team spawn, beyond the spawn zone, at least `ENEMY_SPAWN_DISTANCE` (16) blocks
+  from the team spawn, not on a hazard and with none around them. Each is the candidate
+  farthest from the spawn and the earlier picks. The same cells are turned to every
+  team, so 2 teams get 6 and 4 teams get 12, and every team faces the same enemy layout.
+* **Waiting room:** generated maps set none.
+
+### Seed search and fallback
+
+`MapSearch.search` tries the requested seed, then up to `retryLimit` derived seeds
+(default `DEFAULT_RETRY_LIMIT` 8, at most 64), and returns `Accepted` (the attempt, the
+seed it used, the layout, the points and the report) or `Failed` (one report per
+attempt). Attempt `n` uses `MapSearch.attemptSeed(seed, n)`: `SplitMix64.derive(seed,
+1000 + n)`, the seed itself for attempt 0. An accepted map's `seed()` is the room's last
+good seed: searching it again accepts it on attempt 0.
+
+Over 200 seeds per difficulty with the defaults (the same for 2 and 4 teams, since one
+side decides):
+
+| Difficulty | First seed accepted | Accepted within the limit | Attempts per search |
+| ---: | ---: | ---: | ---: |
+| 1 | 100% | 100% | 1.00 |
+| 2 | 95.5% | 100% | 1.05 |
+| 3 | 80.5% | 100% | 1.25 |
+| 4 | 63.0% | 100% | 1.59 |
+| 5 | 61.5% | 100% | 1.65 |
+
+When a search fails, `MapSearch.fallback(lastGoodSeed)` decides what the room plays:
+`LAST_GOOD_SEED` with that seed if the room has one, else `HAND_BUILT`. Each carries the
+`messages.yml` key that tells the room's players: `room.map-fallback-seed` (`<seed>`,
+`<attempts>`, `<last>`) or `room.map-fallback-hand-built` (`<seed>`, `<attempts>`,
+`<arena>`).
+
+Generating and checking a default side takes about 12 to 13 ms (median over 30 seeds at
+difficulty 5 after warm-up, with points for 2 or 4 teams), of which the solver is about
+8 ms; a search averages under two attempts. `MapSearchTest` prints these figures and
+does not assert times.
+
+### What later tasks do
+
+* **#155** runs the search off the main thread when a room needs a map, remembers the
+  accepted seed as the room's last good seed, and on `Failed` applies
+  `MapSearch.fallback` and sends its message. Nothing in a room calls the search yet.
+* **#160** places `map.layout()` and turns `map.points()` into world locations.
+* **#166** tunes `MovementModel` and `ChallengeMinimums` by play.
+
 ## Determinism rules
 
 The same seed, difficulty and dimensions must give a byte-identical model on every run,
@@ -225,8 +374,7 @@ If the digest's byte layout changes, bump `TerrainModel.DIGEST_FORMAT` as well.
 * Hazards are already part of the model, with kinds and control responsibilities above.
 * Mirroring and rotation map `(x, z)` into the centre square's frame; the spawn and
   centre edges say which way each side faces.
-* The movement solver paths from the spawn zone to the centre ledge over `SURFACE`,
-  `SPAWN_PAD`, `PLATFORM`, `CRUMBLE` and `CRUMBLE_PLATFORM` tops, using
-  `terrainTopY` and `at` and checking adjacent hazards.
+* The movement solver checks every side from its spawn to the centre ledge and places
+  the spawns, as described under Movement solver and challenge check.
 * Placement runs the generator off the main thread and writes the model column by
   column, turning kinds into blocks with `ThemePalette`.

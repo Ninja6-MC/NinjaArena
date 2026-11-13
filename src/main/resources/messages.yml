@@ -371,6 +371,8 @@ room:
   map-list-empty: "<yellow>No maps are pickable."
   map-list-current: "<green>- <arena> (current)"
   map-list-entry: "<gray>- <arena>"
+  map-fallback-seed: "<yellow>No playable map came from seed <seed> in <attempts> tries, so the room plays the last good seed, <last>."
+  map-fallback-hand-built: "<yellow>No playable map came from seed <seed> in <attempts> tries and there is no earlier good seed, so the room plays the hand-built arena <arena>."
   no-permission: "<red>You do not have permission to open a room."
   busy: "Leave your match or spectating first."
   refused: "<red><message>"
