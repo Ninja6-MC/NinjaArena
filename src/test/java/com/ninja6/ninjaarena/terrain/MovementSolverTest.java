@@ -23,7 +23,7 @@ class MovementSolverTest {
         CrossingReport report = new TestSide().solve().report();
         assertTrue(report.spawnSafe());
         assertTrue(report.crossable());
-        assertTrue(report.crossableAfterCollapse());
+        assertTrue(report.crossableWithoutCrumble());
         assertEquals(LENGTH - 2 - TestSide.spawnZ(), report.routeLength());
         assertEquals(0, report.forcedJumps());
         assertEquals(0, report.climb());
@@ -108,11 +108,11 @@ class MovementSolverTest {
         assertTrue(solved.standable(5, FEET, 10));
         CrossingReport report = solved.report();
         assertTrue(report.crossable());
-        // Rows 9, 10 and 11 each see three crumbling blocks at floor level; after the
-        // collapse the row is a one-column gap.
+        // Rows 9, 10 and 11 each see three crumbling blocks at floor level. Without relying
+        // on them the row is a one-column gap, jumped from row 9 to row 11.
         assertEquals(9, report.hazardExposure());
         assertEquals(0, report.forcedJumps());
-        assertTrue(report.crossableAfterCollapse());
+        assertTrue(report.crossableWithoutCrumble());
     }
 
     @Test
@@ -121,8 +121,8 @@ class MovementSolverTest {
         CrossingReport report = new TestSide().trench(10, 10 + wide - 1, 2)
                 .fill(6, GROUND, 10, 9, GROUND, 10 + wide - 1, BlockKind.CRUMBLE).solve().report();
         assertTrue(report.crossable());
-        assertFalse(report.crossableAfterCollapse());
-        assertEquals(List.of(CrossingReport.Problem.NOT_CROSSABLE_AFTER_COLLAPSE), report.problems(NONE));
+        assertFalse(report.crossableWithoutCrumble());
+        assertEquals(List.of(CrossingReport.Problem.NEEDS_CRUMBLE), report.problems(NONE));
     }
 
     @Test
@@ -214,7 +214,7 @@ class MovementSolverTest {
                     CrossingReport full = MovementSolver.crossLayout(layout, team, MovementModel.DEFAULT);
                     String where = "seed " + seed + ", " + teams + " teams, team " + team;
                     assertEquals(alone.crossable(), full.crossable(), where);
-                    assertEquals(alone.crossableAfterCollapse(), full.crossableAfterCollapse(), where);
+                    assertEquals(alone.crossableWithoutCrumble(), full.crossableWithoutCrumble(), where);
                     if (alone.crossable()) {
                         // The full map's route walks on over the centre ledge into the square.
                         assertEquals(alone.routeLength() + side.dimensions().centreDepth(), full.routeLength(), where);

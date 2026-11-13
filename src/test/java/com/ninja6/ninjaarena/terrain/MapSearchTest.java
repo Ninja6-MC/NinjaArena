@@ -46,7 +46,7 @@ class MapSearchTest {
                         if (map.attempt() == 0) {
                             firstTry++;
                         }
-                        assertAcceptedMap(map, difficulty, teams, minimums, i == 0);
+                        assertAcceptedMap(map, difficulty, teams, minimums);
                     } else {
                         attempts += ((MapSearch.Failed) outcome).attempts();
                     }
@@ -62,11 +62,11 @@ class MapSearchTest {
     }
 
     private static void assertAcceptedMap(MapSearch.Accepted map, int difficulty, int teams,
-            ChallengeMinimums minimums, boolean checkArena) {
+            ChallengeMinimums minimums) {
         assertEquals(MapSearch.attemptSeed(map.requestedSeed(), map.attempt()), map.seed());
         CrossingReport report = map.report();
         assertTrue(report.crossable());
-        assertTrue(report.crossableAfterCollapse());
+        assertTrue(report.crossableWithoutCrumble());
         assertTrue(report.forcedJumps() >= minimums.forcedJumps());
         assertTrue(report.climb() >= minimums.climb());
         assertTrue(report.hazardExposure() >= minimums.hazardExposure());
@@ -82,6 +82,12 @@ class MapSearchTest {
         MapPoints points = map.points();
         assertEquals(teams, points.teamSpawns().size());
         assertEquals(teams * report.enemySpawns(), points.enemySpawns().size());
+        ArenaLayout.Position waiting = points.waitingRoom().block();
+        assertTrue(layout.centreBounds().contains(waiting.x(), waiting.y(), waiting.z()));
+        BlockKind waitingFloor = layout.at(waiting.x(), waiting.y() - 1, waiting.z());
+        assertTrue(waitingFloor.solid() && !MovementSolver.isHazard(waitingFloor));
+        assertEquals(BlockKind.AIR, layout.at(waiting.x(), waiting.y(), waiting.z()));
+        assertEquals(BlockKind.AIR, layout.at(waiting.x(), waiting.y() + 1, waiting.z()));
         for (int team = 1; team <= teams; team++) {
             ArenaLayout.Position spawn = points.teamSpawns().get(team - 1).block();
             assertEquals(BlockKind.SPAWN_PAD, layout.at(spawn.x(), spawn.y() - 1, spawn.z()));
@@ -106,15 +112,10 @@ class MapSearchTest {
                 assertTrue(dx * dx + dz * dz >= min * min);
             }
         }
-        if (checkArena) {
-            assertArenaWouldValidate(map);
-        }
+        assertArenaWouldValidate(map);
     }
 
-    /**
-     * An arena made from the map, placed in the middle of grid cell 0, 0, has no problems
-     * except the waiting room, which generated maps leave unset.
-     */
+    /** An arena made from the map, placed in the middle of grid cell 0, 0, has no problems. */
     private static void assertArenaWouldValidate(MapSearch.Accepted map) {
         ArenaLayout layout = map.layout();
         int originX = (GRID.cellSize() - layout.width()) / 2;
@@ -126,10 +127,9 @@ class MapSearchTest {
                 .map(point -> point.toArenaPoint(originX, originY, originZ)).toList();
         List<ArenaPoint> enemies = map.points().enemySpawns().stream()
                 .map(point -> point.toArenaPoint(originX, originY, originZ)).toList();
-        Arena arena = new Arena("generated", new GridCell(0, 0), bounds, null, teams, enemies);
-        List<String> problems = ArenaValidator.problems(arena, GRID);
-        assertTrue(problems.size() <= 1, problems.toString());
-        assertEquals(List.of(), ArenaValidator.problems(arena.withWaitingRoom(teams.get(0)), GRID));
+        ArenaPoint waitingRoom = map.points().waitingRoom().toArenaPoint(originX, originY, originZ);
+        Arena arena = new Arena("generated", new GridCell(0, 0), bounds, waitingRoom, teams, enemies);
+        assertEquals(List.of(), ArenaValidator.problems(arena, GRID));
     }
 
     @Test

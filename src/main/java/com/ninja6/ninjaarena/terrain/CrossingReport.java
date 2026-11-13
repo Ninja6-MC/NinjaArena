@@ -8,24 +8,26 @@ import java.util.List;
  * route from the team spawn to the centre (see {@link MovementSolver}), or {@code -1} when
  * there is no route.
  *
- * @param seed                   the model's seed
- * @param difficulty             the model's difficulty
- * @param spawnSafe              whether a spawn pad cell has a safe team spawn
- * @param crossable              whether the centre can be reached from the team spawn
- * @param crossableAfterCollapse whether it still can with every crumbling block gone
- * @param routeLength            the direct route's horizontal length in blocks
- * @param forcedJumps            jumps over a gap the direct route cannot avoid
- * @param climb                  blocks the direct route climbs, summed over its climbs and
- *                               rising jumps
- * @param hazardExposure         hazard blocks next to the direct route: lava or crumbling
- *                               blocks in the 3 by 3 columns around each standing cell, from
- *                               the floor to the block above the head, summed over the route
- * @param standingCells          standing cells on the side
- * @param reachableCells         standing cells reachable from the team spawn
- * @param enemySpawns            enemy spawn points found on the side
+ * @param seed                    the model's seed
+ * @param difficulty              the model's difficulty
+ * @param spawnSafe               whether a spawn pad cell has a safe team spawn
+ * @param crossable               whether the centre can be reached from the team spawn
+ * @param crossableWithoutCrumble whether it can without standing on, passing through or
+ *                                needing clearance from any crumbling block, so that it
+ *                                holds whichever crumbling blocks collapse
+ * @param routeLength             the direct route's horizontal length in blocks
+ * @param forcedJumps             jumps over a gap the direct route cannot avoid
+ * @param climb                   blocks the direct route climbs, summed over its climbs and
+ *                                rising jumps
+ * @param hazardExposure          hazard blocks next to the direct route: lava or crumbling
+ *                                blocks in the 3 by 3 columns around each standing cell, from
+ *                                the floor to the block above the head, summed over the route
+ * @param standingCells           standing cells on the side
+ * @param reachableCells          standing cells reachable from the team spawn
+ * @param enemySpawns             enemy spawn points found on the side
  */
 public record CrossingReport(long seed, int difficulty, boolean spawnSafe, boolean crossable,
-        boolean crossableAfterCollapse, int routeLength, int forcedJumps, int climb, int hazardExposure,
+        boolean crossableWithoutCrumble, int routeLength, int forcedJumps, int climb, int hazardExposure,
         int standingCells, int reachableCells, int enemySpawns) {
 
     /** A side with no safe team spawn: nothing else is measured. */
@@ -35,7 +37,7 @@ public record CrossingReport(long seed, int difficulty, boolean spawnSafe, boole
 
     /** Why a map is rejected, in the order they are checked. */
     public enum Problem {
-        SPAWN_UNSAFE, NOT_CROSSABLE, NOT_CROSSABLE_AFTER_COLLAPSE, NO_ENEMY_SPAWNS, TOO_FEW_JUMPS,
+        SPAWN_UNSAFE, NOT_CROSSABLE, NEEDS_CRUMBLE, NO_ENEMY_SPAWNS, TOO_FEW_JUMPS,
         TOO_LITTLE_CLIMB, TOO_FEW_HAZARDS
     }
 
@@ -50,8 +52,8 @@ public record CrossingReport(long seed, int difficulty, boolean spawnSafe, boole
             problems.add(Problem.NOT_CROSSABLE);
             return problems;
         }
-        if (!crossableAfterCollapse) {
-            problems.add(Problem.NOT_CROSSABLE_AFTER_COLLAPSE);
+        if (!crossableWithoutCrumble) {
+            problems.add(Problem.NEEDS_CRUMBLE);
         }
         if (enemySpawns == 0) {
             problems.add(Problem.NO_ENEMY_SPAWNS);

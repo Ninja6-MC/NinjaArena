@@ -224,10 +224,17 @@ but never reachable.
 ### Crossing and the challenge measures
 
 A side is crossable when the centre ledge can be reached from the team spawn. It must
-also stay crossable with every crumbling block removed: collapses during a round
-(#161 and #162) may then fire in any order without stranding a team, and those tasks
-need no path check of their own. Across 300 seeds per difficulty this rejects at most
-three extra sides.
+also be crossable without relying on any crumbling block. A second search reads every
+`CRUMBLE` and `CRUMBLE_PLATFORM` cell as blocked, neither solid nor air, so its route
+never stands on one, walks or drops through one, or counts one as headroom or jump
+clearance. A collapse only turns crumbling cells into air, and every move of that route
+depends only on other cells, so the route still works whichever crumbling blocks have
+collapsed, in any order or combination. Checking only "all intact" and "all collapsed"
+is not enough: a crumbling block can be a floor and also part of a step or wall, and
+removing just one can strand a team. The report's `crossableWithoutCrumble` holds the
+result, and `NEEDS_CRUMBLE` rejects a side without it. Over 200 seeds per difficulty
+this rejects 3 more sides at difficulty 4 and 7 more at difficulty 5 than the intact
+check alone.
 
 Every team's side is the same model turned about the centre, and turns map the four move
 directions onto each other, so one side answers for every team. Outside a side the full
@@ -251,7 +258,7 @@ difficulty, because a 96-block side always has a way round.
 
 `CrossingReport` carries these with the spawn, crossing and enemy spawn results;
 `problems(minimums)` lists why a side is rejected: `SPAWN_UNSAFE`, `NOT_CROSSABLE`,
-`NOT_CROSSABLE_AFTER_COLLAPSE`, `NO_ENEMY_SPAWNS`, `TOO_FEW_JUMPS`,
+`NEEDS_CRUMBLE`, `NO_ENEMY_SPAWNS`, `TOO_FEW_JUMPS`,
 `TOO_LITTLE_CLIMB` or `TOO_FEW_HAZARDS`.
 
 ### Minimums
@@ -291,7 +298,9 @@ with `Point.toArenaPoint(originX, originY, originZ)`.
   from the team spawn, not on a hazard and with none around them. Each is the candidate
   farthest from the spawn and the earlier picks. The same cells are turned to every
   team, so 2 teams get 6 and 4 teams get 12, and every team faces the same enemy layout.
-* **Waiting room:** generated maps set none.
+* **Waiting room:** the middle block of the centre square, standing on its surface with
+  yaw 0. The centre square is flat, open to the sky and has no hazards, so the point is
+  always standable, and an `Arena` built from the points passes `ArenaValidator`.
 
 ### Seed search and fallback
 
@@ -309,27 +318,33 @@ side decides):
 | ---: | ---: | ---: | ---: |
 | 1 | 100% | 100% | 1.00 |
 | 2 | 95.5% | 100% | 1.05 |
-| 3 | 80.5% | 100% | 1.25 |
-| 4 | 63.0% | 100% | 1.59 |
-| 5 | 61.5% | 100% | 1.65 |
+| 3 | 80.5% | 100% | 1.26 |
+| 4 | 61.5% | 100% | 1.62 |
+| 5 | 58.0% | 100% | 1.74 |
 
 When a search fails, `MapSearch.fallback(lastGoodSeed)` decides what the room plays:
 `LAST_GOOD_SEED` with that seed if the room has one, else `HAND_BUILT`. Each carries the
 `messages.yml` key that tells the room's players: `room.map-fallback-seed` (`<seed>`,
 `<attempts>`, `<last>`) or `room.map-fallback-hand-built` (`<seed>`, `<attempts>`,
-`<arena>`).
+`<arena>`). Issue #155 owns the room wiring of this decision; this package provides the
+decision and the messages.
 
-Generating and checking a default side takes about 12 to 13 ms (median over 30 seeds at
+Generating and checking a default side takes about 12 ms (median over 30 seeds at
 difficulty 5 after warm-up, with points for 2 or 4 teams), of which the solver is about
 8 ms; a search averages under two attempts. `MapSearchTest` prints these figures and
 does not assert times.
 
 ### What later tasks do
 
-* **#155** runs the search off the main thread when a room needs a map, remembers the
-  accepted seed as the room's last good seed, and on `Failed` applies
-  `MapSearch.fallback` and sends its message. Nothing in a room calls the search yet.
+* **#155** owns the room wiring: it runs the search off the main thread when a room
+  needs a map, remembers the accepted seed as the room's last good seed, and on
+  `Failed` applies `MapSearch.fallback` and sends its message. Nothing in a room calls
+  the search yet.
 * **#160** places `map.layout()` and turns `map.points()` into world locations.
+* **#161** and **#162** may collapse any crumbling blocks, in any order, at any time:
+  an accepted map keeps a route from every team spawn to the centre that never relies
+  on one, so they need no path check of their own. That guarantee covers crumbling
+  blocks only; a hazard that adds lava or removes any other block must be checked again.
 * **#166** tunes `MovementModel` and `ChallengeMinimums` by play.
 
 ## Determinism rules

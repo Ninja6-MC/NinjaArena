@@ -20,9 +20,14 @@ import java.util.function.IntPredicate;
  * horizontal directions; a jump needs {@link #JUMP_CLEARANCE} blocks of air above its
  * take-off, over the gap and at its landing, measured from the higher of the two ends.
  *
- * <p>A side is crossable when the centre ledge can be reached from the team spawn, both as
- * generated and with every crumbling block collapsed, so later collapses can never strand a
- * team. The challenge is measured on the <em>direct route</em>: the shortest route by
+ * <p>A side is crossable when the centre ledge can be reached from the team spawn. It must
+ * also be crossable without relying on any crumbling block: a second search treats every
+ * crumbling cell as blocked, neither a floor nor air, so its route never stands on one,
+ * walks or drops through one, or needs one as headroom or jump clearance. A collapse only
+ * turns crumbling cells into air, so every move of that route still works whichever
+ * crumbling blocks have collapsed, in any order.
+ *
+ * <p>The challenge is measured on the <em>direct route</em>: the shortest route by
  * horizontal distance, and of those the one with the fewest jumps over a gap, then the
  * least climb, then the fewest hazards. Its measures are therefore what a player heading
  * straight for the centre cannot avoid.
@@ -175,8 +180,8 @@ public final class MovementSolver {
      * safe spawn. Team spawns stand on the middle of each spawn pad facing the centre; enemy
      * spawns are up to {@link #ENEMY_SPAWNS_PER_SIDE} reachable, hazard-free standing cells
      * per side, at least {@link #ENEMY_SPAWN_DISTANCE} from the team spawn and spread out,
-     * turned to every team so each team's side gets the same ones. Generated maps set no
-     * waiting-room point.
+     * turned to every team so each team's side gets the same ones. The waiting room stands
+     * in the middle of the centre square, which is flat, open to the sky and clear of hazards.
      */
     public Optional<MapPoints> points(ArenaLayout layout) {
         if (layout.side() != side) {
@@ -194,7 +199,11 @@ public final class MovementSolver {
                 enemies.add(mapPoint(layout, team, node, yaw));
             }
         }
-        return Optional.of(new MapPoints(teams, enemies));
+        ArenaLayout.Bounds centre = layout.centreBounds();
+        int waitingX = (centre.minX() + centre.maxX()) / 2;
+        int waitingZ = (centre.minZ() + centre.maxZ()) / 2;
+        MapPoints.Point waiting = new MapPoints.Point(waitingX + 0.5, side.centreSurfaceY() + 1, waitingZ + 0.5, 0);
+        return Optional.of(new MapPoints(teams, enemies, waiting));
     }
 
     /**
@@ -233,18 +242,18 @@ public final class MovementSolver {
                 reachable++;
             }
         }
-        boolean afterCollapse = false;
+        boolean withoutCrumble = false;
         if (route >= 0) {
-            Graph fallen = new Graph(cells.collapsed(), movement);
-            int fallenSource = fallen.nodeAt(start.x(), start.y(), start.z());
-            afterCollapse = fallenSource >= 0 && fallen.reaches(fallenSource,
-                    fallen.targets(node -> target.test(fallen, node)));
+            Graph firm = new Graph(cells.withoutCrumble(), movement);
+            int firmSource = firm.nodeAt(start.x(), start.y(), start.z());
+            withoutCrumble = firmSource >= 0 && firm.reaches(firmSource,
+                    firm.targets(node -> target.test(firm, node)));
         }
         if (route < 0) {
             return new CrossingReport(side.seed(), side.difficulty(), true, false, false, -1, -1, -1, -1,
                     graph.nodes, reachable, enemies);
         }
-        return new CrossingReport(side.seed(), side.difficulty(), true, true, afterCollapse, Graph.length(route),
+        return new CrossingReport(side.seed(), side.difficulty(), true, true, withoutCrumble, Graph.length(route),
                 Graph.jumps(route), Graph.climb(route), Graph.hazards(route), graph.nodes, reachable, enemies);
     }
 
@@ -375,17 +384,22 @@ public final class MovementSolver {
             return new Cells(layout.width(), layout.height(), layout.length(), kinds);
         }
 
-        /** The same cells with every crumbling block gone, as after all collapses. */
-        Cells collapsed() {
-            byte[] fallen = kinds.clone();
+        /**
+         * The same cells with every crumbling block blocked: read as lava, which is neither
+         * solid nor air, so no move stands on it, passes through it or counts it as clearance.
+         * Only moves that hold whether or not each crumbling block has collapsed remain.
+         */
+        Cells withoutCrumble() {
+            byte[] firm = kinds.clone();
             byte crumble = (byte) BlockKind.CRUMBLE.ordinal();
             byte platform = (byte) BlockKind.CRUMBLE_PLATFORM.ordinal();
-            for (int i = 0; i < fallen.length; i++) {
-                if (fallen[i] == crumble || fallen[i] == platform) {
-                    fallen[i] = AIR;
+            byte blocked = (byte) BlockKind.LAVA.ordinal();
+            for (int i = 0; i < firm.length; i++) {
+                if (firm[i] == crumble || firm[i] == platform) {
+                    firm[i] = blocked;
                 }
             }
-            return new Cells(sizeX, sizeY, sizeZ, fallen);
+            return new Cells(sizeX, sizeY, sizeZ, firm);
         }
 
         int index(int x, int y, int z) {

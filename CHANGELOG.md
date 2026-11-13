@@ -23,9 +23,9 @@ Java 25, and does not run on Folia.
   The grace applies to new disconnects on reload. New `PlayerRejoinMatchEvent`, a
   `MatchUpdate.Cause.DISCONNECTED` elimination cause, and `MatchView#isDisconnected`.
 - Internal: a movement solver that checks each generated map can be crossed from every
-  team spawn to the centre, even after collapses, measures its challenge against
-  per-difficulty minimums, places team and enemy spawns, and retries derived seeds,
-  with a fallback decision for rooms to use later.
+  team spawn to the centre whichever crumbling blocks collapse, measures its challenge
+  against per-difficulty minimums, places team spawns, enemy spawns and the waiting
+  room, and retries derived seeds, with a fallback decision for rooms to use later.
 - Internal: seeded lava falls, low-ground rivers, hanging lava, gaps and collapsing
   ground and platform rims in the terrain model, increasing with difficulty and kept
   outside spawn, the centre ledge and their blends. Placement and activation come later.
