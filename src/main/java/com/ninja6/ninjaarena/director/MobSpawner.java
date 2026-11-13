@@ -1,7 +1,7 @@
 package com.ninja6.ninjaarena.director;
 
 import com.ninja6.ninjaarena.arena.ArenaBounds;
-import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.arena.MapSource;
 import com.ninja6.ninjaarena.match.MatchView;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,7 +68,7 @@ public final class MobSpawner implements MatchDirector.Spawner {
      * or cancelled spawns through {@link SpawnDiagnostics}. A match whose arena is gone gets a
      * spawner that spawns nothing, and a warning is logged.
      */
-    public static Function<MatchView, MatchDirector.Spawner> factory(ArenaRegistry arenas, Supplier<World> world,
+    public static Function<MatchView, MatchDirector.Spawner> factory(MapSource arenas, Supplier<World> world,
             Function<UUID, Player> players, SpawnSettings settings, ShadowStalker stalkers, Logger logger) {
         return match -> arenas.get(match.arena())
                 .<MatchDirector.Spawner>map(arena -> new MobSpawner(world.get(), new SpawnPlacement(arena, settings),

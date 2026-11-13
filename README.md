@@ -45,7 +45,8 @@ permissions, including the `arena`, `portal` and `director` setup groups. A firs
 in the order you need it:
 
 1. `/narena arena create dojo` registers the arena in the next free cell of the arena
-   world and puts it in edit mode. The reply shows the cell's coordinates.
+   world and puts it in edit mode. The reply shows the cell's coordinates. It never
+   picks a slot cell reserved for generated maps (see [Arena slots](#arena-slots)).
 2. Switch to creative, then `/narena arena tp dojo` takes you to the middle of the cell.
    Build the arena inside the cell.
 3. `/narena arena setbounds dojo <x1> <y1> <z1> <x2> <y2> <z2>` marks the playable box.
@@ -275,6 +276,33 @@ it, the old name is ignored. It applies on reload, and a lower value never ends 
 already granted: the rooms above it keep their slots, and no new room is let in until
 enough are given up.
 
+#### Reserved slot cells
+
+Generated maps are played in slot cells: `arenas.max-active` cells of the arena grid,
+reserved at startup, one per slot. They are taken from the edge of the world border
+inwards, farthest from the origin first, which is the opposite end of the grid from the
+cells `/narena arena create` fills. `arena create` never picks a reserved cell, and
+naming one with `/narena arena create <name> <cell x> <cell z>` is refused. A hand-built
+arena that is already in a cell keeps it: that cell is passed over, the next free one is
+reserved instead, and the server log says so. The same cells are reserved after every restart
+while `config.yml` and `arenas.yml` are unchanged. A reload that changes
+`arenas.max-active` keeps the cells already reserved; a higher value adds cells after
+them, a lower one gives up the last ones, but a cell a generated map still uses stays
+reserved until the map is done with it.
+
+Slot cells are cleared on startup, whenever the arena world reopens after being retired,
+and before every map is placed in one, so a generated map never survives a restart or
+a retire. Generated maps are kept in memory only and never written to `arenas.yml`;
+their names (`generated:1`, `generated:2`, ...) cannot be a hand-built arena's name, and
+they are not listed by `/narena map list`, `/narena arena list` or tab completion. While
+any slot cell is in use, being generated, placed, played or cleared, `/narena arena
+create` and `/narena arena edit` are refused, as they are during a match, because edit
+mode turns protection off across the whole arena world; and no generated map starts
+while an arena is in edit mode.
+
+Commands to choose seeds and difficulties for rooms come in a later release; until then
+rooms play hand-built arenas.
+
 ### Where players go
 
 | From | How | To |
@@ -423,7 +451,7 @@ match players or restarts a match.
 
 | Settings | Reload behavior |
 | :--- | :--- |
-| `arenas.max-active` | Applies immediately. A higher value lets queued rooms in; a lower one never ends a lease already granted. The old name `stability.max-concurrent-matches` is read with a warning when the new one is not set. |
+| `arenas.max-active` | Applies immediately. A higher value lets queued rooms in; a lower one never ends a lease already granted. Reserved slot cells stay where they are: a higher value reserves and clears more after them, a lower one gives up the last ones once no generated map uses them. The old name `stability.max-concurrent-matches` is read with a warning when the new one is not set. |
 | `waiting-room.min-players` and `team-size` | Apply to the next room opened; rooms already open keep their settings. |
 | Deprecated `waiting-room.lobby` | Applies to the next portal entry. It and the unused `max-players`, `countdown-seconds` and `radius` are accepted with a warning in the reply and the log (see [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms)). |
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |

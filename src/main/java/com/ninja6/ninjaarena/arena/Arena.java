@@ -31,11 +31,18 @@ public record Arena(
     public static final int MIN_TEAMS = 2;
     public static final int MAX_TEAMS = 4;
 
+    /**
+     * The start of every generated map's name. The colon is not allowed in a hand-built
+     * name, so a generated map can never share a name with one.
+     */
+    public static final String GENERATED_PREFIX = "generated:";
+
     private static final Pattern NAME = Pattern.compile("[a-z0-9_-]{1,32}");
+    private static final Pattern GENERATED = Pattern.compile(Pattern.quote(GENERATED_PREFIX) + "[1-9][0-9]{0,8}");
 
     public Arena {
         Objects.requireNonNull(name, "name");
-        if (!isValidName(name)) {
+        if (!isValidName(name) && !isGeneratedName(name)) {
             throw new KeyedArgumentException("invalid arena name " + name, "arena.invalid.name", "name", name);
         }
         Objects.requireNonNull(cell, "cell");
@@ -65,6 +72,14 @@ public record Arena(
     /** Lower case letters, digits, {@code _} and {@code -}, 1 to 32 characters. */
     public static boolean isValidName(String name) {
         return NAME.matcher(name).matches();
+    }
+
+    /**
+     * Whether the name is a generated map's: {@link #GENERATED_PREFIX} and a number. Such
+     * maps live in memory only and never in {@code arenas.yml}.
+     */
+    public static boolean isGeneratedName(String name) {
+        return GENERATED.matcher(name).matches();
     }
 
     /** Arena names are case-insensitive; this is the stored form. */

@@ -5,7 +5,7 @@ import static com.ninja6.ninjaarena.message.Messages.msg;
 import com.destroystokyo.paper.event.player.PlayerStartSpectatingEntityEvent;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
-import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.arena.MapSource;
 import com.ninja6.ninjaarena.kit.KitInventory;
 import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchService;
@@ -58,7 +58,7 @@ public final class Spectators implements Listener {
     }
 
     private final Plugin plugin;
-    private final ArenaRegistry arenas;
+    private final MapSource arenas;
     private final MatchService matches;
     private final RestoreService restores;
     private final Supplier<World> world;
@@ -70,7 +70,7 @@ public final class Spectators implements Listener {
 
     private Predicate<UUID> inLobby = id -> false;
 
-    public Spectators(Plugin plugin, ArenaRegistry arenas, MatchService matches, RestoreService restores,
+    public Spectators(Plugin plugin, MapSource arenas, MatchService matches, RestoreService restores,
             Supplier<World> world, SpectatorSettings settings) {
         this.plugin = plugin;
         this.arenas = arenas;

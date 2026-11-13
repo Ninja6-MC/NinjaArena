@@ -35,11 +35,18 @@ public final class ArenaCodec {
     private ArenaCodec() {
     }
 
+    /**
+     * @throws IllegalArgumentException for a generated map, which is held in memory only and
+     *                                  must never be written to {@code arenas.yml}
+     */
     public static String encode(Collection<Arena> arenas) {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("format", FORMAT_VERSION);
         ConfigurationSection root = yaml.createSection("arenas");
         for (Arena arena : arenas) {
+            if (Arena.isGeneratedName(arena.name())) {
+                throw new IllegalArgumentException("generated map " + arena.name() + " cannot be stored");
+            }
             ConfigurationSection section = root.createSection(arena.name());
             if (arena.pickable()) {
                 section.set("pickable", true);

@@ -2,7 +2,7 @@ package com.ninja6.ninjaarena.match;
 
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.destroystokyo.paper.event.player.PlayerStartSpectatingEntityEvent;
-import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.arena.MapSource;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.PlayerRejoinMatchEvent;
@@ -41,11 +41,11 @@ public final class MatchDeathListener implements Listener {
 
     private final Plugin plugin;
     private final MatchService matches;
-    private final ArenaRegistry arenas;
+    private final MapSource arenas;
     private final Map<UUID, MatchView> eliminated = new HashMap<>();
     private BukkitTask ticker;
 
-    public MatchDeathListener(Plugin plugin, MatchService matches, ArenaRegistry arenas) {
+    public MatchDeathListener(Plugin plugin, MatchService matches, MapSource arenas) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.matches = Objects.requireNonNull(matches, "matches");
         this.arenas = Objects.requireNonNull(arenas, "arenas");

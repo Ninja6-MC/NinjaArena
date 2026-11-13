@@ -14,7 +14,8 @@ import java.util.function.Predicate;
 
 /**
  * One host's room: who is in it, in the order they joined, the team each is on, the host's
- * settings and the hand-built arena it plays on. Holds no Bukkit state; {@link RoomService}
+ * settings and the map it plays on: a hand-built arena, or a generated map from a seed
+ * ({@link #generated()}) with the last seed that gave a good one. Holds no Bukkit state; {@link RoomService}
  * turns its answers into messages and teleports.
  *
  * <p>Teams are kept even by {@link WaitingRoom}, the same balancing the waiting rooms use: a
@@ -35,6 +36,8 @@ public final class Room {
     private final Set<UUID> kicked = new HashSet<>();
     private WaitingRoom teams;
     private boolean playing;
+    private SeedChoice generated;
+    private SeedChoice lastGoodSeed;
 
     /** A room with only its host in it. */
     public Room(UUID host, String arena, RoomSettings settings) {
@@ -61,6 +64,32 @@ public final class Room {
     /** Changes the arena the room plays on; the caller moves its lease. */
     public void setArena(String arena) {
         this.arena = Objects.requireNonNull(arena, "arena");
+    }
+
+    /**
+     * The seed and difficulty the room generates its maps from, while it plays generated
+     * maps; then {@link #arena()} is the name of its generated map.
+     */
+    public Optional<SeedChoice> generated() {
+        return Optional.ofNullable(generated);
+    }
+
+    /** Plays generated maps from this choice, or hand-built ones again for {@code null}. */
+    public void setGenerated(SeedChoice choice) {
+        this.generated = choice;
+    }
+
+    /**
+     * The last seed a map was accepted from in this room, with its difficulty: what the room
+     * falls back to when a seed search fails. Kept in memory only, for as long as the room
+     * is open.
+     */
+    public Optional<SeedChoice> lastGoodSeed() {
+        return Optional.ofNullable(lastGoodSeed);
+    }
+
+    public void setLastGoodSeed(SeedChoice lastGoodSeed) {
+        this.lastGoodSeed = Objects.requireNonNull(lastGoodSeed, "lastGoodSeed");
     }
 
     public boolean isPlaying() {

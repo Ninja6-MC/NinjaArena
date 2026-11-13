@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.ninja6.ninjaarena.arena.Arena;
+import com.ninja6.ninjaarena.arena.ArenaException;
+import com.ninja6.ninjaarena.arena.ArenaPoint;
+import com.ninja6.ninjaarena.arena.MapSource;
 import com.ninja6.ninjaarena.match.MatchResult.Reason;
 import com.ninja6.ninjaarena.match.MatchService.Exit;
 import com.ninja6.ninjaarena.match.MatchUpdate.Cause;
@@ -19,6 +23,7 @@ import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.world.CrossWorldTransfers;
 import com.ninja6.ninjaarena.world.LobbyWorld;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -418,6 +423,58 @@ class MatchServiceTest extends MatchFixture {
         startTwoOnTwo();
         assertEquals(next, matches.match("dojo").orElseThrow().settings());
         assertEquals(7, matches.match("dojo").orElseThrow().secondsLeft());
+    }
+
+    @Test
+    void eachRoundPlacesTeamsAtTheSpawnsTheMapHasThen() {
+        ArenaPoint moved = new ArenaPoint(30.5, 70, 60.5, 45, 0);
+        boolean[] regenerated = {false};
+        // A map that is placed again between rounds, as a regenerated generated map would be.
+        MapSource changing = new MapSource() {
+            @Override
+            public Optional<Arena> get(String name) {
+                return arenas.get(name).map(arena -> regenerated[0] ? arena.withTeamSpawn(1, moved) : arena);
+            }
+
+            @Override
+            public boolean isAvailable(String name) {
+                return arenas.isAvailable(name);
+            }
+
+            @Override
+            public boolean isHeld(String name) {
+                return arenas.isHeld(name);
+            }
+
+            @Override
+            public void hold(String name) throws ArenaException {
+                arenas.hold(name);
+            }
+
+            @Override
+            public void reset(String name) throws ArenaException {
+                arenas.reset(name);
+            }
+
+            @Override
+            public void release(String name) {
+                arenas.release(name);
+            }
+        };
+        matches = new MatchService(plugin, changing, () -> arenaWorld, SETTINGS, player -> RestoreResult.RESTORED,
+                events::add, player -> { });
+        startTwoOnTwo();
+        assertAt(SPAWN_1, players.get(ALICE).location);
+        regenerated[0] = true;
+        ticks(2);
+        matches.died(player(BOB), player(ALICE));
+        matches.died(player(DAVE), player(ALICE));
+        runNextTick();
+        ticks(1);
+        assertTrue(players.get(ALICE).messages.stream().anyMatch(message -> message.contains("Round 2 of 2.")));
+        assertAt(moved, players.get(ALICE).location);
+        assertAt(SPAWN_2, players.get(BOB).location);
+        assertAt(moved, matches.respawnPoint(CAROL).orElseThrow());
     }
 
 }

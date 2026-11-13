@@ -48,6 +48,7 @@ public final class ArenaWorld {
     private final AtomicInteger operations = new AtomicInteger();
     private volatile ArenaWorldSettings settings = ArenaWorldSettings.DEFAULTS;
     private Runnable restoreCopies = () -> { };
+    private Runnable afterReopen = () -> { };
     private State state = State.READY;
     private final UUID identity;
     private boolean savingEnabled;
@@ -207,6 +208,8 @@ public final class ArenaWorld {
                 }
                 throw failure;
             }
+            // Published: the hooks may use the world, and a failure in one does not retire it.
+            afterReopen.run();
         }
         if (state != State.READY) {
             throw new IllegalStateException("Arena world is not ready: " + state);
@@ -227,6 +230,21 @@ public final class ArenaWorld {
     /** Installed after the initial registry reset; reopened worlds must never adopt dirty disk blocks. */
     public void onReopen(Runnable restoreCopies) {
         this.restoreCopies = Objects.requireNonNull(restoreCopies, "restoreCopies");
+    }
+
+    /**
+     * Runs once a reopened world is published, after {@link #onReopen}, so the hook may use
+     * {@link #world()}; hooks run in the order they were added. The generated maps clear
+     * their slot cells here. A hook that throws reaches the caller of {@link #world()} but
+     * leaves the world open; hooks should handle their own failures.
+     */
+    public void afterReopen(Runnable hook) {
+        Objects.requireNonNull(hook, "hook");
+        Runnable earlier = afterReopen;
+        afterReopen = () -> {
+            earlier.run();
+            hook.run();
+        };
     }
 
     /** Holds the world through an asynchronous operation and its server-thread completion. */
