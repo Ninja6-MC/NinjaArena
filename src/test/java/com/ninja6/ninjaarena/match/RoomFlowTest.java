@@ -670,6 +670,69 @@ class RoomFlowTest extends MatchFixture {
         assertTrue(rooms.hostedBy(CAROL).isPresent());
     }
 
+    /** A disconnect as the server sees it: the match first, then the room. */
+    private void quitMidMatch(UUID id) {
+        PlayerQuitEvent quit = new PlayerQuitEvent(player(id), Component.empty(),
+                PlayerQuitEvent.QuitReason.DISCONNECTED);
+        new MatchListener(matches, deaths, transfers).onQuit(quit);
+        rooms.onQuit(quit);
+        players.get(id).online = false;
+    }
+
+    @Test
+    void aHostHeldForTheRejoinGraceStaysHostAndHandsOnOnlyWhenItRunsOut() {
+        matches.setRejoinGraceSeconds(3);
+        Room room = openWith(ALICE, BOB, CAROL);
+        rooms.start(player(ALICE), null);
+        quitMidMatch(ALICE);
+        rooms.tick();
+        assertTrue(matches.isHeld(ALICE));
+        assertTrue(room.contains(ALICE), "still in the room while held");
+        assertEquals(ALICE, room.host());
+        assertTrue(rooms.hasLease(room));
+
+        ticks(3);
+        assertFalse(matches.isInMatch(ALICE));
+        rooms.tick();
+        assertFalse(room.contains(ALICE));
+        assertEquals(BOB, room.host(), "the usual hand-off once the grace runs out");
+        assertTrue(players.get(BOB).messages.contains("Bob is now the host of the room."));
+        assertTrue(matches.match("dojo").isPresent(), "the match goes on");
+        assertTrue(rooms.hasLease(room));
+    }
+
+    @Test
+    void aMemberWhoRejoinsWithinTheGraceIsBackInTheMatchAndTheRoom() {
+        matches.setRejoinGraceSeconds(30);
+        Room room = openWith(ALICE, BOB, CAROL);
+        rooms.start(player(ALICE), null);
+        quitMidMatch(CAROL);
+        rooms.tick();
+        players.get(CAROL).online = true;
+        new MatchListener(matches, deaths, transfers).onJoin(new org.bukkit.event.player.PlayerJoinEvent(
+                player(CAROL), Component.empty()));
+        runNextTick();
+        assertTrue(matches.isInMatch(CAROL));
+        assertFalse(matches.isHeld(CAROL));
+        assertTrue(room.contains(CAROL));
+        playToTheEnd("dojo");
+        assertTrue(room.contains(CAROL));
+        assertTrue(lobby.contains(CAROL), "back in the lobby with the room");
+    }
+
+    @Test
+    void aHeldMemberWhoseMatchEndsWithoutThemLeavesTheRoomAfterIt() {
+        matches.setRejoinGraceSeconds(600);
+        Room room = openWith(ALICE, BOB, CAROL);
+        rooms.start(player(ALICE), null);
+        quitMidMatch(CAROL);
+        playToTheEnd("dojo");
+        assertFalse(matches.isHeld(CAROL), "no longer held once the match has closed");
+        rooms.tick();
+        assertFalse(room.contains(CAROL));
+        assertFalse(room.isPlaying());
+    }
+
     // ---- Hosts, invitations and buttons ----
 
     @Test

@@ -16,13 +16,15 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
 /**
  * Feeds what happens to players in a match to {@link MatchService}: deaths, teleports that
- * take them out of it ({@link CrossWorldTransfers}), and disconnects. Outside COMBAT and OVERRUN, players in a match take
+ * take them out of it ({@link CrossWorldTransfers}), disconnects and rejoins
+ * ({@link MatchService#disconnect}, {@link MatchService#rejoin}). Outside COMBAT and OVERRUN, players in a match take
  * no damage except from the void or {@code /kill}, so nobody falls forever.
  *
  * <p>Deaths eliminate players through the match engine; {@link MatchDeathListener} owns
@@ -94,8 +96,18 @@ public final class MatchListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    /**
+     * Before the room and the lobby see the quit, so that a player held in their match for the
+     * rejoin grace keeps their room.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onQuit(PlayerQuitEvent event) {
-        matches.leave(event.getPlayer(), Exit.QUIT);
+        matches.disconnect(event.getPlayer());
+    }
+
+    /** Before the join restore runs, which leaves a player who is back in their match alone. */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onJoin(PlayerJoinEvent event) {
+        matches.rejoin(event.getPlayer());
     }
 }

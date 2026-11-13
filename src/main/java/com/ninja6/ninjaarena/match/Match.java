@@ -8,9 +8,11 @@ import com.ninja6.ninjaarena.match.MatchUpdate.MapReplay;
 import com.ninja6.ninjaarena.match.MatchUpdate.MapWait;
 import com.ninja6.ninjaarena.match.MatchUpdate.MatchEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.PhaseChanged;
+import com.ninja6.ninjaarena.match.MatchUpdate.PlayerDisconnected;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerEliminated;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerLeft;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerReady;
+import com.ninja6.ninjaarena.match.MatchUpdate.PlayerRejoined;
 import com.ninja6.ninjaarena.match.MatchUpdate.QuickStart;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundStarted;
@@ -68,6 +70,16 @@ import java.util.function.BooleanSupplier;
  * forfeit, when fewer than two starting teams still have players at a round end, and is
  * abandoned and closed at once when the last player leaves.
  *
+ * <p><b>Disconnects.</b> A player who disconnects with a rejoin grace period running is
+ * {@link #disconnect disconnected}, not removed: they stay in the match and on their team,
+ * so their team does not forfeit while they may still come back, but they are out of the
+ * current round (as if eliminated, {@link Cause#DISCONNECTED}), out of every round that
+ * starts while they are away, and not counted for the shop's ready check. {@link #reconnect}
+ * brings them back, alive from the next round, or at once if {@link #revive} places them
+ * during PREP. When every
+ * player still in the match is disconnected, its timers wait. A player whose grace runs out
+ * {@link #leave leaves}.
+ *
  * <p>Not thread-safe: call it from the server thread.
  */
 public final class Match implements MatchView {
@@ -83,6 +95,8 @@ public final class Match implements MatchView {
     private final Set<UUID> present = new HashSet<>();
     /** Players alive in the current round. */
     private final Set<UUID> alive = new HashSet<>();
+    /** Players still in the match who are disconnected and may rejoin. */
+    private final Set<UUID> away = new HashSet<>();
     private final List<RoundResult> results = new ArrayList<>();
 
     private MatchPhase phase = MatchPhase.WAITING;
@@ -170,7 +184,8 @@ public final class Match implements MatchView {
     /** Advances the match by one second. */
     public List<MatchUpdate> tick() {
         List<MatchUpdate> updates = new ArrayList<>();
-        if (closed) {
+        if (closed || phase != MatchPhase.MATCH_END && !present.isEmpty() && away.containsAll(present)) {
+            // Nobody is connected: the match waits for a rejoin or for the grace to run out.
             return updates;
         }
         if (phase.isInRound()) {
@@ -247,6 +262,7 @@ public final class Match implements MatchView {
             return updates;
         }
         int team = teamOf.get(player);
+        away.remove(player);
         if (alive.remove(player)) {
             updates.add(new PlayerEliminated(player, team, Cause.LEFT, null));
         }
@@ -268,23 +284,77 @@ public final class Match implements MatchView {
     }
 
     /**
+     * A player in the match disconnected and may rejoin. They stay in the match and on their
+     * team, are taken out of the current round if they were alive in it, and are no longer
+     * ready in a SHOP. Does nothing if they are not in the match or already disconnected, or
+     * once the match has ended. Whether this decides the round is left to {@link #settle()}.
+     */
+    public List<MatchUpdate> disconnect(UUID player) {
+        List<MatchUpdate> updates = new ArrayList<>();
+        if (closed || phase == MatchPhase.MATCH_END || !present.contains(player) || !away.add(player)) {
+            return updates;
+        }
+        int team = teamOf.get(player);
+        if (alive.remove(player)) {
+            updates.add(new PlayerEliminated(player, team, Cause.DISCONNECTED, null));
+        }
+        ready.remove(player);
+        updates.add(new PlayerDisconnected(player, team));
+        if (phase == MatchPhase.SHOP) {
+            quickStart(updates);
+        }
+        return updates;
+    }
+
+    /**
+     * A disconnected player is back. They are alive from the next round that starts, or in
+     * the current one if {@link #revive} puts them in it during PREP. Does nothing if they are
+     * not disconnected, or once the match has ended.
+     */
+    public List<MatchUpdate> reconnect(UUID player) {
+        List<MatchUpdate> updates = new ArrayList<>();
+        if (closed || phase == MatchPhase.MATCH_END || !away.remove(player)) {
+            return updates;
+        }
+        updates.add(new PlayerRejoined(player, teamOf.get(player)));
+        return updates;
+    }
+
+    /**
+     * Puts a player who is back from a disconnect into the current round, as they are placed
+     * at their team spawn: only during PREP, before the fight starts, and only for a
+     * connected player in the match.
+     *
+     * @return whether they are alive in the round now
+     */
+    public boolean revive(UUID player) {
+        if (closed || phase != MatchPhase.PREP || !present.contains(player) || away.contains(player)) {
+            return false;
+        }
+        alive.add(player);
+        return true;
+    }
+
+    /**
      * Marks a player in the match ready in the current SHOP. Once everyone in the match is
      * ready, the time left is cut to {@link ShopSettings#quickStartSeconds()}. Does nothing
      * outside SHOP, for a player not in the match, or for one already ready.
      */
     public List<MatchUpdate> ready(UUID player) {
         List<MatchUpdate> updates = new ArrayList<>();
-        if (closed || phase != MatchPhase.SHOP || !present.contains(player) || !ready.add(player)) {
+        if (closed || phase != MatchPhase.SHOP || !present.contains(player) || away.contains(player)
+                || !ready.add(player)) {
             return updates;
         }
-        updates.add(new PlayerReady(player, ready.size(), present.size()));
+        updates.add(new PlayerReady(player, ready.size(), connected().size()));
         quickStart(updates);
         return updates;
     }
 
-    /** In SHOP, cuts the time left to the quick start once everyone is ready. */
+    /** In SHOP, cuts the time left to the quick start once everyone connected is ready. */
     private void quickStart(List<MatchUpdate> updates) {
-        if (waitingForMap || !ready.containsAll(present)) {
+        Set<UUID> connected = connected();
+        if (waitingForMap || connected.isEmpty() || !ready.containsAll(connected)) {
             return;
         }
         if (secondsLeft > shop.quickStartSeconds()) {
@@ -358,7 +428,7 @@ public final class Match implements MatchView {
         ready.clear();
         waitingForMap = false;
         alive.clear();
-        alive.addAll(present);
+        alive.addAll(connected());
         roundElapsed = 0;
         reachedOverrun = false;
         setPhase(MatchPhase.PREP, settings.prepSeconds(), updates);
@@ -463,6 +533,13 @@ public final class Match implements MatchView {
         return best;
     }
 
+    /** Players in the match who are not disconnected. */
+    private Set<UUID> connected() {
+        Set<UUID> connected = new HashSet<>(present);
+        connected.removeAll(away);
+        return connected;
+    }
+
     /** Starting teams with at least one player still in the match. */
     private List<Integer> remainingTeams() {
         Set<Integer> teams = new TreeSet<>();
@@ -563,6 +640,16 @@ public final class Match implements MatchView {
     @Override
     public int teamOf(UUID player) {
         return present.contains(player) ? teamOf.get(player) : 0;
+    }
+
+    @Override
+    public boolean isDisconnected(UUID player) {
+        return away.contains(player);
+    }
+
+    @Override
+    public List<UUID> disconnectedPlayers() {
+        return inRosterOrder(away);
     }
 
     @Override

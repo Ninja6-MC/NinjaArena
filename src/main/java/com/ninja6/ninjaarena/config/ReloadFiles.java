@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.config;
 import com.ninja6.ninjaarena.event.EventSettings;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
@@ -243,6 +244,7 @@ public final class ReloadFiles {
             case "match.overrun-limit-seconds" -> new double[] {0, 3600};
             case "match.rounds" -> new double[] {1, 25};
             case "match.extra-rounds" -> new double[] {0, 10};
+            case "match.rejoin-grace-seconds" -> new double[] {0, MatchService.MAX_REJOIN_GRACE_SECONDS};
             case "shop.max-seconds", "shop.quick-start-seconds" -> new double[] {1, 3600};
             case "shop.map-wait-limit-seconds" -> new double[] {0, 3600};
             case "points.player-kill", "points.enemy-kill-per-cost", "points.round-survive", "points.round-win"

@@ -15,9 +15,11 @@ import com.ninja6.ninjaarena.match.MatchUpdate.MapReplay;
 import com.ninja6.ninjaarena.match.MatchUpdate.MapWait;
 import com.ninja6.ninjaarena.match.MatchUpdate.MatchEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.PhaseChanged;
+import com.ninja6.ninjaarena.match.MatchUpdate.PlayerDisconnected;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerEliminated;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerLeft;
 import com.ninja6.ninjaarena.match.MatchUpdate.PlayerReady;
+import com.ninja6.ninjaarena.match.MatchUpdate.PlayerRejoined;
 import com.ninja6.ninjaarena.match.MatchUpdate.QuickStart;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundStarted;
@@ -26,6 +28,7 @@ import com.ninja6.ninjaarena.match.event.MatchEvent;
 import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
+import com.ninja6.ninjaarena.match.event.PlayerRejoinMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundEndEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
@@ -78,6 +81,17 @@ import org.bukkit.scheduler.BukkitTask;
  * that teleport is not seen as another exit. Disabling the plugin stops every match and
  * sends everyone home.
  *
+ * <p><b>Rejoining.</b> With a rejoin grace period set ({@link #setRejoinGraceSeconds}), a
+ * player who disconnects before the match ends is {@link #disconnect held} instead: still in
+ * the match, on their team and in their room, out of the round (see {@link Match}), with
+ * their kit cleared as on any exit and their snapshot, points and shop purchases kept.
+ * Joining again within the grace ({@link #rejoin}) puts them back: alive at their team spawn
+ * during PREP, in the shop area during SHOP, otherwise spectating their team until the next
+ * round. When the grace runs out, or the plugin is disabled, they leave the match as a
+ * disconnect always did; when the match ends or closes first, they are no longer held.
+ * Either way their next join takes them to the lobby, or home, as before. A grace of 0
+ * keeps a disconnect a leave.
+ *
  * <p><b>Shop.</b> When a match goes to SHOP ({@link ShopSettings}), every player still in it,
  * eliminated players included, is put back in Adventure mode and moved to the lobby world's
  * shop area ({@link #setShopArea}); a player on the death screen respawns there. They stay
@@ -109,6 +123,9 @@ public final class MatchService {
     }
 
     private static final long TICKS_PER_SECOND = 20;
+
+    /** The longest rejoin grace period, in seconds. */
+    public static final int MAX_REJOIN_GRACE_SECONDS = 600;
 
     /** A running match and the team spawns it places players at, team 1 first. */
     private record Running(Match match, List<ArenaPoint> spawns) {
@@ -205,6 +222,13 @@ public final class MatchService {
     private final Set<Running> unsettled = new HashSet<>();
     /** Matches whose players are being brought back from the shop to their team spawns. */
     private final Set<Running> returning = new HashSet<>();
+    /** Disconnected players held in their match, with the seconds of grace left. */
+    private final Map<UUID, Integer> held = new HashMap<>();
+    /** Held players' names, for the messages about them sent while they are offline. */
+    private final Map<UUID, String> heldNames = new HashMap<>();
+    /** Rejoined players being placed, whose moves between the worlds keep the match. */
+    private final Set<UUID> placing = new HashSet<>();
+    private int rejoinGraceSeconds;
     private BukkitTask ticker;
 
     /**
@@ -240,6 +264,24 @@ public final class MatchService {
         player.setExhaustion(0);
         player.setFireTicks(0);
         player.setFallDistance(0);
+    }
+
+    /**
+     * How long a player who disconnects from a match is held in it, in seconds, clamped to 0
+     * to {@link #MAX_REJOIN_GRACE_SECONDS}. Applies to disconnects from now on; players held
+     * already keep the grace they were given. 0, the default, makes a disconnect a leave.
+     */
+    public void setRejoinGraceSeconds(int seconds) {
+        rejoinGraceSeconds = Math.clamp(seconds, 0, MAX_REJOIN_GRACE_SECONDS);
+    }
+
+    public int rejoinGraceSeconds() {
+        return rejoinGraceSeconds;
+    }
+
+    /** Whether the player disconnected from their match and is held in it, within the grace. */
+    public boolean isHeld(UUID playerId) {
+        return held.containsKey(playerId);
     }
 
     /** Changes the defaults for the next match; existing matches retain their settings. */
@@ -399,7 +441,8 @@ public final class MatchService {
      */
     public boolean crossesWorlds(UUID playerId) {
         Running running = matchOf.get(playerId);
-        return running != null && (running.match().phase() == MatchPhase.SHOP || returning.contains(running));
+        return running != null && (running.match().phase() == MatchPhase.SHOP || returning.contains(running)
+                || placing.contains(playerId));
     }
 
     public void setSounds(Sounds sounds) {
@@ -449,6 +492,8 @@ public final class MatchService {
      */
     public boolean leave(Player player, Exit exit) {
         UUID playerId = player.getUniqueId();
+        held.remove(playerId);
+        heldNames.remove(playerId);
         Running running = matchOf.remove(playerId);
         if (running == null) {
             return false;
@@ -482,8 +527,150 @@ public final class MatchService {
         return true;
     }
 
+    /**
+     * A player in a match disconnected. With a rejoin grace period, and before the match has
+     * ended, they are held in it: out of the round, their kit cleared, everything else kept
+     * until they {@link #rejoin} or the grace runs out. Otherwise they leave it as with
+     * {@link Exit#QUIT}.
+     *
+     * @return false if they were not in a match
+     */
+    public boolean disconnect(Player player) {
+        UUID playerId = player.getUniqueId();
+        Running running = matchOf.get(playerId);
+        if (running == null) {
+            return false;
+        }
+        Match match = running.match();
+        if (rejoinGraceSeconds == 0 || held.containsKey(playerId) || match.isClosed()
+                || match.phase() == MatchPhase.MATCH_END) {
+            return leave(player, Exit.QUIT);
+        }
+        held.put(playerId, rejoinGraceSeconds);
+        heldNames.put(playerId, player.getName());
+        // Out of the round first, so they no longer count as spectating when their mode is reset.
+        List<MatchUpdate> updates = match.disconnect(playerId);
+        releasePlayer(player);
+        plugin.getLogger().info(player.getName() + " disconnected from the match in arena " + match.arena()
+                + "; they have " + rejoinGraceSeconds + " seconds to rejoin.");
+        apply(running, updates);
+        settleLater(running);
+        return true;
+    }
+
+    /**
+     * A player joined the server. If they are held in a match, they are back in it, and placed
+     * on the next tick, once the join has finished. A match that has already ended lets them
+     * go instead, and their join is handled as after any disconnect.
+     *
+     * @return whether they are back in a match
+     */
+    public boolean rejoin(Player player) {
+        UUID playerId = player.getUniqueId();
+        if (!held.containsKey(playerId)) {
+            return false;
+        }
+        Running running = matchOf.get(playerId);
+        if (running == null || running.match().isClosed() || running.match().phase() == MatchPhase.MATCH_END) {
+            expire(playerId);
+            return false;
+        }
+        held.remove(playerId);
+        heldNames.remove(playerId);
+        plugin.getLogger().info(player.getName() + " rejoined the match in arena " + running.match().arena() + ".");
+        apply(running, running.match().reconnect(playerId));
+        plugin.getServer().getScheduler().runTask(plugin, () -> placeRejoined(playerId, running));
+        return true;
+    }
+
+    /** The grace of a held player ran out, or their match no longer takes them: they leave it. */
+    private void expire(UUID playerId) {
+        if (held.remove(playerId) == null) {
+            return;
+        }
+        Running running = matchOf.remove(playerId);
+        if (running != null) {
+            plugin.getLogger().info(name(playerId) + " did not rejoin the match in arena " + running.match().arena()
+                    + " in time and left it.");
+            apply(running, running.match().leave(playerId));
+            settleLater(running);
+        }
+        heldNames.remove(playerId);
+    }
+
+    /** Counts down every held player's grace by a second. */
+    private void tickHolds() {
+        for (UUID playerId : new ArrayList<>(held.keySet())) {
+            Integer left = held.computeIfPresent(playerId, (id, seconds) -> seconds - 1);
+            if (left != null && left <= 0) {
+                expire(playerId);
+            }
+        }
+    }
+
+    /**
+     * Places a rejoined player, once their join has finished, by the phase the match is in
+     * then, which may have moved on since they joined: during PREP at their team spawn, alive
+     * in the round from now; during SHOP in the shop area; in any other phase where they are,
+     * for death handling to make them spectate until the next round. A player the round start
+     * has already placed in a round keeps their place. A player on the death screen is placed
+     * by their respawn, which reads the same state.
+     */
+    private void placeRejoined(UUID playerId, Running running) {
+        Player player = plugin.getServer().getPlayer(playerId);
+        Match match = running.match();
+        if (player == null || !player.isOnline() || matchOf.get(playerId) != running || held.containsKey(playerId)
+                || match.isClosed()) {
+            return;
+        }
+        placing.add(playerId);
+        try {
+            if (match.phase() == MatchPhase.PREP) {
+                match.revive(playerId);
+            }
+            boolean alive = match.isAlive(playerId);
+            if (!player.isDead()) {
+                if (alive && match.phase() == MatchPhase.PREP) {
+                    toAdventure(player);
+                    readyForRound.accept(player);
+                    teleport(player, location(running.spawns().get(match.teamOf(playerId) - 1)), "their team spawn");
+                } else if (match.phase() == MatchPhase.SHOP) {
+                    toAdventure(player);
+                    Location shop = shopArea.get();
+                    if (shop != null) {
+                        teleport(player, shop.clone(), "the shop area");
+                    }
+                }
+            }
+            player.sendMessage(msg(alive ? "match.rejoined"
+                    : match.phase() == MatchPhase.SHOP ? "match.rejoined-shop" : "match.rejoined-spectating"));
+            events.accept(new PlayerRejoinMatchEvent(match, playerId, match.teamOf(playerId)));
+        } finally {
+            placing.remove(playerId);
+        }
+    }
+
+    private void teleport(Player player, Location to, String where) {
+        if (!OwnTeleports.teleport(player, to, TeleportCause.PLUGIN)) {
+            plugin.getLogger().warning("Could not teleport " + player.getName() + " to " + where + " after they"
+                    + " rejoined their match.");
+        }
+    }
+
+    private static void toAdventure(Player player) {
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            if (player.getSpectatorTarget() != null) {
+                player.setSpectatorTarget(null);
+            }
+            player.setGameMode(GameMode.ADVENTURE);
+        }
+        player.setFireTicks(0);
+        player.setFallDistance(0);
+    }
+
     /** Advances every match by a second. Run once a second by {@link #start()}. */
     public void tick() {
+        tickHolds();
         for (Running running : new ArrayList<>(matches.values())) {
             apply(running, running.match().tick());
         }
@@ -496,6 +683,10 @@ public final class MatchService {
             ticker = null;
         }
         closing = true;
+        // Disconnected players held in a match leave it, as a disconnect without a grace does.
+        for (UUID playerId : new ArrayList<>(held.keySet())) {
+            expire(playerId);
+        }
         for (Running running : new ArrayList<>(matches.values())) {
             apply(running, running.match().stop());
         }
@@ -559,6 +750,11 @@ public final class MatchService {
                     broadcast(running, msg("match.player-left", "player", name(left.player())));
                     events.accept(new PlayerLeaveMatchEvent(match, left.player(), left.team()));
                 }
+                case PlayerDisconnected away -> broadcast(running, msg("match.player-disconnected",
+                        "player", name(away.player()), "seconds", held.getOrDefault(away.player(), 0)),
+                        away.player());
+                case PlayerRejoined back -> broadcast(running, msg("match.player-rejoined",
+                        "player", name(back.player())), back.player());
                 case PlayerReady ready -> broadcast(running, msg("shop.player-ready", "player",
                         name(ready.player()), "ready", ready.ready(), "players", ready.players()));
                 case QuickStart quick -> broadcast(running, msg("shop.quick-start", "seconds", quick.seconds()));
@@ -685,6 +881,9 @@ public final class MatchService {
     }
 
     private void forget(Running running) {
+        // Held players are let go with their match; their next join is handled as after any quit.
+        held.keySet().removeIf(id -> matchOf.get(id) == running);
+        heldNames.keySet().retainAll(held.keySet());
         matches.remove(running.match().arena(), running);
         matchOf.values().removeIf(value -> value == running);
         for (UUID id : running.match().players()) {
@@ -767,7 +966,7 @@ public final class MatchService {
 
     private String name(UUID playerId) {
         Player player = plugin.getServer().getPlayer(playerId);
-        return player != null ? player.getName() : playerId.toString();
+        return player != null ? player.getName() : heldNames.getOrDefault(playerId, playerId.toString());
     }
 
     /** To the lobby, or home when the lobby cannot take the player. */
@@ -792,9 +991,14 @@ public final class MatchService {
     }
 
     private void broadcast(Running running, Component message) {
+        broadcast(running, message, null);
+    }
+
+    /** To everyone in the match but {@code except}, who may be {@code null}. */
+    private void broadcast(Running running, Component message, UUID except) {
         for (UUID playerId : running.match().players()) {
             Player player = plugin.getServer().getPlayer(playerId);
-            if (player != null) {
+            if (player != null && !playerId.equals(except)) {
                 player.sendMessage(message);
             }
         }

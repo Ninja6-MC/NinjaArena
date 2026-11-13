@@ -13,6 +13,15 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Rejoining a match after a disconnect. A player who disconnects before the match ends
+  is held in it for `match.rejoin-grace-seconds` (60; 0 to 600, 0 keeps a disconnect a
+  leave): still on their team and in their room, out of the round, with their points,
+  pending shop purchases and snapshot kept, and their team does not forfeit meanwhile.
+  Back in time, they play at once during prep, return to the shop area during the shop,
+  and otherwise spectate their team until the next round. When the grace runs out they
+  leave as before; a match that ends first lets them go to the lobby on their next join.
+  The grace applies to new disconnects on reload. New `PlayerRejoinMatchEvent`, a
+  `MatchUpdate.Cause.DISCONNECTED` elimination cause, and `MatchView#isDisconnected`.
 - Internal: seeded lava falls, low-ground rivers, hanging lava, gaps and collapsing
   ground and platform rims in the terrain model, increasing with difficulty and kept
   outside spawn, the centre ledge and their blends. Placement and activation come later.

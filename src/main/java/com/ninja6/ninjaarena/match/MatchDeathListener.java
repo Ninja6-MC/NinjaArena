@@ -5,6 +5,7 @@ import com.destroystokyo.paper.event.player.PlayerStartSpectatingEntityEvent;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
+import com.ninja6.ninjaarena.match.event.PlayerRejoinMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.PluginWorlds;
@@ -71,7 +72,7 @@ public final class MatchDeathListener implements Listener {
     public boolean isSpectating(UUID id) {
         MatchView match = eliminated.get(id);
         return match != null && matches.matchOf(id).filter(current -> current == match).isPresent()
-                && !match.isAlive(id) && match.phase() != MatchPhase.SHOP;
+                && !match.isAlive(id) && match.phase() != MatchPhase.SHOP && !match.isDisconnected(id);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -142,6 +143,25 @@ public final class MatchDeathListener implements Listener {
                 clearCamera(player);
                 player.setGameMode(GameMode.ADVENTURE);
             }
+        }
+    }
+
+    /**
+     * A player back in their match within the rejoin grace who is not alive in this round, in
+     * it or at its end, spectates their team until the next round, like an eliminated player.
+     */
+    @EventHandler(priority = EventPriority.LOW)
+    public void onRejoin(PlayerRejoinMatchEvent event) {
+        MatchView match = event.match();
+        UUID id = event.player();
+        if (match.isAlive(id) || match.phase() == MatchPhase.SHOP
+                || matches.matchOf(id).filter(current -> current == match).isEmpty()) {
+            return;
+        }
+        eliminated.put(id, match);
+        Player player = plugin.getServer().getPlayer(id);
+        if (player != null && player.isOnline()) {
+            follow(player, match, true);
         }
     }
 

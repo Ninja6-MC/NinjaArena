@@ -209,7 +209,8 @@ public final class MatchHud implements Listener {
             case SHOP -> match.isWaitingForMap()
                     ? msg("hud.bar-shop-map-wait", "time", clock(match.secondsLeft()))
                     : msg("hud.bar-shop", "time", clock(match.secondsLeft()),
-                            "ready", match.readyPlayers().size(), "players", match.players().size());
+                            "ready", match.readyPlayers().size(),
+                            "players", match.players().size() - match.disconnectedPlayers().size());
             default -> Component.empty();
         };
         display.bar.name(label);

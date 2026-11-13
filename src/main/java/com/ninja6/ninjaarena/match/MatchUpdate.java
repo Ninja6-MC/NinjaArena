@@ -24,7 +24,12 @@ public sealed interface MatchUpdate {
         /** They died. They stay in the match and are back in the next round. */
         DIED,
         /** They left the match: by command, by being teleported out, or by disconnecting. */
-        LEFT
+        LEFT,
+        /**
+         * They disconnected and may rejoin within the grace period. They stay in the match and
+         * are back in a later round if they rejoin; if not, {@link PlayerLeft} follows.
+         */
+        DISCONNECTED
     }
 
     /**
@@ -37,6 +42,20 @@ public sealed interface MatchUpdate {
 
     /** A player left the match. Comes after {@link PlayerEliminated} if they were alive in a round. */
     record PlayerLeft(UUID player, int team) implements MatchUpdate {
+    }
+
+    /**
+     * A player disconnected and may rejoin within the grace period; they are still in the
+     * match. Comes after {@link PlayerEliminated} if they were alive in a round.
+     */
+    record PlayerDisconnected(UUID player, int team) implements MatchUpdate {
+    }
+
+    /**
+     * A disconnected player rejoined the match. They are not alive in the current round until
+     * they are placed in it during PREP; otherwise they wait for the next round.
+     */
+    record PlayerRejoined(UUID player, int team) implements MatchUpdate {
     }
 
     /** A round was decided. */

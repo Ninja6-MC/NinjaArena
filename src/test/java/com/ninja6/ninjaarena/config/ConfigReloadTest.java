@@ -79,6 +79,8 @@ class ConfigReloadTest {
             calls.add("match"); match = settings; this.friendlyFire = friendlyFire; this.scoring = scoring;
         }
         @Override public void points(PointsSettings settings) { calls.add("points"); points = settings; }
+        Integer rejoinGrace;
+        @Override public void rejoinGrace(int seconds) { calls.add("rejoinGrace"); rejoinGrace = seconds; }
         com.ninja6.ninjaarena.match.ShopSettings shopPhase;
         @Override public void shopPhase(com.ninja6.ninjaarena.match.ShopSettings settings) {
             calls.add("shopPhase");
@@ -235,6 +237,30 @@ class ConfigReloadTest {
         }
         assertEquals(List.of(), target.calls);
         assertEquals(new com.ninja6.ninjaarena.match.ShopSettings(false, 60, 10, 0), target.shopPhase);
+    }
+
+    @Test
+    void theRejoinGraceAppliesAtOnceForNewDisconnectsAndBadValuesAreRejected() throws Exception {
+        write("match: {rejoin-grace-seconds: 30}\n", EMPTY_KIT);
+        var messages = reload.reload();
+        assertTrue(messages.getFirst().contains("complete"), messages.toString());
+        assertEquals(30, target.rejoinGrace);
+        assertTrue(messages.get(1).contains("match.rejoin-grace-seconds"), messages.toString());
+        assertFalse(messages.get(2).contains("match.rejoin-grace-seconds"), "not postponed to the next match");
+        assertTrue(target.calls.contains("rejoinGrace"));
+
+        target.calls.clear();
+        for (String bad : List.of("match: {rejoin-grace-seconds: -1}", "match: {rejoin-grace-seconds: 601}",
+                "match: {rejoin-grace-seconds: 2.5}")) {
+            write(bad + "\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("rejected"), bad);
+        }
+        assertEquals(List.of(), target.calls);
+        assertEquals(30, target.rejoinGrace);
+
+        write("match: {rejoin-grace-seconds: 0}\n", EMPTY_KIT);
+        reload.reload();
+        assertEquals(0, target.rejoinGrace, "0 turns rejoining off");
     }
 
     @Test

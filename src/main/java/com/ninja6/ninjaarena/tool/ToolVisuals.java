@@ -70,6 +70,8 @@ public final class ToolVisuals {
             return false;
         }
         var viewers = new HashSet<>(match.players());
+        // A player away within the rejoin grace sees nothing until they are back.
+        viewers.removeAll(match.disconnectedPlayers());
         viewers.addAll(spectators.apply(match.arena()));
         viewers.addAll(worldPlayers);
         return viewers.stream().allMatch(packs::loaded);

@@ -161,6 +161,21 @@ class JoinRestoreTest {
     }
 
     @Test
+    void aPlayerBackInTheirMatchWithinTheRejoinGraceIsNeitherRestoredNorSentToTheLobby() {
+        List<UUID> lobby = new ArrayList<>();
+        JoinRestore rejoining = withLobby(java.util.Set.of(ALICE), lobby, true);
+        returnsUnderTest.quit(ALICE);
+        restores.markIfPending(ALICE);
+        // The match takes them back during the join, before the first attempt is due.
+        busy = true;
+        rejoining.onJoin(ALICE);
+        advance(JoinRestore.RETRY_DELAYS.length * 1000L);
+        assertEquals(List.of(), lobby);
+        assertEquals(0, attempts);
+        assertTrue(snapshots.hasPending(ALICE), "the snapshot waits for their exit from the match");
+    }
+
+    @Test
     void whenTheLobbyCannotTakeARejoiningPlayerTheyAreRestoredHome() {
         List<UUID> lobby = new ArrayList<>();
         JoinRestore rejoining = withLobby(java.util.Set.of(ALICE), lobby, false);
