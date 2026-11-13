@@ -54,8 +54,10 @@ import java.util.logging.Logger;
  * {@code arenas.yml}. Every slot cell is cleared when it is reserved ({@link #resize}, on
  * startup and on reload) and when the arena world reopens after a retire
  * ({@link #reopened}), so a map the world save kept from an earlier run is gone before
- * any cell is used, and every cell is cleared again before each map is placed. A cell
- * being cleared counts as in use. While the hand-built arenas cannot be read, no cell is
+ * any cell is used, and every cell is cleared again before each map is placed. Those two
+ * sweeps clear the {@link #sweepRegion} for the cell's full size, so a map placed before
+ * the size limit was lowered across a restart goes too. A cell being cleared counts as in
+ * use. While the hand-built arenas cannot be read, no cell is
  * reserved or cleared, since one might hold an arena nobody knows about.
  *
  * <p><b>Progress.</b> {@link #progress} tells how far a map being prepared has got: the
@@ -152,7 +154,8 @@ public final class GeneratedMaps {
         State state = State.IDLE;
         String map;
         Arena arena;
-        boolean ticketed;
+        /** The box whose chunks have tickets on; null for none. */
+        ArenaBounds ticketed;
         /** Bumped by every change, so a completion that comes too late is dropped. */
         int generation;
         CompletableFuture<?> work = CompletableFuture.completedFuture(null);
@@ -266,7 +269,7 @@ public final class GeneratedMaps {
             logger.info("Clearing " + free.size() + " slot cell(s) for generated maps " + when + ": "
                     + String.join("; ", free.stream().map(slot -> slot.cell.describe()).toList()) + ".");
         }
-        free.forEach(this::clear);
+        free.forEach(this::sweep);
     }
 
     /** The reserved cells, slot 1 first. */
@@ -307,7 +310,7 @@ public final class GeneratedMaps {
             return;
         }
         cells.resize(count, this::inUse);
-        syncSlots().forEach(this::clear);
+        syncSlots().forEach(this::sweep);
     }
 
     /**
@@ -323,7 +326,7 @@ public final class GeneratedMaps {
         this.grid = Objects.requireNonNull(grid, "grid");
         slots.clear();
         cells.setGrid(grid);
-        syncSlots().forEach(this::clear);
+        syncSlots().forEach(this::sweep);
     }
 
     /** Adds a slot for every newly reserved cell and drops those given up. */
@@ -351,7 +354,20 @@ public final class GeneratedMaps {
      * height. Both corners inclusive.
      */
     public ArenaBounds region(GridCell cell) {
-        SideDimensions size = mapSize();
+        return region(cell, mapSize());
+    }
+
+    /**
+     * The most of a slot cell any generated map can have used: the {@link #region} for the
+     * cell's full size, whatever the size limit. A size limit lowered across a restart
+     * leaves an older, larger map in it, so a cell is swept this wide when it is reserved
+     * and when the arena world reopens. It contains {@link #region}.
+     */
+    public ArenaBounds sweepRegion(GridCell cell) {
+        return region(cell, SideDimensions.forCell(grid.cellSize()));
+    }
+
+    private ArenaBounds region(GridCell cell, SideDimensions size) {
         int span = size.width() + 2 * size.length();
         ArenaBounds bounds = grid.cellBounds(cell);
         int minX = bounds.minX() + (grid.cellSize() - span) / 2;
@@ -408,7 +424,7 @@ public final class GeneratedMaps {
         target.arena = null;
         int generation = ++target.generation;
         // Tickets before any block is written, so no chunk unloads and drops the work.
-        takeTickets(target);
+        takeTickets(target, region(target.cell));
         // A chunk unloaded since its last use is back as the world save had it, so clear first.
         CellWriter.Work cleared = writer.clear(target.cell, region(target.cell));
         target.work = cleared;
@@ -499,19 +515,24 @@ public final class GeneratedMaps {
         // Bumped before the cancel, so the cancelled work's completion is ignored.
         slot.generation++;
         work.cancel(false);
-        clear(slot);
+        clear(slot, region(slot.cell));
     }
 
-    /** Clears the slot's region with tickets on, then frees the cell. */
-    private void clear(Slot slot) {
+    /** Clears all a map could ever have used of the slot's cell, then frees it. */
+    private void sweep(Slot slot) {
+        clear(slot, sweepRegion(slot.cell));
+    }
+
+    /** Clears the box with tickets on, then frees the cell. */
+    private void clear(Slot slot, ArenaBounds region) {
         slot.state = State.CLEARING;
         slot.map = null;
         slot.arena = null;
         int generation = ++slot.generation;
-        takeTickets(slot);
+        takeTickets(slot, region);
         slot.clearing = null;
         slot.placing = null;
-        CompletableFuture<Void> cleared = writer.clear(slot.cell, region(slot.cell));
+        CompletableFuture<Void> cleared = writer.clear(slot.cell, region);
         slot.work = cleared;
         cleared.whenComplete((ignored, error) -> {
             if (slot.generation != generation) {
@@ -635,30 +656,38 @@ public final class GeneratedMaps {
         return null;
     }
 
-    private void takeTickets(Slot slot) {
-        if (slot.ticketed) {
+    /**
+     * Puts tickets on the chunks of the box, keeping those already on: the slot then holds
+     * the box around both, so a sweep's wider tickets cover a map placed after it.
+     */
+    private void takeTickets(Slot slot, ArenaBounds region) {
+        ArenaBounds held = slot.ticketed;
+        if (held != null && held.contains(region)) {
             return;
         }
-        ArenaBounds region = region(slot.cell);
-        for (int x = region.minChunkX(); x <= region.maxChunkX(); x++) {
-            for (int z = region.minChunkZ(); z <= region.maxChunkZ(); z++) {
+        ArenaBounds box = held == null ? region : new ArenaBounds(Math.min(held.minX(), region.minX()),
+                Math.min(held.minY(), region.minY()), Math.min(held.minZ(), region.minZ()),
+                Math.max(held.maxX(), region.maxX()), Math.max(held.maxY(), region.maxY()),
+                Math.max(held.maxZ(), region.maxZ()));
+        for (int x = box.minChunkX(); x <= box.maxChunkX(); x++) {
+            for (int z = box.minChunkZ(); z <= box.maxChunkZ(); z++) {
                 tickets.add(x, z);
             }
         }
-        slot.ticketed = true;
+        slot.ticketed = box;
     }
 
     private void releaseTickets(Slot slot) {
-        if (!slot.ticketed) {
+        ArenaBounds held = slot.ticketed;
+        if (held == null) {
             return;
         }
-        ArenaBounds region = region(slot.cell);
-        for (int x = region.minChunkX(); x <= region.maxChunkX(); x++) {
-            for (int z = region.minChunkZ(); z <= region.maxChunkZ(); z++) {
+        for (int x = held.minChunkX(); x <= held.maxChunkX(); x++) {
+            for (int z = held.minChunkZ(); z <= held.maxChunkZ(); z++) {
                 tickets.remove(x, z);
             }
         }
-        slot.ticketed = false;
+        slot.ticketed = null;
     }
 
     private static Throwable unwrap(Throwable error) {

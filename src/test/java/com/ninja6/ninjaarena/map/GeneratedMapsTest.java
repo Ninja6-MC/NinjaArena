@@ -486,4 +486,54 @@ class GeneratedMapsTest {
         maps.setMaxMapSize(128);
         assertEquals(SideDimensions.forCell(128), maps.mapSize());
     }
+
+    @Test
+    void loweringTheSizeLimitAcrossARestartClearsTheOldLargerMap() {
+        GeneratedMaps before = maps(1);
+        before.setMaxMapSize(256);
+        ready(before, "generated:1", 42);
+        GridCell cell = before.cellOf("generated:1").orElseThrow();
+        ArenaBounds old = before.region(cell);
+        assertTrue(blocks.countSolid(old) > 0);
+        // Disable with the map placed; the shutdown save keeps it.
+        before.close();
+
+        GeneratedMaps after = fresh();
+        after.setMaxMapSize(128);
+        after.resize(1);
+        assertEquals(cell, after.cells().getFirst(), "the same cell after the restart");
+        assertTrue(after.sweepRegion(cell).contains(old), "the startup clear reaches the old map");
+        drain();
+        assertEquals(0, blocks.countSolid(), "no block of the old map is left in the cell");
+        assertTrue(blocks.tickets.isEmpty());
+
+        // A map prepared afterwards clears and counts only its own, smaller region.
+        after.prepare("generated:1", new GeneratedMaps.Request(42, 1, 4), outcomes::add);
+        ArenaBounds small = after.region(cell);
+        long smallBlocks = (long) (small.maxX() - small.minX() + 1) * (small.maxY() - small.minY() + 1)
+                * (small.maxZ() - small.minZ() + 1);
+        assertEquals(2 * smallBlocks, after.progress("generated:1").orElseThrow().total());
+        long start = writer.visited();
+        drain();
+        assertEquals(2 * smallBlocks, writer.visited() - start, "the progress total is what was visited");
+        assertTrue(after.progress("generated:1").orElseThrow().isComplete());
+        assertEquals(blocks.countSolid(), blocks.countSolid(small));
+    }
+
+    @Test
+    void theWorldReopeningSweepsTheWholeCellToo() {
+        GeneratedMaps maps = fresh();
+        maps.setMaxMapSize(128);
+        maps.resize(1);
+        drain();
+        GridCell cell = maps.cells().getFirst();
+        ArenaBounds wide = maps.sweepRegion(cell);
+        assertTrue(wide.contains(maps.region(cell)));
+        blocks.set(wide.minX(), wide.minY(), wide.minZ(), Material.STONE);
+        blocks.set(wide.maxX(), wide.maxY(), wide.maxZ(), Material.LAVA);
+        maps.reopened();
+        drain();
+        assertEquals(0, blocks.countSolid());
+        assertTrue(blocks.tickets.isEmpty());
+    }
 }

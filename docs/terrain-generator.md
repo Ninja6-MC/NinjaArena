@@ -461,7 +461,8 @@ held. Everything happens on the server thread except the search.
 Generated maps are never written to `arenas.yml` (`ArenaCodec.encode` refuses a generated
 name). Every slot cell is cleared when it is reserved on startup or by a reload, and again
 when the arena world reopens after a retire (`ArenaWorld.afterReopen`), so nothing a world
-save kept from an earlier run survives. A cell being cleared counts as in use. While
+save kept from an earlier run survives. These sweeps clear the cell's full-size region
+([Size limit](#size-limit)). A cell being cleared counts as in use. While
 `arenas.yml` cannot be read, no cell is reserved or cleared, since the registry cannot
 say which cells hold hand-built arenas.
 
@@ -509,20 +510,21 @@ first slice ever, before anything is measured, is 16 blocks. Every block visited
 written or not.
 
 The budget follows the same tick-time guard as enemy spawning. `TickTimeGuard` holds the
-guard state for both: it reads `Bukkit#getAverageTickTime` at most once per tick, with the `stability` thresholds and
-their hysteresis, and both the gate and `PlacementBudget` read it. There is one notion
-of a slow server, not two.
+guard state for both: it reads `Bukkit#getAverageTickTime` at most once per tick, with
+the `stability` thresholds and their hysteresis, and both the gate and `PlacementBudget`
+read it. There is one notion of a slow server, not two.
 
 | Guard | Placement budget |
 | :--- | :--- |
 | `NORMAL` | `stability.placement.budget-ms` (10 ms) |
-| `PAUSED` (above `pause-spawning-above-mspt`) | `slow-budget-ms` (1 ms; 0 pauses placement) |
+| `PAUSED` (above `pause-spawning-above-mspt`) | `slow-budget-ms` (1 ms; 0 pauses) |
 | `TIER_DROPPED` (above `drop-tier-above-mspt`) | `slow-budget-ms` |
-| Back below `resume-below-mspt` (`NORMAL` or `RECOVERING`) | Climbs in a straight line from the slow budget to the full one over `recovery-seconds` (10 s) |
+| Below `resume-below-mspt` again | Climbs back over `recovery-seconds` (10 s) |
 
-A guard that holds back again during the climb drops the budget to the slow one, and the
-climb starts over. The guard lets go only below `resume-below-mspt`, so the budget does
-not flap around a threshold.
+Once the guard lets go (`NORMAL`, or `RECOVERING` after a tier drop), the budget climbs
+in a straight line from the slow budget to the full one. A guard that holds back again
+during the climb drops the budget to the slow one, and the climb starts over. The guard
+lets go only below `resume-below-mspt`, so the budget does not flap around a threshold.
 
 The budget is shared by every slot cell, not given to each: four slots generating at
 once take no more server time per tick than one. At the defaults and the default cell, a
@@ -543,8 +545,15 @@ be last in a tick does not fall behind.
 `stability.placement.max-map-size` (256; 32 to 4096) is the largest grid cell a
 generated map is sized for. In a larger `arena-grid.cell-size`,
 `GeneratedMaps.mapSize()` is `SideDimensions.forCell(max-map-size)`: the generator is
-asked for that smaller side, the region is that map's span, centred in the cell, and
-nothing else of the cell is cleared.
+asked for that smaller side, and the region a map is cleared and placed in is that map's
+span, centred in the cell.
+
+The limit can be lowered across a restart, and the world save keeps a map placed before
+it. So the sweeps when a cell is reserved and when the arena world reopens clear
+`GeneratedMaps.sweepRegion(cell)`, the region for the cell's full size whatever the
+limit, which holds every map any limit could have placed. Between matches only the map's
+own region is cleared, since the limit cannot change while a cell is in use. Progress
+counts only the map's own clear and placement, not a sweep.
 
 The limit caps the map's footprint rather than counting blocks per map, for three
 reasons:

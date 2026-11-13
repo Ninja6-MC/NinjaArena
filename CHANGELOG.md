@@ -20,10 +20,12 @@ Java 25, and does not run on Folia.
   enemy spawning back, and climbs back over `recovery-seconds` (10) once it lets go;
   spawning and placement share one tick-time reading per tick. `max-map-size` (256) caps
   the cell size generated maps are sized for, so a large `arena-grid.cell-size` no
-  longer means larger maps on a shared host. All four keys are restart-only. Internal:
-  `GeneratedMaps#progress` reports blocks done out of total for a map being prepared,
-  for the room's boss bar; `CellWriter` takes the slot cell and returns `Work` with its
-  progress; `TickCellWriter` is replaced by `BudgetedCellWriter`.
+  longer means larger maps on a shared host; the startup and reopen sweeps still clear a
+  cell's full-size region, so a larger map from before a lower limit is removed. All
+  four keys are restart-only. Internal: `GeneratedMaps#progress` reports blocks done out
+  of total for a map being prepared, for the room's boss bar; `CellWriter` takes the
+  slot cell and returns `Work` with its progress; `TickCellWriter` is replaced by
+  `BudgetedCellWriter`.
 - Slot cells for generated maps. `arenas.max-active` cells of the arena grid, farthest
   from the origin first, are reserved for generated maps; `arena create` skips them and
   refuses one named by hand (`arena.error.cell-reserved`), and a hand-built arena already
