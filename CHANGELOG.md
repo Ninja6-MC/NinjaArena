@@ -13,6 +13,27 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Each match is stored with its map. Stats schema version 3 adds a `matches` table (with
+  the `stats.table-prefix`) holding, per map a match was played on, the match id, when
+  it ended, the season, the map, the seed and difficulty, the rounds played on it, the
+  team count, the winners and why it ended. A hand-built arena is stored by name with no
+  seed; a generated map as `*generated` with the seed it was accepted from, never by its
+  slot name, so map stats are keyed by seed (indexed on seed and difficulty). A match
+  whose map is generated again each round has a row per map. Rows are written with the
+  player stats, in the same transaction on the stats thread. The match result now shows
+  each generated map's seed and difficulty with the command to play it again (new texts
+  `match.map-seed` and `match.map-seed-rounds`). The migration from version 2 runs on
+  the first start, on SQLite and MySQL, and keeps every existing row. The schema now
+  also records `compatible_from`, the oldest version whose builds can still use it (2
+  for version 3, which only adds a table): a build refuses a newer schema only when its
+  own version is below that, so builds from now on keep recording when another server
+  sharing the database upgrades it. Released builds before this one refuse a version 3
+  database, also on a reconnect, and then drop matches, so upgrade every server sharing
+  a database together. To go back to a version 2 build, set `schema_version` to 2; the
+  old build ignores `matches`, and a later upgrade keeps its rows. Taking a backup
+  before an upgrade stays the safe general rule. Internal:
+  `MatchView#maps`, `MapSource#seed`, `GeneratedMaps#seed` and
+  `StatsStore#matchesOnSeed`.
 - Seed modes and map control for generated maps. The new `maps` section of `config.yml`
   sets, for every slot cell (`maps.default`) or one (`maps.slots.<n>`), a `mode`
   (`static`, `rotation` or `random`, the default), `seed`, `seeds`, `rotate-every` and

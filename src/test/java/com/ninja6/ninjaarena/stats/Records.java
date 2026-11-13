@@ -31,6 +31,11 @@ final class Records {
         return match(T0, players);
     }
 
+    /** A completed two-team match that team 1 won, with its own rows. */
+    static MatchRecord played(UUID id, Instant at, List<MatchRecord.Played> maps, PlayerStats... players) {
+        return new MatchRecord(at, List.of(players), new MatchRecord.Details(id, "COMPLETED", 2, List.of(1), maps));
+    }
+
     static ConnectionSource sqliteSource(Path file) throws ConnectionSource.MissingDriver {
         return ConnectionSource.sqlite(file, ConnectionSource.SQLITE_DRIVER);
     }

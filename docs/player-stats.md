@@ -69,15 +69,32 @@ time logged, so it cannot block the queue. On shutdown, after running matches ar
 stopped and recorded, the queue is flushed for up to 10 seconds; anything still
 unwritten is reported in the log.
 
-A database whose schema version is newer than the plugin understands is never written
-to: stats turn off with a log line asking for an update.
+Migrations only go forward. Besides its version, the schema records in
+`schema_version.compatible_from` the oldest version whose builds can still use it.
+Version 3 only adds the `matches` table, so it records 2. A build uses a database whose
+version is newer than its own only when its own version is at least `compatible_from`;
+otherwise, or when no `compatible_from` is stored, it never writes to it: stats turn off
+with a log line asking for an update. Builds from this one on read the marker, so they
+keep recording when a server sharing the database upgrades it. Released builds before
+this one do not: they refuse a version 3 database, also when they reconnect after an
+upgrade, for example after a MySQL `wait_timeout`, and then drop the matches they hold.
+Upgrade every server that shares a database together.
+
+To go back to a version 2 build after the upgrade, set the version back with
+`UPDATE <p>schema_version SET version = 2 WHERE id = 1`. The version 2 build ignores
+`<p>matches` and the `compatible_from` column, and a later upgrade keeps both and their
+rows, because the version 3 statements create only what is missing. As a general rule,
+take a backup of the database before any plugin upgrade, and restore it to downgrade
+across a change that is not additive.
 
 ## Schema
 
-Version 1. `<p>` is `stats.table-prefix`.
+Version 3. `<p>` is `stats.table-prefix`; the award, placing and payout tables of version 2
+are under [Cosmetic rewards and Vault payouts](#cosmetic-rewards-and-vault-payouts).
 
 ```sql
-<p>schema_version (id INT PRIMARY KEY, version INT NOT NULL)          -- one row, id 1
+<p>schema_version (id INT PRIMARY KEY, version INT NOT NULL,         -- one row, id 1
+                   compatible_from INT NULL)                          -- version 3
 <p>seasons        (id INT AUTO PRIMARY KEY, name VARCHAR(64) UNIQUE NOT NULL,
                    started_at BIGINT NOT NULL, ended_at BIGINT NULL)  -- epoch millis
 <p>player_stats   (player CHAR(36), season INT,
@@ -86,7 +103,22 @@ Version 1. `<p>` is `stats.table-prefix`.
                    PRIMARY KEY (player, season))                      -- season 0 = all-time
 <p>players        (player CHAR(36) PRIMARY KEY, name VARCHAR(32) NOT NULL,
                    last_seen BIGINT NOT NULL)                         -- latest known name
+<p>matches        (match_id CHAR(36), first_round INT, rounds INT NOT NULL,
+                   ended_at BIGINT NOT NULL, season INT NULL,
+                   map VARCHAR(32) NOT NULL, seed BIGINT NULL, difficulty INT NULL,
+                   teams INT NOT NULL, winners VARCHAR(32) NOT NULL,  -- "1", "1,3" or ""
+                   reason VARCHAR(16) NOT NULL,                       -- COMPLETED, FORFEIT, ...
+                   PRIMARY KEY (match_id, first_round))               -- version 3
 ```
+
+`matches` has a row per map each match was played on. `map` is the hand-built arena's
+name, with `seed` and `difficulty` null; a generated map is `*generated`, with the seed
+it was accepted from and its difficulty, never its slot name (`generated:<n>`), which
+names another map in the next match. A match plays one map, so it has one row with
+`first_round` 1, unless `regenerate: round` generated its map again between rounds: then
+each map has a row with the rounds played on it. Map stats are keyed by seed through the
+`(seed, difficulty)` index. `match_id` is the match result's id, as in `payout_matches`;
+`season` is the season current when the match was written, null before the first one.
 
 `player_stats` has one index on `(season, <stat>)` per stat for top lists. The exact
 DDL for each database is in `Dialect`. Migrations are numbered: on connect the plugin
@@ -107,6 +139,7 @@ stats are off. Every method returns at once and is safe from any thread:
 | `currentSeason()`, `seasons()` | The current `Season`; every season, oldest first. |
 | `startSeason(name)` | Archives the current season and starts `name`. |
 | `useSeason(name)` | As a `stats.season` change: refuses an archived name. |
+| `matchesOnSeed(seed, limit)` | Up to `limit` (1 to 1000) `MatchOnSeed` rows for the generated maps played from the seed, latest first. |
 | `flush()` | Completes once everything queued is written. |
 | `isAvailable()`, `pending()` | Whether the last database use succeeded; matches waiting. |
 
@@ -174,4 +207,5 @@ rewards:
   because Vault has no way to identify a retried deposit.
 
 Stats schema version 2 adds award, season placing and payout tables through the
-existing migration. Upgrade every server that shares the database.
+existing migration, and version 3 the `matches` table. Upgrade every server that shares
+the database.

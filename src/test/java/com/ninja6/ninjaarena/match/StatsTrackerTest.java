@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.match;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
@@ -82,6 +83,13 @@ class StatsTrackerTest extends MatchFixture {
                 new PlayerStats(CAROL, "Carol", 1, 1, 0, 1, 0, 2, 1),
                 new PlayerStats(BOB, "Bob", 0, 0, 1, 0, 1, 2, 1),
                 new PlayerStats(DAVE, "Dave", 0, 0, 0, 0, 2, 1, 1)), records.getFirst().players());
+        // A hand-built arena is kept by its name, with no seed, and the result shows none.
+        MatchResult result = events(MatchEndEvent.class).getLast().result();
+        assertEquals(new MatchRecord.Details(result.id(), "COMPLETED", 2, List.of(1),
+                List.of(MatchRecord.Played.handBuilt("dojo", 1, 2))), records.getFirst().match());
+        assertEquals(List.of(new PlayedMap("dojo", null, 1, 2)), current().maps());
+        assertTrue(players.get(ALICE).messages.stream().noneMatch(text -> text.contains("seed")),
+                String.valueOf(players.get(ALICE).messages));
         // Nothing more is written when the match closes.
         ticks(2);
         assertEquals(1, records.size());
@@ -102,6 +110,10 @@ class StatsTrackerTest extends MatchFixture {
                 new PlayerStats(CAROL, "Carol", 0, 0, 0, 0, 0, 0, 1),
                 new PlayerStats(BOB, "Bob", 0, 0, 0, 0, 1, 0, 1),
                 new PlayerStats(DAVE, "Dave", 0, 0, 0, 0, 0, 0, 1)), records.getFirst().players());
+        MatchRecord.Details details = records.getFirst().match();
+        assertEquals("STOPPED", details.reason());
+        assertEquals(List.of(), details.winners());
+        assertEquals(List.of(MatchRecord.Played.handBuilt("dojo", 1, 1)), details.maps());
     }
 
     @Test

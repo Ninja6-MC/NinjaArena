@@ -193,6 +193,17 @@ public final class StatsStore {
         return submit(database -> database.top(stat, scope, limit));
     }
 
+    /**
+     * The stored matches played on a generated map from the seed, the latest first, at most
+     * {@code limit} of them.
+     */
+    public CompletableFuture<List<MatchOnSeed>> matchesOnSeed(long seed, int limit) {
+        if (limit < 1 || limit > 1000) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("limit must be from 1 to 1000"));
+        }
+        return submit(database -> database.matchesOnSeed(seed, limit));
+    }
+
     public CompletableFuture<List<Award>> awards(UUID player) {
         return submit(database -> database.awards(player));
     }

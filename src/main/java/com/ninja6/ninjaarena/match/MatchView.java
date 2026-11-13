@@ -114,6 +114,14 @@ public interface MatchView {
     /** Each finished round's result, in order. */
     List<RoundResult> results();
 
+    /**
+     * Every map played so far, in round order: one for the whole match, or one per map when
+     * a generated map is generated again between rounds. Empty before the first round.
+     */
+    default List<PlayedMap> maps() {
+        return List.of();
+    }
+
     /** The match result, once the match has ended. */
     Optional<MatchResult> result();
 }

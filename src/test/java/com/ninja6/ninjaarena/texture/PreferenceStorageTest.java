@@ -165,7 +165,7 @@ class PreferenceStorageTest {
         prefs.close();
         assertEquals(Quality.DETAILED, store(true).snapshot(PlayerKey.java(ALICE)));
         assertEquals(1, count("SELECT version FROM na_texture_schema WHERE id = 1"));
-        assertEquals(2, count("SELECT version FROM na_schema_version WHERE id = 1"));
+        assertEquals(3, count("SELECT version FROM na_schema_version WHERE id = 1"));
     }
 
     @Test

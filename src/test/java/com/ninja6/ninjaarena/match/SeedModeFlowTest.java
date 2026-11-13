@@ -12,6 +12,7 @@ import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.arena.MapSeed;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.director.MatchDirector;
 import com.ninja6.ninjaarena.director.MobSpawner;
@@ -25,6 +26,7 @@ import com.ninja6.ninjaarena.map.FakeWriters;
 import com.ninja6.ninjaarena.map.GeneratedMaps;
 import com.ninja6.ninjaarena.map.SeedPolicy;
 import com.ninja6.ninjaarena.map.SeedSettings;
+import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
@@ -35,6 +37,8 @@ import com.ninja6.ninjaarena.room.Room;
 import com.ninja6.ninjaarena.room.RoomLobby;
 import com.ninja6.ninjaarena.room.RoomService;
 import com.ninja6.ninjaarena.room.SeedChoice;
+import com.ninja6.ninjaarena.stats.MatchRecord;
+import com.ninja6.ninjaarena.stats.StatsTracker;
 import com.ninja6.ninjaarena.terrain.MapSearch;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.CrossWorldTransfers;
@@ -515,6 +519,39 @@ class SeedModeFlowTest extends MatchFixture {
         tickUntil(first.arena(), MatchPhase.SHOP);
         drain();
         assertEquals(seedOf(first), seedOf(second));
+    }
+
+    @Test
+    void aMatchGeneratedAgainEachRoundKeepsEverySeedPlayedAndShowsThemInTheResult() {
+        useSeedModes("maps: {default: {regenerate: round, difficulty: 1}}");
+        randoms.addAll(List.of(42L, 43L, 44L, 45L, 46L));
+        Room room = generatedRoom(ALICE, BOB);
+        String name = room.arena();
+        rooms.start(player(ALICE), null);
+        MatchView match = matches.match(name).orElseThrow();
+        for (int i = 0; i < 300 && matches.match(name).isPresent(); i++) {
+            matches.tick();
+            runNextTick();
+            drain();
+        }
+        assertTrue(matches.match(name).isEmpty(), "the match closed");
+
+        List<PlayedMap> played = match.maps();
+        assertEquals(match.results().size(), played.stream().mapToInt(PlayedMap::rounds).sum(),
+                "every round counts");
+        assertEquals(new PlayedMap(name, new MapSeed(42, 1), 1, 1), played.getFirst());
+        assertEquals(new PlayedMap(name, new MapSeed(43, 1), 2, 1), played.get(1));
+        for (PlayedMap map : played) {
+            MapSeed seed = map.generated().orElseThrow();
+            assertTrue(messages(BOB).contains("Rounds " + map.firstRound() + " to " + map.lastRound() + ": seed "
+                    + seed.seed() + " at difficulty 1. Play it again with /narena map set generated " + seed.seed()
+                    + " 1."), String.valueOf(messages(BOB)));
+        }
+        List<MatchRecord> records = new java.util.ArrayList<>();
+        new StatsTracker(records::add, plugin.getServer()::getPlayer, java.time.Instant::now)
+                .onMatchEnd(events(MatchEndEvent.class).getLast());
+        assertEquals(played.stream().map(map -> MatchRecord.Played.generated(map.seed().seed(), 1, map.firstRound(),
+                map.rounds())).toList(), records.getFirst().match().maps());
     }
 
     @Test

@@ -15,12 +15,17 @@ enum Dialect {
 
     /** Stats columns in the order {@link StatsDatabase} binds them. */
     static final List<Stat> COLUMNS = List.of(Stat.values());
+    /** Longest stored map name: a hand-built arena's name or {@link MatchRecord#GENERATED}. */
+    static final int MAP_LENGTH = 32;
+    /** Longest stored list of winning teams. */
+    static final int WINNERS_LENGTH = 32;
 
     /** The statements of one schema version, run in order. */
     List<String> migration(int version, String prefix) {
         return switch (version) {
             case 1 -> this == SQLITE ? sqliteV1(prefix) : mysqlV1(prefix);
             case 2 -> rewards(prefix);
+            case 3 -> matches(prefix);
             default -> throw new IllegalArgumentException("unknown schema version " + version);
         };
     }
@@ -69,6 +74,25 @@ enum Dialect {
                         + " NOT NULL, PRIMARY KEY (player, match_id))" + suffix);
     }
 
+    /**
+     * Version 3: one row per map a match was played on, so a match on a map generated again
+     * between rounds has a row for each map, and every seed played can be looked up. A
+     * generated map is stored by its seed, with {@link MatchRecord#GENERATED} as its name.
+     */
+    private List<String> matches(String p) {
+        String columns = "match_id CHAR(36) NOT NULL, first_round INT NOT NULL, rounds INT NOT NULL,"
+                + " ended_at BIGINT NOT NULL, season INT, map VARCHAR(" + MAP_LENGTH + ") NOT NULL, seed BIGINT,"
+                + " difficulty INT, teams INT NOT NULL, winners VARCHAR(" + WINNERS_LENGTH + ") NOT NULL,"
+                + " reason VARCHAR(" + MatchRecord.REASON_LENGTH + ") NOT NULL, PRIMARY KEY (match_id, first_round)";
+        if (this == MYSQL) {
+            return List.of("CREATE TABLE IF NOT EXISTS " + p + "matches (" + columns + ", INDEX " + p
+                    + "matches_seed (seed, difficulty))"
+                    + " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
+        return List.of("CREATE TABLE IF NOT EXISTS " + p + "matches (" + columns + ")",
+                "CREATE INDEX IF NOT EXISTS " + p + "matches_seed ON " + p + "matches (seed, difficulty)");
+    }
+
     String keepExisting(String keys, String firstKey) {
         return this == SQLITE ? " ON CONFLICT (" + keys + ") DO NOTHING"
                 : " ON DUPLICATE KEY UPDATE " + firstKey + " = " + firstKey;
@@ -77,6 +101,25 @@ enum Dialect {
     private static String statColumns() {
         return COLUMNS.stream().map(stat -> " " + stat.column() + " INT NOT NULL DEFAULT 0")
                 .collect(Collectors.joining(","));
+    }
+
+    /**
+     * The oldest schema version whose builds can still use a database at {@code version}, as
+     * stored in {@code schema_version.compatible_from}. Version 3 only adds a table, so a
+     * version 2 build reads and writes it as before. A version that older builds cannot use
+     * returns itself; one that keeps them working returns the oldest it keeps.
+     */
+    static int compatibleFrom(int version) {
+        return switch (version) {
+            case 1, 2 -> version;
+            case 3 -> 2;
+            default -> throw new IllegalArgumentException("unknown schema version " + version);
+        };
+    }
+
+    /** Version 3's marker of the oldest schema version whose builds can still use the database. */
+    String addCompatibleFrom(String p) {
+        return "ALTER TABLE " + p + "schema_version ADD COLUMN compatible_from INT NULL";
     }
 
     String createSchemaTable(String p) {

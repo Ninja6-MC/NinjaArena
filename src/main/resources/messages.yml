@@ -522,6 +522,10 @@ match:
   shared-win: "<gold>Teams <teams> share the win!"
   forfeit: "<gold>Team <teams> wins the match: no other team is left."
   stopped: "<red>The match was stopped."
+  # After the result of a match on a generated map: what to play it again from.
+  map-seed: "<gray>Map: seed <seed> at difficulty <difficulty>. Play it again with /narena map set generated <seed> <difficulty>."
+  # One line per map when the map was generated again between rounds.
+  map-seed-rounds: "<gray>Rounds <from> to <to>: seed <seed> at difficulty <difficulty>. Play it again with /narena map set generated <seed> <difficulty>."
   team-separator: " and "
   returning: "<gray>Returning in <seconds> seconds."
 

@@ -7,6 +7,7 @@ import com.ninja6.ninjaarena.arena.ArenaGrid;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ChunkTickets;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.arena.MapSeed;
 import com.ninja6.ninjaarena.terrain.ArenaLayout;
 import com.ninja6.ninjaarena.terrain.ChallengeMinimums;
 import com.ninja6.ninjaarena.terrain.MapPoints;
@@ -163,6 +164,8 @@ public final class GeneratedMaps {
         State state = State.IDLE;
         String map;
         Arena arena;
+        /** What the placed map was generated from, while it is placed. */
+        MapSeed seed;
         /** The box whose chunks have tickets on; null for none. */
         ArenaBounds ticketed;
         /** Bumped by every change, so a completion that comes too late is dropped. */
@@ -462,6 +465,7 @@ public final class GeneratedMaps {
     private void start(Slot target, Request request, Consumer<Prepared> done) {
         target.state = State.PREPARING;
         target.arena = null;
+        target.seed = null;
         int generation = ++target.generation;
         // Tickets before any block is written, so no chunk unloads and drops the work.
         takeTickets(target, region(target.cell));
@@ -525,6 +529,7 @@ public final class GeneratedMaps {
                 return;
             }
             slot.arena = arena(slot, layout, accepted.points(), originX, originY, originZ);
+            slot.seed = new MapSeed(accepted.seed(), request.difficulty());
             slot.state = State.READY;
             logger.info("Generated map " + slot.map + " (seed " + accepted.seed() + ", difficulty "
                     + request.difficulty() + ", " + request.teams() + " teams) is ready in slot cell "
@@ -569,6 +574,7 @@ public final class GeneratedMaps {
         slot.state = State.CLEARING;
         slot.map = null;
         slot.arena = null;
+        slot.seed = null;
         int generation = ++slot.generation;
         takeTickets(slot, region);
         slot.clearing = null;
@@ -596,6 +602,16 @@ public final class GeneratedMaps {
         Slot slot = slotOf(Arena.normalizeName(name));
         return slot != null && (slot.state == State.READY || slot.state == State.HELD)
                 ? Optional.of(slot.arena) : Optional.empty();
+    }
+
+    /**
+     * The seed the placed map was accepted from and its difficulty: what reproduces it.
+     * Empty unless the map is placed. A committed replacement answers with its own seed.
+     */
+    public Optional<MapSeed> seed(String name) {
+        Slot slot = slotOf(Arena.normalizeName(name));
+        return slot != null && (slot.state == State.READY || slot.state == State.HELD)
+                ? Optional.ofNullable(slot.seed) : Optional.empty();
     }
 
     /**
@@ -776,6 +792,7 @@ public final class GeneratedMaps {
             slot.state = State.IDLE;
             slot.map = null;
             slot.arena = null;
+            slot.seed = null;
         }
         writer.close();
     }
