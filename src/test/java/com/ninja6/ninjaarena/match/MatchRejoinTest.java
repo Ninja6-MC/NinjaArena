@@ -456,6 +456,103 @@ class MatchRejoinTest extends MatchFixture {
         assertTrue(match().result().isEmpty());
     }
 
+    // ---- The phase moving on between the join and the placement ----
+
+    /**
+     * Joins a player and lets the once-a-second match ticker run before the placement on the
+     * next tick, as it does when both are due on the same server tick.
+     */
+    private void joinAsTheMatchTicks(UUID id) {
+        players.get(id).online = true;
+        PlayerJoinEvent event = new PlayerJoinEvent(player(id), Component.empty());
+        listener.onJoin(event);
+        joins.onJoin(event);
+        matches.tick();
+        runNextTick();
+    }
+
+    @Test
+    void aRejoinOnTheLastSecondOfPrepSpectatesTheFightInsteadOfStayingInTheShop() {
+        matches.setRejoinGraceSeconds(60);
+        toShop();
+        players.get(BOB).location = shopSpot.clone();
+        quit(BOB);
+        ticks(SHOP.maxSeconds());
+        ticks(SETTINGS.prepSeconds() - 1);
+        assertEquals(MatchPhase.PREP, match().phase());
+        kitted.clear();
+        joinAsTheMatchTicks(BOB);
+        assertEquals(MatchPhase.COMBAT, match().phase());
+        assertTrue(matches.isInMatch(BOB));
+        assertFalse(match().isAlive(BOB), "the fight started before he was placed");
+        assertTrue(deaths.isSpectating(BOB));
+        assertTrue(PluginWorlds.isArena(players.get(BOB).location), "out of the shop area, into the arena");
+        assertFalse(kitted.contains(BOB));
+        assertEquals("You are back in the match and play again from the next round.",
+                players.get(BOB).messages.getLast());
+
+        // Dave is the last of team 2 alive: taking him out wins the round for team 1.
+        matches.died(player(DAVE), null);
+        runNextTick();
+        assertEquals(MatchPhase.ROUND_END, match().phase());
+        assertEquals(1, match().results().getLast().winner());
+    }
+
+    @Test
+    void aRejoinOnTheLastSecondOfTheShopIsAliveAtTheTeamSpawn() {
+        matches.setRejoinGraceSeconds(60);
+        toShop();
+        players.get(BOB).location = shopSpot.clone();
+        quit(BOB);
+        ticks(SHOP.maxSeconds() - 1);
+        joinAsTheMatchTicks(BOB);
+        assertEquals(MatchPhase.PREP, match().phase());
+        assertTrue(match().isAlive(BOB), "back before the round started");
+        assertAt(SPAWN_2, players.get(BOB).location);
+        assertTrue(kitted.contains(BOB));
+        assertEquals("You are back in the match, at your team spawn.", players.get(BOB).messages.getLast());
+    }
+
+    @Test
+    void aRejoinOnTheLastSecondOfTheRoundEndIsAliveInTheNextPrep() {
+        toCombat();
+        team1WinsTheRound();
+        quit(CAROL);
+        joinAsTheMatchTicks(CAROL);
+        assertEquals(MatchPhase.PREP, match().phase());
+        assertTrue(match().isAlive(CAROL));
+        assertFalse(deaths.isSpectating(CAROL));
+        assertEquals(GameMode.ADVENTURE, players.get(CAROL).gameMode);
+        assertAt(SPAWN_1, players.get(CAROL).location);
+    }
+
+    @Test
+    void aRejoinOnTheLastSecondOfTheRoundEndBeforeAShopGoesToTheShopArea() {
+        matches.setShopSettings(SHOP);
+        toCombat();
+        team1WinsTheRound();
+        quit(CAROL);
+        joinAsTheMatchTicks(CAROL);
+        assertEquals(MatchPhase.SHOP, match().phase());
+        assertFalse(match().isAlive(CAROL));
+        assertFalse(deaths.isSpectating(CAROL));
+        assertTrue(PluginWorlds.isLobby(players.get(CAROL).location), "in the shop area");
+        assertEquals(GameMode.ADVENTURE, players.get(CAROL).gameMode);
+        assertEquals("You are back in the match, in the shop.", players.get(CAROL).messages.getLast());
+    }
+
+    @Test
+    void aRejoinOnTheLastSecondOfOverrunSpectatesThroughTheRoundEnd() {
+        toCombat();
+        quit(CAROL);
+        ticks(SETTINGS.roundSeconds() + SETTINGS.overrunLimitSeconds() - 1);
+        assertEquals(MatchPhase.OVERRUN, match().phase());
+        joinAsTheMatchTicks(CAROL);
+        assertEquals(MatchPhase.ROUND_END, match().phase());
+        assertFalse(match().isAlive(CAROL));
+        assertTrue(deaths.isSpectating(CAROL));
+    }
+
     // ---- The grace running out ----
 
     @Test
@@ -621,9 +718,18 @@ class MatchRejoinTest extends MatchFixture {
         assertEquals(List.of(A1, A2, B1), match.players());
         assertEquals(List.of(A1), match.disconnectedPlayers());
         assertEquals(1, match.teamOf(A1));
-        assertEquals(List.of(new PlayerRejoined(A1, 1, true)), match.reconnect(A1), "alive again during PREP");
+        assertEquals(List.of(new PlayerRejoined(A1, 1)), match.reconnect(A1));
+        assertFalse(match.isAlive(A1), "not alive until placed");
+        assertTrue(match.revive(A1), "placed during PREP: alive in the round");
         assertTrue(match.isAlive(A1));
         assertTrue(match.reconnect(A1).isEmpty());
+        match.disconnect(B1);
+        assertFalse(match.revive(B1), "a disconnected player is never placed");
+        match.reconnect(B1);
+        // Team 2 has nobody alive: the next second decides the round.
+        match.tick();
+        assertEquals(MatchPhase.ROUND_END, match.phase());
+        assertFalse(match.revive(B1), "never outside PREP");
     }
 
     @Test
@@ -643,7 +749,8 @@ class MatchRejoinTest extends MatchFixture {
         assertEquals(List.of(new PlayerReady(B1, 2, 3)), match.ready(B1));
         assertEquals(List.of(new PlayerDisconnected(A2, 1), new QuickStart(2)), match.disconnect(A2));
         assertTrue(match.ready(A2).isEmpty(), "a disconnected player cannot be ready");
-        assertEquals(List.of(new PlayerRejoined(A2, 1, false)), match.reconnect(A2));
+        assertEquals(List.of(new PlayerRejoined(A2, 1)), match.reconnect(A2));
+        assertFalse(match.revive(A2), "not in a SHOP");
         assertTrue(match.readyPlayers().containsAll(List.of(A1, B1)));
     }
 

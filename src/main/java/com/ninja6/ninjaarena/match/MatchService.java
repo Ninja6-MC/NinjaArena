@@ -609,9 +609,12 @@ public final class MatchService {
     }
 
     /**
-     * Places a rejoined player, once their join has finished: alive at their team spawn during
-     * PREP, in the shop area during SHOP, otherwise where they are, for death handling to make
-     * them spectate. A player on the death screen is placed by their respawn.
+     * Places a rejoined player, once their join has finished, by the phase the match is in
+     * then, which may have moved on since they joined: during PREP at their team spawn, alive
+     * in the round from now; during SHOP in the shop area; in any other phase where they are,
+     * for death handling to make them spectate until the next round. A player the round start
+     * has already placed in a round keeps their place. A player on the death screen is placed
+     * by their respawn, which reads the same state.
      */
     private void placeRejoined(UUID playerId, Running running) {
         Player player = plugin.getServer().getPlayer(playerId);
@@ -622,6 +625,9 @@ public final class MatchService {
         }
         placing.add(playerId);
         try {
+            if (match.phase() == MatchPhase.PREP) {
+                match.revive(playerId);
+            }
             boolean alive = match.isAlive(playerId);
             if (!player.isDead()) {
                 if (alive && match.phase() == MatchPhase.PREP) {

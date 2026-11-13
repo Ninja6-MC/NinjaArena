@@ -75,7 +75,8 @@ import java.util.function.BooleanSupplier;
  * so their team does not forfeit while they may still come back, but they are out of the
  * current round (as if eliminated, {@link Cause#DISCONNECTED}), out of every round that
  * starts while they are away, and not counted for the shop's ready check. {@link #reconnect}
- * brings them back: alive at once during PREP, otherwise from the next round. When every
+ * brings them back, alive from the next round, or at once if {@link #revive} places them
+ * during PREP. When every
  * player still in the match is disconnected, its timers wait. A player whose grace runs out
  * {@link #leave leaves}.
  *
@@ -306,18 +307,32 @@ public final class Match implements MatchView {
     }
 
     /**
-     * A disconnected player is back. During PREP they are alive in the round at once; in any
-     * other phase they are alive from the next round. Does nothing if they are not
-     * disconnected, or once the match has ended.
+     * A disconnected player is back. They are alive from the next round that starts, or in
+     * the current one if {@link #revive} puts them in it during PREP. Does nothing if they are
+     * not disconnected, or once the match has ended.
      */
     public List<MatchUpdate> reconnect(UUID player) {
         List<MatchUpdate> updates = new ArrayList<>();
         if (closed || phase == MatchPhase.MATCH_END || !away.remove(player)) {
             return updates;
         }
-        boolean back = phase == MatchPhase.PREP && alive.add(player);
-        updates.add(new PlayerRejoined(player, teamOf.get(player), back));
+        updates.add(new PlayerRejoined(player, teamOf.get(player)));
         return updates;
+    }
+
+    /**
+     * Puts a player who is back from a disconnect into the current round, as they are placed
+     * at their team spawn: only during PREP, before the fight starts, and only for a
+     * connected player in the match.
+     *
+     * @return whether they are alive in the round now
+     */
+    public boolean revive(UUID player) {
+        if (closed || phase != MatchPhase.PREP || !present.contains(player) || away.contains(player)) {
+            return false;
+        }
+        alive.add(player);
+        return true;
     }
 
     /**

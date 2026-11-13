@@ -52,12 +52,10 @@ public sealed interface MatchUpdate {
     }
 
     /**
-     * A disconnected player rejoined the match.
-     *
-     * @param alive whether they are alive in the current round, as they are when they rejoin
-     *              during PREP; otherwise they wait for the next round
+     * A disconnected player rejoined the match. They are not alive in the current round until
+     * they are placed in it during PREP; otherwise they wait for the next round.
      */
-    record PlayerRejoined(UUID player, int team, boolean alive) implements MatchUpdate {
+    record PlayerRejoined(UUID player, int team) implements MatchUpdate {
     }
 
     /** A round was decided. */
