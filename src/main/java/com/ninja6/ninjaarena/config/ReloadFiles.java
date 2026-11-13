@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.config;
 import com.ninja6.ninjaarena.event.EventSettings;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
@@ -94,6 +95,9 @@ public final class ReloadFiles {
             if (path.equals(MaxActive.OLD_KEY)) {
                 continue; // Read below as arenas.max-active when that is not set.
             }
+            if (path.startsWith(SeedSettings.SECTION + ".")) {
+                continue; // SeedSettings validates the maps section, slot overrides included.
+            }
             if (WaitingRoomSettings.DEPRECATED.contains(path)) {
                 continue; // Old waiting-room settings: the lobby is read below, the rest ignored.
             }
@@ -111,7 +115,7 @@ public final class ReloadFiles {
             }
         }
         for (String path : defaults.getKeys(true)) {
-            if (defaults.isConfigurationSection(path)) {
+            if (defaults.isConfigurationSection(path) || path.startsWith(SeedSettings.SECTION + ".")) {
                 continue;
             }
             Object fallback = defaults.get(path);
@@ -183,6 +187,14 @@ public final class ReloadFiles {
                 }
             }
             result.set(path, value);
+        }
+        if (document.value(SeedSettings.SECTION) instanceof Map<?, ?> maps) {
+            result.createSection(SeedSettings.SECTION, maps);
+        }
+        try {
+            SeedSettings.from(result.getConfigurationSection(SeedSettings.SECTION));
+        } catch (SeedSettings.Invalid e) {
+            throw document.invalid(e.path(), e.reason());
         }
         try {
             ResourcePackSettings.from(result.getConfigurationSection("resource-pack"));

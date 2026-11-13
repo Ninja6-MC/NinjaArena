@@ -13,6 +13,37 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Seed modes and map control for generated maps. The new `maps` section of `config.yml`
+  sets, for every slot cell (`maps.default`) or one (`maps.slots.<n>`), a `mode`
+  (`static`, `rotation` or `random`, the default), `seed`, `seeds`, `rotate-every` and
+  `reroll-every` (durations such as `30m` or `2h`; `0` for every generation),
+  `difficulty` (default 2) and `regenerate` (`match` or `round`), and
+  `maps.seed-sharing` (`distinct`, the default, or `shared`). Under `distinct` no two
+  active slots play the same seed, per-round regeneration included: a static seed on
+  several slots warns and later slots fall back to random, slots beyond a rotation's
+  seeds get random seeds with a log line, and a seed set by hand that another slot has
+  is refused. Under `shared`, slot overrides are ignored with a warning. Timers and
+  requests take effect at a slot's next generation, never during a match. Every `maps`
+  key is validated on startup and reload and applies on reload at each slot's next
+  generation. With `regenerate: round` the map is generated again in each shop break in
+  a spare cell, holding the shop open through `MatchService.setMapReady` up to
+  `shop.map-wait-limit-seconds`, and the round starts on it only once fully placed;
+  otherwise it keeps the current map.
+- Commands: `/narena map set generated [seed] [difficulty]`, `/narena map next` and
+  `/narena map reroll` (`ninjaarena.map.change`), and `/narena admin generate <seed>
+  [difficulty] [2|4]` and `admin generate free` under the new
+  `ninjaarena.admin.generate` node (default op, a child of `ninjaarena.admin`), which
+  reproduce a seed's layout in a free slot cell and clear it again. New texts are in
+  `messages.yml` (`room.map-*`, `generate.*`, `reload.next-generation`).
+- A new room with no hand-built arena ready plays generated maps from the seed modes,
+  for two teams, so a server without hand-built arenas works out of the box; when one
+  is ready, rooms keep getting it as before.
+- Internal: `SeedPolicy` (seed and difficulty per generation, with an injected clock and
+  a `preview` for showing the next map), `GeneratedMaps#prepareReplacement`,
+  `commitReplacement`, `dropReplacement`, `slotNumber` and `replacementProgress`;
+  `RoomService#playSeedModes`, `mapSetGenerated`, `mapNext` and `mapReroll` for the room
+  dialog to call. A match's enemy spawner and spectators follow a generated map that
+  moved between rounds.
 - Tick-budgeted placement of generated maps. Slot cells are cleared and maps placed
   within a time budget per tick (`stability.placement.budget-ms`, 10 ms) shared fairly
   between every slot generating at once, measured rather than counted in blocks. The

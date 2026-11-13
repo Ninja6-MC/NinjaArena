@@ -16,11 +16,13 @@ import com.ninja6.ninjaarena.terrain.SideDimensions;
 import com.ninja6.ninjaarena.terrain.TerrainGenerator;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -62,6 +64,13 @@ import java.util.logging.Logger;
  *
  * <p><b>Progress.</b> {@link #progress} tells how far a map being prepared has got: the
  * blocks its clear and its placement have visited out of both together.
+ *
+ * <p><b>Replacing a map.</b> A map can be generated again while it is placed, for the next
+ * round of its match ({@link #prepareReplacement}): the new one is placed in another free
+ * cell while the old one stays as it is. Only once it is fully placed can it take the old
+ * one's place ({@link #commitReplacement}): the name then finds the new map, which takes the
+ * old one's slot number, and the old cell is cleared. Until then, or when it is dropped
+ * ({@link #dropReplacement}), the old map is untouched.
  *
  * <p>Server thread only, apart from the searches, which run on the executor given.
  */
@@ -172,6 +181,8 @@ public final class GeneratedMaps {
     private ArenaGrid grid;
     private final SlotCells cells;
     private final Map<GridCell, Slot> slots = new LinkedHashMap<>();
+    /** Maps being generated again, by the name of the map each will replace. */
+    private final Map<String, Slot> replacements = new HashMap<>();
     private final CellWriter writer;
     private final ChunkTickets tickets;
     private final Executor searches;
@@ -279,6 +290,27 @@ public final class GeneratedMaps {
 
     public boolean isReserved(GridCell cell) {
         return cells.isReserved(cell);
+    }
+
+    /**
+     * The slot number of the cell a map uses: its place among the reserved cells, from 1.
+     * Empty for a map without a cell.
+     */
+    public OptionalInt slotNumber(String name) {
+        Slot slot = slotOf(Arena.normalizeName(name));
+        return slot == null ? OptionalInt.empty() : OptionalInt.of(cells.cells().indexOf(slot.cell) + 1);
+    }
+
+    /** The slot number {@link #prepare} gives a new map now: the first free cell's. Empty if none is free. */
+    public OptionalInt nextFreeSlot() {
+        List<GridCell> reserved = cells.cells();
+        for (int i = 0; i < reserved.size(); i++) {
+            Slot slot = slots.get(reserved.get(i));
+            if (slot != null && slot.state == State.IDLE) {
+                return OptionalInt.of(i + 1);
+            }
+        }
+        return OptionalInt.empty();
     }
 
     /**
@@ -415,11 +447,19 @@ public final class GeneratedMaps {
             throw new IllegalStateException(key + " is already being prepared or placed");
         }
         if (slot == null) {
-            slot = slots.values().stream().filter(free -> free.state == State.IDLE).findFirst()
-                    .orElseThrow(() -> new IllegalStateException("no slot cell is free"));
+            slot = freeSlot();
             slot.map = key;
         }
-        Slot target = slot;
+        start(slot, request, done);
+    }
+
+    private Slot freeSlot() {
+        return slots.values().stream().filter(free -> free.state == State.IDLE).findFirst()
+                .orElseThrow(() -> new IllegalStateException("no slot cell is free"));
+    }
+
+    /** Clears the slot's region, searches the seed and places the map, for {@link #prepare}. */
+    private void start(Slot target, Request request, Consumer<Prepared> done) {
         target.state = State.PREPARING;
         target.arena = null;
         int generation = ++target.generation;
@@ -507,6 +547,7 @@ public final class GeneratedMaps {
      * tickets taken off, and the cell is free again. Does nothing for a map without a cell.
      */
     public void free(String name) {
+        dropReplacement(name);
         Slot slot = slotOf(Arena.normalizeName(name));
         if (slot == null) {
             return;
@@ -562,7 +603,18 @@ public final class GeneratedMaps {
      * for a map with no cell, or whose last try failed until it tries again.
      */
     public Optional<Progress> progress(String name) {
-        Slot slot = slotOf(Arena.normalizeName(name));
+        return progress(slotOf(Arena.normalizeName(name)));
+    }
+
+    /**
+     * How far the map that will replace this one has got ({@link #prepareReplacement}), and
+     * complete once it is placed. Empty when none is being generated.
+     */
+    public Optional<Progress> replacementProgress(String name) {
+        return progress(replacements.get(Arena.normalizeName(name)));
+    }
+
+    private static Optional<Progress> progress(Slot slot) {
         if (slot == null || slot.clearing == null
                 || (slot.state != State.PREPARING && slot.state != State.READY && slot.state != State.HELD)) {
             return Optional.empty();
@@ -631,12 +683,93 @@ public final class GeneratedMaps {
         }
     }
 
+    // ---- Replacing a placed map ----
+
+    /**
+     * Generates a map to replace a placed one, in a free cell, while the placed one stays as
+     * it is. {@code done} is told on the server thread, unless the replacement is dropped or
+     * the map freed first. A {@link Ready} replacement waits for {@link #commitReplacement};
+     * after {@link Failed}, drop it.
+     *
+     * @throws IllegalStateException if the map is not placed, already has a replacement, or
+     *                               no cell is free
+     */
+    public void prepareReplacement(String name, Request request, Consumer<Prepared> done) {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(done, "done");
+        if (closed) {
+            throw new IllegalStateException("generated maps are closed");
+        }
+        String key = Arena.normalizeName(name);
+        Slot current = slotOf(key);
+        if (current == null || current.state != State.READY && current.state != State.HELD) {
+            throw new IllegalStateException(key + " is not placed");
+        }
+        if (replacements.containsKey(key)) {
+            throw new IllegalStateException(key + " already has a replacement");
+        }
+        Slot slot = freeSlot();
+        // A name of its own until it takes the old map's place, so nothing finds it before.
+        slot.map = newName();
+        replacements.put(key, slot);
+        start(slot, request, done);
+    }
+
+    public boolean hasReplacement(String name) {
+        return replacements.containsKey(Arena.normalizeName(name));
+    }
+
+    /**
+     * The placed replacement takes the map's place: the name finds it from now on, held by
+     * the match as the old map was, and it takes the old map's slot number. The old map's
+     * cell is cleared and freed.
+     *
+     * @throws IllegalStateException if no replacement is placed for the map
+     */
+    public void commitReplacement(String name) {
+        String key = Arena.normalizeName(name);
+        Slot next = replacements.get(key);
+        Slot old = slotOf(key);
+        if (next == null || next.state != State.READY || old == null) {
+            throw new IllegalStateException(key + " has no placed replacement");
+        }
+        replacements.remove(key);
+        State state = old.state;
+        cells.swap(old.cell, next.cell);
+        syncSlots();
+        old.map = null;
+        next.map = key;
+        Arena placed = next.arena;
+        next.arena = new Arena(key, placed.cell(), placed.bounds(), placed.waitingRoom(), placed.teamSpawns(),
+                placed.enemySpawns(), false);
+        next.state = state;
+        logger.info("Map " + key + " is replaced by the one generated in slot cell " + next.cell.describe()
+                + "; slot cell " + old.cell.describe() + " is cleared.");
+        clear(old, region(old.cell));
+    }
+
+    /**
+     * Gives up the map's replacement, if it has one: its work is dropped and its cell
+     * cleared. The map itself is untouched.
+     */
+    public void dropReplacement(String name) {
+        Slot slot = replacements.remove(Arena.normalizeName(name));
+        if (slot == null) {
+            return;
+        }
+        CompletableFuture<?> work = slot.work;
+        slot.generation++;
+        work.cancel(false);
+        clear(slot, region(slot.cell));
+    }
+
     /**
      * Drops every map and all queued work and takes every ticket off. Called on plugin
      * disable; the cells are cleared on the next start.
      */
     public void close() {
         closed = true;
+        replacements.clear();
         for (Slot slot : slots.values()) {
             slot.generation++;
             releaseTickets(slot);

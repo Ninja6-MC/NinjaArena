@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.command;
 
 import static com.ninja6.ninjaarena.message.Messages.msg;
 
+import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.message.Keyed;
 import com.ninja6.ninjaarena.portal.PortalEntry;
@@ -28,6 +29,8 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String PLAY = "ninjaarena.play";
     /** Lobby edit mode and reset; a child of {@link #ADMIN}. */
     public static final String LOBBY = "ninjaarena.admin.lobby";
+    /** {@code admin generate}: reproducing a seed's layout in a free slot cell; a child of {@link #ADMIN}. */
+    public static final String GENERATE = "ninjaarena.admin.generate";
     /** Leaves the room, match or spectating for the lobby, or the lobby for home. */
     public static final String LEAVE = "leave";
     /** Rooms: open, set up, invite, start and leave. */
@@ -37,12 +40,17 @@ public final class NinjaArenaCommand implements TabExecutor {
     private static final List<String> ROOM_ACTIONS = List.of("create", "settings", "invite", "accept", "kick",
             "start", "leave");
     private static final List<String> ROOM_SETTINGS = List.of("players", "teams", "team-size", "privacy");
+    private static final List<String> DIFFICULTIES = List.of("1", "2", "3", "4", "5");
     /** The shop phase between rounds: {@code shop ready}. */
     public static final String SHOP = "shop";
     private static final String SHOP_USAGE = "shop ready";
     public static final String TEXTURES = "textures";
     public static final String ADMIN_ROUTE = "admin";
+    /** What {@code map set} takes to play generated maps instead of a hand-built arena. */
+    public static final String GENERATED = "generated";
     private static final String LOBBY_USAGE = "admin lobby <edit|done|reset>";
+    private static final String GENERATE_USAGE = "admin generate <seed [difficulty] [2|4]|free>";
+    private static final String MAP_USAGE = "map <list|set <arena|generated [seed] [difficulty]>|next|reroll>";
 
     /** A route's help text is the message {@code help.<name>}. */
     private record Route(String name, String permission, String usage) {
@@ -56,7 +64,7 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route("intro", PLAY, "intro"),
             new Route("accept", PLAY, "accept <host>"),
             new Route(ROOM, PLAY, ROOM_USAGE),
-            new Route("map", PLAY, "map <list|set <arena>>"),
+            new Route("map", PLAY, MAP_USAGE),
             new Route(SHOP, PLAY, SHOP_USAGE),
             new Route("host", HOST, "host <arena>"),
             new Route("invite", HOST, "invite <player>"),
@@ -65,7 +73,8 @@ public final class NinjaArenaCommand implements TabExecutor {
             new Route(DirectorCommand.NAME, ADMIN, DirectorCommand.NAME + " [arena]"),
             new Route(EventCommand.NAME, EventCommand.PERMISSION, EventCommand.USAGE),
             new Route("pack", ADMIN, "pack status"),
-            new Route(ADMIN_ROUTE, ADMIN, "admin <reload|lobby <edit|done|reset>|textures reset <java|bedrock> <id>>"));
+            new Route(ADMIN_ROUTE, ADMIN, "admin <reload|lobby <edit|done|reset>|generate <seed|free>"
+                    + "|textures reset <java|bedrock> <id>>"));
 
     private final ArenaCommand arena;
     private final PortalCommand portal;
@@ -82,6 +91,7 @@ public final class NinjaArenaCommand implements TabExecutor {
     private TextureCommands textures;
     private LobbyCommands lobby;
     private RoomCommands rooms;
+    private AdminMapCommands adminMaps;
     private Consumer<Player> intro;
     private Function<Player, MatchService.Ready> shopReady;
 
@@ -97,6 +107,11 @@ public final class NinjaArenaCommand implements TabExecutor {
     /** Without it the room subcommands say the feature is unavailable. */
     public void setRooms(RoomCommands rooms) {
         this.rooms = rooms;
+    }
+
+    /** Without it the admin generate subcommand says the feature is unavailable. */
+    public void setAdminMaps(AdminMapCommands adminMaps) {
+        this.adminMaps = adminMaps;
     }
 
     public void setPackStatus(java.util.function.Supplier<String> status) {
@@ -286,6 +301,8 @@ public final class NinjaArenaCommand implements TabExecutor {
                 case ADMIN_ROUTE -> {
                     if (args.length >= 2 && args[1].equalsIgnoreCase("lobby")) {
                         lobby(sender, label, args);
+                    } else if (args.length >= 2 && args[1].equalsIgnoreCase("generate")) {
+                        generate(sender, label, args);
                     } else if (!sender.hasPermission(ADMIN)) {
                         denied(sender);
                     } else if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
@@ -309,19 +326,80 @@ public final class NinjaArenaCommand implements TabExecutor {
     }
 
     private void map(CommandSender sender, String label, String[] args) {
-        if (args.length == 3 && args[1].equalsIgnoreCase("set") && !sender.hasPermission(MAP_CHANGE)) {
+        String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "";
+        boolean generatedSet = action.equals("set") && args.length >= 3 && args[2].equalsIgnoreCase(GENERATED)
+                && args.length <= 5;
+        boolean valid = action.equals("list") && args.length == 2
+                || action.equals("set") && (args.length == 3 || generatedSet)
+                || (action.equals("next") || action.equals("reroll")) && args.length == 2;
+        if (!valid) {
+            usage(sender, label, MAP_USAGE);
+        } else if (!action.equals("list") && !sender.hasPermission(MAP_CHANGE)) {
             sender.sendMessage(msg("room.map-no-permission"));
-        } else if (!(args.length == 2 && args[1].equalsIgnoreCase("list")
-                || args.length == 3 && args[1].equalsIgnoreCase("set"))) {
-            usage(sender, label, "map <list|set <arena>>");
         } else if (!(sender instanceof Player player)) {
             sender.sendMessage(msg("command.players-only"));
         } else if (rooms == null) {
             unavailable(sender, msg("command.feature.rooms"));
-        } else if (args[1].equalsIgnoreCase("list")) {
+        } else if (action.equals("list")) {
             rooms.mapList(player);
+        } else if (action.equals("next")) {
+            rooms.mapNext(player);
+        } else if (action.equals("reroll")) {
+            rooms.mapReroll(player);
+        } else if (generatedSet) {
+            Long seed = args.length >= 4 ? seed(args[3]) : null;
+            Integer difficulty = args.length == 5 ? number(args[4]) : null;
+            if (args.length >= 4 && seed == null) {
+                sender.sendMessage(msg("room.map-seed-invalid", "seed", args[3]));
+            } else if (args.length == 5 && difficulty == null) {
+                sender.sendMessage(msg("room.map-difficulty-invalid", "min", SeedSettings.MIN_DIFFICULTY,
+                        "max", SeedSettings.MAX_DIFFICULTY));
+            } else {
+                rooms.mapSetGenerated(player, seed, difficulty);
+            }
         } else {
             rooms.mapSet(player, args[2]);
+        }
+    }
+
+    /** {@code admin generate <seed> [difficulty] [2|4]} and {@code admin generate free}. */
+    private void generate(CommandSender sender, String label, String[] args) {
+        if (!sender.hasPermission(GENERATE)) {
+            denied(sender);
+            return;
+        }
+        boolean free = args.length == 3 && args[2].equalsIgnoreCase("free");
+        if (!free && (args.length < 3 || args.length > 5)) {
+            usage(sender, label, GENERATE_USAGE);
+            return;
+        }
+        Long seed = free ? null : seed(args[2]);
+        Integer difficulty = args.length >= 4 ? number(args[3]) : null;
+        Integer teams = args.length == 5 ? number(args[4]) : null;
+        if (!free && (seed == null || args.length >= 4 && difficulty == null || args.length == 5 && teams == null)) {
+            usage(sender, label, GENERATE_USAGE);
+        } else if (adminMaps == null) {
+            unavailable(sender, msg("command.feature.generate"));
+        } else if (free) {
+            adminMaps.free(sender);
+        } else {
+            adminMaps.generate(sender, seed, difficulty, teams);
+        }
+    }
+
+    private static Long seed(String text) {
+        try {
+            return Long.parseLong(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static Integer number(String text) {
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 
@@ -437,14 +515,16 @@ public final class NinjaArenaCommand implements TabExecutor {
 
     private static boolean canUseRoot(CommandSender sender) {
         return sender.hasPermission(PLAY) || sender.hasPermission(HOST) || sender.hasPermission(ADMIN)
-                || sender.hasPermission(LOBBY) || sender.hasPermission(PortalEntry.SPECTATE)
+                || sender.hasPermission(LOBBY) || sender.hasPermission(GENERATE)
+                || sender.hasPermission(PortalEntry.SPECTATE)
                 || sender.hasPermission(LeaderboardCommand.PERMISSION) || sender.hasPermission(EventCommand.PERMISSION);
     }
 
     private static boolean canUse(CommandSender sender, Route route) {
         return sender.hasPermission(route.permission())
                 || (route.name().equals(LEAVE) && sender.hasPermission(PortalEntry.SPECTATE))
-                || (route.name().equals(ADMIN_ROUTE) && sender.hasPermission(LOBBY));
+                || (route.name().equals(ADMIN_ROUTE) && (sender.hasPermission(LOBBY)
+                        || sender.hasPermission(GENERATE)));
     }
 
     private static void denied(CommandSender sender) {
@@ -520,11 +600,19 @@ public final class NinjaArenaCommand implements TabExecutor {
                 return List.of();
             }
             if (args.length == 2) {
-                return ArenaCommand.matching(sender.hasPermission(MAP_CHANGE) ? List.of("list", "set")
+                return ArenaCommand.matching(sender.hasPermission(MAP_CHANGE) ? List.of("list", "set", "next", "reroll")
                         : List.of("list"), args[1]);
             }
-            return args.length == 3 && args[1].equalsIgnoreCase("set") && sender.hasPermission(MAP_CHANGE)
-                    && rooms != null ? ArenaCommand.matching(rooms.pickableMaps(), args[2]) : List.of();
+            if (!args[1].equalsIgnoreCase("set") || !sender.hasPermission(MAP_CHANGE) || rooms == null) {
+                return List.of();
+            }
+            if (args.length == 3) {
+                List<String> maps = new ArrayList<>(rooms.pickableMaps());
+                maps.add(GENERATED);
+                return ArenaCommand.matching(maps, args[2]);
+            }
+            return args.length == 5 && args[2].equalsIgnoreCase(GENERATED)
+                    ? ArenaCommand.matching(DIFFICULTIES, args[4]) : List.of();
         }
         if (args[0].equalsIgnoreCase(SHOP)) {
             return args.length == 2 && sender.hasPermission(PLAY)
@@ -563,6 +651,7 @@ public final class NinjaArenaCommand implements TabExecutor {
         String last = args[args.length - 1].toLowerCase(Locale.ROOT);
         boolean admin = sender.hasPermission(ADMIN);
         boolean lobby = sender.hasPermission(LOBBY);
+        boolean generate = sender.hasPermission(GENERATE) && args.length >= 3 && args[1].equalsIgnoreCase("generate");
         List<String> options = switch (args.length) {
             case 2 -> {
                 List<String> routes = new ArrayList<>();
@@ -572,15 +661,21 @@ public final class NinjaArenaCommand implements TabExecutor {
                 if (lobby) {
                     routes.add("lobby");
                 }
+                if (sender.hasPermission(GENERATE)) {
+                    routes.add("generate");
+                }
                 if (admin) {
                     routes.add(TEXTURES);
                 }
                 yield routes;
             }
             case 3 -> admin && args[1].equalsIgnoreCase(TEXTURES) ? List.of("reset")
-                    : lobby && args[1].equalsIgnoreCase("lobby") ? List.of("edit", "done", "reset") : List.of();
+                    : lobby && args[1].equalsIgnoreCase("lobby") ? List.of("edit", "done", "reset")
+                    : generate ? List.of("free") : List.of();
             case 4 -> admin && args[1].equalsIgnoreCase(TEXTURES) && args[2].equalsIgnoreCase("reset")
-                    ? List.of("java", "bedrock") : List.of();
+                    ? List.of("java", "bedrock") : generate && !args[2].equalsIgnoreCase("free") ? DIFFICULTIES
+                    : List.of();
+            case 5 -> generate && !args[2].equalsIgnoreCase("free") ? List.of("2", "4") : List.of();
             default -> List.of();
         };
         return options.stream().filter(option -> option.startsWith(last)).toList();

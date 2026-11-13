@@ -154,6 +154,14 @@ public final class Spectators implements Listener {
             if (player == null || !player.isOnline() || player.isDead()) {
                 continue;
             }
+            if (!opening) {
+                // A generated map can be placed again in the break, elsewhere: back to it as it is now.
+                Seat before = seat;
+                seat = arenas.get(before.match().arena()).filter(found -> !found.teamSpawns().isEmpty())
+                        .map(found -> new Seat(before.match(), found.bounds(), found.teamSpawns().getFirst()))
+                        .orElse(before);
+                viewers.put(viewer.getKey(), seat);
+            }
             ArenaPoint point = seat.point();
             Location to = opening ? shop.clone()
                     : new Location(world.get(), point.x(), point.y(), point.z(), point.yaw(), point.pitch());

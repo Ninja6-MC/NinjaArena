@@ -180,7 +180,11 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `room kick <player>` | Host | Remove a player from the room to the lobby |
 | `room start [host]` | Host, or `ninjaarena.admin` for any room | Start the room's match |
 | `room leave` | `ninjaarena.play` | Leave the room and stay in the lobby |
-| `map <list\|set <arena>>` | `ninjaarena.play`; `set` needs `ninjaarena.map.change` | List pickable maps, or change your room's map while it is in the lobby |
+| `map list` | `ninjaarena.play` | List pickable maps, and generated maps when they are on |
+| `map set <arena>` | `ninjaarena.map.change`, host | Change your room's map to a pickable hand-built arena while it is in the lobby |
+| `map set generated [seed] [difficulty]` | `ninjaarena.map.change`, host | Play [generated maps](#seed-modes): from the seed modes, or from a seed set by hand |
+| `map next` | `ninjaarena.map.change`, host | The next seed of the rotation at your map's next generation |
+| `map reroll` | `ninjaarena.map.change`, host | A new random seed at your map's next generation |
 | `shop ready` | `ninjaarena.play` | Say you are ready in the [shop between rounds](#shop-phase) |
 | `host <arena>` | `ninjaarena.host` | Open an invite-only room on the named arena |
 | `invite <player>` | `ninjaarena.host` | Invite a player to your room; the same as `room invite <player>` |
@@ -190,19 +194,23 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `event <subcommand>` | `ninjaarena.event.manage` | List, inspect, start or cancel scheduled arena events |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration, kits and messages |
 | `admin lobby <edit\|done\|reset>` | `ninjaarena.admin.lobby` | Change the lobby in edit mode, or put the bundled lobby back |
+| `admin generate <seed> [difficulty] [2\|4]` | `ninjaarena.admin.generate` | [Reproduce a seed's layout](#reproducing-a-layout) in a free slot cell |
+| `admin generate free` | `ninjaarena.admin.generate` | Clear that layout and free its cell |
 
 Enter the Arena by walking through a portal into the lobby, or by opening or joining a
-room. Leaderboard, event management, admin reload, lobby reset and
+room. Leaderboard, event management, admin reload, lobby reset, admin generate and
 `room start <host>` also work from the console.
 
 `ninjaarena.play`, `ninjaarena.spectate`, `ninjaarena.leaderboard` and
 `ninjaarena.room.create` default to everyone, so a server where nobody has op can open
-rooms and play. `ninjaarena.host`, `ninjaarena.admin` and `ninjaarena.admin.lobby` default
-to operators. Play grants spectate, leaderboard and `ninjaarena.room.create`, which can be
-taken away on its own to stop a group opening rooms. Host grants play, and admin grants host and
-`ninjaarena.admin.lobby`, which can also be given on its own to someone who only edits
-the lobby. The root accepts any of these permissions.
-Dispatch, help and tab completion check the permissions for each route.
+rooms and play. `ninjaarena.host`, `ninjaarena.admin` and `ninjaarena.admin.lobby`
+default to operators. Play grants spectate, leaderboard and `ninjaarena.room.create`,
+which can be taken away on its own to stop a group opening rooms. Host grants play, and
+admin grants host, `ninjaarena.map.change`, `ninjaarena.admin.lobby` and
+`ninjaarena.admin.generate`. The last two default to operators and can also be given on
+their own: to someone who only edits the lobby, or who only reproduces layouts. The root
+accepts any of these permissions. Dispatch, help and tab completion check the
+permissions for each route.
 
 ## Hosting and invitations
 
@@ -221,19 +229,22 @@ Rooms are how players start matches themselves. `/narena room create` takes the 
 to the lobby, saving their snapshot as a portal does, and opens a room there with them
 as its host. The room plays on a hand-built arena: an event's featured map when it is
 ready and no other room holds it, else the first by name that is ready and that no other
-room holds. Nothing in a room counts down, and no match starts any other way. The host,
-or an admin, presses start with `/narena room start` once the room has its required
-player count; below it the start is refused.
+room holds. When no hand-built arena is ready, the room plays [generated
+maps](#seed-modes) from the seed modes instead, for two teams, so a server with no
+hand-built arena at all works out of the box. Nothing in a room counts down, and no
+match starts any other way. The host, or an admin, presses start with `/narena room
+start` once the room has its required player count; below it the start is refused.
 
-Hosts with `ninjaarena.map.change` (default op, inherited from `ninjaarena.admin`)
-can use `/narena map set <arena>` while their room is in the lobby. Admins mark a
-hand-built arena with `/narena arena pickable <arena> <on|off>`; `arena info` shows the
-flag. It is saved as optional `pickable: true` in `arenas.yml`, still format 1; missing
-means not pickable. A chosen arena needs at least two team spawns. Everyone in the room
-hears the old map, new map and who changed it, plus the queue position if it is busy.
-Changing maps moves the lease and lowers the team count to fit the new arena. Any room
-member can use `/narena map list` to see pickable arenas, with the current map marked.
-Hosts without the node keep the default arena selection described above.
+Hosts with `ninjaarena.map.change` (default op, inherited from `ninjaarena.admin`) can
+use `/narena map set <arena>` while their room is in the lobby. Admins mark a hand-built
+arena with `/narena arena pickable <arena> <on|off>`; `arena info` shows the flag. It is
+saved as optional `pickable: true` in `arenas.yml`, still format 1; missing means not
+pickable. A chosen arena needs at least two team spawns. Everyone in the room hears the
+old map, new map and who changed it, plus the queue position if it is busy. Changing
+maps moves the lease and lowers the team count to fit the new arena. Any room member can
+use `/narena map list` to see pickable arenas, with the current map marked, and
+`generated` when generated maps are on. Hosts without the node keep the default arena
+selection described above.
 
 The host sets the room up with `/narena room settings`:
 
@@ -300,8 +311,87 @@ create` and `/narena arena edit` are refused, as they are during a match, becaus
 mode turns protection off across the whole arena world; and no generated map starts
 while an arena is in edit mode.
 
-Commands to choose seeds and difficulties for rooms come in a later release; until then
-rooms play hand-built arenas.
+#### Seed modes
+
+A room plays generated maps when its host picks them with `/narena map set generated`,
+or when it opens with no hand-built arena ready. Its map is generated in a slot cell
+before each match, and with `regenerate: round` also in each shop break. The `maps`
+section of `config.yml` says which seed and difficulty each slot cell's next map gets:
+
+| Key | Default | Meaning |
+| :--- | :--- | :--- |
+| `maps.default.mode` | `random` | `static`: always `seed`. `rotation`: the `seeds` list in order. `random`: a random seed. |
+| `maps.default.seed` | `''` (none) | The seed for `static`, a whole number. `static` without one is refused. |
+| `maps.default.seeds` | `[]` | The seeds for `rotation`, in order, each once. `rotation` without any is refused. |
+| `maps.default.rotate-every` | `0` | How long a rotation stays on one seed, as a duration such as `30m`, `2h` or `1h30m` (units `d`, `h`, `m`, `s`; at most `365d`). `0` moves on at every generation. |
+| `maps.default.reroll-every` | `0` | How long a random seed is kept before a new one is picked; `0` picks again at every generation. |
+| `maps.default.difficulty` | `2` | How hard the map is to cross, 1 to 5. |
+| `maps.default.regenerate` | `match` | `match`: a new map before each match. `round`: also in each shop break. |
+| `maps.slots.<n>` | none | Any of the keys above, for slot cell `n` (1 to 100) only. |
+| `maps.seed-sharing` | `distinct` | `distinct`: no two active slots play the same seed at once. `shared`: every slot follows `maps.default` and one seed. |
+
+Slot cell numbers follow the reserved cells, slot 1 first, plus one spare cell after
+them when a slot regenerates between rounds. A map takes the first free cell when it is
+generated, and a map generated again between rounds takes its old slot number with it.
+
+A rotation starts on its first seed for slot 1, its second for slot 2, and so on, and
+moves on once `rotate-every` has passed since it last moved. A random seed is kept until
+`reroll-every` has passed. Either way the change happens at the slot's next generation:
+a timer that runs out during a match never touches the map being played. Under `shared`
+every slot follows one rotation or one random seed, so give it a timer; with `0`, each
+generation of any slot moves it on. The rotation place and the random seed in force are
+kept in memory only: a restart starts each rotation again and picks new random seeds.
+
+Under `distinct`, a seed is active while its map is being generated, placed or played,
+or while a room has it set by hand, and no other slot gets it:
+
+- A static seed set on several slots warns at startup and on reload; the first slot
+  plays it and the later ones fall back to random seeds. A static seed that another slot
+  has set by hand gets a random seed for that map, with a log line.
+- When more slots are active than a rotation has free seeds, the extra slots get random
+  seeds, with a log line.
+- A random seed is never one that is active.
+
+Under `shared`, `maps.slots` is ignored with a warning, and slots may play one seed. A
+default install, `random` and `distinct`, gives no warning.
+
+Hosts with `ninjaarena.map.change` control the room's seed:
+
+- `/narena map set generated` plays generated maps from the seed modes.
+- `/narena map set generated <seed> [difficulty]` sets the seed by hand, for every map
+  until changed, at `maps.default.difficulty` unless given. Under `distinct`, a seed
+  another slot has is refused with a message; it is never silently replaced.
+- `/narena map next` asks for the next rotation seed (a new random one in `random`
+  mode), and `/narena map reroll` for a new random seed. Both end a seed set by hand.
+
+In the lobby these generate the room's map again at once. While the room plays, the map
+being played never changes: they apply at the next generation, which is the next shop
+break with `regenerate: round`, else the map after the match. `/narena map set <arena>`
+goes back to a hand-built arena. When no map comes from a seed, the room plays its last
+good seed; with none, a hand-built arena; with none of those, one more random seed.
+
+With `regenerate: round` (it needs the shop phase), the next map is generated in a spare
+cell in each shop break while the current one stays as it is. The shop waits for it, up
+to `shop.map-wait-limit-seconds` past its time, and the next round starts on it only
+once it is fully placed; the old cell is then cleared. A map that fails, or is not
+placed in time, is dropped and the round is played on the current map, the last good
+seed. With no cell free in the break, the round keeps the current map too. A seed set by
+hand is not generated again between rounds.
+
+Changing the map, mode or difficulty from the room dialog will call the same room
+service methods as these commands.
+
+#### Reproducing a layout
+
+`/narena admin generate <seed> [difficulty] [2|4]` (`ninjaarena.admin.generate`, from
+`ninjaarena.admin`) places the map a room would get from that seed, at
+`maps.default.difficulty` and for two teams unless given, in a free slot cell. The reply
+names the cell and its block bounds. Nobody plays it or is moved there, it takes no
+arena slot, and its seed does not count under `distinct`, so the layout a room plays now
+can be looked at. It is refused while no cell is free beyond those rooms wait for, so it
+never holds up a room. Only one is placed at a time; `/narena admin generate free`
+clears it and frees the cell. While it is placed, arena edits are refused as for any
+slot cell in use, and it is gone after a restart.
 
 #### Placing generated maps
 
@@ -437,11 +527,12 @@ done; once everyone in the match is ready, the time left is cut to
 `shop.quick-start-seconds` (default 5), if it is shorter. The boss bar counts down and
 shows how many are ready.
 
-The shop never closes before the map for the next round is ready. Nothing prepares
-another map yet, so today the map is always ready and every round is played on the
-match's arena as before. Once a later feature does, a shop whose time is up waits for the
-map, and when it is still not ready `shop.map-wait-limit-seconds` (default 30) after the
-time limit, the round is played on the current arena, reset from its saved copy first. 30
+The shop never closes before the map for the next round is ready. Hand-built arenas and
+generated maps with `regenerate: match` are always ready, and every round is played on
+the match's arena. A generated map with [`regenerate: round`](#seed-modes) is generated
+again in the break: a shop whose time is up waits for it, and when it is still not ready
+`shop.map-wait-limit-seconds` (default 30) after the time limit, the round is played on
+the current map, a hand-built arena reset from its saved copy first. 30
 seconds caps the whole pause between rounds at well over a minute without leaving players
 waiting on a map that is stuck; 0 replays at the time limit.
 
@@ -480,6 +571,7 @@ match players or restarts a match.
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
+| Seed modes | Every `maps` key applies at each slot's next generation, including the spare cell for `regenerate: round`. A map already placed, a running match and a shop break under way keep theirs. A rotation keeps its place while its `seeds` list is the same; a change of `seed-sharing` starts every rotation and random seed again. Warnings about the new settings go to the log. |
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |
 | Player-built portals | Apply to the next portal lit; the curtain colour changes immediately. Portals already built stay, with their own frame block. |
 | Tool values | New uses take the new values immediately. Existing clouds retain their radius, effects and duration; existing marks and dash cooldowns retain their deadlines. |

@@ -167,6 +167,41 @@ arenas:
   # still read, with a warning, when this is not set.
   max-active: 4
 
+maps:
+  # How each slot cell picks the seed and difficulty of its next generated map. A room
+  # plays generated maps when its host picks them (/narena map set generated) or when no
+  # hand-built arena is ready as it opens. Every key applies on reload, at each slot's
+  # next generation: a map already placed and a running match keep theirs.
+  default:
+    # static: always seed. rotation: the seeds list in order. random: a random seed.
+    mode: random
+    # The seed for static mode, a whole number. '' for none.
+    seed: ''
+    # The seeds for rotation mode, in order, for example [1234, 5678, 42].
+    seeds: []
+    # How long a rotation stays on one seed before moving to the next, and how long a
+    # random seed is kept before a new one is picked, as a duration such as 30m, 2h or
+    # 1h30m (d, h, m and s, at most 365d). 0 moves on at every generation. The change
+    # happens at the slot's next generation, never during a match.
+    rotate-every: 0
+    reroll-every: 0
+    # How hard the map is to cross, 1 to 5.
+    difficulty: 2
+    # match: a new map before each match. round: also in each shop break between rounds
+    # (needs the shop phase); the next map is placed in a spare cell and the round
+    # starts on it only once it is fully placed, else on the current map.
+    regenerate: match
+  # Overrides of any key above for one slot cell, by slot number, for example:
+  #   slots:
+  #     1:
+  #       mode: static
+  #       seed: 42
+  slots: {}
+  # distinct: no two active slots play the same seed at once; a seed set by hand that
+  # another slot has is refused. shared: every slot follows maps.default and one seed,
+  # and the slots overrides are ignored with a warning.
+  seed-sharing: distinct
+
 stability:
   # Enemies alive at once in one match, and across every match (1 to 1000 each).
   match-mob-cap: 25

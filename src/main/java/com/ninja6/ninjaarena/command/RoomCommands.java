@@ -33,6 +33,18 @@ public interface RoomCommands {
 
     void mapSet(Player player, String arena);
 
+    /**
+     * Plays generated maps: from the seed modes for a {@code null} seed, otherwise from the
+     * seed set by hand, at the difficulty or {@code maps.default.difficulty} for {@code null}.
+     */
+    void mapSetGenerated(Player player, Long seed, Integer difficulty);
+
+    /** The next rotation seed at the next generation of the room's map. */
+    void mapNext(Player player);
+
+    /** A new random seed at the next generation of the room's map. */
+    void mapReroll(Player player);
+
     void mapList(Player player);
 
     /** Arena names offered for room map selection. */

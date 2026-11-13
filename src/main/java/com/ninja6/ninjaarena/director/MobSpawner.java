@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.director;
 
+import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.MapSource;
 import com.ninja6.ninjaarena.match.MatchView;
@@ -70,13 +71,69 @@ public final class MobSpawner implements MatchDirector.Spawner {
      */
     public static Function<MatchView, MatchDirector.Spawner> factory(MapSource arenas, Supplier<World> world,
             Function<UUID, Player> players, SpawnSettings settings, ShadowStalker stalkers, Logger logger) {
-        return match -> arenas.get(match.arena())
-                .<MatchDirector.Spawner>map(arena -> new MobSpawner(world.get(), new SpawnPlacement(arena, settings),
-                        arena.bounds(), match, players, new SpawnDiagnostics(match, settings, logger), stalkers))
-                .orElseGet(() -> {
-                    logger.warning("Arena " + match.arena() + " is gone, so its match gets no enemies.");
-                    return (kind, target) -> Optional.empty();
-                });
+        return match -> {
+            Optional<Arena> found = arenas.get(match.arena());
+            if (found.isEmpty()) {
+                logger.warning("Arena " + match.arena() + " is gone, so its match gets no enemies.");
+                return (kind, target) -> Optional.empty();
+            }
+            SpawnDiagnostics diagnostics = new SpawnDiagnostics(match, settings, logger);
+            Function<Arena, MobSpawner> spawner = arena -> new MobSpawner(world.get(),
+                    new SpawnPlacement(arena, settings), arena.bounds(), match, players, diagnostics, stalkers);
+            if (!Arena.isGeneratedName(match.arena())) {
+                return spawner.apply(found.get());
+            }
+            return new Following(() -> arenas.get(match.arena()), found.get(), spawner);
+        };
+    }
+
+    /**
+     * The spawner of a match on a generated map, which can be generated again between rounds
+     * and placed in another cell: the spawns and bounds follow the map as it is now.
+     */
+    public static final class Following implements MatchDirector.Spawner {
+
+        private final Supplier<Optional<Arena>> map;
+        private final Function<Arena, MobSpawner> spawner;
+        private Arena arena;
+        private MobSpawner current;
+
+        Following(Supplier<Optional<Arena>> map, Arena arena, Function<Arena, MobSpawner> spawner) {
+            this.map = map;
+            this.spawner = spawner;
+            this.arena = arena;
+            this.current = spawner.apply(arena);
+        }
+
+        private MobSpawner current() {
+            Optional<Arena> now = map.get();
+            if (now.isPresent() && !now.get().equals(arena)) {
+                arena = now.get();
+                current = spawner.apply(arena);
+            }
+            return current;
+        }
+
+        /** The map the spawns come from now. */
+        public Arena arena() {
+            current();
+            return arena;
+        }
+
+        @Override
+        public Optional<MatchDirector.Enemy> spawn(EnemyKind kind, UUID target) {
+            return current().spawn(kind, target);
+        }
+
+        @Override
+        public Optional<String> lastRefusal() {
+            return current.lastRefusal();
+        }
+
+        @Override
+        public void blocked(MatchDirector.Blockage reason, double targetThreat, double inPlay) {
+            current().blocked(reason, targetThreat, inPlay);
+        }
     }
 
     @Override

@@ -96,6 +96,8 @@ class ConfigReloadTest {
         @Override public boolean eventArenaExists(String arena) { return arena.equals("dojo"); }
         @Override public void configuration(ConfigurationSection settings) { published = settings; }
         @Override public void bedrockEnforcement() { enforcement.run(); }
+        com.ninja6.ninjaarena.map.SeedSettings maps;
+        @Override public void maps(com.ninja6.ninjaarena.map.SeedSettings settings) { calls.add("maps"); maps = settings; }
     }
 
     @BeforeEach
@@ -112,6 +114,61 @@ class ConfigReloadTest {
 
     private ReloadFiles.Candidate candidate() throws Exception {
         return ReloadFiles.read(dir.resolve("config.yml"), dir.resolve("kits.yml"), items);
+    }
+
+    @Test
+    void seedModesApplyAtEachSlotsNextGenerationOnReload() throws Exception {
+        write("""
+                maps:
+                  default:
+                    mode: rotation
+                    seeds: [3, 4]
+                    rotate-every: 2h
+                  slots:
+                    2: {mode: static, seed: 9}
+                  seed-sharing: distinct
+                """, EMPTY_KIT);
+        List<String> report = reload.reload();
+        assertEquals(List.of("The Arena reload complete.", "Changed: none.", "Postponed: maps (each slot's next map).",
+                "Refused: none."), report);
+        assertEquals(List.of("maps"), target.calls);
+        assertEquals(com.ninja6.ninjaarena.map.SeedSettings.Mode.STATIC, target.maps.forSlot(2).mode());
+        assertEquals(java.time.Duration.ofHours(2), target.maps.forSlot(1).rotateEvery());
+
+        target.calls.clear();
+        assertEquals("Postponed: none.", reload.reload().get(2), "the same settings again change nothing");
+        assertEquals(List.of(), target.calls);
+
+        write("maps: {default: {mode: rotation, seeds: [3, 4], rotate-every: 2h}}", EMPTY_KIT);
+        assertEquals("Postponed: maps (each slot's next map).", reload.reload().get(2), "a slot override removed");
+        assertEquals(java.util.Map.of(), target.maps.slots());
+    }
+
+    @Test
+    void invalidSeedModesAreRejectedWithTheirLineAndNothingChanges() throws Exception {
+        write("arenas:\n  max-active: 3\nmaps:\n  slots:\n    2:\n      mode: shuffle\n", EMPTY_KIT);
+        assertEquals(List.of("The Arena reload was rejected: config.yml: line 6: maps.slots.2.mode: expected static,"
+                + " rotation or random. Nothing changed."), reload.reload());
+        assertEquals(List.of(), target.calls);
+        write("maps:\n  default:\n    rotate-every: 30\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("line 3: maps.default.rotate-every: expected a duration"));
+        write("maps:\n  default:\n    mode: static\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("maps.default.mode: static mode needs a seed"));
+        write("maps:\n  colour: red\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("maps.colour: unknown setting"));
+        assertEquals(List.of(), target.calls);
+        assertEquals(null, target.maps);
+    }
+
+    @Test
+    void slotOverridesSetAtStartupAreNotReportedAsAChange() throws Exception {
+        String yaml = "maps:\n  slots:\n    1:\n      difficulty: 4\n";
+        write(yaml, EMPTY_KIT);
+        YamlConfiguration started = YamlConfiguration.loadConfiguration(new java.io.StringReader(yaml));
+        started.setDefaults(ReloadFiles.defaults());
+        reload = new ConfigReload(dir, started, KitDefinition.EMPTY, items, target);
+        assertEquals("Postponed: none.", reload.reload().get(2));
+        assertEquals(List.of(), target.calls);
     }
 
     @Test

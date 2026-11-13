@@ -5,6 +5,7 @@ import static com.ninja6.ninjaarena.message.Messages.text;
 
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
@@ -56,6 +57,12 @@ public final class ConfigReload {
         }
         /** New {@code shop} phase settings, for matches started from now on. */
         default void shopPhase(ShopSettings settings) {
+        }
+        /**
+         * New {@code maps} seed modes, for each slot's next generation. A map placed, a
+         * running match and a shop break under way keep theirs.
+         */
+        default void maps(SeedSettings settings) {
         }
         void tools(ToolSettings settings);
         default void spectating(SpectatorSettings settings) {
@@ -117,6 +124,15 @@ public final class ConfigReload {
         if (!initial.contains(MaxActive.KEY, true) && initial.contains(MaxActive.OLD_KEY, true)) {
             effective.set(MaxActive.KEY, initial.get(MaxActive.OLD_KEY));
         }
+        // The maps section as started, slot overrides included, which the defaults do not list.
+        ConfigurationSection maps = initial.getConfigurationSection(SeedSettings.SECTION);
+        if (maps != null) {
+            for (String path : maps.getKeys(true)) {
+                if (!maps.isConfigurationSection(path)) {
+                    effective.set(SeedSettings.SECTION + "." + path, maps.get(path));
+                }
+            }
+        }
     }
 
     public void execute(CommandSender sender) {
@@ -155,7 +171,8 @@ public final class ConfigReload {
         List<String> refused = new ArrayList<>();
         boolean resize = target.canResize();
         for (String path : effective.getKeys(true)) {
-            if (effective.isConfigurationSection(path) || same(effective.get(path), next.get(path))) {
+            if (effective.isConfigurationSection(path) || same(effective.get(path), next.get(path))
+                    || path.startsWith(SeedSettings.SECTION + ".")) {
                 continue;
             }
             if (path.startsWith("director.") || path.startsWith("stability.")
@@ -179,6 +196,12 @@ public final class ConfigReload {
             } else {
                 changed.add(path);
             }
+        }
+        SeedSettings seedsBefore = seeds(effective);
+        SeedSettings seedsAfter = seeds(next);
+        boolean seedsChanged = !seedsBefore.equals(seedsAfter);
+        if (seedsChanged) {
+            postponed.add(text("reload.next-generation", "path", SeedSettings.SECTION));
         }
         boolean shopChanged = !Objects.equals(shop, nextShop);
         if (shopChanged) {
@@ -239,6 +262,9 @@ public final class ConfigReload {
         if (differs("shop.", next)) {
             target.shopPhase(ShopSettings.from(next.getConfigurationSection("shop")));
         }
+        if (seedsChanged) {
+            target.maps(seedsAfter);
+        }
         if (differs("tools.", next)) {
             target.tools(ToolSettings.from(next.getConfigurationSection("tools")));
         }
@@ -279,6 +305,15 @@ public final class ConfigReload {
             lines.add(text("reload.deprecated", "path", old));
         }
         return List.copyOf(lines);
+    }
+
+    /** The seed modes in a configuration; the defaults for a section startup could not read either. */
+    private static SeedSettings seeds(ConfigurationSection config) {
+        try {
+            return SeedSettings.from(config.getConfigurationSection(SeedSettings.SECTION));
+        } catch (SeedSettings.Invalid e) {
+            return SeedSettings.DEFAULTS;
+        }
     }
 
     private boolean differs(String prefix, ConfigurationSection next) {
