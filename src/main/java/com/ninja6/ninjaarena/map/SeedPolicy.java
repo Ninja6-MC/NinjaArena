@@ -122,6 +122,11 @@ public final class SeedPolicy {
         return settings.forSlot(slot);
     }
 
+    /** Whether the slot's settings allow a reroll instead of fixing every slot to one static seed. */
+    public boolean canReroll(int slot) {
+        return settings.sharing() != Sharing.SHARED || forSlot(slot).mode() != Mode.STATIC;
+    }
+
     /**
      * What is worth a warning for slots 1 to {@code slots}, as server log lines: a static
      * seed set on several slots under {@code distinct}, whose later slots fall back to

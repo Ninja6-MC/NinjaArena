@@ -47,6 +47,20 @@ class SeedPolicyTest {
     }
 
     @Test
+    void rerollsAreAllowedExceptForSharedStaticSeedsIgnoringSlotOverrides() {
+        for (String sharing : List.of("distinct", "shared")) {
+            for (String mode : List.of("static", "rotation", "random")) {
+                SeedPolicy policy = policy("maps: {seed-sharing: " + sharing + ", default: {mode: " + mode
+                        + ", seed: 42, seeds: [42, 43]}, slots: {2: {mode: random}, 3: {mode: static, seed: 7}}}");
+                for (int slot = 1; slot <= 3; slot++) {
+                    assertEquals(!sharing.equals("shared") || !mode.equals("static"), policy.canReroll(slot),
+                            sharing + " " + mode + " slot " + slot);
+                }
+            }
+        }
+    }
+
+    @Test
     void rule1TheDefaultModeIsRandomSoADefaultInstallGivesNoWarning() {
         SeedSettings bundled = SeedSettings.from(ReloadFiles.defaults().getConfigurationSection("maps"));
         assertEquals(SeedSettings.Mode.RANDOM, bundled.defaults().mode());

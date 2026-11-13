@@ -295,6 +295,8 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Refuse a map reroll when the shared seed is static, telling only the player who asked
+  that the server settings fix the seed, without regenerating or queuing a change.
 - Servers sharing one SQLite file no longer lose matches when they create the file
   together: the plugin creates the file before the bundled SQLite driver opens it, since
   that driver deletes a missing file it has just created to test write access. Stats
