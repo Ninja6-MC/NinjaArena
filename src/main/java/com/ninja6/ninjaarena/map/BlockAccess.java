@@ -3,7 +3,7 @@ package com.ninja6.ninjaarena.map;
 import org.bukkit.Material;
 
 /**
- * Block reads and writes in the arena world for {@link TickCellWriter}. On the server this
+ * Block reads and writes in the arena world for {@link BudgetedCellWriter}. On the server this
  * is the arena world, writing without physics; tests keep the blocks in memory.
  * Server thread only.
  */

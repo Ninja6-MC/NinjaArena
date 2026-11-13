@@ -35,8 +35,10 @@ import java.util.logging.Logger;
  *
  * <p><b>Slot cells.</b> {@code arenas.max-active} grid cells are reserved for generated
  * maps ({@link SlotCells}). A generated map is played in the middle of its cell, in a
- * fixed region as wide as the cell's four-team map and {@link SideDimensions#DEFAULT_HEIGHT}
- * high from {@link #FLOOR_Y}; nothing is written outside it.
+ * fixed region as wide as the four-team map for the cell, or for a cell of
+ * {@link PlacementSettings#maxMapSize()} when that is smaller ({@link #setMaxMapSize}), and
+ * {@link SideDimensions#DEFAULT_HEIGHT} high from {@link #FLOOR_Y}; nothing is written
+ * outside it.
  *
  * <p><b>Lifecycle.</b> A room that holds an arena slot asks for a map with
  * {@link #prepare}: the map takes a free cell, chunk tickets go on the cell's region, the
@@ -55,6 +57,9 @@ import java.util.logging.Logger;
  * any cell is used, and every cell is cleared again before each map is placed. A cell
  * being cleared counts as in use. While the hand-built arenas cannot be read, no cell is
  * reserved or cleared, since one might hold an arena nobody knows about.
+ *
+ * <p><b>Progress.</b> {@link #progress} tells how far a map being prepared has got: the
+ * blocks its clear and its placement have visited out of both together.
  *
  * <p>Server thread only, apart from the searches, which run on the executor given.
  */
@@ -113,6 +118,32 @@ public final class GeneratedMaps {
     public record Failed(long requestedSeed, int attempts) implements Prepared {
     }
 
+    /**
+     * How far a map being prepared has got: the blocks the {@link CellWriter} has visited,
+     * clearing the region and then placing the map, out of both together. Before the
+     * search is done, the placement counts with the size of the layout asked for.
+     *
+     * @param done  from 0 to {@code total}
+     * @param total the region's blocks and the layout's blocks
+     */
+    public record Progress(long done, long total) {
+
+        public Progress {
+            if (total < 0 || done < 0 || done > total) {
+                throw new IllegalArgumentException("done must be 0 to total");
+            }
+        }
+
+        /** From 0 to 1; 1 for nothing to do. */
+        public double fraction() {
+            return total == 0 ? 1 : (double) done / total;
+        }
+
+        public boolean isComplete() {
+            return done == total;
+        }
+    }
+
     private enum State { IDLE, CLEARING, PREPARING, FAILED, READY, HELD }
 
     private static final class Slot {
@@ -125,6 +156,10 @@ public final class GeneratedMaps {
         /** Bumped by every change, so a completion that comes too late is dropped. */
         int generation;
         CompletableFuture<?> work = CompletableFuture.completedFuture(null);
+        /** The clear before the map in progress, its placement once queued, and its size until then. */
+        CellWriter.Work clearing;
+        CellWriter.Work placing;
+        long placeTotal;
 
         Slot(GridCell cell) {
             this.cell = cell;
@@ -143,6 +178,7 @@ public final class GeneratedMaps {
     private Runnable freed = () -> { };
     private final BooleanSupplier handBuiltKnown;
     private int names;
+    private int maxMapSize = PlacementSettings.DEFAULTS.maxMapSize();
     private boolean closed;
 
     /**
@@ -165,6 +201,33 @@ public final class GeneratedMaps {
         this.server = Objects.requireNonNull(server, "server");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.cells = new SlotCells(grid, handBuilt, logger::warning);
+    }
+
+    /**
+     * Sizes maps as if no cell were larger than {@code size} blocks, which caps the blocks
+     * each map clears and places on shared hosts ({@link PlacementSettings#maxMapSize()}).
+     * Set before any cell is in use; the regions follow it.
+     *
+     * @param size {@link PlacementSettings#MIN_MAP_SIZE} to {@link PlacementSettings#MAX_MAP_SIZE}
+     * @throws IllegalStateException if a cell is in use
+     */
+    public void setMaxMapSize(int size) {
+        if (size < PlacementSettings.MIN_MAP_SIZE || size > PlacementSettings.MAX_MAP_SIZE) {
+            throw new IllegalArgumentException("map size must be " + PlacementSettings.MIN_MAP_SIZE + " to "
+                    + PlacementSettings.MAX_MAP_SIZE);
+        }
+        if (!inUse().isEmpty()) {
+            throw new IllegalStateException("slot cells are in use");
+        }
+        maxMapSize = size;
+    }
+
+    /**
+     * The size of each side of a generated map: {@link SideDimensions#forCell} for the cell
+     * size, or for {@link #setMaxMapSize the size limit} when that is smaller.
+     */
+    public SideDimensions mapSize() {
+        return SideDimensions.forCell(Math.min(grid.cellSize(), maxMapSize));
     }
 
     /** Replaces the seed search; for tests. */
@@ -284,11 +347,11 @@ public final class GeneratedMaps {
 
     /**
      * The region of a slot cell a generated map may use: centred in the cell, as wide and
-     * long as the cell's four-team map, from {@link #FLOOR_Y} up the map's height. Both
-     * corners inclusive.
+     * long as a four-team map of {@link #mapSize()}, from {@link #FLOOR_Y} up the map's
+     * height. Both corners inclusive.
      */
     public ArenaBounds region(GridCell cell) {
-        SideDimensions size = SideDimensions.forCell(grid.cellSize());
+        SideDimensions size = mapSize();
         int span = size.width() + 2 * size.length();
         ArenaBounds bounds = grid.cellBounds(cell);
         int minX = bounds.minX() + (grid.cellSize() - span) / 2;
@@ -347,9 +410,12 @@ public final class GeneratedMaps {
         // Tickets before any block is written, so no chunk unloads and drops the work.
         takeTickets(target);
         // A chunk unloaded since its last use is back as the world save had it, so clear first.
-        CompletableFuture<Void> cleared = writer.clear(region(target.cell));
+        CellWriter.Work cleared = writer.clear(target.cell, region(target.cell));
         target.work = cleared;
-        SideDimensions size = SideDimensions.forCell(grid.cellSize());
+        SideDimensions size = mapSize();
+        target.clearing = cleared;
+        target.placing = null;
+        target.placeTotal = layoutVolume(size, request.teams());
         CompletableFuture<MapSearch.Outcome> searched = CompletableFuture
                 .supplyAsync(() -> search.search(request.seed(), request.difficulty(), request.teams(), size), searches);
         // Back on the server thread for every outcome, a search that threw included.
@@ -388,8 +454,9 @@ public final class GeneratedMaps {
         int originX = cell.minX() + (grid.cellSize() - layout.width()) / 2;
         int originZ = cell.minZ() + (grid.cellSize() - layout.length()) / 2;
         int originY = floorY(layout.side().dimensions());
-        CompletableFuture<Void> placed = writer.place(layout, originX, originY, originZ);
+        CellWriter.Work placed = writer.place(slot.cell, layout, originX, originY, originZ);
         slot.work = placed;
+        slot.placing = placed;
         placed.whenComplete((ignored, error) -> {
             if (slot.generation != generation) {
                 return;
@@ -442,7 +509,9 @@ public final class GeneratedMaps {
         slot.arena = null;
         int generation = ++slot.generation;
         takeTickets(slot);
-        CompletableFuture<Void> cleared = writer.clear(region(slot.cell));
+        slot.clearing = null;
+        slot.placing = null;
+        CompletableFuture<Void> cleared = writer.clear(slot.cell, region(slot.cell));
         slot.work = cleared;
         cleared.whenComplete((ignored, error) -> {
             if (slot.generation != generation) {
@@ -465,6 +534,32 @@ public final class GeneratedMaps {
         Slot slot = slotOf(Arena.normalizeName(name));
         return slot != null && (slot.state == State.READY || slot.state == State.HELD)
                 ? Optional.of(slot.arena) : Optional.empty();
+    }
+
+    /**
+     * How far the map has got while it is prepared, and complete once it is placed. Empty
+     * for a map with no cell, or whose last try failed until it tries again.
+     */
+    public Optional<Progress> progress(String name) {
+        Slot slot = slotOf(Arena.normalizeName(name));
+        if (slot == null || slot.clearing == null
+                || (slot.state != State.PREPARING && slot.state != State.READY && slot.state != State.HELD)) {
+            return Optional.empty();
+        }
+        long placeTotal = slot.placing != null ? slot.placing.total() : slot.placeTotal;
+        long total = slot.clearing.total() + placeTotal;
+        if (slot.state != State.PREPARING) {
+            return Optional.of(new Progress(total, total));
+        }
+        long done = slot.clearing.done() + (slot.placing != null ? slot.placing.done() : 0);
+        return Optional.of(new Progress(done, total));
+    }
+
+    /** The blocks in the box of a layout of this size for 2 or 4 teams. */
+    static long layoutVolume(SideDimensions size, int teams) {
+        long span = size.width() + 2L * size.length();
+        long across = teams == 4 ? span : size.width();
+        return across * span * size.height();
     }
 
     /** Placed and not held by a match. */

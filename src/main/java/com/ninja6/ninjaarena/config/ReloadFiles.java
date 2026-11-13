@@ -222,6 +222,12 @@ public final class ReloadFiles {
             throw document.invalid(document.has("stability.drop-tier-above-mspt") ? "stability.drop-tier-above-mspt"
                     : "stability.pause-spawning-above-mspt", "drop-tier-above-mspt must not be below pause-spawning-above-mspt");
         }
+        if (result.getDouble("stability.placement.slow-budget-ms")
+                > result.getDouble("stability.placement.budget-ms")) {
+            throw document.invalid(document.has("stability.placement.slow-budget-ms")
+                    ? "stability.placement.slow-budget-ms" : "stability.placement.budget-ms",
+                    "slow-budget-ms must not exceed budget-ms");
+        }
         if (result.getDouble("director.shadow-stalker.blink.range")
                 < result.getDouble("director.shadow-stalker.blink.distance")) {
             throw document.invalid(document.has("director.shadow-stalker.blink.range")
@@ -258,6 +264,10 @@ public final class ReloadFiles {
                     "director.intensity.round-step", "director.intensity.relax-level", "director.intensity.time-ramp",
                     "director.intensity.teams-weight", "director.intensity.damage-relief" -> new double[] {0, 1};
             case "stability.tier-recovery-seconds" -> new double[] {0, 600};
+            case "stability.placement.budget-ms" -> new double[] {0.1, 50};
+            case "stability.placement.slow-budget-ms" -> new double[] {0, 50};
+            case "stability.placement.recovery-seconds" -> new double[] {0, 600};
+            case "stability.placement.max-map-size" -> new double[] {32, 4096};
             case "director.spawn.view-angle" -> new double[] {0, 180};
             case "director.threat-budget.base" -> new double[] {0, Double.MAX_VALUE};
             case "director.enemy-costs.zombie", "director.enemy-costs.skeleton", "director.enemy-costs.spider",
