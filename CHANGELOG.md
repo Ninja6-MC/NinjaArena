@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Internal: seeded lava falls, low-ground rivers, hanging lava, gaps and collapsing
+  ground and platform rims in the terrain model, increasing with difficulty and kept
+  outside spawn, the centre ledge and their blends. Placement and activation come later.
 - Internal: a full-map view with mirrored sides for 2 teams, quarter-turns for 4 teams,
   a flat centre and frame helpers for later path checks and placement.
 - Internal: a seeded terrain generator that builds one team's side of a generated map
