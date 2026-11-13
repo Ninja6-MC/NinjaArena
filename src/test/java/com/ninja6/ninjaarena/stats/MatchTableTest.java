@@ -23,6 +23,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.AfterEach;
@@ -231,6 +236,39 @@ class MatchTableTest {
         versionTwo(dialect, migrated);
         assertEquals(new StatsDatabase.StoredSchema(3, 2), open(dialect, migrated).storedSchema());
         assertEquals(2, count(migrated, "SELECT compatible_from FROM na_schema_version WHERE id = 1"));
+    }
+
+    @Test
+    void serversOpeningOneVersionTwoSqliteFileAtOnceAllMigrateIt() throws Exception {
+        int servers = 8;
+        for (int round = 0; round < 5; round++) {
+            ConnectionSource source = Records.sqliteSource(dir.resolve("shared" + round + ".db"));
+            versionTwo(Dialect.SQLITE, source);
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<StatsDatabase.StoredSchema>> opens = new ArrayList<>();
+            try (ExecutorService workers = Executors.newFixedThreadPool(servers)) {
+                for (int server = 0; server < servers; server++) {
+                    opens.add(workers.submit(() -> {
+                        start.await();
+                        try (StatsDatabase database = StatsDatabase.open(source, Dialect.SQLITE, "na_")) {
+                            return database.storedSchema();
+                        }
+                    }));
+                }
+                start.countDown();
+                for (Future<StatsDatabase.StoredSchema> open : opens) {
+                    // Each waits for the others under busy_timeout instead of failing with SQLITE_BUSY.
+                    assertEquals(new StatsDatabase.StoredSchema(3, 2), open.get(30, TimeUnit.SECONDS),
+                            "round " + round);
+                }
+            }
+            StatsDatabase database = open(Dialect.SQLITE, source);
+            assertEquals(new StatsDatabase.StoredSchema(3, 2), database.storedSchema());
+            assertVersionTwoRowsKept(database, source);
+            assertEquals(2, count(source, "SELECT COUNT(*) FROM na_player_stats"));
+            assertEquals(1, count(source, "SELECT COUNT(*) FROM na_seasons"));
+            assertEquals(0, count(source, "SELECT COUNT(*) FROM na_matches"));
+        }
     }
 
     @ParameterizedTest

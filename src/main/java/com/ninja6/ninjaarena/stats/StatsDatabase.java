@@ -167,6 +167,8 @@ final class StatsDatabase implements AutoCloseable {
             int target = next;
             // MySQL commits DDL on its own; each version's statements are idempotent instead.
             transaction(() -> {
+                // The step reads before it writes, so it takes the write lock first.
+                lockSchemaForWrite();
                 if (target == MARKED_FROM) {
                     addCompatibleFrom();
                 }
@@ -579,6 +581,19 @@ final class StatsDatabase implements AutoCloseable {
 
     private static String statColumns(String alias) {
         return String.join(", ", Dialect.COLUMNS.stream().map(stat -> alias + "." + stat.column()).toList());
+    }
+
+    /**
+     * As {@link #lockForWrite}, for a migration step, so servers migrating one SQLite file at
+     * once wait for each other: on {@code schema_version}, which exists before the first step
+     * and so before {@code seasons}. MySQL keeps committing each DDL statement on its own.
+     */
+    private void lockSchemaForWrite() throws SQLException {
+        if (dialect == Dialect.SQLITE) {
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("UPDATE " + prefix + "schema_version SET id = id WHERE 0 = 1");
+            }
+        }
     }
 
     @FunctionalInterface
