@@ -5,6 +5,7 @@ import com.ninja6.ninjaarena.reward.RewardSettings;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
@@ -33,16 +34,26 @@ final class StatsDatabase implements AutoCloseable {
 
     /** The schema version this build writes. Each version's statements live in {@link Dialect}. */
     static final int SCHEMA_VERSION = 3;
+    /** The first version that stores {@code compatible_from}; see {@link Dialect#compatibleFrom}. */
+    private static final int MARKED_FROM = 3;
     static final int ALL_TIME = 0;
     /** Longest stored player name; longer names, such as some proxy-prefixed ones, are cut. */
     static final int NAME_LENGTH = 32;
 
-    /** The database was written by a newer plugin build; this one must not touch it. */
+    /** The database was written by a newer plugin build that this one cannot use; it must not touch it. */
     static final class SchemaTooNew extends Exception {
-        SchemaTooNew(int found) {
+        SchemaTooNew(int found, int compatibleFrom) {
             super("the stats schema is version " + found + " but this build supports up to " + SCHEMA_VERSION
+                    + (compatibleFrom != found ? " and the schema needs at least " + compatibleFrom : "")
                     + "; update NinjaArena or point it at another database");
         }
+    }
+
+    /**
+     * The stored schema version and the oldest version whose builds can use it; with no
+     * {@code compatible_from} stored, only builds of the version itself can.
+     */
+    record StoredSchema(int version, int compatibleFrom) {
     }
 
     /** What applying the configured season name did. */
@@ -85,9 +96,58 @@ final class StatsDatabase implements AutoCloseable {
     }
 
     int schemaVersion() throws SQLException {
+        return storedSchema().version();
+    }
+
+    /** Reads every column, so a schema without {@code compatible_from} reads as well. */
+    StoredSchema storedSchema() throws SQLException {
         try (Statement statement = connection.createStatement();
-                ResultSet rows = statement.executeQuery("SELECT version FROM " + prefix + "schema_version WHERE id = 1")) {
-            return rows.next() ? rows.getInt(1) : 0;
+                ResultSet rows = statement.executeQuery("SELECT * FROM " + prefix
+                        + "schema_version WHERE id = 1")) {
+            if (!rows.next()) {
+                return new StoredSchema(0, 0);
+            }
+            int version = rows.getInt("version");
+            if (!hasCompatibleFrom(rows.getMetaData())) {
+                return new StoredSchema(version, version);
+            }
+            int compatibleFrom = rows.getInt("compatible_from");
+            return new StoredSchema(version, rows.wasNull() ? version : compatibleFrom);
+        }
+    }
+
+    private static boolean hasCompatibleFrom(ResultSetMetaData columns) throws SQLException {
+        for (int column = 1; column <= columns.getColumnCount(); column++) {
+            if (columns.getColumnLabel(column).equalsIgnoreCase("compatible_from")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean schemaTableHasCompatibleFrom() throws SQLException {
+        try (Statement statement = connection.createStatement();
+                ResultSet rows = statement.executeQuery("SELECT * FROM " + prefix
+                        + "schema_version WHERE 0 = 1")) {
+            return hasCompatibleFrom(rows.getMetaData());
+        }
+    }
+
+    /**
+     * Adds {@code compatible_from} unless it is there. Neither SQLite nor MySQL has ADD COLUMN
+     * IF NOT EXISTS, so it is looked for first; MySQL commits the ALTER on its own, so a
+     * retried migration finds it, and one that loses a race with another server checks again.
+     */
+    private void addCompatibleFrom() throws SQLException {
+        if (schemaTableHasCompatibleFrom()) {
+            return;
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(dialect.addCompatibleFrom(prefix));
+        } catch (SQLException e) {
+            if (!schemaTableHasCompatibleFrom()) {
+                throw e;
+            }
         }
     }
 
@@ -95,14 +155,21 @@ final class StatsDatabase implements AutoCloseable {
         try (Statement statement = connection.createStatement()) {
             statement.execute(dialect.createSchemaTable(prefix));
         }
-        int version = schemaVersion();
-        if (version > SCHEMA_VERSION) {
-            throw new SchemaTooNew(version);
+        StoredSchema stored = storedSchema();
+        if (stored.version() > SCHEMA_VERSION) {
+            // A newer schema that keeps this build's tables usable is used as it is.
+            if (stored.compatibleFrom() > SCHEMA_VERSION) {
+                throw new SchemaTooNew(stored.version(), stored.compatibleFrom());
+            }
+            return;
         }
-        for (int next = version + 1; next <= SCHEMA_VERSION; next++) {
+        for (int next = stored.version() + 1; next <= SCHEMA_VERSION; next++) {
             int target = next;
             // MySQL commits DDL on its own; each version's statements are idempotent instead.
             transaction(() -> {
+                if (target == MARKED_FROM) {
+                    addCompatibleFrom();
+                }
                 try (Statement statement = connection.createStatement()) {
                     for (String sql : dialect.migration(target, prefix)) {
                         statement.execute(sql);
@@ -111,6 +178,15 @@ final class StatsDatabase implements AutoCloseable {
                 try (PreparedStatement update = connection.prepareStatement(dialect.upsertSchemaVersion(prefix))) {
                     update.setInt(1, target);
                     update.executeUpdate();
+                }
+                if (target >= MARKED_FROM) {
+                    // Only while the version is this one: a newer server's marker is never lowered.
+                    try (PreparedStatement mark = connection.prepareStatement("UPDATE " + prefix
+                            + "schema_version SET compatible_from = ? WHERE id = 1 AND version = ?")) {
+                        mark.setInt(1, Dialect.compatibleFrom(target));
+                        mark.setInt(2, target);
+                        mark.executeUpdate();
+                    }
                 }
                 return null;
             });

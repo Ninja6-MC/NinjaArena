@@ -257,7 +257,7 @@ class StatsStoreTest {
         Faults faults = faults();
         StatsDatabase.open(faults, Dialect.SQLITE, "na_").close();
         try (var connection = faults.connect(); var statement = connection.createStatement()) {
-            statement.executeUpdate("UPDATE na_schema_version SET version = 7");
+            statement.executeUpdate("UPDATE na_schema_version SET version = 7, compatible_from = 7");
         }
         int before = faults.connects.get();
         StatsStore store = store(faults);
@@ -266,6 +266,44 @@ class StatsStoreTest {
         Thread.sleep(150);
         assertEquals(before + 1, faults.connects.get());
         assertTrue(log.stream().anyMatch(line -> line.contains("schema is version 7")), log.toString());
+    }
+
+    @Test
+    void aReconnectToANewerSchemaKeepsStatsOnWhileItIsCompatibleAndTurnsThemOffWhenNot() throws Exception {
+        Faults faults = faults();
+        StatsStore store = store(faults);
+        get(store.flush());
+        setSchema(faults, "version = 4, compatible_from = 3");
+        // A dropped connection makes the store reconnect, as after a MySQL wait_timeout.
+        faults.failPlayers = true;
+        store.record(match(player(ALICE, "Alice", 1, 0, 0, 0, 0, 0)));
+        assertInstanceOf(StatsUnavailableException.class, failure(store.flush()));
+        faults.failPlayers = false;
+        eventually(() -> store.pending() == 0);
+        assertEquals(1, get(store.stats(ALICE, StatsScope.ALL_TIME)).orElseThrow().wins());
+        assertTrue(store.isAvailable());
+        assertTrue(log.stream().noneMatch(line -> line.contains("stats are off")), log.toString());
+
+        setSchema(faults, "compatible_from = 4");
+        faults.failPlayers = true;
+        store.record(match(player(ALICE, "Alice", 1, 0, 0, 0, 0, 0)));
+        assertInstanceOf(StatsUnavailableException.class, failure(store.flush()));
+        faults.failPlayers = false;
+        eventually(() -> log.stream().anyMatch(line -> line.contains("stats are off")));
+        assertFalse(store.isAvailable());
+        assertTrue(log.stream().anyMatch(line -> line.contains("schema is version 4")), log.toString());
+        try (var connection = faults.connect(); var statement = connection.createStatement();
+                var rows = statement.executeQuery("SELECT version, compatible_from FROM na_schema_version")) {
+            assertTrue(rows.next());
+            assertEquals(4, rows.getInt(1), "an incompatible schema is left as it is");
+            assertEquals(4, rows.getInt(2));
+        }
+    }
+
+    private static void setSchema(Faults faults, String assignments) throws Exception {
+        try (var connection = faults.connect(); var statement = connection.createStatement()) {
+            statement.executeUpdate("UPDATE na_schema_version SET " + assignments + " WHERE id = 1");
+        }
     }
 
     @Test

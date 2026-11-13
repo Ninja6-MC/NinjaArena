@@ -279,7 +279,7 @@ class StatsDatabaseTest {
         ConnectionSource source = source(dialect);
         open(dialect, source).close();
         try (Connection connection = source.connect(); Statement statement = connection.createStatement()) {
-            statement.executeUpdate("UPDATE na_schema_version SET version = 99");
+            statement.executeUpdate("UPDATE na_schema_version SET version = 99, compatible_from = 99");
         }
         var failure = assertThrows(StatsDatabase.SchemaTooNew.class, () -> StatsDatabase.open(source, dialect, "na_"));
         assertTrue(failure.getMessage().contains("version 99"), failure.getMessage());

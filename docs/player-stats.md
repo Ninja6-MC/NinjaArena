@@ -69,10 +69,23 @@ time logged, so it cannot block the queue. On shutdown, after running matches ar
 stopped and recorded, the queue is flushed for up to 10 seconds; anything still
 unwritten is reported in the log.
 
-A database whose schema version is newer than the plugin understands is never written
-to: stats turn off with a log line asking for an update. Migrations only go forward, so
-once a build has moved the schema to version 3, an older build refuses the database
-until the plugin is updated again.
+Migrations only go forward. Besides its version, the schema records in
+`schema_version.compatible_from` the oldest version whose builds can still use it.
+Version 3 only adds the `matches` table, so it records 2. A build uses a database whose
+version is newer than its own only when its own version is at least `compatible_from`;
+otherwise, or when no `compatible_from` is stored, it never writes to it: stats turn off
+with a log line asking for an update. Builds from this one on read the marker, so they
+keep recording when a server sharing the database upgrades it. Released builds before
+this one do not: they refuse a version 3 database, also when they reconnect after an
+upgrade, for example after a MySQL `wait_timeout`, and then drop the matches they hold.
+Upgrade every server that shares a database together.
+
+To go back to a version 2 build after the upgrade, set the version back with
+`UPDATE <p>schema_version SET version = 2 WHERE id = 1`. The version 2 build ignores
+`<p>matches` and the `compatible_from` column, and a later upgrade keeps both and their
+rows, because the version 3 statements create only what is missing. As a general rule,
+take a backup of the database before any plugin upgrade, and restore it to downgrade
+across a change that is not additive.
 
 ## Schema
 
@@ -80,7 +93,8 @@ Version 3. `<p>` is `stats.table-prefix`; the award, placing and payout tables o
 are under [Cosmetic rewards and Vault payouts](#cosmetic-rewards-and-vault-payouts).
 
 ```sql
-<p>schema_version (id INT PRIMARY KEY, version INT NOT NULL)          -- one row, id 1
+<p>schema_version (id INT PRIMARY KEY, version INT NOT NULL,         -- one row, id 1
+                   compatible_from INT NULL)                          -- version 3
 <p>seasons        (id INT AUTO PRIMARY KEY, name VARCHAR(64) UNIQUE NOT NULL,
                    started_at BIGINT NOT NULL, ended_at BIGINT NULL)  -- epoch millis
 <p>player_stats   (player CHAR(36), season INT,

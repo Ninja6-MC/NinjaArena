@@ -103,6 +103,25 @@ enum Dialect {
                 .collect(Collectors.joining(","));
     }
 
+    /**
+     * The oldest schema version whose builds can still use a database at {@code version}, as
+     * stored in {@code schema_version.compatible_from}. Version 3 only adds a table, so a
+     * version 2 build reads and writes it as before. A version that older builds cannot use
+     * returns itself; one that keeps them working returns the oldest it keeps.
+     */
+    static int compatibleFrom(int version) {
+        return switch (version) {
+            case 1, 2 -> version;
+            case 3 -> 2;
+            default -> throw new IllegalArgumentException("unknown schema version " + version);
+        };
+    }
+
+    /** Version 3's marker of the oldest schema version whose builds can still use the database. */
+    String addCompatibleFrom(String p) {
+        return "ALTER TABLE " + p + "schema_version ADD COLUMN compatible_from INT NULL";
+    }
+
     String createSchemaTable(String p) {
         return "CREATE TABLE IF NOT EXISTS " + p + "schema_version (id INT NOT NULL PRIMARY KEY,"
                 + " version INT NOT NULL)";

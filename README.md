@@ -1028,8 +1028,12 @@ seed it was made from and its difficulty, never by its slot name, so map stats a
 by seed. A match whose map was generated again between rounds has a row per map. The
 match result shows each generated map's seed and difficulty, to play it again with
 `/narena map set generated <seed> <difficulty>`. The schema is migrated in place on the
-first start and the existing stats are kept; after that an older plugin build refuses
-the database, so downgrading needs a backup taken before the upgrade.
+first start and the existing stats are kept. Upgrade every server that shares a database
+together: released builds before this one refuse a version 3 database, also when they
+reconnect, and then drop matches. Version 3 only adds a table, so to go back to an
+older build, set `schema_version` back to 2; see
+[`docs/player-stats.md`](docs/player-stats.md).
+Taking a backup before an upgrade stays the safe general rule.
 For weekly events and admin commands, see [Scheduled arena events](docs/arena-events.md).
 
 ## Licence

@@ -101,8 +101,9 @@ class MatchTableTest {
     }
 
     private static boolean hasMatchesTable(ConnectionSource source) throws SQLException {
-        try (Connection connection = source.connect();
-                ResultSet tables = connection.getMetaData().getTables(null, null, "%", null)) {
+        // Only the connection's own database: a MySQL server may hold other na_matches tables.
+        try (Connection connection = source.connect(); ResultSet tables = connection.getMetaData()
+                .getTables(connection.getCatalog(), connection.getSchema(), "%", null)) {
             while (tables.next()) {
                 if (tables.getString("TABLE_NAME").equalsIgnoreCase("na_matches")) {
                     return true;
@@ -201,11 +202,77 @@ class MatchTableTest {
         try (Connection connection = source.connect(); Statement statement = connection.createStatement()) {
             statement.executeUpdate("UPDATE na_schema_version SET version = " + (StatsDatabase.SCHEMA_VERSION + 1));
         }
+        // No compatible_from column: only a build of version 4 itself may use it.
         var failure = assertThrows(StatsDatabase.SchemaTooNew.class, () -> StatsDatabase.open(source, dialect, "na_"));
         assertTrue(failure.getMessage().contains("version 4 but this build supports up to 3"), failure.getMessage());
         assertEquals(4, count(source, "SELECT version FROM na_schema_version WHERE id = 1"));
         assertFalse(hasMatchesTable(source), "nothing is created in a newer schema");
         assertEquals(2, count(source, "SELECT COUNT(*) FROM na_player_stats"));
+    }
+
+    private static void setSchema(ConnectionSource source, String assignments) throws SQLException {
+        try (Connection connection = source.connect(); Statement statement = connection.createStatement()) {
+            statement.executeUpdate("UPDATE na_schema_version SET " + assignments + " WHERE id = 1");
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(Dialect.class)
+    void versionThreeIsMarkedUsableByVersionTwoBuildsOnAFreshAndAMigratedDatabase(Dialect dialect)
+            throws Exception {
+        ConnectionSource fresh = source(dialect);
+        open(dialect, fresh).close();
+        assertEquals(2, count(fresh, "SELECT compatible_from FROM na_schema_version WHERE id = 1"));
+        // A version 3 database marked so opens on this version 3 build, and stays marked.
+        assertEquals(new StatsDatabase.StoredSchema(3, 2), open(dialect, fresh).storedSchema());
+
+        ConnectionSource migrated = dialect == Dialect.SQLITE ? Records.sqliteSource(dir.resolve("migrated.db"))
+                : Records.mysqlLike("matches" + NAMES.incrementAndGet());
+        versionTwo(dialect, migrated);
+        assertEquals(new StatsDatabase.StoredSchema(3, 2), open(dialect, migrated).storedSchema());
+        assertEquals(2, count(migrated, "SELECT compatible_from FROM na_schema_version WHERE id = 1"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(Dialect.class)
+    void aColumnLeftByAnInterruptedMigrationIsKeptAndTheRetryCompletes(Dialect dialect) throws Exception {
+        ConnectionSource source = source(dialect);
+        versionTwo(dialect, source);
+        // As MySQL leaves it when the ALTER committed on its own and the rest of the step failed.
+        try (Connection connection = source.connect(); Statement statement = connection.createStatement()) {
+            statement.execute(dialect.addCompatibleFrom("na_"));
+        }
+        StatsDatabase database = open(dialect, source);
+        assertEquals(new StatsDatabase.StoredSchema(3, 2), database.storedSchema());
+        assertVersionTwoRowsKept(database, source);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Dialect.class)
+    void aNewerSchemaThatKeepsThisVersionUsableIsUsedAsItIs(Dialect dialect) throws Exception {
+        ConnectionSource source = source(dialect);
+        open(dialect, source).close();
+        setSchema(source, "version = 4, compatible_from = 3");
+        StatsDatabase database = open(dialect, source);
+        database.write(List.of(played(MATCH, T0, List.of(MatchRecord.Played.generated(42, 3, 1, 1)),
+                player(ALICE, "Alice", 1, 1, 0, 0, 0, 0))));
+        assertEquals(1, database.matchesOnSeed(42, 10).size());
+        assertEquals(new StatsDatabase.StoredSchema(4, 3), database.storedSchema(), "never lowered");
+    }
+
+    @ParameterizedTest
+    @EnumSource(Dialect.class)
+    void aNewerSchemaThatNeedsANewerBuildIsRefused(Dialect dialect) throws Exception {
+        ConnectionSource source = source(dialect);
+        open(dialect, source).close();
+        for (String marker : List.of("compatible_from = 4", "compatible_from = NULL")) {
+            setSchema(source, "version = 4, " + marker);
+            var failure = assertThrows(StatsDatabase.SchemaTooNew.class,
+                    () -> StatsDatabase.open(source, dialect, "na_"));
+            assertTrue(failure.getMessage().contains("version 4 but this build supports up to 3"),
+                    failure.getMessage());
+            assertEquals(4, count(source, "SELECT version FROM na_schema_version WHERE id = 1"));
+        }
     }
 
     @ParameterizedTest
