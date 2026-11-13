@@ -22,13 +22,14 @@ Java 25, and does not run on Folia.
   active slots play the same seed, per-round regeneration included: a static seed on
   several slots warns and later slots fall back to random, slots beyond a rotation's
   seeds get random seeds with a log line, and a seed set by hand that another slot has
-  is refused. Under `shared`, slot overrides are ignored with a warning. Timers and
-  requests take effect at a slot's next generation, never during a match. Every `maps`
-  key is validated on startup and reload and applies on reload at each slot's next
-  generation. With `regenerate: round` the map is generated again in each shop break in
-  a spare cell, holding the shop open through `MatchService.setMapReady` up to
-  `shop.map-wait-limit-seconds`, and the round starts on it only once fully placed;
-  otherwise it keeps the current map.
+  is refused. Under `shared`, every active slot plays one seed, which a `0` timer moves
+  on only when no other active slot still plays it, and slot overrides are ignored with
+  a warning. Timers and requests take effect at a slot's next generation, never during a
+  match. Every `maps` key is validated on startup and reload and applies on reload at
+  each slot's next generation. With `regenerate: round` the map is generated again in
+  each shop break in a spare cell, holding the shop open through
+  `MatchService.setMapReady` up to `shop.map-wait-limit-seconds`, and the round starts
+  on it only once fully placed; otherwise it keeps the current map.
 - Commands: `/narena map set generated [seed] [difficulty]`, `/narena map next` and
   `/narena map reroll` (`ninjaarena.map.change`), and `/narena admin generate <seed>
   [difficulty] [2|4]` and `admin generate free` under the new

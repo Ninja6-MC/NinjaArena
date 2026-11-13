@@ -323,12 +323,12 @@ section of `config.yml` says which seed and difficulty each slot cell's next map
 | `maps.default.mode` | `random` | `static`: always `seed`. `rotation`: the `seeds` list in order. `random`: a random seed. |
 | `maps.default.seed` | `''` (none) | The seed for `static`, a whole number. `static` without one is refused. |
 | `maps.default.seeds` | `[]` | The seeds for `rotation`, in order, each once. `rotation` without any is refused. |
-| `maps.default.rotate-every` | `0` | How long a rotation stays on one seed, as a duration such as `30m`, `2h` or `1h30m` (units `d`, `h`, `m`, `s`; at most `365d`). `0` moves on at every generation. |
-| `maps.default.reroll-every` | `0` | How long a random seed is kept before a new one is picked; `0` picks again at every generation. |
+| `maps.default.rotate-every` | `0` | How long a rotation stays on one seed, as a duration such as `30m`, `2h` or `1h30m` (units `d`, `h`, `m`, `s`; at most `365d`). `0` moves on at every generation (under `shared`, see below). |
+| `maps.default.reroll-every` | `0` | How long a random seed is kept before a new one is picked; `0` picks again at every generation (under `shared`, see below). |
 | `maps.default.difficulty` | `2` | How hard the map is to cross, 1 to 5. |
 | `maps.default.regenerate` | `match` | `match`: a new map before each match. `round`: also in each shop break. |
 | `maps.slots.<n>` | none | Any of the keys above, for slot cell `n` (1 to 100) only. |
-| `maps.seed-sharing` | `distinct` | `distinct`: no two active slots play the same seed at once. `shared`: every slot follows `maps.default` and one seed. |
+| `maps.seed-sharing` | `distinct` | `distinct`: no two active slots play the same seed at once. `shared`: every slot follows `maps.default` and one seed at once. |
 
 Slot cell numbers follow the reserved cells, slot 1 first, plus one spare cell after
 them when a slot regenerates between rounds. A map takes the first free cell when it is
@@ -338,9 +338,13 @@ A rotation starts on its first seed for slot 1, its second for slot 2, and so on
 moves on once `rotate-every` has passed since it last moved. A random seed is kept until
 `reroll-every` has passed. Either way the change happens at the slot's next generation:
 a timer that runs out during a match never touches the map being played. Under `shared`
-every slot follows one rotation or one random seed, so give it a timer; with `0`, each
-generation of any slot moves it on. The rotation place and the random seed in force are
-kept in memory only: a restart starts each rotation again and picks new random seeds.
+every active slot plays one seed, from one rotation or one random seed. With `0` it
+moves on only at a generation while no other active slot still plays it, so a slot on
+its own gets a new seed each match or round while slots active together stay on one;
+with a timer, once the timer has run out, at the next generation. `map next` and `map
+reroll` move it on for every slot, a rotation by one step. The rotation place and the
+random seed in force are kept in memory only: a restart starts each rotation again and
+picks new random seeds.
 
 Under `distinct`, a seed is active while its map is being generated, placed or played,
 or while a room has it set by hand, and no other slot gets it:
@@ -352,8 +356,8 @@ or while a room has it set by hand, and no other slot gets it:
   seeds, with a log line.
 - A random seed is never one that is active.
 
-Under `shared`, `maps.slots` is ignored with a warning, and slots may play one seed. A
-default install, `random` and `distinct`, gives no warning.
+Under `shared`, `maps.slots` is ignored with a warning, and active slots play one seed.
+A default install, `random` and `distinct`, gives no warning.
 
 Hosts with `ninjaarena.map.change` control the room's seed:
 

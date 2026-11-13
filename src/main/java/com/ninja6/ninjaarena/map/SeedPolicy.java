@@ -38,7 +38,9 @@ import java.util.function.LongSupplier;
  * ones fall back to random seeds ({@link #warnings}); a rotation whose free seeds run out
  * gives the extra slots random seeds, which is logged; a random seed is never one in use.
  * Under {@link Sharing#SHARED} every slot follows {@code maps.default} and one state: the
- * slots' overrides are ignored, with a warning.
+ * slots' overrides are ignored, with a warning. With a timer of 0 the shared seed moves on
+ * only at a generation while no other active slot plays it, so slots active together play
+ * one seed; with a timer, once it has run out, at the next generation.
  *
  * <p>The rotation place and the random seed in force are held in memory only, so a restart
  * begins each rotation again and picks new random seeds. The clock and the random numbers
@@ -52,7 +54,11 @@ public final class SeedPolicy {
         NONE,
         /** The next seed of the rotation; a new random seed for a random slot. */
         NEXT,
-        /** A new random seed, whatever the mode. A random slot keeps it as its seed. */
+        /**
+         * A new random seed, whatever the mode; a random slot keeps it as its seed. Under
+         * {@code shared}, where a one-off seed would leave the other slots, a rotation moves
+         * on as for {@link #NEXT} and a static seed stays.
+         */
         REROLL
     }
 
@@ -178,8 +184,9 @@ public final class SeedPolicy {
      * The seed and difficulty of the slot's next map, now that it is generated. The
      * request, and any made with {@link #request}, is used up.
      *
-     * @param activeElsewhere the seeds other slots play or are generating now; ignored under
-     *                        {@code shared}
+     * @param activeElsewhere the seeds other slots play or are generating now; under
+     *                        {@code shared} they never refuse a seed, and only keep the
+     *                        shared seed in place while another slot plays it
      */
     public Pick next(int slot, Set<Long> activeElsewhere, Request request) {
         Objects.requireNonNull(activeElsewhere, "activeElsewhere");
@@ -192,7 +199,12 @@ public final class SeedPolicy {
         long now = clock.getAsLong();
         Mode mode = mode(slot, own);
         if (asked == Request.REROLL && mode != Mode.RANDOM) {
-            return pick(own, randomSeed(taken), Source.RANDOM);
+            if (settings.sharing() == Sharing.SHARED) {
+                // A one-off seed would leave the other slots; under shared it moves the rotation on for all.
+                asked = mode == Mode.ROTATION ? Request.NEXT : Request.NONE;
+            } else {
+                return pick(own, randomSeed(taken), Source.RANDOM);
+            }
         }
         return switch (mode) {
             case STATIC -> {
@@ -205,9 +217,10 @@ public final class SeedPolicy {
                 }
                 yield pick(own, seed, Source.STATIC);
             }
-            case ROTATION -> rotation(slot, own, state, taken, now, asked == Request.NEXT);
+            case ROTATION -> rotation(slot, own, state, taken, activeElsewhere, now, asked == Request.NEXT);
             case RANDOM -> {
-                if (state.current.isEmpty() || asked != Request.NONE || due(own.rerollEvery(), state.rolledAt, now)
+                if (state.current.isEmpty() || asked != Request.NONE
+                        || moves(own.rerollEvery(), state.rolledAt, now, state.current, activeElsewhere)
                         || taken.contains(state.current.getAsLong())) {
                     state.current = OptionalLong.of(randomSeed(taken));
                     state.rolledAt = now;
@@ -229,7 +242,9 @@ public final class SeedPolicy {
         Request asked = state == null ? Request.NONE : state.requested;
         long now = clock.getAsLong();
         Mode mode = mode(slot, own);
-        if (asked == Request.REROLL) {
+        if (asked == Request.REROLL && settings.sharing() == Sharing.SHARED && mode != Mode.RANDOM) {
+            asked = mode == Mode.ROTATION ? Request.NEXT : Request.NONE;
+        } else if (asked == Request.REROLL) {
             return Optional.empty();
         }
         return switch (mode) {
@@ -238,23 +253,27 @@ public final class SeedPolicy {
             case ROTATION -> {
                 List<Long> seeds = own.seeds();
                 int index = state == null || state.index < 0 || !seeds.equals(state.rotation) ? start(slot, seeds)
-                        : asked == Request.NEXT || due(own.rotateEvery(), state.movedAt, now)
+                        : asked == Request.NEXT || moves(own.rotateEvery(), state.movedAt, now,
+                                OptionalLong.of(seeds.get(state.index)), activeElsewhere)
                                 ? (state.index + 1) % seeds.size() : state.index;
                 yield free(seeds, index, taken).map(seed -> new SeedChoice(seed, own.difficulty()));
             }
             case RANDOM -> state == null || state.current.isEmpty() || asked != Request.NONE
-                    || due(own.rerollEvery(), state.rolledAt, now) || taken.contains(state.current.getAsLong())
+                    || moves(own.rerollEvery(), state.rolledAt, now, state.current, activeElsewhere)
+                    || taken.contains(state.current.getAsLong())
                     ? Optional.empty() : Optional.of(new SeedChoice(state.current.getAsLong(), own.difficulty()));
         };
     }
 
-    private Pick rotation(int slot, SlotSettings own, State state, Set<Long> taken, long now, boolean next) {
+    private Pick rotation(int slot, SlotSettings own, State state, Set<Long> taken, Set<Long> elsewhere, long now,
+            boolean next) {
         List<Long> seeds = own.seeds();
         if (state.index < 0 || !seeds.equals(state.rotation)) {
             state.rotation = seeds;
             state.index = start(slot, seeds);
             state.movedAt = now;
-        } else if (next || due(own.rotateEvery(), state.movedAt, now)) {
+        } else if (next || moves(own.rotateEvery(), state.movedAt, now, OptionalLong.of(seeds.get(state.index)),
+                elsewhere)) {
             state.index = (state.index + 1) % seeds.size();
             state.movedAt = now;
         }
@@ -299,6 +318,20 @@ public final class SeedPolicy {
             }
         }
         return Mode.STATIC;
+    }
+
+    /**
+     * Whether a rotation or a random seed moves on at this generation. With a timer, once it
+     * has run out. With 0 under {@code distinct}, at every generation. With 0 under
+     * {@code shared}, only when no other active slot still plays the current seed: slots
+     * generating while one of them plays it all get it, so they stay on one seed, and a slot
+     * on its own gets a new one each time.
+     */
+    private boolean moves(Duration every, long since, long now, OptionalLong current, Set<Long> elsewhere) {
+        if (every.isZero() && settings.sharing() == Sharing.SHARED) {
+            return current.isEmpty() || !elsewhere.contains(current.getAsLong());
+        }
+        return due(every, since, now);
     }
 
     private static boolean due(Duration every, long since, long now) {

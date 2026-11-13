@@ -497,6 +497,39 @@ class SeedModeFlowTest extends MatchFixture {
     }
 
     @Test
+    void underSharedPerRoundRegenerationKeepsActiveSlotsOnOneSeed() {
+        useSeedModes("maps: {default: {regenerate: round, difficulty: 1}, seed-sharing: shared}");
+        randoms.addAll(List.of(42L, 43L, 44L));
+        Room first = generatedRoom(ALICE, BOB);
+        Room second = generatedRoom(CAROL, DAVE);
+        assertEquals(List.of(42L, 42L), List.of(seedOf(first), seedOf(second)), "the second slot joins the first");
+        rooms.start(player(ALICE), null);
+        rooms.start(player(CAROL), null);
+        tickUntil(first.arena(), MatchPhase.SHOP);
+        assertTrue(generated.hasReplacement(first.arena()), "generated again in the break");
+        drain();
+        assertEquals(List.of(42L, 42L), List.of(seedOf(first), seedOf(second)),
+                "the other slot still plays 42, so the next round stays on it");
+        assertEquals(Set.of(42L), rooms.activeSeeds("", null));
+        tickUntil(first.arena(), MatchPhase.COMBAT);
+        tickUntil(first.arena(), MatchPhase.SHOP);
+        drain();
+        assertEquals(seedOf(first), seedOf(second));
+    }
+
+    @Test
+    void underSharedALoneRoomGetsANewSeedEachRound() {
+        useSeedModes("maps: {default: {regenerate: round, difficulty: 1}, seed-sharing: shared}");
+        randoms.addAll(List.of(42L, 43L));
+        Room room = generatedRoom(ALICE, BOB);
+        assertEquals(42, seedOf(room));
+        rooms.start(player(ALICE), null);
+        tickUntil(room.arena(), MatchPhase.SHOP);
+        drain();
+        assertEquals(43, seedOf(room));
+    }
+
+    @Test
     void anAdminReproducesALayoutInAFreeSlotCellAndFreesItAgain() {
         useSeedModes("maps: {default: {difficulty: 1}}");
         List<String> told = new java.util.ArrayList<>();

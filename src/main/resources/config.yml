@@ -181,8 +181,9 @@ maps:
     seeds: []
     # How long a rotation stays on one seed before moving to the next, and how long a
     # random seed is kept before a new one is picked, as a duration such as 30m, 2h or
-    # 1h30m (d, h, m and s, at most 365d). 0 moves on at every generation. The change
-    # happens at the slot's next generation, never during a match.
+    # 1h30m (d, h, m and s, at most 365d). 0 moves on at every generation (see
+    # seed-sharing for shared). The change happens at the slot's next generation, never
+    # during a match.
     rotate-every: 0
     reroll-every: 0
     # How hard the map is to cross, 1 to 5.
@@ -198,8 +199,10 @@ maps:
   #       seed: 42
   slots: {}
   # distinct: no two active slots play the same seed at once; a seed set by hand that
-  # another slot has is refused. shared: every slot follows maps.default and one seed,
-  # and the slots overrides are ignored with a warning.
+  # another slot has is refused. shared: every active slot plays one seed from
+  # maps.default, and the slots overrides are ignored with a warning. With a timer of 0
+  # the shared seed moves on only when no other active slot still plays it, so a slot on
+  # its own gets a new seed each time and slots active together stay on one.
   seed-sharing: distinct
 
 stability:

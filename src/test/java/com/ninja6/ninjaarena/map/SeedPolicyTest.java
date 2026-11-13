@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 class SeedPolicyTest {
 
     private static final long MINUTE = 60_000;
+    private static final long HOUR_MS = 60 * MINUTE;
 
     private long now = 1_000_000;
     /** Random seeds handed out in order; 1000, 1001, ... once these run out. */
@@ -133,6 +134,54 @@ class SeedPolicyTest {
         // Every slot follows one rotation, and may play what another plays.
         assertEquals(5, next(policy, 4, 5L).seed());
         assertEquals(5, next(policy, 1, 5L).seed());
+    }
+
+    @Test
+    void rule4UnderSharedWithZeroTimersActiveSlotsPlayOneRandomSeed() {
+        SeedPolicy policy = policy("maps: {seed-sharing: shared}");
+        long first = next(policy, 1).seed();
+        assertEquals(first, next(policy, 2, first).seed(), "slot 2 joins the seed slot 1 plays");
+        assertEquals(first, next(policy, 3, first).seed());
+        // Slot 1 generates again while slots 2 and 3 still play it: it stays with them.
+        assertEquals(first, next(policy, 1, first).seed());
+        assertEquals(List.of(), logged);
+    }
+
+    @Test
+    void rule4UnderSharedWithZeroTimersActiveSlotsPlayOneRotationSeed() {
+        SeedPolicy policy = policy("maps: {seed-sharing: shared, default: {mode: rotation, seeds: [1, 2, 3]}}");
+        assertEquals(1, next(policy, 1).seed());
+        assertEquals(1, next(policy, 2, 1L).seed());
+        assertEquals(1, next(policy, 1, 1L).seed(), "still played by slot 2");
+        // Once no other slot plays it, the next generation moves the rotation on, for everyone.
+        assertEquals(2, next(policy, 2).seed());
+        assertEquals(2, next(policy, 1, 2L).seed());
+    }
+
+    @Test
+    void rule4UnderSharedALoneSlotMovesOnAndARequestMovesEverySlotOn() {
+        SeedPolicy rotation = policy("maps: {seed-sharing: shared, default: {mode: rotation, seeds: [1, 2, 3]}}");
+        assertEquals(List.of(1L, 2L, 3L, 1L), List.of(next(rotation, 1).seed(), next(rotation, 1).seed(),
+                next(rotation, 1).seed(), next(rotation, 1).seed()), "a slot on its own gets the next one each time");
+        assertEquals(2, rotation.next(2, Set.of(1L), Request.NEXT).seed(), "map next moves on though slot 1 plays 1");
+        assertEquals(2, next(rotation, 1, 2L).seed(), "and slot 1 follows at its next generation");
+        assertEquals(new SeedPolicy.Pick(new SeedChoice(3, 2), Source.ROTATION),
+                rotation.next(2, Set.of(2L), Request.REROLL), "a reroll moves a shared rotation on for all");
+        assertEquals(3, next(rotation, 1, 3L).seed());
+
+        SeedPolicy random = policy("maps: {seed-sharing: shared}");
+        long first = next(random, 1).seed();
+        assertNotEquals(first, next(random, 1).seed(), "a lone random slot gets a new seed each time");
+        long held = next(random, 2).seed();
+        long rolled = random.next(1, Set.of(held), Request.REROLL).seed();
+        assertNotEquals(held, rolled, "map reroll picks a new shared seed");
+        assertEquals(rolled, next(random, 2, rolled).seed());
+
+        SeedPolicy timed = policy("maps: {seed-sharing: shared, default: {reroll-every: 1h}}");
+        long kept = next(timed, 1).seed();
+        assertEquals(kept, next(timed, 2, kept).seed());
+        now += HOUR_MS;
+        assertNotEquals(kept, next(timed, 2, kept).seed(), "with a timer, it moves on once due, as before");
     }
 
     @Test

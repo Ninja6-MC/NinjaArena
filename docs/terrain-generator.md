@@ -494,12 +494,19 @@ asks it once per generation, with `next(slot, activeElsewhere, request)`:
   is active elsewhere gets a random seed for that map, with a log line.
 - `rotation` starts slot `n` at seed `n` of the list under `distinct` and at the first
   under `shared`, moves one step once `rotate-every` has passed (or at every generation
-  for `0`) and takes the first seed from its place on that is not active elsewhere;
-  with none free it gives a random seed and logs it.
+  for `0` under `distinct`) and takes the first seed from its place on that is not
+  active elsewhere; with none free it gives a random seed and logs it.
 - `random` keeps its seed until `reroll-every` has passed, the seed becomes active
   elsewhere, or a request asks for another.
 - `Request.NEXT` moves a rotation on one step and rerolls a random slot; `REROLL` gives
   a random seed for that map, which a random slot keeps.
+- Under `shared` the state is one for every slot and active seeds never refuse one, so
+  every active slot plays the shared seed. A timer of `0` moves it on only at a
+  generation while no other active slot plays it (`moves`): slots generating while
+  another plays the shared seed join it, and a lone slot gets a new one each time. A
+  timer moves it once due, at the next generation. A request moves it for every slot;
+  `REROLL` on a rotation moves it on as `NEXT`, since a one-off seed would leave the
+  other slots.
 
 A random seed is drawn again while it is active elsewhere. Timers and requests are only
 read by `next`, so nothing changes a placed map. `preview(slot, activeElsewhere)` tells
