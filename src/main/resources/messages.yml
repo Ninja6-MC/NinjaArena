@@ -392,6 +392,7 @@ room:
   map-next: "<green><player> asked for the next seed in the rotation: the room's map is generated again."
   map-reroll: "<green><player> asked for a new random seed: the room's map is generated again."
   map-next-queued: "<green><player> asked for the next seed in the rotation. The map being played stays; it applies when the map is generated next."
+  map-reroll-fixed: "<yellow>The room's seed is fixed by the server's settings and cannot be rerolled."
   map-reroll-queued: "<green><player> asked for a new random seed. The map being played stays; it applies when the map is generated next."
   map-next-round: "<gray>Generating the next round's map from seed <seed> at difficulty <difficulty>..."
   no-permission: "<red>You do not have permission to open a room."

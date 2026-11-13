@@ -342,7 +342,8 @@ every active slot plays one seed, from one rotation or one random seed. With `0`
 moves on only at a generation while no other active slot still plays it, so a slot on
 its own gets a new seed each match or round while slots active together stay on one;
 with a timer, once the timer has run out, at the next generation. `map next` and `map
-reroll` move it on for every slot, a rotation by one step. The rotation place and the
+reroll` move it on for every slot, a rotation by one step. A reroll is refused when the
+shared seed is static because the server settings fix it. The rotation place and the
 random seed in force are kept in memory only: a restart starts each rotation again and
 picks new random seeds.
 
@@ -366,7 +367,8 @@ Hosts with `ninjaarena.map.change` control the room's seed:
   until changed, at `maps.default.difficulty` unless given. Under `distinct`, a seed
   another slot has is refused with a message; it is never silently replaced.
 - `/narena map next` asks for the next rotation seed (a new random one in `random`
-  mode), and `/narena map reroll` for a new random seed. Both end a seed set by hand.
+  mode), and `/narena map reroll` for a new random seed. Both end a seed set by hand,
+  except a reroll under `shared` with `static` mode is refused and keeps that seed.
 
 In the lobby these generate the room's map again at once. While the room plays, the map
 being played never changes: they apply at the next generation, which is the next shop

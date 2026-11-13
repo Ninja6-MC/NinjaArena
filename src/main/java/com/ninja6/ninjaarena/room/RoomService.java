@@ -1073,6 +1073,11 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             tell(player, "room.map-not-generated");
             return;
         }
+        if (request == SeedPolicy.Request.REROLL
+                && !seeds.canReroll(generated.slotNumber(room.arena()).orElse(1))) {
+            tell(player, "room.map-reroll-fixed");
+            return;
+        }
         boolean next = request == SeedPolicy.Request.NEXT;
         room.setSeedModes();
         room.request(request);

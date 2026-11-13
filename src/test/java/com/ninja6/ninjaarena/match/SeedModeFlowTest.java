@@ -344,6 +344,47 @@ class SeedModeFlowTest extends MatchFixture {
     }
 
     @Test
+    void aSharedStaticRerollIsRefusedInTheLobbyAndDuringAMatch() {
+        useSeedModes("maps: {seed-sharing: shared, default: {mode: static, seed: 42, difficulty: 1}}");
+        Room room = generatedRoom(ALICE, BOB);
+        assertSharedStaticRerollRefused(room);
+        rooms.start(player(ALICE), null);
+        assertTrue(room.isPlaying());
+        assertSharedStaticRerollRefused(room);
+    }
+
+    @Test
+    void aRefusedRerollKeepsAPinnedSeedAndAnExistingRequest() {
+        useSeedModes("maps: {seed-sharing: shared, default: {mode: static, seed: 42, difficulty: 1}}");
+        Room room = openWith(ALICE, BOB);
+        rooms.mapSetGenerated(player(ALICE), 7L, 1);
+        drain();
+        room.request(SeedPolicy.Request.NEXT);
+        assertSharedStaticRerollRefused(room);
+        assertTrue(room.isPinned());
+        assertEquals(7, seedOf(room));
+    }
+
+    private void assertSharedStaticRerollRefused(Room room) {
+        Arena before = maps.get(room.arena()).orElseThrow();
+        List<GridCell> cells = List.copyOf(generated.inUse());
+        SeedPolicy.Request request = room.requested();
+        int toldHost = messages(ALICE).size();
+        int toldGuest = messages(BOB).size();
+        rooms.mapReroll(player(ALICE));
+        assertEquals(toldHost + 1, messages(ALICE).size());
+        assertEquals("The room's seed is fixed by the server's settings and cannot be rerolled.",
+                messages(ALICE).getLast());
+        assertEquals(toldGuest, messages(BOB).size());
+        assertEquals(request, room.requested());
+        assertEquals(0, writer.pending());
+        assertFalse(generated.hasReplacement(room.arena()));
+        drain();
+        assertSame(before, maps.get(room.arena()).orElseThrow());
+        assertEquals(cells, generated.inUse());
+    }
+
+    @Test
     void mapNextAndRerollInTheLobbyGenerateTheRoomsMapAgainNow() {
         useSeedModes("maps: {default: {mode: rotation, seeds: [42, 43], rotate-every: 1d, difficulty: 1}}");
         Room room = generatedRoom(ALICE, BOB);
