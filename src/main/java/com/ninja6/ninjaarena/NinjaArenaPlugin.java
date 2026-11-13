@@ -27,6 +27,7 @@ import com.ninja6.ninjaarena.director.ShadowStalker;
 import com.ninja6.ninjaarena.director.SpawnSettings;
 import com.ninja6.ninjaarena.director.StabilityGate;
 import com.ninja6.ninjaarena.director.StabilitySettings;
+import com.ninja6.ninjaarena.director.TickTimeGuard;
 import com.ninja6.ninjaarena.director.StalkerSettings;
 import com.ninja6.ninjaarena.director.StealthSettings;
 import com.ninja6.ninjaarena.director.ThreatBudget;
@@ -46,7 +47,9 @@ import com.ninja6.ninjaarena.lobby.LobbyMembers;
 import com.ninja6.ninjaarena.map.ArenaMaps;
 import com.ninja6.ninjaarena.map.BlockAccess;
 import com.ninja6.ninjaarena.map.GeneratedMaps;
-import com.ninja6.ninjaarena.map.TickCellWriter;
+import com.ninja6.ninjaarena.map.BudgetedCellWriter;
+import com.ninja6.ninjaarena.map.PlacementBudget;
+import com.ninja6.ninjaarena.map.PlacementSettings;
 import com.ninja6.ninjaarena.match.MatchDeathListener;
 import com.ninja6.ninjaarena.message.MessageMigration;
 import com.ninja6.ninjaarena.message.Messages;
@@ -151,6 +154,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private ArenaRegistry arenas;
     /** Generated maps in the reserved slot cells; held in memory only. */
     private GeneratedMaps generatedMaps;
+    /** The tick-time guard enemy spawns and map placement both back off by. */
+    private TickTimeGuard tickTime;
     /** Hand-built and generated maps by name, for everything a match looks up. */
     private MapSource maps;
     private PortalRegistry portals;
@@ -219,6 +224,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         lobbyWorld = LobbyWorld.load(getLogger());
         startLobby();
         arenas = ArenaRegistry.open(this, arenaWorld);
+        // One reading of the tick time per tick, shared by enemy spawns and map placement.
+        tickTime = new TickTimeGuard(StabilitySettings.from(getConfig().getConfigurationSection("stability")),
+                Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger());
         startGeneratedMaps();
         chunkUnloader = new ArenaChunkUnloader(arenaWorld::currentWorld, arenaWorld::isSavingEnabled,
                 () -> arenaWorld.releaseIfIdle(arenas::canReleaseWorld), getLogger());
@@ -373,7 +381,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new InventoryLockdownListener(busy), this);
         // Enemy caps, the spawn rate and the tick-time guard; enemies are counted
         // from each match's director. Set before any fight can create a director.
-        StabilitySettings stability = StabilitySettings.from(getConfig().getConfigurationSection("stability"));
+        StabilitySettings stability = tickTime.settings();
         DirectorService enemyDirectors = directors;
         hud = new MatchHud(inMatch::matches, getServer()::getPlayer, scores, points,
                 match -> enemyDirectors.director(match).map(director -> (int) director.enemies().stream()
@@ -384,7 +392,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         hud.start(this);
         directors.setGate(hud.withSpawnCues(new StabilityGate(stability,
                 match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
-                Bukkit::getCurrentTick, Bukkit::getAverageTickTime, getLogger())));
+                Bukkit::getCurrentTick, tickTime)));
         // Events never start a match: their arena is the featured map for rooms, and a match
         // there earns the bonus, captured when it starts.
         ArenaEvents arenaEvents = startEvents();
@@ -612,7 +620,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
      */
     private void startGeneratedMaps() {
         ArenaWorld world = arenaWorld;
-        TickCellWriter writer = new TickCellWriter(new BlockAccess() {
+        PlacementSettings placement = PlacementSettings.from(
+                getConfig().getConfigurationSection("stability.placement"));
+        // A time budget per tick that drops while the tick-time guard holds spawning back.
+        BudgetedCellWriter writer = new BudgetedCellWriter(new BlockAccess() {
             @Override
             public Material get(int x, int y, int z) {
                 return world.world().getType(x, y, z);
@@ -622,7 +633,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             public void set(int x, int y, int z, Material material) {
                 world.world().getBlockAt(x, y, z).setType(material, false);
             }
-        });
+        }, new PlacementBudget(placement, tickTime::read, Bukkit::getCurrentTick), System::nanoTime);
         writer.start(this);
         ChunkTickets tickets = new ChunkTickets() {
             @Override
@@ -646,6 +657,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         getServer().getScheduler().runTask(this, task);
                     }
                 }, getLogger());
+        generatedMaps.setMaxMapSize(placement.maxMapSize());
         registry.setReservedCells(generatedMaps::isReserved);
         registry.setSlotCellsInUse(generatedMaps::inUse);
         world.afterReopen(generatedMaps::reopened);
@@ -961,6 +973,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             generatedMaps = null;
             maps = null;
         }
+        tickTime = null;
         if (arenas != null) {
             arenas.close().forEach(getLogger()::warning);
             arenaWorld.releaseIfIdle(arenas::canReleaseWorld);

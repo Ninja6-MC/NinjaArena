@@ -303,6 +303,29 @@ while an arena is in edit mode.
 Commands to choose seeds and difficulties for rooms come in a later release; until then
 rooms play hand-built arenas.
 
+#### Placing generated maps
+
+A generated map is cleared and placed over many server ticks, within a time budget per
+tick shared by every slot cell, under `stability.placement` in `config.yml`:
+
+| Key | Default | Range | Meaning |
+| :--- | :--- | :--- | :--- |
+| `budget-ms` | 10.0 | 0.1 to 50 | Server time per tick, in milliseconds, spent placing and clearing maps across every slot cell. |
+| `slow-budget-ms` | 1.0 | 0 to 50, at most `budget-ms` | The time per tick while the tick-time guard holds enemy spawning back. 0 pauses placement then. |
+| `recovery-seconds` | 10 | 0 to 600 | Once the average tick time is back below `stability.resume-below-mspt`, how long the budget takes to climb back to `budget-ms`. |
+| `max-map-size` | 256 | 32 to 4096 | The largest grid cell a generated map is sized for. In a larger `arena-grid.cell-size` the map is the one a cell of this size gets, centred in the cell. |
+
+The budget backs off on the same tick-time guard as enemy spawning: above
+`stability.pause-spawning-above-mspt` placement drops to `slow-budget-ms` until the
+average falls below `stability.resume-below-mspt`. Slots generating at once take turns,
+so they move on together and four of them take no more time per tick than one.
+`max-map-size` caps the blocks each map clears and places on a shared host: 256 leaves
+the default 256-block cell as it is (a 240-block map, about 3.7 million blocks to clear
+and as many to place for four teams), and 128 gives a 120-block map with a quarter of
+the blocks. Like the rest of `stability`, these settings are validated on reload but
+apply after a restart. See [Placement](docs/terrain-generator.md#placement) for the
+details.
+
 ### Where players go
 
 | From | How | To |

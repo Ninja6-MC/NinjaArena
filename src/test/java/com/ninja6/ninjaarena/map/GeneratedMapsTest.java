@@ -34,7 +34,7 @@ class GeneratedMapsTest {
     private static final ArenaGrid GRID = new ArenaGrid(256, 2048, -64, 320);
 
     private final FakeBlocks blocks = new FakeBlocks();
-    private final TickCellWriter writer = new TickCellWriter(blocks, 1 << 20);
+    private final BudgetedCellWriter writer = FakeWriters.perTick(blocks, 1 << 20);
     private final Set<GridCell> handBuilt = new HashSet<>();
     private final List<GeneratedMaps.Prepared> outcomes = new ArrayList<>();
 
@@ -335,5 +335,205 @@ class GeneratedMapsTest {
         } finally {
             async.shutdownNow();
         }
+    }
+
+    @Test
+    void progressCountsTheClearThenThePlacementAndIsCompleteOnceReady() {
+        GeneratedMaps maps = maps(1);
+        assertTrue(maps.progress("generated:1").isEmpty(), "no map yet");
+        maps.prepare("generated:1", new GeneratedMaps.Request(42, 1, 4), outcomes::add);
+        GridCell cell = maps.cellOf("generated:1").orElseThrow();
+        ArenaBounds region = maps.region(cell);
+        long regionBlocks = (long) (region.maxX() - region.minX() + 1) * (region.maxY() - region.minY() + 1)
+                * (region.maxZ() - region.minZ() + 1);
+        // A four-team map fills its region, so the placement visits as many blocks as the clear.
+        long total = 2 * regionBlocks;
+        assertEquals(total, GeneratedMaps.layoutVolume(maps.mapSize(), 4) + regionBlocks);
+        assertEquals(new GeneratedMaps.Progress(0, total), maps.progress("generated:1").orElseThrow());
+
+        long start = writer.visited();
+        double last = 0;
+        while (outcomes.isEmpty()) {
+            writer.tick();
+            GeneratedMaps.Progress progress = maps.progress("GENERATED:1").orElseThrow();
+            assertEquals(total, progress.total(), "the total never changes");
+            if (outcomes.isEmpty()) {
+                assertEquals(writer.visited() - start, progress.done(), "every block visited counts once");
+                assertTrue(progress.fraction() > last && progress.fraction() < 1);
+                last = progress.fraction();
+            }
+        }
+        assertInstanceOf(GeneratedMaps.Ready.class, outcomes.getLast());
+        assertEquals(total, writer.visited() - start);
+        GeneratedMaps.Progress done = maps.progress("generated:1").orElseThrow();
+        assertTrue(done.isComplete());
+        assertEquals(1.0, done.fraction());
+
+        maps.free("generated:1");
+        assertTrue(maps.progress("generated:1").isEmpty(), "a freed map has none");
+        drain();
+    }
+
+    @Test
+    void progressOfATwoTeamMapCountsTheSmallerLayout() {
+        GeneratedMaps maps = maps(1);
+        maps.prepare("generated:1", new GeneratedMaps.Request(42, 1, 2), outcomes::add);
+        long expected = maps.progress("generated:1").orElseThrow().total();
+        SideDimensions size = maps.mapSize();
+        long span = size.width() + 2L * size.length();
+        assertEquals(span * span * size.height() + size.width() * span * size.height(), expected);
+        long start = writer.visited();
+        drain();
+        assertEquals(expected, writer.visited() - start, "the estimate before the search was exact");
+    }
+
+    @Test
+    void aFailedMapHasNoProgressUntilItTriesAgain() {
+        GeneratedMaps maps = maps(1);
+        maps.setSearch((seed, difficulty, teams, size) -> seed == 13
+                ? new MapSearch.Failed(13, List.of()) : GeneratedMaps.Search.DEFAULT.search(seed, difficulty, teams, size));
+        maps.prepare("generated:1", new GeneratedMaps.Request(13, 2, 2), outcomes::add);
+        drain();
+        assertTrue(maps.progress("generated:1").isEmpty());
+        maps.prepare("generated:1", new GeneratedMaps.Request(42, 1, 2), outcomes::add);
+        assertEquals(0, maps.progress("generated:1").orElseThrow().done(), "a new try starts from nothing");
+        drain();
+        assertTrue(maps.progress("generated:1").orElseThrow().isComplete());
+    }
+
+    @Test
+    void fourSlotsPrepareTogether() {
+        BudgetedCellWriter slow = FakeWriters.perTick(blocks, 100_000);
+        GeneratedMaps maps = new GeneratedMaps(GRID, () -> handBuilt, () -> true, slow, blocks.ticketsView(),
+                Runnable::run, Runnable::run, quiet());
+        maps.resize(4);
+        while (slow.pending() > 0) {
+            slow.tick();
+        }
+        List<String> names = List.of("generated:1", "generated:2", "generated:3", "generated:4");
+        for (String name : names) {
+            maps.prepare(name, new GeneratedMaps.Request(42, 1, 4), outcomes::add);
+        }
+        for (int i = 0; i < 30; i++) {
+            slow.tick();
+            double least = names.stream().mapToDouble(name -> maps.progress(name).orElseThrow().fraction()).min()
+                    .orElseThrow();
+            double most = names.stream().mapToDouble(name -> maps.progress(name).orElseThrow().fraction()).max()
+                    .orElseThrow();
+            assertTrue(least > 0, "every slot moves on");
+            assertTrue(most - least < 0.001, "no slot runs ahead: " + least + " to " + most);
+        }
+        while (slow.pending() > 0) {
+            slow.tick();
+        }
+        assertEquals(4, outcomes.stream().filter(GeneratedMaps.Ready.class::isInstance).count());
+    }
+
+    @Test
+    void theSizeLimitShrinksTheMapAndItsRegion() {
+        GeneratedMaps maps = fresh();
+        maps.setMaxMapSize(128);
+        List<SideDimensions> asked = new ArrayList<>();
+        maps.setSearch((seed, difficulty, teams, size) -> {
+            asked.add(size);
+            return GeneratedMaps.Search.DEFAULT.search(seed, difficulty, teams, size);
+        });
+        maps.resize(1);
+        drain();
+        SideDimensions small = SideDimensions.forCell(128);
+        assertEquals(small, maps.mapSize());
+        GridCell cell = maps.cells().getFirst();
+        ArenaBounds region = maps.region(cell);
+        int span = small.width() + 2 * small.length();
+        assertEquals(span, region.maxX() - region.minX() + 1);
+        assertEquals(span, region.maxZ() - region.minZ() + 1);
+        ArenaBounds bounds = GRID.cellBounds(cell);
+        assertEquals((GRID.cellSize() - span) / 2, region.minX() - bounds.minX(), "centred in the cell");
+
+        maps.prepare("generated:1", new GeneratedMaps.Request(42, 1, 4), outcomes::add);
+        drain();
+        assertEquals(List.of(small), asked, "the generator is asked for the smaller map");
+        Arena arena = assertInstanceOf(GeneratedMaps.Ready.class, outcomes.getLast()).arena();
+        assertEquals(region, arena.bounds());
+        assertEquals(List.of(), ArenaValidator.problems(arena, GRID));
+        assertEquals(blocks.countSolid(), blocks.countSolid(region), "nothing is written outside the region");
+        long regionBlocks = (long) span * span * small.height();
+        assertEquals(2 * regionBlocks, maps.progress("generated:1").orElseThrow().total(),
+                "a quarter of the blocks a full-size map clears and places");
+    }
+
+    @Test
+    void theDefaultLimitCapsMapsInLargeCellsAndLeavesTheDefaultCellAlone() {
+        assertEquals(SideDimensions.forCell(GRID.cellSize()), fresh().mapSize(), "a 256-block cell is unchanged");
+        ArenaGrid large = new ArenaGrid(1024, 8192, -64, 320);
+        GeneratedMaps maps = new GeneratedMaps(large, () -> handBuilt, () -> true, writer, blocks.ticketsView(),
+                Runnable::run, Runnable::run, quiet());
+        assertEquals(SideDimensions.forCell(256), maps.mapSize());
+        maps.setMaxMapSize(4096);
+        assertEquals(SideDimensions.forCell(1024), maps.mapSize(), "a limit above the cell size changes nothing");
+    }
+
+    @Test
+    void theSizeLimitIsCheckedAndCannotChangeUnderAMap() {
+        GeneratedMaps maps = maps(1);
+        assertThrows(IllegalArgumentException.class, () -> maps.setMaxMapSize(31));
+        assertThrows(IllegalArgumentException.class, () -> maps.setMaxMapSize(4097));
+        maps.prepare("generated:1", new GeneratedMaps.Request(42, 1, 2), outcomes::add);
+        assertThrows(IllegalStateException.class, () -> maps.setMaxMapSize(128), "the region would move");
+        drain();
+        maps.free("generated:1");
+        drain();
+        maps.setMaxMapSize(128);
+        assertEquals(SideDimensions.forCell(128), maps.mapSize());
+    }
+
+    @Test
+    void loweringTheSizeLimitAcrossARestartClearsTheOldLargerMap() {
+        GeneratedMaps before = maps(1);
+        before.setMaxMapSize(256);
+        ready(before, "generated:1", 42);
+        GridCell cell = before.cellOf("generated:1").orElseThrow();
+        ArenaBounds old = before.region(cell);
+        assertTrue(blocks.countSolid(old) > 0);
+        // Disable with the map placed; the shutdown save keeps it.
+        before.close();
+
+        GeneratedMaps after = fresh();
+        after.setMaxMapSize(128);
+        after.resize(1);
+        assertEquals(cell, after.cells().getFirst(), "the same cell after the restart");
+        assertTrue(after.sweepRegion(cell).contains(old), "the startup clear reaches the old map");
+        drain();
+        assertEquals(0, blocks.countSolid(), "no block of the old map is left in the cell");
+        assertTrue(blocks.tickets.isEmpty());
+
+        // A map prepared afterwards clears and counts only its own, smaller region.
+        after.prepare("generated:1", new GeneratedMaps.Request(42, 1, 4), outcomes::add);
+        ArenaBounds small = after.region(cell);
+        long smallBlocks = (long) (small.maxX() - small.minX() + 1) * (small.maxY() - small.minY() + 1)
+                * (small.maxZ() - small.minZ() + 1);
+        assertEquals(2 * smallBlocks, after.progress("generated:1").orElseThrow().total());
+        long start = writer.visited();
+        drain();
+        assertEquals(2 * smallBlocks, writer.visited() - start, "the progress total is what was visited");
+        assertTrue(after.progress("generated:1").orElseThrow().isComplete());
+        assertEquals(blocks.countSolid(), blocks.countSolid(small));
+    }
+
+    @Test
+    void theWorldReopeningSweepsTheWholeCellToo() {
+        GeneratedMaps maps = fresh();
+        maps.setMaxMapSize(128);
+        maps.resize(1);
+        drain();
+        GridCell cell = maps.cells().getFirst();
+        ArenaBounds wide = maps.sweepRegion(cell);
+        assertTrue(wide.contains(maps.region(cell)));
+        blocks.set(wide.minX(), wide.minY(), wide.minZ(), Material.STONE);
+        blocks.set(wide.maxX(), wide.maxY(), wide.maxZ(), Material.LAVA);
+        maps.reopened();
+        drain();
+        assertEquals(0, blocks.countSolid());
+        assertTrue(blocks.tickets.isEmpty());
     }
 }

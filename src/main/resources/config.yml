@@ -185,6 +185,21 @@ stability:
   # After a tier drop, spawning resumes below resume-below-mspt but the intensity stays a
   # tier lower for this many seconds (0 to 600), so the arenas refill to less than before.
   tier-recovery-seconds: 30
+  # Placing and clearing generated maps in the slot cells, spread over server ticks.
+  placement:
+    # Server time per tick, in milliseconds, spent placing and clearing maps, shared fairly
+    # between every slot cell generating at once (0.1 to 50).
+    budget-ms: 10.0
+    # The time per tick while the tick-time guard above holds enemy spawning back (0 to 50,
+    # at most budget-ms; 0 pauses placement). Once the average tick time is back below
+    # resume-below-mspt, the budget climbs back to budget-ms over recovery-seconds (0 to 600).
+    slow-budget-ms: 1.0
+    recovery-seconds: 10
+    # The largest grid cell a generated map is sized for (32 to 4096). In a larger
+    # arena-grid.cell-size the map is the one a cell of this size gets, centred in the cell,
+    # which caps the blocks each map clears and places. 256 gives a 240-block map, 64 high:
+    # about 3.7 million blocks to clear and as many to place for four teams.
+    max-map-size: 256
 
 director:
   # Log why an enemy did not spawn (each reason at most once per round per match) at INFO

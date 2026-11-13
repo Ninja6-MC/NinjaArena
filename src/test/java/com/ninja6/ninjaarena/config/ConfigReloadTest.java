@@ -702,6 +702,28 @@ class ConfigReloadTest {
     }
 
     @Test
+    void placementSettingsAreValidatedAndRestartOnly() throws Exception {
+        for (String config : List.of("stability:\n  placement:\n    budget-ms: 0.05\n",
+                "stability:\n  placement:\n    budget-ms: 51\n",
+                "stability:\n  placement:\n    slow-budget-ms: -1\n",
+                "stability:\n  placement:\n    recovery-seconds: 601\n",
+                "stability:\n  placement:\n    max-map-size: 31\n",
+                "stability:\n  placement:\n    max-map-size: 300.5\n",
+                "stability:\n  placement:\n    budget-ms: 2.0\n    slow-budget-ms: 3.0\n",
+                "stability:\n  placement:\n    budget-ms: 0.5\n",
+                "stability:\n  placement:\n    unknown: 1\n")) {
+            write(config, EMPTY_KIT);
+            var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate, config);
+            assertTrue(failure.getMessage().contains("stability.placement."), failure.getMessage());
+        }
+        write("stability:\n  placement:\n    budget-ms: 5.0\n    max-map-size: 128\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertTrue(report.get(3).contains("stability.placement.budget-ms (restart required)"), report.get(3));
+        assertTrue(report.get(3).contains("stability.placement.max-map-size (restart required)"), report.get(3));
+        assertTrue(target.calls.isEmpty());
+    }
+
+    @Test
     void aNewSeasonAppliesOnReloadWhileStatsStorageStaysRestartOnly() throws Exception {
         write("stats:\n  season: Season 2\n  storage: mysql\n  mysql:\n    password: changed\n", EMPTY_KIT);
         var report = reload.reload();

@@ -62,6 +62,9 @@ end.
 | 32 (minimum) | 8 x 11 x 64 | 30 | 5.5 KiB |
 | 512 and above | 192 x 144 x 64 (capped) | 480 | 1.7 MiB |
 
+Generated maps in the slot cells use at most the size for a 256-block cell unless
+`stability.placement.max-map-size` is raised; see [Size limit](#size-limit).
+
 The height of 64 leaves the ground between `y = 2` and `y = 51`, around a base level of
 24, with 12 blocks above it for platforms. That is a sixth of the 384-block world
 height.
@@ -340,8 +343,9 @@ does not assert times.
 * Rooms run the search off the main thread when they need a map, remember the accepted
   seed as the room's last good seed, and on `Failed` apply `MapSearch.fallback` and send
   its message ([Generated map lifecycle](#generated-map-lifecycle)).
-* **#160** replaces the simple cell writer with tick-budgeted placement of
-  `map.layout()`; the map's points are already turned into world locations.
+* Placement writes `map.layout()` within a time budget per tick, shared between the
+  slot cells ([Placement](#placement)); the map's points are already turned into world
+  locations.
 * **#161** and **#162** may collapse any crumbling blocks, in any order, at any time:
   an accepted map keeps a route from every team spawn to the centre that never relies
   on one, so they need no path check of their own. That guarantee covers crumbling
@@ -412,10 +416,12 @@ count adds cells after them, a lower one drops the last ones, but never a cell a
 still uses, which stays reserved until it is free. `ArenaRegistry.create` skips the
 reserved cells and refuses one named by hand (`arena.error.cell-reserved`).
 
-Within its cell a map uses a fixed region: centred, as wide and long as the cell's
-four-team map (`width + 2 * length` of `SideDimensions.forCell`), and the side's height
-from `GeneratedMaps.FLOOR_Y` (32). A two-team map is centred in the same region. Nothing
-outside the region is written or cleared.
+Within its cell a map uses a fixed region: centred, as wide and long as the four-team
+map of `GeneratedMaps.mapSize()` (`width + 2 * length`), and the side's height from
+`GeneratedMaps.FLOOR_Y` (32). `mapSize()` is `SideDimensions.forCell` of the cell size,
+or of `stability.placement.max-map-size` when that is smaller ([Size
+limit](#size-limit)). A two-team map is centred in the same region. Nothing outside the
+region is written or cleared.
 
 ### Lifecycle
 
@@ -455,7 +461,8 @@ held. Everything happens on the server thread except the search.
 Generated maps are never written to `arenas.yml` (`ArenaCodec.encode` refuses a generated
 name). Every slot cell is cleared when it is reserved on startup or by a reload, and again
 when the arena world reopens after a retire (`ArenaWorld.afterReopen`), so nothing a world
-save kept from an earlier run survives. A cell being cleared counts as in use. While
+save kept from an earlier run survives. These sweeps clear the cell's full-size region
+([Size limit](#size-limit)). A cell being cleared counts as in use. While
 `arenas.yml` cannot be read, no cell is reserved or cleared, since the registry cannot
 say which cells hold hand-built arenas.
 
@@ -471,24 +478,109 @@ shop phase's `MatchService.setMapReady`, belong to #163.
 
 ### The placement seam
 
-`CellWriter` is what #160 fills in:
+`CellWriter` is the seam between the lifecycle and the world:
 
 ```java
-CompletableFuture<Void> place(ArenaLayout layout, int originX, int originY, int originZ);
-CompletableFuture<Void> clear(ArenaBounds region);
+Work place(GridCell cell, ArenaLayout layout, int originX, int originY, int originZ);
+Work clear(GridCell cell, ArenaBounds region);
 void close();
 ```
 
-`place` writes every non-air block of the layout with `ThemePalette`; air is not written,
-since the region is always cleared first. `clear` sets every block of the region to air.
-Futures complete on the server thread; cancelling one drops the work left, and
-`GeneratedMaps` clears the region afterwards. Jobs run in the order they were asked for.
+`place` writes every non-air block of the layout with `ThemePalette`; air is not
+written, since the region is always cleared first. `clear` sets every block of the
+region to air. `Work` is a `CompletableFuture<Void>` that also counts the blocks visited
+(`done()`) out of the blocks in its box (`total()`). Futures complete on the server
+thread; cancelling one drops the work left, and `GeneratedMaps` clears the region
+afterwards. Within a cell, work runs in the order it was asked for, so a clear always
+finishes before the placement asked after it; work in different cells runs side by side.
+`close()` cancels every queued job.
 
-`TickCellWriter` is the simple implementation used now: one queue, worked through every
-tick up to a fixed budget of `DEFAULT_BLOCKS_PER_TICK` (32,768) blocks visited, written
-or not, through a `BlockAccess` that sets blocks without physics. At the default cell
-size a clear visits 3,686,400 blocks (about 113 ticks) and a four-team placement as
-many again, so a map takes roughly 11 seconds to be ready. It does not watch tick times
-and has no size limit for shared hosts; #160 replaces the fixed budget with one that
-shrinks when `StabilityGate` reports high tick times, adds the size limit and reports
-progress for #164.
+## Placement
+
+`BudgetedCellWriter` is the `CellWriter` on the server. It writes through a
+`BlockAccess` that sets blocks without physics.
+
+### Time budget
+
+Every server tick with work, the writer asks `PlacementBudget` how many nanoseconds it
+may use and measures its own work with `System.nanoTime` (a fake clock in tests). It
+works in slices of at most 1,024 blocks, each sized from the measured time per block so
+that it fits in what is left of the budget, and stops when no further block fits. The
+first slice ever, before anything is measured, is 16 blocks. Every block visited counts,
+written or not.
+
+The budget follows the same tick-time guard as enemy spawning. `TickTimeGuard` holds the
+guard state for both: it reads `Bukkit#getAverageTickTime` at most once per tick, with
+the `stability` thresholds and their hysteresis, and both the gate and `PlacementBudget`
+read it. There is one notion of a slow server, not two.
+
+| Guard | Placement budget |
+| :--- | :--- |
+| `NORMAL` | `stability.placement.budget-ms` (10 ms) |
+| `PAUSED` (above `pause-spawning-above-mspt`) | `slow-budget-ms` (1 ms; 0 pauses) |
+| `TIER_DROPPED` (above `drop-tier-above-mspt`) | `slow-budget-ms` |
+| Below `resume-below-mspt` again | Climbs back over `recovery-seconds` (10 s) |
+
+Once the guard lets go (`NORMAL`, or `RECOVERING` after a tier drop), the budget climbs
+in a straight line from the slow budget to the full one. A guard that holds back again
+during the climb drops the budget to the slow one, and the climb starts over. The guard
+lets go only below `resume-below-mspt`, so the budget does not flap around a threshold.
+
+The budget is shared by every slot cell, not given to each: four slots generating at
+once take no more server time per tick than one. At the defaults and the default cell, a
+clear and a four-team placement visit about 7.4 million blocks; at an assumed cost of
+half a microsecond per block that is about 3.7 s of server time, so about 18 s of 10 ms
+ticks for one slot and about 74 s when four generate together. The real cost per block
+depends on the host and is not measured here.
+
+### Fair turns between cells
+
+Each cell has its own queue. Cells with work take turns a slice at a time, so four slots
+generating at once all move on together and finish within a tick of each other. A turn
+the budget cuts short is finished first on the next tick, so the cell that happened to
+be last in a tick does not fall behind.
+
+### Size limit
+
+`stability.placement.max-map-size` (256; 32 to 4096) is the largest grid cell a
+generated map is sized for. In a larger `arena-grid.cell-size`,
+`GeneratedMaps.mapSize()` is `SideDimensions.forCell(max-map-size)`: the generator is
+asked for that smaller side, and the region a map is cleared and placed in is that map's
+span, centred in the cell.
+
+The limit can be lowered across a restart, and the world save keeps a map placed before
+it. So the sweeps when a cell is reserved and when the arena world reopens clear
+`GeneratedMaps.sweepRegion(cell)`, the region for the cell's full size whatever the
+limit, which holds every map any limit could have placed. Between matches only the map's
+own region is cleared, since the limit cannot change while a cell is in use. Progress
+counts only the map's own clear and placement, not a sweep.
+
+The limit caps the map's footprint rather than counting blocks per map, for three
+reasons:
+
+* The size of a map is fixed before it is generated: `SideDimensions.forCell` of the
+  cell size, with the height always 64. A cap on that input bounds every clear and every
+  placement up front, so there is nothing for a room to refuse or fall back from, and no
+  map is generated only to be thrown away.
+* The cost that matters most is the clear, which visits the whole region whatever the
+  map holds. A cap on blocks written would not shrink it; a smaller footprint does.
+* A size in grid-cell terms is what server owners already set with
+  `arena-grid.cell-size`, so the limit reads the same way.
+
+The default of 256 leaves the default cell unchanged (a 96 x 72 x 64 side, a 240-block
+map, about 3.7 million blocks to clear and as many to place for four teams) and caps
+larger cells, which without it reach a 480-block map with four times the blocks. A
+shared host can set 128 (a 48 x 36 side, a 120-block map, about 0.9 million blocks each
+way). The limit is restart-only, like the rest of `stability`, so a region never moves
+under a map in use; `GeneratedMaps.setMaxMapSize` refuses a change while any cell is in
+use.
+
+### Progress
+
+`GeneratedMaps.progress(name)` gives a `Progress(done, total)` for a map being prepared:
+the blocks the writer has visited clearing the region and then placing the map, out of
+both together. The placement's size is known before the search finishes (it is the
+layout box for the map size and team count), so the total never changes while the map is
+prepared, and `fraction()` only goes up. A placed map reports complete; a map with no
+cell, or whose last try failed, reports nothing until it tries again. It is what the
+room's boss bar (#164) is to show.

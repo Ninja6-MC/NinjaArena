@@ -2,7 +2,6 @@ package com.ninja6.ninjaarena.director;
 
 import com.ninja6.ninjaarena.match.MatchView;
 import java.util.Collection;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.function.DoubleSupplier;
 import java.util.function.IntSupplier;
@@ -20,7 +19,8 @@ import java.util.logging.Logger;
  * whichever matches they are for. A director held back by any of these tries again the next
  * second.
  *
- * <p><b>Tick-time guard.</b> Read at most once per server tick, when the gate is next asked.
+ * <p><b>Tick-time guard.</b> Read through a {@link TickTimeGuard}, at most once per server
+ * tick, which may be shared with other work that backs off when the server is slow.
  * Above {@link StabilitySettings#pauseAboveMspt()} spawning pauses; above
  * {@link StabilitySettings#dropTierAboveMspt()} the intensity also drops by
  * {@link StabilitySettings#intensityTier()}. Both hold until the average falls below
@@ -52,15 +52,12 @@ public final class StabilityGate implements SpawnGate {
     private final ToIntFunction<MatchView> aliveIn;
     private final Supplier<? extends Collection<? extends MatchView>> matches;
     private final IntSupplier currentTick;
-    private final DoubleSupplier averageTickMillis;
-    private final Logger logger;
+    private final TickTimeGuard tickTime;
 
     private boolean read;
     private int tick;
     private int spawnsThisTick;
     private Guard guard = Guard.NORMAL;
-    /** The server tick spawning resumed after a tier drop. */
-    private int recoveryStart;
 
     /**
      * @param aliveIn           enemies alive in a match; {@link #alive(MatchDirector)} of its director
@@ -72,12 +69,25 @@ public final class StabilityGate implements SpawnGate {
     public StabilityGate(StabilitySettings settings, ToIntFunction<MatchView> aliveIn,
             Supplier<? extends Collection<? extends MatchView>> matches, IntSupplier currentTick,
             DoubleSupplier averageTickMillis, Logger logger) {
+        this(settings, aliveIn, matches, currentTick,
+                new TickTimeGuard(settings, currentTick, averageTickMillis, logger));
+    }
+
+    /**
+     * A gate on a tick-time guard shared with other work.
+     *
+     * @param currentTick the server tick, the same the guard reads
+     * @param tickTime    the tick-time guard; read with its own thresholds, not those of
+     *                    {@code settings}
+     */
+    public StabilityGate(StabilitySettings settings, ToIntFunction<MatchView> aliveIn,
+            Supplier<? extends Collection<? extends MatchView>> matches, IntSupplier currentTick,
+            TickTimeGuard tickTime) {
         this.settings = Objects.requireNonNull(settings, "settings");
         this.aliveIn = Objects.requireNonNull(aliveIn, "aliveIn");
         this.matches = Objects.requireNonNull(matches, "matches");
         this.currentTick = Objects.requireNonNull(currentTick, "currentTick");
-        this.averageTickMillis = Objects.requireNonNull(averageTickMillis, "averageTickMillis");
-        this.logger = Objects.requireNonNull(logger, "logger");
+        this.tickTime = Objects.requireNonNull(tickTime, "tickTime");
     }
 
     /** The enemies of a director that are alive now. */
@@ -128,7 +138,7 @@ public final class StabilityGate implements SpawnGate {
         return guard;
     }
 
-    /** Starts a new server tick's spawn count and reads the tick time, once per tick. */
+    /** Starts a new server tick's spawn count and reads the tick-time guard, once per tick. */
     private void refresh() {
         int now = currentTick.getAsInt();
         if (read && now == tick) {
@@ -137,44 +147,6 @@ public final class StabilityGate implements SpawnGate {
         read = true;
         tick = now;
         spawnsThisTick = 0;
-        double mspt = averageTickMillis.getAsDouble();
-        if (!Double.isFinite(mspt)) {
-            if (guard == Guard.RECOVERING && recovered(now)) {
-                change(Guard.NORMAL, "Intensity is back to normal.");
-            }
-            return;
-        }
-        String at = "Average tick time is " + String.format(Locale.ROOT, "%.1f", mspt) + " ms; ";
-        boolean tierDown = guard == Guard.TIER_DROPPED || guard == Guard.RECOVERING;
-        if (mspt > settings.dropTierAboveMspt() || (mspt > settings.pauseAboveMspt() && tierDown)) {
-            change(Guard.TIER_DROPPED, at + "enemy spawning paused and intensity lowered one tier.");
-        } else if (mspt > settings.pauseAboveMspt()) {
-            change(Guard.PAUSED, at + "enemy spawning paused.");
-        } else if (mspt < settings.resumeBelowMspt() && guard == Guard.PAUSED) {
-            change(Guard.NORMAL, at + "enemy spawning resumed.");
-        } else if (mspt < settings.resumeBelowMspt() && guard == Guard.TIER_DROPPED) {
-            recoveryStart = now;
-            change(Guard.RECOVERING, at + "enemy spawning resumed; intensity stays one tier lower for "
-                    + settings.tierRecoverySeconds() + " s.");
-        }
-        if (guard == Guard.RECOVERING && recovered(now)) {
-            change(Guard.NORMAL, at + "intensity is back to normal.");
-        }
-    }
-
-    private boolean recovered(int now) {
-        return now - recoveryStart >= settings.tierRecoverySeconds() * TICKS_PER_SECOND;
-    }
-
-    private void change(Guard next, String message) {
-        if (next == guard) {
-            return;
-        }
-        if (next == Guard.NORMAL || next == Guard.RECOVERING) {
-            logger.info(message);
-        } else {
-            logger.warning(message);
-        }
-        guard = next;
+        guard = tickTime.read();
     }
 }
