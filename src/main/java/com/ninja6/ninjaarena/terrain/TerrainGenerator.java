@@ -23,6 +23,8 @@ package com.ninja6.ninjaarena.terrain;
  *   <li><b>Platforms.</b> Floating ellipses above the ground, more of them with
  *       difficulty.</li>
  *   <li><b>Kinds.</b> Each solid cell is labelled surface, cliff, soil or rock.</li>
+ *   <li><b>Hazards.</b> Gaps, low-ground rivers, ceiling lava and collapsing rims, each
+ *       on a new stream and kept outside both flat zones and their blends.</li>
  * </ol>
  * The spawn zone and the centre ledge are flat at the base level and untouched by ravines,
  * overhangs and platforms; the terrain eases into them over
@@ -55,6 +57,12 @@ public final class TerrainGenerator {
     private static final long STREAM_RAVINES = 4;
     private static final long STREAM_OVERHANGS = 5;
     private static final long STREAM_PLATFORMS = 6;
+
+    private static final long STREAM_FALLS = 7;
+    private static final long STREAM_RIVERS = 8;
+    private static final long STREAM_HANGING = 9;
+    private static final long STREAM_GAPS = 10;
+    private static final long STREAM_CRUMBLE = 11;
 
     private static final byte AIR = (byte) BlockKind.AIR.ordinal();
     private static final byte ROCK = (byte) BlockKind.ROCK.ordinal();
@@ -117,6 +125,7 @@ public final class TerrainGenerator {
             hollowOverhangs();
             placePlatforms();
             labelKinds();
+            placeHazards();
             return new TerrainModel(seed, difficulty, dimensions, themeFor(seed), base, base, cells);
         }
 
@@ -289,6 +298,130 @@ public final class TerrainGenerator {
                     }
                     if (z < dimensions.spawnDepth()) {
                         cells[column + columnTop] = spawnPad;
+                    }
+                }
+            }
+        }
+
+        /** Hazards read the original geometry; earlier passes and their streams stay intact. */
+        private void placeHazards() {
+            byte[] terrain = cells.clone();
+            cutGaps();
+            placeRivers(terrain);
+            placeCeilingLava(terrain);
+            placeCrumble(terrain);
+        }
+
+        /** Keep both blends clear too, leaving the spawn an unobstructed apron. */
+        private boolean hazardRow(int z) {
+            return z >= dimensions.spawnDepth() + dimensions.blendDepth()
+                    && z < length - dimensions.centreDepth() - dimensions.blendDepth();
+        }
+
+        private void cutGaps() {
+            SplitMix64 random = new SplitMix64(SplitMix64.derive(seed, STREAM_GAPS));
+            int attempts = Math.max(1, width * length / 2304) * difficulty;
+            for (int i = 0; i < attempts; i++) {
+                // Four draws per attempt, including ones clipped by a protected row.
+                int startX = random.nextInt(width);
+                int startZ = random.nextInt(length);
+                int span = 3 + random.nextInt(3 + difficulty);
+                int breadth = 1 + random.nextInt(1 + difficulty / 2);
+                for (int z = startZ; z < Math.min(length, startZ + breadth); z++) {
+                    if (!hazardRow(z)) {
+                        continue;
+                    }
+                    for (int x = startX; x < Math.min(width, startX + span); x++) {
+                        int column = column(x, z);
+                        int ground = top[z * width + x];
+                        int bottom = Math.max(FLOOR, ground - 3 - difficulty);
+                        for (int y = bottom + 1; y <= ground; y++) {
+                            cells[column + y] = AIR;
+                        }
+                        while (bottom > FLOOR && cells[column + bottom] == AIR) {
+                            bottom--;
+                        }
+                        cells[column + bottom] = (byte) BlockKind.SURFACE.ordinal();
+                    }
+                }
+            }
+        }
+
+        /** Narrow connected runs, following low ground without climbing steep banks. */
+        private void placeRivers(byte[] terrain) {
+            SplitMix64 random = new SplitMix64(SplitMix64.derive(seed, STREAM_RIVERS));
+            for (int z = 0; z < length; z++) {
+                for (int x = 0; x < width; x++) {
+                    int roll = random.nextInt(1000);
+                    if (!hazardRow(z) || roll >= 2 * difficulty
+                            || top[z * width + x] > base - 3) {
+                        continue;
+                    }
+                    int previous = top[z * width + x];
+                    for (int step = 0; step < 2 + 2 * difficulty && z + step < length; step++) {
+                        int nz = z + step;
+                        int y = top[nz * width + x];
+                        if (!hazardRow(nz) || y > base - 3 || Math.abs(y - previous) > 1) {
+                            break;
+                        }
+                        int index = column(x, nz) + y;
+                        if (terrain[index] == BlockKind.SURFACE.ordinal() && cells[index] == terrain[index]
+                                && cells[index + 1] == AIR) {
+                            cells[index + 1] = (byte) BlockKind.LAVA.ordinal();
+                        }
+                        previous = y;
+                    }
+                }
+            }
+        }
+
+        private void placeCeilingLava(byte[] terrain) {
+            SplitMix64 falls = new SplitMix64(SplitMix64.derive(seed, STREAM_FALLS));
+            SplitMix64 hanging = new SplitMix64(SplitMix64.derive(seed, STREAM_HANGING));
+            for (int z = 0; z < length; z++) {
+                for (int x = 0; x < width; x++) {
+                    int column = column(x, z);
+                    for (int y = FLOOR + 3; y < height - 2; y++) {
+                        int fallRoll = falls.nextInt(1000);
+                        int hangingRoll = hanging.nextInt(1000);
+                        int index = column + y;
+                        if (!hazardRow(z) || terrain[index] != AIR
+                                || !BlockKind.ofOrdinal(terrain[index + 1]).solid()
+                                || terrain[index - 1] != AIR || terrain[index - 2] != AIR) {
+                            continue;
+                        }
+                        if (hangingRoll < 8 * difficulty && cells[index + 1] == terrain[index + 1]
+                                && BlockKind.ofOrdinal(cells[index + 2]).solid()) {
+                            cells[index + 1] = (byte) BlockKind.HANGING_LAVA.ordinal();
+                        } else if (fallRoll < 10 * difficulty && cells[index] == AIR
+                                && cells[index + 1] == terrain[index + 1]) {
+                            cells[index] = (byte) BlockKind.LAVA_SOURCE.ordinal();
+                            for (int below = y - 1; below >= FLOOR && cells[column + below] == AIR; below--) {
+                                cells[column + below] = (byte) BlockKind.LAVA.ordinal();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private void placeCrumble(byte[] terrain) {
+            SplitMix64 random = new SplitMix64(SplitMix64.derive(seed, STREAM_CRUMBLE));
+            for (int z = 0; z < length; z++) {
+                for (int x = 0; x < width; x++) {
+                    int column = column(x, z);
+                    for (int y = FLOOR + 1; y < height - 1; y++) {
+                        int roll = random.nextInt(100);
+                        int index = column + y;
+                        if (!hazardRow(z) || roll >= 4 * difficulty || cells[index] != terrain[index]
+                                || terrain[index + 1] != AIR || !openSide(x, y - 1, z)) {
+                            continue;
+                        }
+                        if (terrain[index] == PLATFORM) {
+                            cells[index] = (byte) BlockKind.CRUMBLE_PLATFORM.ordinal();
+                        } else if (terrain[index] == BlockKind.SURFACE.ordinal()) {
+                            cells[index] = (byte) BlockKind.CRUMBLE.ordinal();
+                        }
                     }
                 }
             }

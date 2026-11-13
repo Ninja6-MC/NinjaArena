@@ -22,6 +22,9 @@ Java 25, and does not run on Folia.
   leave as before; a match that ends first lets them go to the lobby on their next join.
   The grace applies to new disconnects on reload. New `PlayerRejoinMatchEvent`, a
   `MatchUpdate.Cause.DISCONNECTED` elimination cause, and `MatchView#isDisconnected`.
+- Internal: seeded lava falls, low-ground rivers, hanging lava, gaps and collapsing
+  ground and platform rims in the terrain model, increasing with difficulty and kept
+  outside spawn, the centre ledge and their blends. Placement and activation come later.
 - Internal: a full-map view with mirrored sides for 2 teams, quarter-turns for 4 teams,
   a flat centre and frame helpers for later path checks and placement.
 - Internal: a seeded terrain generator that builds one team's side of a generated map

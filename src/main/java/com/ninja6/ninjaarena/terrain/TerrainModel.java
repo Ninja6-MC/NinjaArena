@@ -91,13 +91,15 @@ public final class TerrainModel {
 
     /**
      * The highest terrain cell in a column, ignoring floating platforms: the top of the
-     * ground, which may roof an overhang. {@code -1} if the column is empty.
+     * ground, which may roof an overhang. Ignores lava and collapsing platform rims.
+     * {@code -1} if the column has no solid ground.
      */
     public int terrainTopY(int x, int z) {
         int base = index(x, 0, z);
         for (int y = dimensions.height() - 1; y >= 0; y--) {
             byte kind = cells[base + y];
-            if (kind != BlockKind.AIR.ordinal() && kind != BlockKind.PLATFORM.ordinal()) {
+            if (BlockKind.ofOrdinal(kind).solid() && kind != BlockKind.PLATFORM.ordinal()
+                    && kind != BlockKind.CRUMBLE_PLATFORM.ordinal()) {
                 return y;
             }
         }
