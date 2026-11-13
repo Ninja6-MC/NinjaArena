@@ -367,7 +367,8 @@ Hosts with `ninjaarena.map.change` control the room's seed:
   until changed, at `maps.default.difficulty` unless given. Under `distinct`, a seed
   another slot has is refused with a message; it is never silently replaced.
 - `/narena map next` asks for the next rotation seed (a new random one in `random`
-  mode), and `/narena map reroll` for a new random seed. Both end a seed set by hand.
+  mode), and `/narena map reroll` for a new random seed. Both end a seed set by hand,
+  except a reroll under `shared` with `static` mode is refused and keeps that seed.
 
 In the lobby these generate the room's map again at once. While the room plays, the map
 being played never changes: they apply at the next generation, which is the next shop
