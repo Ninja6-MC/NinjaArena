@@ -45,9 +45,7 @@ public final class ArenaValidator {
                     "cell", arena.cell().describe(), "cell-bounds", cell.describe()));
         }
 
-        if (arena.waitingRoom() == null) {
-            missing.add(text("arena.problem.no-waiting-room"));
-        } else if (bounds != null && !bounds.contains(arena.waitingRoom())) {
+        if (arena.waitingRoom() != null && bounds != null && !bounds.contains(arena.waitingRoom())) {
             problems.add(text("arena.problem.waiting-room-outside"));
         }
 

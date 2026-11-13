@@ -41,6 +41,23 @@ class ArenaStoreTest {
     }
 
     @Test
+    void waitingRoomIsOptionalAndRoundTripsWithoutChangingTheFormat() throws Exception {
+        Arena original = Arenas.complete("dojo");
+        for (Arena arena : List.of(original, original.withWaitingRoom(null))) {
+            String encoded = ArenaCodec.encode(List.of(arena));
+            assertTrue(encoded.contains("format: 1"));
+            assertEquals(arena.waitingRoom() != null, encoded.contains("waiting-room:"));
+            assertEquals(List.of(arena), ArenaCodec.decode(encoded));
+            assertEquals(encoded, ArenaCodec.encode(ArenaCodec.decode(encoded)));
+            Files.writeString(file(), encoded);
+            List<Arena> loaded = new ArenaStore(file()).load();
+            assertEquals(List.of(arena), loaded);
+            new ArenaStore(file()).save(loaded);
+            assertEquals(encoded, Files.readString(file()));
+        }
+    }
+
+    @Test
     void pickableIsOptionalAndRoundTripsWithoutChangingTheFormat() throws Exception {
         Arena original = Arenas.complete("dojo");
         String legacy = ArenaCodec.encode(List.of(original));

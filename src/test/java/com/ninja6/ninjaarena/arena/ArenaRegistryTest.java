@@ -198,7 +198,7 @@ class ArenaRegistryTest {
     void incompleteArenaIsNotAvailable() throws Exception {
         registry.create("dojo", null);
         List<String> problems = registry.finishEdit("dojo");
-        assertEquals(4, problems.size());
+        assertEquals(3, problems.size());
         assertFalse(registry.isAvailable("dojo"));
         assertThrows(ArenaException.class, () -> registry.hold("dojo"));
         assertEquals(List.of(), tickets);

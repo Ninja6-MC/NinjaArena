@@ -53,8 +53,9 @@ in the order you need it:
    relative to where you stand.
 4. Stand at each team base and run `/narena arena setteamspawn dojo 1`, then `2`, up to
    four teams. Two are required.
-5. Stand where players wait before the match and run `/narena arena setwaitingroom dojo`.
-   Players now wait in the lobby, but an arena still needs the point to be ready.
+5. Optionally, stand where `/narena arena tp dojo` should land you and run
+   `/narena arena setwaitingroom dojo`. This only sets the teleport landing point;
+   players wait in the lobby, and the arena is ready without this point.
 6. Stand where enemies should appear and run `/narena arena addenemyspawn dojo`. At least
    one is required; enemies spawn there during rounds.
 7. `/narena arena edit dojo off` saves the arena and leaves edit mode. If anything is
@@ -535,11 +536,11 @@ transparent light and dark, and monochrome variants live beside the master.
 Arenas are built in the void world `ninjaarena_arenas`. `/narena arena create <name>` puts
 the new arena in edit mode in an empty grid cell; `/narena arena tp <name>` takes you there
 and reports the cell and its bounds. Switch to creative or turn on flight before building:
-until a waiting room is set, `tp` lands you over the cell centre with nothing below, and
-turns flight on for survival and adventure players once the teleport is done (after
-plugins such as EssentialsX have reset flight for the world change). The arena world
-keeps inventories on death, so a fall while building loses no items; match deaths are
-handled by the match as described below.
+without an optional landing point set by `/narena arena setwaitingroom <name>`, `tp`
+lands you over the cell centre with nothing below and turns flight on for survival and
+adventure players once the teleport is done (after plugins such as EssentialsX have reset
+flight for the world change). The arena world keeps inventories on death, so a fall while
+building loses no items; match deaths are handled by the match as described below.
 
 When fully idle, the arena world unloads without saving. Its next use reopens it and
 restores the saved arena copies before entry; active edits, players, matches, tickets
