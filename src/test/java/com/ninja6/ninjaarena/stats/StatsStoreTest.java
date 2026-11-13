@@ -149,6 +149,18 @@ class StatsStoreTest {
     }
 
     @Test
+    void aRecordedMatchOnAGeneratedMapIsFoundByItsSeedInTheCurrentSeason() throws Exception {
+        StatsStore store = store(faults());
+        UUID id = UUID.randomUUID();
+        store.record(Records.played(id, T0, List.of(MatchRecord.Played.generated(42, 4, 1, 3)),
+                player(ALICE, "Alice", 1, 3, 0, 0, 0, 0)));
+        List<MatchOnSeed> found = get(store.matchesOnSeed(42, 10));
+        assertEquals(List.of(new MatchOnSeed(id, T0, 1, 4, 1, 3, 2, List.of(1), "COMPLETED")), found);
+        assertEquals(List.of(), get(store.matchesOnSeed(43, 10)));
+        assertInstanceOf(IllegalArgumentException.class, failure(store.matchesOnSeed(42, 0)));
+    }
+
+    @Test
     void matchesWaitingTogetherAreWrittenInOneTransaction() throws Exception {
         Faults faults = faults();
         CountDownLatch gate = new CountDownLatch(1);

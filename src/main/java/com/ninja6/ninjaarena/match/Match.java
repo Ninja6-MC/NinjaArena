@@ -16,6 +16,7 @@ import com.ninja6.ninjaarena.match.MatchUpdate.PlayerRejoined;
 import com.ninja6.ninjaarena.match.MatchUpdate.QuickStart;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundEnded;
 import com.ninja6.ninjaarena.match.MatchUpdate.RoundStarted;
+import com.ninja6.ninjaarena.arena.MapSeed;
 import com.ninja6.ninjaarena.event.EventSettings.Bonus;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,6 +30,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
  * One match's round loop: phases, timers, who is alive, round results and the match result.
@@ -112,6 +114,8 @@ public final class Match implements MatchView {
     private final Set<UUID> ready = new HashSet<>();
     private boolean waitingForMap;
     private BooleanSupplier mapReady = () -> true;
+    private Supplier<Optional<MapSeed>> mapSeed = Optional::empty;
+    private final List<PlayedMap> maps = new ArrayList<>();
 
     /**
      * @param arena     the arena's name
@@ -179,6 +183,14 @@ public final class Match implements MatchView {
      */
     void setMapReady(BooleanSupplier mapReady) {
         this.mapReady = Objects.requireNonNull(mapReady, "mapReady");
+    }
+
+    /**
+     * What the map is generated from, asked as each round starts, so {@link #maps()} tells
+     * every map played. The default is a hand-built arena.
+     */
+    void setMapSeed(Supplier<Optional<MapSeed>> mapSeed) {
+        this.mapSeed = Objects.requireNonNull(mapSeed, "mapSeed");
     }
 
     /** Advances the match by one second. */
@@ -432,7 +444,18 @@ public final class Match implements MatchView {
         roundElapsed = 0;
         reachedOverrun = false;
         setPhase(MatchPhase.PREP, settings.prepSeconds(), updates);
+        playedOn(mapSeed.get().orElse(null));
         updates.add(new RoundStarted(round, isExtraRound()));
+    }
+
+    /** Counts the round for the map it starts on: the last one, unless the map changed. */
+    private void playedOn(MapSeed seed) {
+        if (!maps.isEmpty() && Objects.equals(maps.getLast().seed(), seed)) {
+            PlayedMap last = maps.removeLast();
+            maps.add(new PlayedMap(last.arena(), last.seed(), last.firstRound(), last.rounds() + 1));
+        } else {
+            maps.add(new PlayedMap(arena, seed, round, 1));
+        }
     }
 
     private void checkRound(List<MatchUpdate> updates) {
@@ -685,6 +708,11 @@ public final class Match implements MatchView {
     @Override
     public List<RoundResult> results() {
         return List.copyOf(results);
+    }
+
+    @Override
+    public List<PlayedMap> maps() {
+        return List.copyOf(maps);
     }
 
     @Override

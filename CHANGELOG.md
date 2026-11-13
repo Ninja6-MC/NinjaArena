@@ -13,6 +13,20 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Each match is stored with its map. Stats schema version 3 adds a `matches` table (with
+  the `stats.table-prefix`) holding, per map a match was played on, the match id, when
+  it ended, the season, the map, the seed and difficulty, the rounds played on it, the
+  team count, the winners and why it ended. A hand-built arena is stored by name with no
+  seed; a generated map as `*generated` with the seed it was accepted from, never by its
+  slot name, so map stats are keyed by seed (indexed on seed and difficulty). A match
+  whose map is generated again each round has a row per map. Rows are written with the
+  player stats, in the same transaction on the stats thread. The match result now shows
+  each generated map's seed and difficulty with the command to play it again (new texts
+  `match.map-seed` and `match.map-seed-rounds`). The migration from version 2 runs on
+  the first start, on SQLite and MySQL, and keeps every existing row; after it, an older
+  plugin build refuses the database, so keep a backup to downgrade. Internal:
+  `MatchView#maps`, `MapSource#seed`, `GeneratedMaps#seed` and
+  `StatsStore#matchesOnSeed`.
 - Seed modes and map control for generated maps. The new `maps` section of `config.yml`
   sets, for every slot cell (`maps.default`) or one (`maps.slots.<n>`), a `mode`
   (`static`, `rotation` or `random`, the default), `seed`, `seeds`, `rotate-every` and

@@ -1,9 +1,12 @@
 package com.ninja6.ninjaarena.stats;
 
+import com.ninja6.ninjaarena.arena.Arena;
+import com.ninja6.ninjaarena.arena.MapSeed;
 import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchResult;
 import com.ninja6.ninjaarena.match.MatchUpdate.Cause;
 import com.ninja6.ninjaarena.match.MatchView;
+import com.ninja6.ninjaarena.match.PlayedMap;
 import com.ninja6.ninjaarena.match.RoundResult;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
@@ -15,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -147,8 +151,34 @@ public final class StatsTracker implements Listener {
             record.computeIfAbsent(entry.getKey(), id -> stats(id, entry.getValue(), false));
         }
         if (!record.isEmpty()) {
-            sink.accept(new MatchRecord(clock.get(), new ArrayList<>(record.values())));
+            sink.accept(new MatchRecord(clock.get(), new ArrayList<>(record.values()), details(match, result)));
         }
+    }
+
+    /**
+     * The match's own row. A generated map is kept by its seed and difficulty, never by its
+     * slot name, which names another map in the next match.
+     */
+    static MatchRecord.Details details(MatchView match, MatchResult result) {
+        List<MatchRecord.Played> maps = new ArrayList<>();
+        for (PlayedMap played : match.maps()) {
+            maps.add(played(played.arena(), played.seed(), played.firstRound(), played.rounds()));
+        }
+        if (maps.isEmpty()) {
+            // Ended before its first round: it counts as played on its map, with no rounds of its own.
+            maps.add(played(match.arena(), null, 1, 1));
+        }
+        return new MatchRecord.Details(result.id(), result.reason().name(), match.teamCount(), result.winners(),
+                maps);
+    }
+
+    private static MatchRecord.Played played(String arena, MapSeed seed, int firstRound, int rounds) {
+        if (seed != null) {
+            return MatchRecord.Played.generated(seed.seed(), seed.difficulty(), firstRound, rounds);
+        }
+        String name = Arena.normalizeName(arena);
+        return Arena.isValidName(name) ? MatchRecord.Played.handBuilt(name, firstRound, rounds)
+                : new MatchRecord.Played(MatchRecord.GENERATED, null, null, firstRound, rounds);
     }
 
     private PlayerStats stats(UUID id, Counts counts, boolean won) {

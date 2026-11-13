@@ -7,8 +7,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,11 +25,14 @@ import java.util.UUID;
  * <p>Rows of {@code player_stats} with season 0 hold the all-time totals; other rows hold a
  * season's, keyed by {@link Season#id()}. Every write adds to the stored values in the same
  * statement, so servers sharing one MySQL database never overwrite each other's matches.
+ *
+ * <p>{@code matches} has a row per map each match was played on (schema version 3): a
+ * hand-built arena by name, a generated map by seed and difficulty, never by its slot name.
  */
 final class StatsDatabase implements AutoCloseable {
 
     /** The schema version this build writes. Each version's statements live in {@link Dialect}. */
-    static final int SCHEMA_VERSION = 2;
+    static final int SCHEMA_VERSION = 3;
     static final int ALL_TIME = 0;
     /** Longest stored player name; longer names, such as some proxy-prefixed ones, are cut. */
     static final int NAME_LENGTH = 32;
@@ -214,7 +219,8 @@ final class StatsDatabase implements AutoCloseable {
 
     /**
      * Adds the matches to the all-time totals and to the season current at the time of the
-     * write, in one transaction. A player in several matches is written once.
+     * write, and stores each match's own rows, in one transaction. A player in several
+     * matches is written once; a match row already stored is kept as it is.
      *
      * @throws SQLException with nothing written
      */
@@ -229,7 +235,8 @@ final class StatsDatabase implements AutoCloseable {
                 }
             }
         }
-        if (merged.isEmpty()) {
+        List<MatchRecord> details = matches.stream().filter(match -> match.match() != null).toList();
+        if (merged.isEmpty() && details.isEmpty()) {
             return;
         }
         transaction(() -> {
@@ -257,8 +264,68 @@ final class StatsDatabase implements AutoCloseable {
                     names.executeBatch();
                 }
             }
+            if (!details.isEmpty()) {
+                insertMatches(details, season.map(Season::id).orElse(null));
+            }
             return null;
         });
+    }
+
+    private void insertMatches(List<MatchRecord> matches, Integer season) throws SQLException {
+        String sql = "INSERT INTO " + prefix + "matches (match_id, first_round, rounds, ended_at, season, map,"
+                + " seed, difficulty, teams, winners, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                + dialect.keepExisting("match_id, first_round", "match_id");
+        try (PreparedStatement insert = connection.prepareStatement(sql)) {
+            for (MatchRecord match : matches) {
+                MatchRecord.Details details = match.match();
+                for (MatchRecord.Played map : details.maps()) {
+                    insert.setString(1, details.id().toString());
+                    insert.setInt(2, map.firstRound());
+                    insert.setInt(3, map.rounds());
+                    insert.setLong(4, match.endedAt().toEpochMilli());
+                    insert.setObject(5, season, Types.INTEGER);
+                    insert.setString(6, map.map());
+                    insert.setObject(7, map.seed(), Types.BIGINT);
+                    insert.setObject(8, map.difficulty(), Types.INTEGER);
+                    insert.setInt(9, details.teams());
+                    insert.setString(10, details.winnersText());
+                    insert.setString(11, details.reason());
+                    insert.addBatch();
+                }
+            }
+            insert.executeBatch();
+        }
+    }
+
+    /**
+     * The matches played on a generated map from {@code seed}, at any difficulty, the latest
+     * first: one entry per map row, so a match that played the seed in two stretches of
+     * rounds has two.
+     */
+    List<MatchOnSeed> matchesOnSeed(long seed, int limit) throws SQLException {
+        if (limit < 1) {
+            throw new IllegalArgumentException("limit must be at least 1");
+        }
+        try (PreparedStatement query = connection.prepareStatement("SELECT match_id, ended_at, season, difficulty,"
+                + " first_round, rounds, teams, winners, reason FROM " + prefix + "matches WHERE seed = ?"
+                + " ORDER BY ended_at DESC, match_id, first_round LIMIT ?")) {
+            query.setLong(1, seed);
+            query.setInt(2, limit);
+            List<MatchOnSeed> found = new ArrayList<>();
+            try (ResultSet rows = query.executeQuery()) {
+                while (rows.next()) {
+                    int season = rows.getInt(3);
+                    Integer seasonId = rows.wasNull() ? null : season;
+                    String winners = rows.getString(8);
+                    List<Integer> teams = winners.isEmpty() ? List.of()
+                            : Arrays.stream(winners.split(",")).map(Integer::valueOf).toList();
+                    found.add(new MatchOnSeed(UUID.fromString(rows.getString(1)),
+                            Instant.ofEpochMilli(rows.getLong(2)), seasonId, rows.getInt(4), rows.getInt(5),
+                            rows.getInt(6), rows.getInt(7), teams, rows.getString(9)));
+                }
+            }
+            return List.copyOf(found);
+        }
     }
 
     private static void add(PreparedStatement upsert, PlayerStats delta, int season) throws SQLException {

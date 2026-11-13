@@ -1021,6 +1021,15 @@ that several servers share. Changing `stats.season` archives the current season;
 stats are kept. A missing driver or an unreachable database never stops a match:
 finished matches stay queued and are retried. Configuration, the schema and the read
 API for leaderboards and rewards are in [`docs/player-stats.md`](docs/player-stats.md).
+
+Each match is stored too, with when it ended, its season, team count, winners and map
+(stats schema version 3). A hand-built arena is stored by name; a generated map by the
+seed it was made from and its difficulty, never by its slot name, so map stats are keyed
+by seed. A match whose map was generated again between rounds has a row per map. The
+match result shows each generated map's seed and difficulty, to play it again with
+`/narena map set generated <seed> <difficulty>`. The schema is migrated in place on the
+first start and the existing stats are kept; after that an older plugin build refuses
+the database, so downgrading needs a backup taken before the upgrade.
 For weekly events and admin commands, see [Scheduled arena events](docs/arena-events.md).
 
 ## Licence

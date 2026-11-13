@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.map;
 import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
+import com.ninja6.ninjaarena.arena.MapSeed;
 import com.ninja6.ninjaarena.arena.MapSource;
 import java.util.Objects;
 import java.util.Optional;
@@ -66,5 +67,10 @@ public final class ArenaMaps implements MapSource {
         } else {
             handBuilt.release(name);
         }
+    }
+
+    @Override
+    public Optional<MapSeed> seed(String name) {
+        return isGenerated(name) ? generated.seed(name) : Optional.empty();
     }
 }

@@ -38,4 +38,12 @@ public interface MapSource {
 
     /** Ends a {@link #hold}. Does nothing if the map is not held. */
     void release(String name);
+
+    /**
+     * What the placed map called {@code name} was generated from; empty for a hand-built
+     * arena and for a name with no map placed.
+     */
+    default Optional<MapSeed> seed(String name) {
+        return Optional.empty();
+    }
 }

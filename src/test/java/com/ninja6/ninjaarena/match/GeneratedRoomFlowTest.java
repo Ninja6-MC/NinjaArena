@@ -14,6 +14,7 @@ import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.arena.MapSeed;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.director.MobSpawner;
 import com.ninja6.ninjaarena.director.ShadowStalker;
@@ -24,6 +25,7 @@ import com.ninja6.ninjaarena.map.BudgetedCellWriter;
 import com.ninja6.ninjaarena.map.FakeBlocks;
 import com.ninja6.ninjaarena.map.FakeWriters;
 import com.ninja6.ninjaarena.map.GeneratedMaps;
+import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
@@ -37,6 +39,8 @@ import com.ninja6.ninjaarena.snapshot.SnapshotService;
 import com.ninja6.ninjaarena.snapshot.SnapshotStore;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.spectate.Spectators;
+import com.ninja6.ninjaarena.stats.MatchRecord;
+import com.ninja6.ninjaarena.stats.StatsTracker;
 import com.ninja6.ninjaarena.terrain.ArenaLayout;
 import com.ninja6.ninjaarena.terrain.BlockKind;
 import com.ninja6.ninjaarena.terrain.ChallengeMinimums;
@@ -51,6 +55,7 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -298,6 +303,18 @@ class GeneratedRoomFlowTest extends MatchFixture {
         GridCell cell = map.cell();
         playToTheEnd(name);
         assertFalse(room.isPlaying());
+        // The result says what to play the map again from, and stats keep it by seed.
+        int rounds = match.results().size();
+        assertEquals(List.of(new PlayedMap(name, new MapSeed(42, 1), 1, rounds)), match.maps());
+        assertTrue(messages(BOB).contains("Map: seed 42 at difficulty 1. Play it again with /narena map set"
+                + " generated 42 1."), String.valueOf(messages(BOB)));
+        List<MatchRecord> records = new ArrayList<>();
+        new StatsTracker(records::add, plugin.getServer()::getPlayer, Instant::now)
+                .onMatchEnd(events(MatchEndEvent.class).getLast());
+        MatchRecord.Details details = records.getFirst().match();
+        assertEquals(match.result().orElseThrow().id(), details.id());
+        assertEquals(List.of(MatchRecord.Played.generated(42, 1, 1, rounds)), details.maps());
+        assertFalse(details.maps().getFirst().map().contains(name), "never the slot name");
         // Reset by clearing the cell and generating the map again, in the other free cell.
         assertTrue(generated.inUse().contains(cell), "the played cell is being cleared");
         drain();

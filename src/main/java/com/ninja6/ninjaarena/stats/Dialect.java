@@ -15,12 +15,17 @@ enum Dialect {
 
     /** Stats columns in the order {@link StatsDatabase} binds them. */
     static final List<Stat> COLUMNS = List.of(Stat.values());
+    /** Longest stored map name: a hand-built arena's name or {@link MatchRecord#GENERATED}. */
+    static final int MAP_LENGTH = 32;
+    /** Longest stored list of winning teams. */
+    static final int WINNERS_LENGTH = 32;
 
     /** The statements of one schema version, run in order. */
     List<String> migration(int version, String prefix) {
         return switch (version) {
             case 1 -> this == SQLITE ? sqliteV1(prefix) : mysqlV1(prefix);
             case 2 -> rewards(prefix);
+            case 3 -> matches(prefix);
             default -> throw new IllegalArgumentException("unknown schema version " + version);
         };
     }
@@ -67,6 +72,25 @@ enum Dialect {
                         + " spent BIGINT NOT NULL, PRIMARY KEY (player, day_id))" + suffix,
                 "CREATE TABLE IF NOT EXISTS " + p + "payout_matches (player CHAR(36) NOT NULL, match_id CHAR(36)"
                         + " NOT NULL, PRIMARY KEY (player, match_id))" + suffix);
+    }
+
+    /**
+     * Version 3: one row per map a match was played on, so a match on a map generated again
+     * between rounds has a row for each map, and every seed played can be looked up. A
+     * generated map is stored by its seed, with {@link MatchRecord#GENERATED} as its name.
+     */
+    private List<String> matches(String p) {
+        String columns = "match_id CHAR(36) NOT NULL, first_round INT NOT NULL, rounds INT NOT NULL,"
+                + " ended_at BIGINT NOT NULL, season INT, map VARCHAR(" + MAP_LENGTH + ") NOT NULL, seed BIGINT,"
+                + " difficulty INT, teams INT NOT NULL, winners VARCHAR(" + WINNERS_LENGTH + ") NOT NULL,"
+                + " reason VARCHAR(" + MatchRecord.REASON_LENGTH + ") NOT NULL, PRIMARY KEY (match_id, first_round)";
+        if (this == MYSQL) {
+            return List.of("CREATE TABLE IF NOT EXISTS " + p + "matches (" + columns + ", INDEX " + p
+                    + "matches_seed (seed, difficulty))"
+                    + " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
+        return List.of("CREATE TABLE IF NOT EXISTS " + p + "matches (" + columns + ")",
+                "CREATE INDEX IF NOT EXISTS " + p + "matches_seed ON " + p + "matches (seed, difficulty)");
     }
 
     String keepExisting(String keys, String firstKey) {

@@ -381,6 +381,7 @@ public final class MatchService {
         try {
             Match match = new Match(name, online, settings, standings, eventBonus.apply(name), shopSettings);
             match.setMapReady(() -> mapReady.test(match));
+            match.setMapSeed(() -> arenas.seed(name));
             running = new Running(match, arena.get().teamSpawns());
             matches.put(name, running);
             for (UUID playerId : everyone) {
@@ -986,6 +987,18 @@ public final class MatchService {
         };
         if (headline != null) {
             broadcast(running, headline);
+            announceSeeds(running);
+        }
+    }
+
+    /** The seed and difficulty of each generated map played, so players can play it again. */
+    private void announceSeeds(Running running) {
+        List<PlayedMap> played = running.match().maps();
+        for (PlayedMap map : played) {
+            map.generated().ifPresent(seed -> broadcast(running, played.size() == 1
+                    ? msg("match.map-seed", "seed", seed.seed(), "difficulty", seed.difficulty())
+                    : msg("match.map-seed-rounds", "seed", seed.seed(), "difficulty", seed.difficulty(),
+                            "from", map.firstRound(), "to", map.lastRound())));
         }
     }
 
