@@ -156,6 +156,8 @@ Java 25, and does not run on Folia.
   rejecting `config.yml` or `kits.yml` stay in English.
 
 ### Changed
+- Arena waiting-room points are optional: a ready arena only needs bounds, two to four
+  team spawns and an enemy spawn. `setwaitingroom` still sets where `arena tp` lands.
 - No match starts by itself: waiting rooms, their countdown and the shared hub are
   replaced by rooms, and every match is a room's, started by its host or an admin, and
   holds an arena slot lease. A room that closes while its match runs keeps the lease

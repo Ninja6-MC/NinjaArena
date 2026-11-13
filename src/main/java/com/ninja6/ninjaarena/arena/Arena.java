@@ -9,13 +9,14 @@ import java.util.regex.Pattern;
 
 /**
  * A registered arena: the grid cell it is built in, its bounds inside that cell, the
- * waiting room, one spawn per team and the spawn points the enemy director picks from.
+ * optional teleport landing point, one spawn per team and the spawn points the enemy
+ * director picks from.
  * Instances are immutable; the {@code with} methods return a changed copy. Whether a
  * definition is complete enough for a match is decided by {@link ArenaValidator}, not here,
  * so an arena can be saved half built.
  *
  * @param bounds      {@code null} until set
- * @param waitingRoom {@code null} until set
+ * @param waitingRoom optional teleport landing point; {@code null} until set
  * @param teamSpawns  team 1 first; at most {@link #MAX_TEAMS}
  */
 public record Arena(

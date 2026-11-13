@@ -278,7 +278,6 @@ class NinjaArenaCommandTest {
         CommandSender sender = console(true);
         run(sender, "arena create dojo 0 0");
         run(sender, "arena setbounds dojo 10 60 10 90 100 90");
-        run(sender, "arena setwaitingroom dojo 50.5 64 50.5");
         run(sender, "arena setteamspawn dojo 1 20.5 64 20.5 -90 0");
         run(sender, "arena setteamspawn dojo 2 80.5 64 80.5");
         run(sender, "arena addenemyspawn dojo 50.5 64 20.5");
@@ -291,6 +290,10 @@ class NinjaArenaCommandTest {
         assertEquals(new ArenaBounds(10, 60, 10, 90, 100, 90), arena.bounds());
         assertEquals(new ArenaPoint(20.5, 64, 20.5, -90, 0), arena.teamSpawns().get(0));
         assertTrue(registry.isAvailable("dojo"));
+        assertEquals(null, arena.waitingRoom());
+        messages.clear();
+        run(sender, "arena info dojo");
+        assertTrue(messages.contains("Waiting room: not set"), messages.toString());
     }
 
     @Test
@@ -302,7 +305,6 @@ class NinjaArenaCommandTest {
         run(sender, "arena edit dojo off");
 
         assertEquals(List.of("Arena dojo saved and left edit mode, but it cannot host a match yet:",
-                "The waiting room is not set.",
                 "Needs 2 to 4 team spawns, has 0.",
                 "Needs at least one enemy spawn point: enemies spawn there during rounds.",
                 "Turn edit mode back on with /narena arena edit dojo on to fix them."), messages);
@@ -504,6 +506,27 @@ class NinjaArenaCommandTest {
         assertEquals(List.of("help", "leave", "textures", "intro", "accept", "room", "map", "shop"),
                 command.onTabComplete(player, null, "narena", new String[] {""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"arena", ""}));
+    }
+
+    @Test
+    void teleportToASetWaitingRoomKeepsItsPositionAndFacingWithoutGrantingFlight() throws Exception {
+        registry.create("dojo", new GridCell(0, 0));
+        ArenaPoint point = new ArenaPoint(50.5, 72, 60.5, 90, 15);
+        registry.update("dojo", arena -> arena.withWaitingRoom(point));
+        List<Location> targets = new ArrayList<>();
+        Player admin = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "hasPermission" -> NinjaArenaCommand.ADMIN.equals(args[0]);
+                    case "sendMessage" -> null;
+                    case "getUniqueId" -> java.util.UUID.nameUUIDFromBytes(new byte[] {4});
+                    case "teleportAsync" -> {
+                        targets.add((Location) args[0]);
+                        yield CompletableFuture.completedFuture(true);
+                    }
+                    default -> throw new AssertionError("Unexpected player call: " + method.getName());
+                });
+        run(admin, "arena tp dojo");
+        assertEquals(List.of(new Location(null, point.x(), point.y(), point.z(), point.yaw(), point.pitch())), targets);
     }
 
     @Test
