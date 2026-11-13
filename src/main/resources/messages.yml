@@ -51,6 +51,7 @@ command:
     lobby: "Lobby editing"
     rooms: "Rooms"
     shop: "The shop"
+    generate: "Reproducing a seed's layout"
   usage-full: "<red>Usage: <usage>"
   unknown-subcommand: "<red>Unknown subcommand <subcommand>. Use one of: <subcommands>."
   error: "<red><message>"
@@ -70,7 +71,7 @@ help:
   textures: "choose Standard or Detailed ninja tool textures"
   intro: "show the lobby introduction again"
   accept: "join a room you were invited to; same as room accept"
-  map: "list pickable maps or change your room map"
+  map: "list pickable maps, change your room map, or ask for the next or a new seed"
   room: "open a room, invite players and start its match"
   shop: "say you are ready in the shop between rounds"
   host: "open an invite-only room on an arena of your choice"
@@ -80,7 +81,7 @@ help:
   director: "show the enemy director of a running match"
   event: "manage scheduled arena events"
   pack: "show Java and Bedrock resource pack state"
-  admin: "reload the Arena configuration, edit or reset the lobby, or reset a player's texture quality to Standard"
+  admin: "reload the Arena configuration, edit or reset the lobby, reproduce a seed's layout in a free slot cell, or reset a player's texture quality to Standard"
 
 # /ninjaarena arena: building and registering arenas. <cell>, <bounds> and <point> are
 # coordinates. invalid and error are refusals, shown through command.error; problem lists
@@ -376,6 +377,23 @@ room:
   map-ready: "<green>The room's generated map is ready: seed <seed>."
   map-fallback-seed: "<yellow>No playable map came from seed <seed> in <attempts> tries, so the room plays the last good seed, <last>."
   map-fallback-hand-built: "<yellow>No playable map came from seed <seed> in <attempts> tries and there is no earlier good seed, so the room plays the hand-built arena <arena>."
+  map-fallback-random: "<yellow>No playable map came from seed <seed> in <attempts> tries, so the room tries a new random seed, <next>."
+  map-list-generated: "<gray>- generated (a new map from the seed modes)"
+  map-list-generated-current: "<green>- generated (current)"
+  map-generated-off: "<red>Generated maps are not available on this server."
+  map-already-generated: "<yellow>The room already plays generated maps from the seed modes."
+  map-changed-generated: "<green><player> changed the room's map from <old> to generated maps."
+  map-seed-invalid: "<red><seed> is not a seed: use a whole number."
+  map-difficulty-invalid: "<red>The difficulty must be a whole number from <min> to <max>."
+  map-seed-in-use: "<red>Seed <seed> is played by another arena slot now, and seeds are not shared here. Choose another seed."
+  map-seed-already: "<yellow>The room already plays seed <seed> at difficulty <difficulty>."
+  map-changed-seed: "<green><player> set the room's map to seed <seed> at difficulty <difficulty>."
+  map-not-generated: "<red>The room does not play generated maps. Use /narena map set generated first."
+  map-next: "<green><player> asked for the next seed in the rotation: the room's map is generated again."
+  map-reroll: "<green><player> asked for a new random seed: the room's map is generated again."
+  map-next-queued: "<green><player> asked for the next seed in the rotation. The map being played stays; it applies when the map is generated next."
+  map-reroll-queued: "<green><player> asked for a new random seed. The map being played stays; it applies when the map is generated next."
+  map-next-round: "<gray>Generating the next round's map from seed <seed> at difficulty <difficulty>..."
   no-permission: "<red>You do not have permission to open a room."
   busy: "Leave your match or spectating first."
   refused: "<red><message>"
@@ -457,6 +475,19 @@ room:
   status-ready: "<green>Room <count>: ready to start"
   status-queued: "<gold>Waiting for an arena: number <position> in the queue"
   status-playing: "<gold>Playing in arena <arena>"
+
+# /ninjaarena admin generate: reproducing a seed's layout in a free slot cell. <cell> is
+# the slot cell and <bounds> the blocks the layout takes.
+generate:
+  difficulty-invalid: "<red>The difficulty must be from <min> to <max>."
+  teams-invalid: "<red>A layout is generated for 2 or 4 teams."
+  busy: "<yellow>A layout is placed already, as <map>. Clear it first with /narena admin generate free."
+  no-cell: "<red>No slot cell is free for a layout now. Try again once a room's map is cleared."
+  started: "<gray>Generating seed <seed> at difficulty <difficulty> for <teams> teams..."
+  ready: "<green>Seed <seed> at difficulty <difficulty> for <teams> teams is placed in slot cell <cell>, blocks <bounds> (from seed <accepted>). Nobody plays it; /narena admin generate free clears it."
+  failed: "<yellow>No playable map came from seed <seed> in <attempts> tries; its cell is cleared."
+  none: "<yellow>No layout is placed."
+  freed: "<green>The layout is being cleared and its slot cell freed."
 
 # Spectating a match.
 spectate:
@@ -715,6 +746,7 @@ reload:
   resize-refused: "<path> (arenas exist or a match runs; restart required)"
   next-match: "<path> (next match)"
   next-round: "<path> (next round)"
+  next-generation: "<path> (each slot's next map)"
   line: "<yellow><line>"
   messages-unreadable: "<file>: <reason>"
   renamed: "<old> has been renamed <path>. It still works for now; rename it in config.yml."

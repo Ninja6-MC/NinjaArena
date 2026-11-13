@@ -47,6 +47,8 @@ import com.ninja6.ninjaarena.lobby.LobbyMembers;
 import com.ninja6.ninjaarena.map.ArenaMaps;
 import com.ninja6.ninjaarena.map.BlockAccess;
 import com.ninja6.ninjaarena.map.GeneratedMaps;
+import com.ninja6.ninjaarena.map.SeedPolicy;
+import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.map.BudgetedCellWriter;
 import com.ninja6.ninjaarena.map.PlacementBudget;
 import com.ninja6.ninjaarena.map.PlacementSettings;
@@ -106,6 +108,7 @@ import com.ninja6.ninjaarena.lobby.LobbyEntry;
 import com.ninja6.ninjaarena.lobby.LobbyReturns;
 import com.ninja6.ninjaarena.restore.JoinRestore;
 import com.ninja6.ninjaarena.room.MaxActive;
+import com.ninja6.ninjaarena.room.AdminMaps;
 import com.ninja6.ninjaarena.room.RoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaChunkUnloader;
@@ -480,6 +483,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void maps(SeedSettings settings) {
+                        roomList.setSeedSettings(settings);
+                    }
+
+                    @Override
                     public void shopPhase(ShopSettings settings) {
                         inMatch.setShopSettings(settings);
                     }
@@ -569,6 +577,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         command.setLobby(lobbyEditing);
         command.setIntro(lobbyIntro::open);
         command.setRooms(roomList);
+        command.setAdminMaps(new AdminMaps(generatedMaps, roomList::hasSpareCell,
+                () -> roomList.seedPolicy().map(policy -> policy.settings().defaults().difficulty())
+                        .orElse(SeedSettings.DEFAULT_DIFFICULTY), getLogger()));
         command.setShopReady(inMatch::ready);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
@@ -599,7 +610,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         rooms.setSounds(sounds);
         // Reserves arenas.max-active slot cells and clears them before any room can use one.
         rooms.setGeneratedMaps(generatedMaps);
+        rooms.setSeedPolicy(new SeedPolicy(seedSettings(), System::currentTimeMillis,
+                new SplittableRandom()::nextLong, getLogger()::info));
         RoomService roomList = rooms;
+        // The next round's map, generated in the shop break, holds the shop open until placed.
+        inMatch.setMapReady(roomList::mapReady);
         getServer().getPluginManager().registerEvents(roomList, this);
         inMatch.setLobby(roomList::enterLobby);
         watching.setLobby(roomList::enterLobby);
@@ -609,6 +624,18 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 || watching.contains(id), roomList::enterLobby);
         getServer().getPluginManager().registerEvents(lobbyReturns, this);
         roomList.start();
+    }
+
+    /** The seed modes from {@code maps}; the defaults, with a warning, when they cannot be read. */
+    private SeedSettings seedSettings() {
+        try {
+            return SeedSettings.from(getConfig().getConfigurationSection(SeedSettings.SECTION));
+        } catch (SeedSettings.Invalid e) {
+            getLogger().warning("The maps settings cannot be read (" + e.getMessage() + "), so every slot uses"
+                    + " random seeds at difficulty " + SeedSettings.DEFAULT_DIFFICULTY + "; fix config.yml and"
+                    + " reload.");
+            return SeedSettings.DEFAULTS;
+        }
     }
 
     /**

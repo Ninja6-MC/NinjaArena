@@ -282,9 +282,10 @@ class GeneratedRoomFlowTest extends MatchFixture {
                 new Class<?>[] {MobGoals.class}, (p, m, a) -> {
                     throw new UnsupportedOperationException(m.getName());
                 });
-        assertInstanceOf(MobSpawner.class, MobSpawner.factory(maps, () -> arenaWorld, plugin.getServer()::getPlayer,
-                SpawnSettings.DEFAULTS, new ShadowStalker(StalkerSettings.DEFAULTS, goals, () -> 0),
-                plugin.getLogger()).apply(match));
+        // A generated map can move between rounds, so its spawner follows it.
+        assertInstanceOf(MobSpawner.Following.class, MobSpawner.factory(maps, () -> arenaWorld,
+                plugin.getServer()::getPlayer, SpawnSettings.DEFAULTS, new ShadowStalker(StalkerSettings.DEFAULTS,
+                        goals, () -> 0), plugin.getLogger()).apply(match));
         // Death handling: a spectator follows a teammate who is inside the map's bounds.
         UUID teammate = match.playersOf(aliceTeam).stream().filter(id -> !id.equals(ALICE)).findFirst()
                 .orElseThrow();

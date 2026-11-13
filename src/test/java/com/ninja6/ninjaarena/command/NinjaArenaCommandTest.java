@@ -325,9 +325,9 @@ class NinjaArenaCommandTest {
                 "/narena portal <subcommand> - mark out portals that lead to the lobby or a live match",
                 "/narena director [arena] - show the enemy director of a running match",
                 "/narena pack status - show Java and Bedrock resource pack state",
-                "/narena admin <reload|lobby <edit|done|reset>|textures reset <java|bedrock> <id>> - reload the"
-                        + " Arena configuration, edit or reset the lobby, or reset a player's texture quality to"
-                        + " Standard");
+                "/narena admin <reload|lobby <edit|done|reset>|generate <seed|free>|textures reset <java|bedrock>"
+                        + " <id>> - reload the Arena configuration, edit or reset the lobby, reproduce a seed's layout"
+                        + " in a free slot cell, or reset a player's texture quality to Standard");
         assertEquals("The Arena commands:", messages.get(0));
         assertEquals(help, messages.subList(1, messages.size()));
 
@@ -613,7 +613,8 @@ class NinjaArenaCommandTest {
                 "/ninjaarena accept <host> - join a room you were invited to; same as room accept",
                 "/ninjaarena room [create|settings|invite|accept|kick|start|leave] - open a room, invite players and"
                         + " start its match",
-                "/ninjaarena map <list|set <arena>> - list pickable maps or change your room map",
+                "/ninjaarena map <list|set <arena|generated [seed] [difficulty]>|next|reroll> - list pickable maps,"
+                        + " change your room map, or ask for the next or a new seed",
                 "/ninjaarena shop ready - say you are ready in the shop between rounds"), messages);
 
         messages.clear();
@@ -773,12 +774,139 @@ class NinjaArenaCommandTest {
                 new String[] {"arena", "pickable", "dojo", ""}));
     }
 
+    /** Records the map subcommands as they reach the rooms. */
+    private List<String> recordMapCalls() {
+        List<String> calls = new ArrayList<>();
+        command.setRooms(new RoomCommands() {
+            @Override public void mapSet(Player player, String arena) { calls.add("map " + arena); }
+            @Override public void mapSetGenerated(Player player, Long seed, Integer difficulty) {
+                calls.add("generated " + seed + " " + difficulty);
+            }
+            @Override public void mapNext(Player player) { calls.add("next"); }
+            @Override public void mapReroll(Player player) { calls.add("reroll"); }
+            @Override public void mapList(Player player) { calls.add("maps"); }
+            @Override public List<String> pickableMaps() { return List.of("garden"); }
+            @Override public void show(Player player) { }
+            @Override public void create(Player player) { }
+            @Override public void settings(Player player, String setting, String value) { }
+            @Override public void invite(Player player, String invitee) { }
+            @Override public void accept(Player player, String host) { }
+            @Override public void kick(Player player, String member) { }
+            @Override public void start(CommandSender sender, String host) { }
+            @Override public void leave(Player player) { }
+        });
+        return calls;
+    }
+
+    @Test
+    void mapNextRerollAndSetGeneratedNeedTheMapChangeNode() {
+        List<String> calls = recordMapCalls();
+        Player host = playerWithPermissions(NinjaArenaCommand.PLAY);
+        for (String line : List.of("map next", "map reroll", "map set generated", "map set generated 42 3")) {
+            messages.clear();
+            run(host, line);
+            assertEquals(List.of("You do not have permission to change your room's map."), messages, line);
+        }
+        assertEquals(List.of(), calls);
+        assertEquals(List.of("list"), command.onTabComplete(host, null, "narena", new String[] {"map", ""}));
+
+        Player chooser = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.MAP_CHANGE);
+        for (String line : List.of("map next", "MAP REROLL", "map set generated", "map set generated 42",
+                "map set Generated -7 5", "map set garden")) {
+            run(chooser, line);
+        }
+        assertEquals(List.of("next", "reroll", "generated null null", "generated 42 null", "generated -7 5",
+                "map garden"), calls);
+        calls.clear();
+        messages.clear();
+        run(chooser, "map set generated ten");
+        run(chooser, "map set generated 1 hard");
+        assertEquals(List.of("ten is not a seed: use a whole number.", "The difficulty must be a whole number from 1"
+                + " to 5."), messages);
+        messages.clear();
+        for (String line : List.of("map next now", "map reroll 3", "map set generated 1 2 3", "map set")) {
+            run(chooser, line);
+            assertTrue(messages.getLast().startsWith("Usage: /narena map <list|set <arena|generated [seed]"
+                    + " [difficulty]>|next|reroll>"), messages.getLast());
+        }
+        assertEquals(List.of(), calls);
+        assertEquals(List.of("list", "set", "next", "reroll"),
+                command.onTabComplete(chooser, null, "narena", new String[] {"map", ""}));
+        assertEquals(List.of("generated"), command.onTabComplete(chooser, null, "narena",
+                new String[] {"map", "set", "ge"}));
+        assertEquals(List.of("1", "2", "3", "4", "5"), command.onTabComplete(chooser, null, "narena",
+                new String[] {"map", "set", "generated", "42", ""}));
+        assertEquals(List.of(), command.onTabComplete(chooser, null, "narena",
+                new String[] {"map", "set", "garden", ""}));
+    }
+
+    @Test
+    void adminGenerateNeedsItsNodeAndChecksItsArguments() {
+        List<String> calls = new ArrayList<>();
+        command.setAdminMaps(new AdminMapCommands() {
+            @Override
+            public void generate(CommandSender sender, long seed, Integer difficulty, Integer teams) {
+                calls.add("generate " + seed + " " + difficulty + " " + teams);
+            }
+
+            @Override
+            public void free(CommandSender sender) {
+                calls.add("free");
+            }
+        });
+        Player admin = playerWithPermissions(NinjaArenaCommand.GENERATE);
+        for (String line : List.of("admin generate 42", "admin generate -42 3", "admin generate 9 5 4",
+                "admin GENERATE FREE")) {
+            run(admin, line);
+        }
+        assertEquals(List.of("generate 42 null null", "generate -42 3 null", "generate 9 5 4", "free"), calls);
+        calls.clear();
+        messages.clear();
+        for (String line : List.of("admin generate", "admin generate seed", "admin generate 1 x",
+                "admin generate 1 2 four", "admin generate 1 2 4 5", "admin generate free now")) {
+            run(admin, line);
+        }
+        assertEquals(List.of(), calls);
+        assertEquals(6, messages.size());
+        assertTrue(messages.stream().allMatch(message -> message.equals("Usage: /narena admin generate <seed"
+                + " [difficulty] [2|4]|free>")), messages.toString());
+
+        messages.clear();
+        run(playerWithPermissions(NinjaArenaCommand.LOBBY), "admin generate 42");
+        run(playerWithPlay(), "admin generate 42");
+        run(console(true), "admin generate 42");
+        assertEquals(List.of(), calls, "the admin node alone does not grant it here: Bukkit grants the child");
+        assertEquals(List.of("You do not have permission to use this command."), messages.stream().distinct().toList());
+
+        assertEquals(List.of("generate"), command.onTabComplete(admin, null, "narena", new String[] {"admin", ""}));
+        assertEquals(List.of("free"), command.onTabComplete(admin, null, "narena",
+                new String[] {"admin", "generate", ""}));
+        assertEquals(List.of("1", "2", "3", "4", "5"), command.onTabComplete(admin, null, "narena",
+                new String[] {"admin", "generate", "42", ""}));
+        assertEquals(List.of("2", "4"), command.onTabComplete(admin, null, "narena",
+                new String[] {"admin", "generate", "42", "3", ""}));
+        assertEquals(List.of(), command.onTabComplete(admin, null, "narena",
+                new String[] {"admin", "generate", "free", ""}));
+        assertEquals(List.of(), command.onTabComplete(playerWithPermissions(NinjaArenaCommand.LOBBY), null, "narena",
+                new String[] {"admin", "generate", ""}));
+
+        command.setAdminMaps(null);
+        messages.clear();
+        run(admin, "admin generate 42");
+        assertEquals(List.of("Reproducing a seed's layout is not available yet in the Arena."), messages);
+    }
+
     @Test
     void roomSubcommandsDispatchOnlyAfterPermissionPlayerAndArityChecks() {
         List<String> calls = new ArrayList<>();
         command.setRooms(new RoomCommands() {
             @Override public void mapSet(Player player, String arena) { calls.add("map " + arena); }
             @Override public void mapList(Player player) { calls.add("maps"); }
+            @Override public void mapSetGenerated(Player player, Long seed, Integer difficulty) {
+                calls.add("generated " + seed + " " + difficulty);
+            }
+            @Override public void mapNext(Player player) { calls.add("next"); }
+            @Override public void mapReroll(Player player) { calls.add("reroll"); }
             @Override public List<String> pickableMaps() { return List.of("garden"); }
             @Override public void show(Player player) { calls.add("show"); }
             @Override public void create(Player player) { calls.add("create"); }
@@ -807,7 +935,7 @@ class NinjaArenaCommandTest {
         }
         assertTrue(calls.isEmpty());
         messages.clear();
-        assertEquals(List.of("garden"), command.onTabComplete(chooser, null, "narena",
+        assertEquals(List.of("garden", "generated"), command.onTabComplete(chooser, null, "narena",
                 new String[] {"map", "set", ""}));
         assertEquals(List.of("list"), command.onTabComplete(player, null, "narena", new String[] {"map", ""}));
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"map", "set", ""}));

@@ -131,6 +131,20 @@ public final class SlotCells {
     }
 
     /**
+     * Swaps the places of two reserved cells, so a slot number follows its map when the map
+     * moves to another cell. Neither cell is given up or added.
+     */
+    public void swap(GridCell first, GridCell second) {
+        int a = reserved.indexOf(first);
+        int b = reserved.indexOf(second);
+        if (a < 0 || b < 0) {
+            throw new IllegalArgumentException("both cells must be reserved");
+        }
+        reserved.set(a, second);
+        reserved.set(b, first);
+    }
+
+    /**
      * The grid changed: every cell is chosen again on the new grid. Only while no generated
      * map uses a cell.
      */

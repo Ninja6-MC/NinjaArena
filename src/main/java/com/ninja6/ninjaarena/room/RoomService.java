@@ -8,7 +8,12 @@ import com.ninja6.ninjaarena.command.HostingCommands;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import com.ninja6.ninjaarena.command.RoomCommands;
 import com.ninja6.ninjaarena.map.GeneratedMaps;
+import com.ninja6.ninjaarena.map.SeedPolicy;
+import com.ninja6.ninjaarena.map.SeedSettings;
+import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchService;
+import com.ninja6.ninjaarena.match.MatchView;
+import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
 import com.ninja6.ninjaarena.sound.Sounds;
 import com.ninja6.ninjaarena.sound.Sounds.Cue;
 import com.ninja6.ninjaarena.terrain.MapSearch;
@@ -18,6 +23,7 @@ import com.ninja6.ninjaarena.world.CrossWorldTransfers;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -46,8 +52,9 @@ import org.bukkit.scheduler.BukkitTask;
  * settings, invites players and presses start once enough have joined; nothing starts a
  * room's match by itself. The rules for teams and hand-offs are in {@link Room}.
  *
- * <p><b>Arena slots.</b> A room plays on a hand-built arena, the first free one when it is
- * created, and leases a slot for it at once ({@link SlotLeases}). While every slot is in use,
+ * <p><b>Arena slots.</b> A room plays on a hand-built arena, the first ready one when it is
+ * created, or on a generated map when no hand-built arena is ready (once the seed modes are
+ * set, {@link #setSeedPolicy}), and leases a slot for it at once ({@link SlotLeases}). While every slot is in use,
  * or its arena is, the room waits in a queue and its players see their position. The lease
  * lasts through the start, every round and the end of the match, and is given up when the
  * room is back in the lobby, where it queues again for its next match, or when it closes;
@@ -61,6 +68,15 @@ import org.bukkit.scheduler.BukkitTask;
  * cell; the room can start when it is ready. After each match the cell is cleared and the
  * map generated again for the next. When no map comes from the seed, the room falls back
  * to its last good seed, else to a hand-built arena, and tells its players which.
+ *
+ * <p><b>Seeds.</b> A room on generated maps plays a seed its host set by hand
+ * ({@link #playGenerated}), or the seed the seed modes give the slot its map is generated in
+ * ({@link SeedPolicy}), at each generation. Under {@code maps.seed-sharing: distinct} no two
+ * maps placed, being generated or set by hand have the same seed: a seed set by hand that
+ * another slot has is refused ({@link #mapSetGenerated}). With {@code regenerate: round} the
+ * slot's map is generated again in each shop break, in another cell, and takes the old one's
+ * place only once it is fully placed; until then the shop waits ({@link #mapReady}), and a
+ * map that fails or is not placed in time is dropped and the round keeps the current map.
  *
  * <p><b>Ways in.</b> Besides {@code /narena room create} and an invitation, a player who
  * walks through a play portal comes into the lobby and joins an open room there
@@ -93,6 +109,10 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     private static final long TICKS_PER_SECOND = 20;
     private static final String ROOT = "/ninjaarena room ";
+    /** The teams of a new room on generated maps; its host can set 2 to 4. */
+    static final int GENERATED_TEAMS = 2;
+    /** What {@code /narena map set} takes to play generated maps. */
+    public static final String GENERATED = "generated";
 
     private final Plugin plugin;
     private final ArenaRegistry arenas;
@@ -112,6 +132,11 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     private Runnable heldWorld;
     private Sounds sounds;
     private GeneratedMaps generated;
+    private SeedPolicy seeds;
+    /** The seed each generated map placed or being prepared was asked for, by map name. */
+    private final Map<String, Long> mapSeeds = new HashMap<>();
+    /** Maps generated again in a shop break, by the name of the map each will replace. */
+    private final Map<String, SeedChoice> nextMaps = new HashMap<>();
 
     private BukkitTask ticker;
     private int configuredMax;
@@ -156,7 +181,54 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     public void setGeneratedMaps(GeneratedMaps generated) {
         this.generated = Objects.requireNonNull(generated, "generated");
         generated.onFree(() -> granted(slots.pump()));
-        generated.resize(maxActive());
+        generated.resize(cells(maxActive()));
+    }
+
+    /**
+     * The seed modes ({@code maps} in config.yml), after {@link #setGeneratedMaps}. From then
+     * on a room with no hand-built arena ready plays generated maps, rooms on generated maps
+     * without a seed set by hand take their seeds from it, and slots that regenerate between
+     * rounds get one spare cell to place the next map in. Logs what the settings warn about.
+     */
+    public void setSeedPolicy(SeedPolicy seeds) {
+        this.seeds = Objects.requireNonNull(seeds, "seeds");
+        warn();
+        if (generated != null) {
+            generated.resize(cells(maxActive()));
+        }
+    }
+
+    /**
+     * New seed modes on reload. Each applies at a slot's next generation: a map already
+     * placed, a running match and a shop break already under way keep theirs.
+     */
+    public void setSeedSettings(SeedSettings settings) {
+        if (seeds == null) {
+            return;
+        }
+        seeds.setSettings(settings);
+        warn();
+        if (generated != null) {
+            generated.resize(cells(maxActive()));
+        }
+    }
+
+    public Optional<SeedPolicy> seedPolicy() {
+        return Optional.ofNullable(seeds);
+    }
+
+    private void warn() {
+        seeds.warnings(maxActive()).forEach(plugin.getLogger()::warning);
+    }
+
+    /**
+     * The slot cells to reserve for this many slots: one more while a slot regenerates its
+     * map between rounds and the grid has room, for the next map to be placed in.
+     */
+    private int cells(int max) {
+        boolean spare = seeds != null && seeds.settings().regeneratesRounds(max)
+                && max < arenas.grid().cellsNearestFirst().size();
+        return spare ? max + 1 : max;
     }
 
     /** Starts the once-a-second queue check and room status line. */
@@ -183,7 +255,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         int max = effectiveMax(maxActive);
         if (generated != null) {
             // Reserved cells never move, and a cell a generated map uses stays reserved.
-            generated.resize(max);
+            generated.resize(cells(max));
         }
         granted(slots.setMax(max));
     }
@@ -227,11 +299,60 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     /** The room holds its slot now: one on generated maps has its map generated. */
     private void leased(Room room) {
-        if (generated != null && room.generated().isPresent() && generated.cellOf(room.arena()).isEmpty()) {
-            SeedChoice choice = room.generated().get();
+        if (generated != null && room.playsGenerated() && generated.cellOf(room.arena()).isEmpty()) {
+            SeedChoice choice = choose(room, generated.nextFreeSlot().orElse(1));
             broadcast(room, msg("room.map-generating", "seed", choice.seed(), "difficulty", choice.difficulty()));
             prepare(room, room.arena(), choice, false);
         }
+    }
+
+    /**
+     * The seed of the room's next map, to be generated in the slot: the one set by hand, or
+     * what the seed modes give the slot. Under distinct, a seed set by hand that another slot
+     * has taken since is not played; the map gets a random seed instead, and that is logged.
+     */
+    private SeedChoice choose(Room room, int slot) {
+        SeedPolicy.Request asked = room.takeRequest();
+        Set<Long> active = activeSeeds(room.arena(), room);
+        if (seeds == null || room.isPinned()) {
+            SeedChoice pinned = room.generated().orElseThrow();
+            if (seeds == null || !seeds.collides(pinned.seed(), active)) {
+                return pinned;
+            }
+            long instead = seeds.next(slot, active, SeedPolicy.Request.REROLL).seed();
+            plugin.getLogger().warning("Seed " + pinned.seed() + " was set by hand for the room of "
+                    + name(room.host()) + ", but another slot plays it now, so its map gets random seed " + instead
+                    + " this time.");
+            return new SeedChoice(instead, pinned.difficulty());
+        }
+        SeedChoice choice = seeds.next(slot, active, asked).choice();
+        room.setSeed(choice);
+        return choice;
+    }
+
+    /**
+     * The seeds active outside the room's map: those of every other map placed or being
+     * prepared, of the maps being generated for a next round, and of the rooms whose seed
+     * was set by hand.
+     */
+    public Set<Long> activeSeeds(String exceptMap, Room exceptRoom) {
+        Set<Long> active = new HashSet<>();
+        mapSeeds.forEach((map, seed) -> {
+            if (!map.equals(exceptMap)) {
+                active.add(seed);
+            }
+        });
+        nextMaps.forEach((map, choice) -> {
+            if (!map.equals(exceptMap)) {
+                active.add(choice.seed());
+            }
+        });
+        for (Room room : rooms) {
+            if (room != exceptRoom && room.isPinned()) {
+                room.generated().ifPresent(choice -> active.add(choice.seed()));
+            }
+        }
+        return active;
     }
 
     /**
@@ -247,9 +368,21 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (generated == null || !arenas.editing().isEmpty()) {
             return true;
         }
-        long waitingForCell = slots.leasedArenas().stream().filter(Arena::isGeneratedName)
+        return generated.freeCells() <= waitingForCell();
+    }
+
+    /** Leased slots on generated maps whose map has no cell yet. */
+    private long waitingForCell() {
+        return slots.leasedArenas().stream().filter(Arena::isGeneratedName)
                 .filter(name -> generated.cellOf(name).isEmpty()).count();
-        return generated.freeCells() <= waitingForCell;
+    }
+
+    /**
+     * Whether a slot cell is free beyond those leased rooms wait for, so a map that is no
+     * room's lease, such as an admin's or a next round's, can take it.
+     */
+    public boolean hasSpareCell() {
+        return generated != null && arenas.editing().isEmpty() && generated.freeCells() > waitingForCell();
     }
 
     /** Whether a match may start on the room's map now. */
@@ -364,8 +497,14 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             tell(player, "room.already-in-room");
             return null;
         }
-        Optional<Arena> arena = chosen != null ? Optional.of(chosen) : defaultArena(null);
-        if (arena.isEmpty()) {
+        Optional<Arena> arena = chosen != null ? Optional.of(chosen) : readyArena(null);
+        // With no hand-built arena ready, a new room plays generated maps, so a server with
+        // none at all works out of the box.
+        boolean onGenerated = arena.isEmpty() && chosen == null && generated != null && seeds != null;
+        if (arena.isEmpty() && !onGenerated) {
+            arena = defaultArena(null);
+        }
+        if (arena.isEmpty() && !onGenerated) {
             tell(player, "room.no-arena");
             return null;
         }
@@ -380,12 +519,15 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return null;
         }
         WaitingRoomSettings base = defaults.get();
-        int teams = teamCount(arena.get());
+        int teams = onGenerated ? GENERATED_TEAMS : teamCount(arena.get());
         int teamSize = base.teamSize();
         int capacity = teamSize == 0 ? Integer.MAX_VALUE : teams * teamSize;
         RoomSettings settings = new RoomSettings(false,
                 Math.min(Math.min(base.minPlayers(), RoomSettings.MAX_PLAYERS), capacity), teams, teamSize);
-        Room room = new Room(id, arena.get().name(), settings);
+        Room room = new Room(id, onGenerated ? generated.newName() : arena.get().name(), settings);
+        if (onGenerated) {
+            room.setSeedModes();
+        }
         rooms.add(room);
         roomOf.put(id, room);
         names.put(id, player.getName());
@@ -429,7 +571,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 int max = switch (key) {
                     case "players" -> Math.min(RoomSettings.MAX_PLAYERS, current.capacity());
                     // A generated map is laid out for the team count, up to four.
-                    case "teams" -> room.generated().isPresent() ? Arena.MAX_TEAMS
+                    case "teams" -> room.playsGenerated() ? Arena.MAX_TEAMS
                             : arenas.get(room.arena()).map(RoomService::teamCount).orElse(1);
                     default -> RoomSettings.MAX_TEAM_SIZE;
                 };
@@ -464,7 +606,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 tell(member, "room.team", "team", room.teamOf(member));
             }
         }
-        if (room.generated().isPresent() && layoutTeams(current) != layoutTeams(next)) {
+        if (room.playsGenerated() && layoutTeams(current) != layoutTeams(next)) {
             // A map laid out for 2 teams has no sides for 3 or 4: generate it again.
             regenerate(room);
         }
@@ -763,7 +905,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         Room room = playing.remove(name);
         if (generated != null && Arena.isGeneratedName(name)) {
             // Reset by clearing the cell; the room's next lease generates the map again.
-            generated.free(name);
+            freeMap(name);
         }
         if (room == null || !rooms.contains(room)) {
             if (room != null) {
@@ -802,6 +944,11 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 continue;
             }
             Optional<Arena> replacement = defaultArena(room);
+            if (replacement.isEmpty() && generated != null && seeds != null) {
+                playSeedModes(room);
+                broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+                continue;
+            }
             if (replacement.isEmpty()) {
                 close(room, "room.closed-no-arena");
                 continue;
@@ -824,10 +971,118 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return;
         }
         List<String> maps = pickableMaps();
-        tell(player, maps.isEmpty() ? "room.map-list-empty" : "room.map-list-header");
+        boolean offersGenerated = generated != null && seeds != null;
+        tell(player, maps.isEmpty() && !offersGenerated ? "room.map-list-empty" : "room.map-list-header");
         for (String arena : maps) {
             tell(player, arena.equals(room.arena()) ? "room.map-list-current" : "room.map-list-entry",
                     "arena", arena);
+        }
+        if (offersGenerated) {
+            tell(player, room.playsGenerated() ? "room.map-list-generated-current" : "room.map-list-generated");
+        }
+    }
+
+    /**
+     * {@code /narena map set generated [seed] [difficulty]}, for {@code ninjaarena.map.change}:
+     * the host's room plays generated maps, from the seed modes without a seed, or from the
+     * seed set by hand. Under distinct, a seed another slot has is refused with a message,
+     * never replaced. In the lobby the map is generated now; nothing changes while the room
+     * plays.
+     *
+     * @param seed       null for the seed modes
+     * @param difficulty null for {@code maps.default.difficulty}
+     */
+    @Override
+    public void mapSetGenerated(Player player, Long seed, Integer difficulty) {
+        if (!player.hasPermission(NinjaArenaCommand.MAP_CHANGE)) {
+            tell(player, "room.map-no-permission");
+            return;
+        }
+        Room room = hostRoom(player);
+        if (room == null) {
+            return;
+        }
+        if (room.isPlaying()) {
+            tell(player, "room.map-playing");
+            return;
+        }
+        if (generated == null || seeds == null) {
+            tell(player, "room.map-generated-off");
+            return;
+        }
+        if (seed == null) {
+            if (room.playsGenerated() && !room.isPinned()) {
+                tell(player, "room.map-already-generated");
+                return;
+            }
+            String old = room.arena();
+            playSeedModes(room);
+            broadcast(room, msg("room.map-changed-generated", "old", old, "player", player.getName()));
+            return;
+        }
+        int level = difficulty != null ? difficulty : seeds.settings().defaults().difficulty();
+        if (level < SeedSettings.MIN_DIFFICULTY || level > SeedSettings.MAX_DIFFICULTY) {
+            tell(player, "room.map-difficulty-invalid", "min", SeedSettings.MIN_DIFFICULTY,
+                    "max", SeedSettings.MAX_DIFFICULTY);
+            return;
+        }
+        if (seeds.collides(seed, activeSeeds(room.arena(), room))) {
+            tell(player, "room.map-seed-in-use", "seed", seed);
+            return;
+        }
+        SeedChoice choice = new SeedChoice(seed, level);
+        if (room.isPinned() && room.generated().equals(Optional.of(choice))) {
+            tell(player, "room.map-seed-already", "seed", seed, "difficulty", level);
+            return;
+        }
+        playGenerated(room, seed, level);
+        broadcast(room, msg("room.map-changed-seed", "seed", seed, "difficulty", level, "player", player.getName()));
+    }
+
+    /**
+     * {@code /narena map next}, for {@code ninjaarena.map.change}: the next rotation seed at
+     * the next generation of the host's map, a new random seed for a random slot.
+     */
+    @Override
+    public void mapNext(Player player) {
+        askSeed(player, SeedPolicy.Request.NEXT);
+    }
+
+    /** {@code /narena map reroll}, for {@code ninjaarena.map.change}: a new random seed at the next generation. */
+    @Override
+    public void mapReroll(Player player) {
+        askSeed(player, SeedPolicy.Request.REROLL);
+    }
+
+    /**
+     * Asks for a seed at the next generation of the host's generated map. A seed set by
+     * hand gives way to the seed modes. In the lobby that generation starts now; while the
+     * room plays, it is the next shop break with {@code regenerate: round}, else the next
+     * match. A running round's map never changes.
+     */
+    private void askSeed(Player player, SeedPolicy.Request request) {
+        if (!player.hasPermission(NinjaArenaCommand.MAP_CHANGE)) {
+            tell(player, "room.map-no-permission");
+            return;
+        }
+        Room room = hostRoom(player);
+        if (room == null) {
+            return;
+        }
+        if (seeds == null || !room.playsGenerated()) {
+            tell(player, "room.map-not-generated");
+            return;
+        }
+        boolean next = request == SeedPolicy.Request.NEXT;
+        room.setSeedModes();
+        room.request(request);
+        if (room.isPlaying()) {
+            broadcast(room, msg(next ? "room.map-next-queued" : "room.map-reroll-queued", "player", player.getName()));
+            return;
+        }
+        broadcast(room, msg(next ? "room.map-next" : "room.map-reroll", "player", player.getName()));
+        if (generated.cellOf(room.arena()).isPresent()) {
+            regenerate(room);
         }
     }
 
@@ -904,8 +1159,8 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
      * it is moved to a hand-built arena. The room gets a new generated map name and asks for
      * a slot for it, queueing if it must; once it holds the slot, a slot cell is cleared, the
      * map is generated off the server thread and placed, and the room can start. Each match
-     * after that clears the cell and generates the map again. Seed modes, per-slot settings
-     * and the commands that call this belong to the map control task.
+     * after that clears the cell and generates the map again from the same seed, which is
+     * not checked against other slots here ({@link #mapSetGenerated} checks it).
      *
      * <p>When no map comes from the seed, the room plays its last good seed if it has one,
      * else the hand-built arena a new room would get, and its players are told which
@@ -935,9 +1190,40 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         }
     }
 
+    /**
+     * Makes a room in the lobby play generated maps whose seeds the seed modes pick, from its
+     * next map on, under a new generated map name; as {@link #playGenerated} otherwise.
+     *
+     * @throws IllegalStateException if the room is playing or not open, or there are no seed modes
+     */
+    public void playSeedModes(Room room) {
+        if (generated == null || seeds == null) {
+            throw new IllegalStateException("generated maps are off");
+        }
+        if (!rooms.contains(room)) {
+            throw new IllegalStateException("the room is not open");
+        }
+        if (room.isPlaying()) {
+            throw new IllegalStateException("the room is playing");
+        }
+        SeedPolicy.Request asked = room.requested();
+        leaveGenerated(room);
+        room.setSeedModes();
+        room.request(asked);
+        room.setArena(generated.newName());
+        int teams = Math.min(Math.max(room.settings().teams(), 1), Arena.MAX_TEAMS);
+        if (teams != room.settings().teams()) {
+            room.setSettings(room.settings().withTeams(teams));
+        }
+        granted(slots.release(room));
+        if (!request(room)) {
+            broadcast(room, queued(room));
+        }
+    }
+
     /** Frees the room's generated map and asks for a slot again, to generate it anew. */
     private void regenerate(Room room) {
-        generated.free(room.arena());
+        freeMap(room.arena());
         granted(slots.release(room));
         if (!request(room)) {
             broadcast(room, queued(room));
@@ -946,12 +1232,19 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     /** A room on generated maps frees its map and plays hand-built arenas again. */
     private void leaveGenerated(Room room) {
-        if (room.generated().isPresent()) {
+        if (room.playsGenerated()) {
             if (generated != null) {
-                generated.free(room.arena());
+                freeMap(room.arena());
             }
             room.setGenerated(null);
         }
+    }
+
+    /** Frees a generated map's cell, and its next round's map, and forgets their seeds. */
+    private void freeMap(String name) {
+        mapSeeds.remove(name);
+        nextMaps.remove(name);
+        generated.free(name);
     }
 
     /** The sides a generated map has for the room's team count. */
@@ -960,6 +1253,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     }
 
     private void prepare(Room room, String name, SeedChoice choice, boolean fallback) {
+        mapSeeds.put(name, choice.seed());
         try {
             generated.prepare(name, new GeneratedMaps.Request(choice.seed(), choice.difficulty(),
                     layoutTeams(room.settings())), outcome -> prepared(room, name, choice, fallback, outcome));
@@ -986,7 +1280,10 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 broadcast(room, msg("room.map-ready", "seed", ready.seed()));
             }
             case GeneratedMaps.Failed failed -> {
-                Optional<SeedChoice> last = fallback ? Optional.empty() : room.lastGoodSeed();
+                Set<Long> active = activeSeeds(name, room);
+                // Under distinct, a last good seed another slot has taken since is no fallback.
+                Optional<SeedChoice> last = fallback ? Optional.empty() : room.lastGoodSeed()
+                        .filter(seed -> seeds == null || !seeds.collides(seed.seed(), active));
                 MapSearch.FallbackDecision decision = MapSearch.fallback(
                         last.map(seed -> OptionalLong.of(seed.seed())).orElse(OptionalLong.empty()));
                 if (decision.fallback() == MapSearch.Fallback.LAST_GOOD_SEED) {
@@ -996,6 +1293,16 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                     return;
                 }
                 Optional<Arena> handBuilt = defaultArena(room);
+                if (handBuilt.isEmpty() && seeds != null && !room.isPinned() && !fallback) {
+                    // No hand-built arena to fall back to: one more try, from a new random seed.
+                    int slot = generated.slotNumber(name).orElse(1);
+                    SeedChoice retry = seeds.next(slot, active, SeedPolicy.Request.REROLL).choice();
+                    room.setSeed(retry);
+                    broadcast(room, msg("room.map-fallback-random", "seed", failed.requestedSeed(),
+                            "attempts", failed.attempts(), "next", retry.seed()));
+                    prepare(room, name, retry, true);
+                    return;
+                }
                 if (handBuilt.isEmpty()) {
                     leaveGenerated(room);
                     close(room, "room.closed-no-arena");
@@ -1004,6 +1311,93 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 broadcast(room, msg(decision.messageKey(), "seed", failed.requestedSeed(),
                         "attempts", failed.attempts(), "arena", handBuilt.get().name()));
                 setArena(room, handBuilt.get().name());
+            }
+        }
+    }
+
+    // ---- Generating the map again between rounds ----
+
+    /**
+     * A match on a generated map went to its shop break: with {@code regenerate: round} for
+     * its slot, the next map is generated in a spare cell. Leaving the break drops a next map
+     * that is not placed yet; the round keeps the current map. Register this class as a
+     * listener, or pass each {@link MatchPhaseChangeEvent} here.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPhase(MatchPhaseChangeEvent event) {
+        String arena = Arena.normalizeName(event.match().arena());
+        if (event.to() == MatchPhase.SHOP) {
+            nextRoundMap(arena);
+        } else if (event.from() == MatchPhase.SHOP && nextMaps.remove(arena) != null) {
+            generated.dropReplacement(arena);
+            plugin.getLogger().info("The next map for the match in " + arena + " was not placed in time; the round"
+                    + " keeps the current map.");
+        }
+    }
+
+    /**
+     * Whether the next round's map is ready: true unless it is still being generated in the
+     * shop break. {@code MatchService#setMapReady}.
+     */
+    public boolean mapReady(MatchView match) {
+        return !nextMaps.containsKey(Arena.normalizeName(match.arena()));
+    }
+
+    private void nextRoundMap(String arena) {
+        Room room = playing.get(arena);
+        if (generated == null || seeds == null || room == null || !rooms.contains(room) || room.isPinned()
+                || !Arena.isGeneratedName(arena) || nextMaps.containsKey(arena)) {
+            return;
+        }
+        OptionalInt slot = generated.slotNumber(arena);
+        if (slot.isEmpty() || seeds.forSlot(slot.getAsInt()).regenerate() != SeedSettings.Regenerate.ROUND
+                || generated.get(arena).isEmpty()) {
+            return;
+        }
+        if (!hasSpareCell()) {
+            plugin.getLogger().info("No slot cell is free to generate the next map for the match in " + arena
+                    + ", so the next round keeps the current map.");
+            return;
+        }
+        SeedChoice choice = seeds.next(slot.getAsInt(), activeSeeds(arena, room), room.takeRequest()).choice();
+        nextMaps.put(arena, choice);
+        broadcast(room, msg("room.map-next-round", "seed", choice.seed(), "difficulty", choice.difficulty()));
+        try {
+            generated.prepareReplacement(arena, new GeneratedMaps.Request(choice.seed(), choice.difficulty(),
+                    layoutTeams(room.settings())), outcome -> nextRoundPrepared(room, arena, choice, outcome));
+        } catch (RuntimeException e) {
+            nextMaps.remove(arena);
+            plugin.getLogger().log(Level.SEVERE, "Could not generate the next map for the match in " + arena + ".", e);
+        }
+    }
+
+    /**
+     * The next round's map is placed, or no map came from its seed. A placed one takes the
+     * current one's place while the match is still in its shop break. Otherwise it is
+     * dropped, and by {@link MapSearch#fallback} the round plays the last good seed: the map
+     * already placed.
+     */
+    private void nextRoundPrepared(Room room, String arena, SeedChoice choice, GeneratedMaps.Prepared outcome) {
+        if (nextMaps.get(arena) != choice) {
+            return;
+        }
+        nextMaps.remove(arena);
+        boolean inBreak = matches.match(arena).map(match -> match.phase() == MatchPhase.SHOP).orElse(false);
+        switch (outcome) {
+            case GeneratedMaps.Ready ready when inBreak -> {
+                generated.commitReplacement(arena);
+                mapSeeds.put(arena, choice.seed());
+                room.setSeed(choice);
+                room.setLastGoodSeed(new SeedChoice(ready.seed(), choice.difficulty()));
+                broadcast(room, msg("room.map-ready", "seed", ready.seed()));
+            }
+            case GeneratedMaps.Ready ready -> generated.dropReplacement(arena);
+            case GeneratedMaps.Failed failed -> {
+                generated.dropReplacement(arena);
+                long current = room.lastGoodSeed().map(SeedChoice::seed).orElse(mapSeeds.getOrDefault(arena, 0L));
+                MapSearch.FallbackDecision decision = MapSearch.fallback(OptionalLong.of(current));
+                broadcast(room, msg(decision.messageKey(), "seed", failed.requestedSeed(),
+                        "attempts", failed.attempts(), "last", current));
             }
         }
     }
@@ -1088,8 +1482,8 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         room.members().forEach(names::remove);
         if (!room.isPlaying()) {
             // A running match keeps its lease, and its generated map, until it ends (matchClosed).
-            if (generated != null && room.generated().isPresent()) {
-                generated.free(room.arena());
+            if (generated != null && room.playsGenerated()) {
+                freeMap(room.arena());
             }
             granted(slots.release(room));
         }
@@ -1124,6 +1518,34 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
      * when there is no arena at all.
      */
     private Optional<Arena> defaultArena(Room except) {
+        Optional<Arena> ready = readyArena(except);
+        if (ready.isPresent()) {
+            return ready;
+        }
+        List<Arena> usable = usableArenas();
+        for (Arena arena : usable) {
+            if (!claimedByOthers(arena.name(), except)) {
+                return Optional.of(arena);
+            }
+        }
+        return usable.stream().findFirst();
+    }
+
+    /**
+     * The hand-built arena a new room plays when one is ready: the featured map of a running
+     * event when it is available and no other room holds or waits for it, else the first
+     * such arena by name.
+     */
+    private Optional<Arena> readyArena(Room except) {
+        for (Arena arena : usableArenas()) {
+            if (arenas.isAvailable(arena.name()) && !claimedByOthers(arena.name(), except)) {
+                return Optional.of(arena);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private List<Arena> usableArenas() {
         List<Arena> usable = new ArrayList<>();
         for (Arena arena : arenas.all()) {
             if (!arena.teamSpawns().isEmpty()) {
@@ -1131,17 +1553,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             }
         }
         usable.sort(Comparator.comparing(arena -> isFeatured(arena.name()) ? 0 : 1));
-        for (Arena arena : usable) {
-            if (arenas.isAvailable(arena.name()) && !claimedByOthers(arena.name(), except)) {
-                return Optional.of(arena);
-            }
-        }
-        for (Arena arena : usable) {
-            if (!claimedByOthers(arena.name(), except)) {
-                return Optional.of(arena);
-            }
-        }
-        return usable.stream().findFirst();
+        return usable;
     }
 
     private boolean claimedByOthers(String arena, Room except) {

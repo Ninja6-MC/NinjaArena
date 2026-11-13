@@ -99,8 +99,8 @@ class PluginDescriptionTest {
         Map<String, Object> command = description().getCommands().get("ninjaarena");
         assertNotNull(command, "ninjaarena is not declared");
         assertEquals(List.of("narena"), command.get("aliases"));
-        assertEquals("ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.admin.lobby;ninjaarena.spectate;"
-                + "ninjaarena.leaderboard;ninjaarena.event.manage",
+        assertEquals("ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.admin.lobby;"
+                + "ninjaarena.admin.generate;ninjaarena.spectate;ninjaarena.leaderboard;ninjaarena.event.manage",
                 command.get("permission"));
     }
 
@@ -130,8 +130,10 @@ class PluginDescriptionTest {
         assertEquals(Map.of("ninjaarena.play", true), nodes.get("ninjaarena.host").getChildren());
         assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.event.manage").getDefault());
         assertEquals(Map.of("ninjaarena.host", true, "ninjaarena.event.manage", true, "ninjaarena.admin.lobby", true,
-                "ninjaarena.map.change", true),
+                "ninjaarena.map.change", true, "ninjaarena.admin.generate", true),
                 nodes.get("ninjaarena.admin").getChildren());
+        assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.admin.generate").getDefault());
+        assertEquals(Map.of(), nodes.get("ninjaarena.admin.generate").getChildren());
         assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.map.change").getDefault());
         assertEquals(Map.of(), nodes.get("ninjaarena.map.change").getChildren());
         assertEquals(PermissionDefault.OP, nodes.get("ninjaarena.admin.lobby").getDefault());
@@ -189,7 +191,7 @@ class PluginDescriptionTest {
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(stream, StandardCharsets.UTF_8));
             for (String tier : List.of("shop.use", "spectate", "leaderboard", "rewards.payout", "room.create",
-                    "event.manage", "map.change", "play", "host", "admin", "admin.lobby")) {
+                    "event.manage", "map.change", "play", "host", "admin", "admin.lobby", "admin.generate")) {
                 assertTrue(yaml.isConfigurationSection("permissions.ninjaarena." + tier + ".children"), tier);
             }
             assertTrue(yaml.getBoolean("permissions.ninjaarena.admin.children.ninjaarena.host"));
@@ -210,7 +212,8 @@ class PluginDescriptionTest {
         };
         root.setPermission((String) description().getCommands().get("ninjaarena").get("permission"));
         for (String granted : List.of("ninjaarena.play", "ninjaarena.host", "ninjaarena.admin",
-                "ninjaarena.admin.lobby", "ninjaarena.spectate", "ninjaarena.leaderboard", "none")) {
+                "ninjaarena.admin.lobby", "ninjaarena.admin.generate", "ninjaarena.spectate", "ninjaarena.leaderboard",
+                "none")) {
             CommandSender sender = (CommandSender) Proxy.newProxyInstance(CommandSender.class.getClassLoader(),
                     new Class<?>[] {CommandSender.class}, (proxy, method, args) -> {
                         if (method.getName().equals("hasPermission")) {

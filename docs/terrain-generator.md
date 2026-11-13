@@ -471,10 +471,76 @@ While any cell is in use, `ArenaRegistry` refuses `create` and `startEdit`
 protection off across the whole arena world, and a placed map may hold lava. The lock
 works both ways, since a generated slot is not granted while an arena is in edit mode.
 
-Each match regenerates its map; this task does not regenerate between rounds.
-`RoomService.playGenerated(room, seed, difficulty)` is the entry point; the commands,
-seed modes and per-slot settings that call it, and per-round regeneration through the
-shop phase's `MatchService.setMapReady`, belong to #163.
+`RoomService.playGenerated(room, seed, difficulty)` plays a seed set by hand and
+`RoomService.playSeedModes(room)` the seeds of the [seed modes](#seed-modes); a new room
+uses the latter when no hand-built arena is ready. `/narena map set generated`, `map
+next`, `map reroll` and `admin generate` call them (README, *Seed modes*).
+
+### Seed modes
+
+`SeedSettings` reads the `maps` section: `maps.default`, the `maps.slots.<n>` overrides
+merged over it, and `maps.seed-sharing`. It is validated at startup (an invalid section
+falls back to the defaults with a warning) and on reload (an invalid one rejects the
+reload with its line). Durations go through `Durations.parse`: amounts with units `d`,
+`h`, `m` and `s`, largest first, or `0`.
+
+`SeedPolicy` is pure: it is given the settings, a clock, a source of random seeds and
+the seeds active in other slots, and keeps per slot (one shared state under `shared`)
+the rotation place, when it last moved, the random seed in force and any request. A slot
+asks it once per generation, with `next(slot, activeElsewhere, request)`:
+
+- `static` gives `seed`; under `distinct` a static seed that an earlier slot also has
+  falls back to random (`warnings` lists those at startup and on reload), and one that
+  is active elsewhere gets a random seed for that map, with a log line.
+- `rotation` starts slot `n` at seed `n` of the list under `distinct` and at the first
+  under `shared`, moves one step once `rotate-every` has passed (or at every generation
+  for `0` under `distinct`) and takes the first seed from its place on that is not
+  active elsewhere; with none free it gives a random seed and logs it.
+- `random` keeps its seed until `reroll-every` has passed, the seed becomes active
+  elsewhere, or a request asks for another.
+- `Request.NEXT` moves a rotation on one step and rerolls a random slot; `REROLL` gives
+  a random seed for that map, which a random slot keeps.
+- Under `shared` the state is one for every slot and active seeds never refuse one, so
+  every active slot plays the shared seed. A timer of `0` moves it on only at a
+  generation while no other active slot plays it (`moves`): slots generating while
+  another plays the shared seed join it, and a lone slot gets a new one each time. A
+  timer moves it once due, at the next generation. A request moves it for every slot;
+  `REROLL` on a rotation moves it on as `NEXT`, since a one-off seed would leave the
+  other slots.
+
+A random seed is drawn again while it is active elsewhere. Timers and requests are only
+read by `next`, so nothing changes a placed map. `preview(slot, activeElsewhere)` tells
+what `next` would give, without moving anything, when that is known: the hook for
+showing the next map before it is generated. `RoomService` keeps the active seeds: the
+seed each map placed or being prepared was asked for, each next round's seed, and the
+seeds rooms set by hand. A seed set by hand that collides under `distinct` is refused
+with `room.map-seed-in-use`.
+
+The rotation place and random seeds are held in memory only. Nothing needs them across a
+restart: every slot cell is cleared on startup, so no map from before is still played,
+and a rotation simply starts again.
+
+### Between rounds
+
+With `regenerate: round` for its slot, a room's map is generated again in each shop
+break, without touching the map being played:
+
+1. `RoomService.onPhase` sees the match go to SHOP and asks the policy for the slot's
+   next seed. `GeneratedMaps.prepareReplacement` clears, searches and places it in
+   another free cell under an internal name. `RoomService` reserves one spare cell
+   beyond `arenas.max-active` while any slot regenerates between rounds; with no cell
+   free, the round keeps the current map.
+2. Meanwhile `RoomService.mapReady`, set as `MatchService.setMapReady`, answers false,
+   so the shop waits for the map up to `shop.map-wait-limit-seconds` past its time.
+3. A `Ready` replacement while the match is still in SHOP is committed:
+   `commitReplacement` gives it the map's name, the held state and the old map's slot
+   number (`SlotCells.swap`), and clears the old cell. The next PREP reads the new team
+   spawns, the enemy spawner (`MobSpawner.Following`) and the spectators' seats follow
+   the new map, and `GeneratedMaps.replacementProgress` tells how far it had got.
+4. A `Failed` replacement is dropped and, by `MapSearch.fallback`, the round plays the
+   last good seed: the map already placed (`room.map-fallback-seed`). One that is not
+   placed when the wait runs out is dropped as the match leaves SHOP
+   (`shop.map-replay`). Players are never moved to a map that is not fully placed.
 
 ### The placement seam
 

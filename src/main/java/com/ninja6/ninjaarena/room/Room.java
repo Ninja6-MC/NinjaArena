@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.room;
 
+import com.ninja6.ninjaarena.map.SeedPolicy;
 import com.ninja6.ninjaarena.waiting.WaitingRoom;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,8 +15,9 @@ import java.util.function.Predicate;
 
 /**
  * One host's room: who is in it, in the order they joined, the team each is on, the host's
- * settings and the map it plays on: a hand-built arena, or a generated map from a seed
- * ({@link #generated()}) with the last seed that gave a good one. Holds no Bukkit state; {@link RoomService}
+ * settings and the map it plays on: a hand-built arena, or a generated map
+ * ({@link #playsGenerated()}) from a seed set by hand ({@link #isPinned()}) or from the seed
+ * modes, with the last seed that gave a good one. Holds no Bukkit state; {@link RoomService}
  * turns its answers into messages and teleports.
  *
  * <p>Teams are kept even by {@link WaitingRoom}, the same balancing the waiting rooms use: a
@@ -36,8 +38,11 @@ public final class Room {
     private final Set<UUID> kicked = new HashSet<>();
     private WaitingRoom teams;
     private boolean playing;
+    private boolean onGenerated;
+    private boolean pinned;
     private SeedChoice generated;
     private SeedChoice lastGoodSeed;
+    private SeedPolicy.Request request = SeedPolicy.Request.NONE;
 
     /** A room with only its host in it. */
     public Room(UUID host, String arena, RoomSettings settings) {
@@ -67,16 +72,58 @@ public final class Room {
     }
 
     /**
-     * The seed and difficulty the room generates its maps from, while it plays generated
-     * maps; then {@link #arena()} is the name of its generated map.
+     * The seed and difficulty of the room's generated map: the one set by hand, or the one
+     * the seed modes gave its current map. Empty while it plays hand-built arenas, and before
+     * the seed modes have given it one.
      */
     public Optional<SeedChoice> generated() {
-        return Optional.ofNullable(generated);
+        return onGenerated ? Optional.ofNullable(generated) : Optional.empty();
     }
 
-    /** Plays generated maps from this choice, or hand-built ones again for {@code null}. */
+    /** Whether the room plays generated maps; then {@link #arena()} is the name of its map. */
+    public boolean playsGenerated() {
+        return onGenerated;
+    }
+
+    /** Whether its seed was set by hand, and is used for every map until changed. */
+    public boolean isPinned() {
+        return onGenerated && pinned;
+    }
+
+    /** Plays generated maps from this seed, set by hand, or hand-built ones again for {@code null}. */
     public void setGenerated(SeedChoice choice) {
         this.generated = choice;
+        this.onGenerated = choice != null;
+        this.pinned = choice != null;
+        this.request = SeedPolicy.Request.NONE;
+    }
+
+    /** Plays generated maps whose seeds the seed modes pick, from its next map on. */
+    public void setSeedModes() {
+        this.onGenerated = true;
+        this.pinned = false;
+    }
+
+    /** The seed the seed modes gave the room's map now being generated. */
+    public void setSeed(SeedChoice choice) {
+        this.generated = Objects.requireNonNull(choice, "choice");
+    }
+
+    /** Asks for the next rotation seed or a new random one at the room's next generation. */
+    public void request(SeedPolicy.Request request) {
+        this.request = Objects.requireNonNull(request, "request");
+    }
+
+    /** What was asked for the next generation, which is used up. */
+    public SeedPolicy.Request takeRequest() {
+        SeedPolicy.Request asked = request;
+        request = SeedPolicy.Request.NONE;
+        return asked;
+    }
+
+    /** What is asked for the next generation, left in place. */
+    public SeedPolicy.Request requested() {
+        return request;
     }
 
     /**

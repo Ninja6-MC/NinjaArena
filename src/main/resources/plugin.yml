@@ -17,7 +17,7 @@ commands:
     description: The Arena commands
     usage: /<command>
     aliases: [narena]
-    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.admin.lobby;ninjaarena.spectate;ninjaarena.leaderboard;ninjaarena.event.manage
+    permission: ninjaarena.play;ninjaarena.host;ninjaarena.admin;ninjaarena.admin.lobby;ninjaarena.admin.generate;ninjaarena.spectate;ninjaarena.leaderboard;ninjaarena.event.manage
 
 permissions:
   # Each tier is a declared child of the one above it. Bukkit gives the dots in a node name
@@ -68,8 +68,13 @@ permissions:
       ninjaarena.event.manage: true
       ninjaarena.map.change: true
       ninjaarena.admin.lobby: true
+      ninjaarena.admin.generate: true
   ninjaarena.map.change:
-    description: Change the map of a hosted room
+    description: Change the map of a hosted room, or ask for its next or a new seed
+    default: op
+    children: {}
+  ninjaarena.admin.generate:
+    description: Reproduce a seed's layout in a free slot cell and clear it again
     default: op
     children: {}
   ninjaarena.admin.lobby:
