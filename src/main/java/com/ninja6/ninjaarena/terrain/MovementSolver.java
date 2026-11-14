@@ -226,6 +226,74 @@ public final class MovementSolver {
                 movement, (g, node) -> centre.contains(g.x(node), 0, g.z(node)), solved.enemyNodes.size());
     }
 
+    /**
+     * The side cells one route from the team spawn to the centre ledge moves through without
+     * relying on any crumbling block: for every move, the columns from its start to its end,
+     * widened by {@code margin} on each side, from the lower end's feet up to
+     * {@link #JUMP_CLEARANCE} blocks above the higher end's feet. That covers every cell the
+     * move needs as air, so lava kept out of them leaves the route as it is. Indexed like the
+     * model's cells: {@code (z * width + x) * height + y}. All false when the side has no
+     * such route.
+     */
+    public boolean[] firmRouteSpace(int margin) {
+        if (margin < 0) {
+            throw new IllegalArgumentException("margin cannot be negative");
+        }
+        SideDimensions size = side.dimensions();
+        boolean[] space = new boolean[size.volume()];
+        if (spawnNode < 0) {
+            return space;
+        }
+        Graph firm = new Graph(intact.cells.withoutCrumble(), movement);
+        ArenaLayout.Position start = intact.position(spawnNode);
+        int source = firm.nodeAt(start.x(), start.y(), start.z());
+        if (source < 0) {
+            return space;
+        }
+        int ledge = size.length() - size.centreDepth();
+        int feet = side.centreSurfaceY() + 1;
+        int[] route = firm.path(source, firm.targets(node -> firm.z(node) >= ledge && firm.y(node) == feet));
+        for (int i = 0; i < route.length; i++) {
+            int from = route[i];
+            int to = route[Math.min(i + 1, route.length - 1)];
+            int minX = Math.min(firm.x(from), firm.x(to)) - margin;
+            int maxX = Math.max(firm.x(from), firm.x(to)) + margin;
+            int minZ = Math.min(firm.z(from), firm.z(to)) - margin;
+            int maxZ = Math.max(firm.z(from), firm.z(to)) + margin;
+            int minY = Math.min(firm.y(from), firm.y(to));
+            int maxY = Math.max(firm.y(from), firm.y(to)) + JUMP_CLEARANCE - 1;
+            for (int x = Math.max(0, minX); x <= Math.min(size.width() - 1, maxX); x++) {
+                for (int z = Math.max(0, minZ); z <= Math.min(size.length() - 1, maxZ); z++) {
+                    for (int y = Math.max(0, minY); y <= Math.min(size.height() - 1, maxY); y++) {
+                        space[(z * size.width() + x) * size.height() + y] = true;
+                    }
+                }
+            }
+        }
+        return space;
+    }
+
+    /**
+     * Whether the centre can still be reached from the team spawn without relying on any
+     * crumbling block once the given cells hold lava: the check {@link CrossingReport}
+     * makes, run again with the extra lava. Indexed like {@link #firmRouteSpace}.
+     */
+    public boolean crossableWithLava(boolean[] lava) {
+        SideDimensions size = side.dimensions();
+        if (lava.length != size.volume()) {
+            throw new IllegalArgumentException("lava must cover the side's cells");
+        }
+        if (spawnNode < 0) {
+            return false;
+        }
+        Graph firm = new Graph(intact.cells.withoutCrumble().withLava(lava), movement);
+        ArenaLayout.Position start = intact.position(spawnNode);
+        int source = firm.nodeAt(start.x(), start.y(), start.z());
+        int ledge = size.length() - size.centreDepth();
+        int feet = side.centreSurfaceY() + 1;
+        return source >= 0 && firm.reaches(source, firm.targets(node -> firm.z(node) >= ledge && firm.y(node) == feet));
+    }
+
     /** Which nodes of a graph are the centre a route ends at. */
     private interface Target {
         boolean test(Graph graph, int node);
@@ -400,6 +468,18 @@ public final class MovementSolver {
                 }
             }
             return new Cells(sizeX, sizeY, sizeZ, firm);
+        }
+
+        /** The same cells with every marked one read as lava; indexed like {@link #index}. */
+        Cells withLava(boolean[] lava) {
+            byte[] next = kinds.clone();
+            byte blocked = (byte) BlockKind.LAVA.ordinal();
+            for (int i = 0; i < next.length; i++) {
+                if (lava[i]) {
+                    next[i] = blocked;
+                }
+            }
+            return new Cells(sizeX, sizeY, sizeZ, next);
         }
 
         int index(int x, int y, int z) {
@@ -639,6 +719,45 @@ public final class MovementSolver {
                 }
             }
             return seen;
+        }
+
+        /**
+         * The nodes of a fewest-moves route from the source to the first target reached, the
+         * source first; empty if no target is reachable.
+         */
+        int[] path(int source, boolean[] targets) {
+            int[] parent = new int[nodes];
+            Arrays.fill(parent, -1);
+            int[] queue = new int[nodes];
+            int head = 0;
+            int tail = 0;
+            parent[source] = source;
+            queue[tail++] = source;
+            while (head < tail) {
+                int node = queue[head++];
+                if (targets[node]) {
+                    Ints route = new Ints();
+                    for (int at = node; at != source; at = parent[at]) {
+                        route.add(at);
+                    }
+                    route.add(source);
+                    int[] reversed = route.toArray();
+                    for (int i = 0, j = reversed.length - 1; i < j; i++, j--) {
+                        int swap = reversed[i];
+                        reversed[i] = reversed[j];
+                        reversed[j] = swap;
+                    }
+                    return reversed;
+                }
+                for (int e = edgeStart[node]; e < edgeStart[node + 1]; e++) {
+                    int next = edgeTo[e];
+                    if (parent[next] < 0) {
+                        parent[next] = node;
+                        queue[tail++] = next;
+                    }
+                }
+            }
+            return new int[0];
         }
 
         boolean reaches(int source, boolean[] targets) {

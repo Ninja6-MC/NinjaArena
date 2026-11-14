@@ -13,6 +13,30 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Real lava flow and collapsing blocks in generated maps. When a round's fight starts,
+  the map's lava falls flow for real: the still column goes and the head is set flowing,
+  so falling lava fills it again and spreads where it lands. Lava held in ceilings stays
+  still for now. Each source's footprint is worked out with the map (`HazardPlan`): its
+  column and a pool of reach 3 where it lands, kept to the side's hazard rows, so no lava
+  reaches outside the map, a spawn, the centre or their blends. A source whose flow would
+  touch the crumble-free route to the centre or an enemy spawn is left still, and the
+  side is checked to stay crossable with every kept source flowing. The arena protection
+  lets lava flow only inside the footprint of a source the plugin set flowing in that
+  map's fight; every other flow in the arena world stays cancelled, and fire, explosions
+  and entity block changes stay off. A crumbling block a fighting player stands on
+  cracks with the `hazard-warning` sound and collapses a second later into a falling
+  block that never lands as one; lava starting plays `hazard-warning` to the match. At
+  most `stability.hazards.max-lava-sources-per-map` (256) sources flow in one map and
+  `max-lava-sources` (1024) across every map, the same number on each side, each for at
+  most `lava-flow-seconds` (300); every start, stop and collapse goes through the
+  placement budget, at most 64 a tick. When a round or match ends every source is taken
+  away and the lava drains; the next PREP puts the still lava and collapsed blocks back.
+  Freeing, replacing or sweeping a slot cell drops it all before the cell is cleared,
+  and plugin disable removes the lava of every footprint at once. Hand-built arenas are
+  unchanged. Restart-only, like the rest of `stability`. Internal: `CellWriter#apply`
+  runs block changes within the budget; `GeneratedMaps#placed` gives a placed map's
+  layout and origin and `onClearing` says when a cell starts being cleared;
+  `HazardService#openLava` starts more sources mid-round for growing hazards.
 - A disconnect during the fight counts as a death. A player who disconnects while alive in
   COMBAT or OVERRUN, held for the rejoin grace or not, dies for the round, and the kill
   goes to the last enemy player still in the match who damaged them within

@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.map;
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.arena.GridCell;
 import com.ninja6.ninjaarena.terrain.ArenaLayout;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -34,6 +35,20 @@ public interface CellWriter {
      * @param cell the slot cell the region is in
      */
     Work clear(GridCell cell, ArenaBounds region);
+
+    /**
+     * Runs each change once, in order: block changes that are not a whole map, such as
+     * starting and stopping lava or a collapse. Changes in every cell together run at most
+     * {@link #MAX_CHANGES_PER_TICK} a tick, within the same time budget as placing and
+     * clearing. Each change counts as one block visited.
+     *
+     * @param cell the slot cell the changes are in, which orders them behind the cell's
+     *             other work
+     */
+    Work apply(GridCell cell, List<? extends Runnable> changes);
+
+    /** The most changes {@link #apply} runs in one server tick, across every cell. */
+    int MAX_CHANGES_PER_TICK = 64;
 
     /** Drops every queued job, cancelling its future. Called on plugin disable. */
     void close();
