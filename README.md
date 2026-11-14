@@ -728,6 +728,8 @@ Nothing takes damage in the lobby world. Anyone who falls into its void is put b
 the lobby spawn; such a fall never kills and never counts as a death in a match, and no
 death there counts in a match.
 
+Lobby members do not get hungry while waiting in the lobby world.
+
 Lobby membership is a player state. A member's inventory is locked, the join restore
 treats them as busy, and a member who walks or falls out of the lobby area is put back at
 the spawn. Rooms and play portals bring their
