@@ -148,6 +148,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private LobbyEditing lobbyEditing;
     /** In a match or the lobby, or spectating. */
     private final ArenaBusy busy = new ArenaBusy(() -> this.matches, () -> this.spectators, () -> this.lobbyMembers);
+    private final com.ninja6.ninjaarena.texture.TextureMenuLock textureMenuLock =
+            new com.ninja6.ninjaarena.texture.TextureMenuLock(() -> this.matches, () -> this.spectators);
     private final CrossWorldTransfers transfers = new CrossWorldTransfers();
     /** Lets match players cross to the shop area and back; released on disable. */
     private Runnable shopCrossing;
@@ -819,10 +821,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     @Override public String bedrockStatus() { return integration.status(); }
                 }, main, notifier);
         com.ninja6.ninjaarena.texture.TextureMenu chestMenu = new com.ninja6.ninjaarena.texture.TextureMenu(
-                textures, new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), notifier);
+                textures, new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), notifier, textureMenuLock);
         com.ninja6.ninjaarena.texture.TextureDialog dialogMenu = new com.ninja6.ninjaarena.texture.TextureDialog(
                 textures, new com.ninja6.ninjaarena.texture.TextureDialog.PaperScreens(main), notifier,
-                this::menuLocked);
+                textureMenuLock);
         textureMenu = new com.ninja6.ninjaarena.texture.TextureMenus(packSettings.textureMenu(), chestMenu,
                 dialogMenu, message -> getLogger().warning(message));
         getServer().getPluginManager().registerEvents(
@@ -843,11 +845,6 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         : "texture.admin-failed", "message", result.message())));
             }
         };
-    }
-
-    /** The inventory lockdown condition, read when used because matches start after textures. */
-    private boolean menuLocked(UUID id) {
-        return busy.test(id);
     }
 
     /**

@@ -70,7 +70,7 @@ public final class TextureDialog {
         this(service, screens, notifier, id -> false);
     }
 
-    /** {@code locked} is the inventory lockdown condition: in a match, waiting for one, or spectating. */
+    /** {@code locked} is true during a match or while spectating. */
     public TextureDialog(TextureService service, Screens screens, TextureService.Notifier notifier,
             Predicate<UUID> locked) {
         this.locked = Objects.requireNonNull(locked, "locked");

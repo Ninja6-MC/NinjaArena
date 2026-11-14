@@ -54,12 +54,18 @@ class TextureDialogTest {
 
     private final java.util.Set<UUID> inMatch = new java.util.HashSet<>();
 
+    private final java.util.Set<UUID> spectating = new java.util.HashSet<>();
+
+    private boolean locked(UUID id) {
+        return inMatch.contains(id) || spectating.contains(id);
+    }
+
     private void start(boolean authenticated) {
         fixture = new TextureFixture(true, true);
         fixture.authenticated = authenticated;
-        chest = new MenuHarness(fixture);
+        chest = new MenuHarness(fixture, this::locked);
         fake = new Fake();
-        dialog = new TextureDialog(fixture.service, fake, (id, message) -> told.add(message), inMatch::contains);
+        dialog = new TextureDialog(fixture.service, fake, (id, message) -> told.add(message), this::locked);
         joined(ALICE);
         joined(BOB);
     }
@@ -80,6 +86,65 @@ class TextureDialogTest {
 
     private void press(Fake.Shown shown, Player presser, TextureDialog.Button button) {
         shown.press().pressed(presser, button);
+    }
+
+    @Test
+    void bothModesOpenAndChestChoicesWorkThroughTheLobbyLockdown() {
+        start(true);
+        var lockdown = new com.ninja6.ninjaarena.kit.InventoryLockdownListener(id -> true);
+        for (TextureMenuMode mode : TextureMenuMode.values()) {
+            var menus = new TextureMenus(mode, chest.menu, dialog, message -> { });
+            menus.open(chest.player(ALICE));
+            menus.open(chest.player(BOB));
+        }
+        assertEquals(2, fake.shown.size());
+        assertEquals(2, chest.opened.size());
+        for (var opened : chest.opened) {
+            var view = chest.view(opened.player(), opened.inventory());
+            var open = new org.bukkit.event.inventory.InventoryOpenEvent(view);
+            lockdown.onOpen(open);
+            assertFalse(open.isCancelled());
+            var click = new org.bukkit.event.inventory.InventoryClickEvent(view,
+                    org.bukkit.event.inventory.InventoryType.SlotType.CONTAINER, TextureMenu.DETAILED_SLOT,
+                    org.bukkit.event.inventory.ClickType.LEFT, org.bukkit.event.inventory.InventoryAction.PICKUP_ALL);
+            lockdown.onClick(click);
+            assertFalse(click.isCancelled());
+            new TextureListener(fixture.service, chest.menu, dialog).onClick(click);
+            assertTrue(click.isCancelled());
+        }
+        fixture.settle();
+        assertEquals(2, fixture.backend.writes.get());
+    }
+
+    @Test
+    void bothModesRefuseMatchPlayersAndSpectatorsWithTheReason() {
+        start(true);
+        inMatch.add(ALICE);
+        spectating.add(BOB);
+        for (TextureMenuMode mode : TextureMenuMode.values()) {
+            var menus = new TextureMenus(mode, chest.menu, dialog, message -> { });
+            menus.open(chest.player(ALICE));
+            menus.open(chest.player(BOB));
+        }
+        assertTrue(fake.shown.isEmpty());
+        assertTrue(chest.opened.isEmpty());
+        String reason = "You can't change textures during a match or while spectating.";
+        assertEquals(List.of(reason, reason), told);
+        assertEquals(List.of(reason, reason), chest.menuTold);
+    }
+
+    @Test
+    void aChestChoiceIsRefusedIfThePlayerStartsSpectatingAfterOpening() {
+        start(true);
+        chest.menu.open(chest.player(ALICE));
+        var holder = chest.screen().holder;
+        spectating.add(ALICE);
+        chest.menu.click(chest.player(ALICE), holder, TextureMenu.DETAILED_SLOT);
+        fixture.settle();
+        assertEquals(0, fixture.backend.writes.get());
+        assertFalse(chest.menu.isCurrent(ALICE, holder));
+        assertEquals(1, chest.closes.get(ALICE));
+        assertEquals("You can't change textures during a match or while spectating.", chest.menuTold.getLast());
     }
 
     @Test
@@ -197,9 +262,9 @@ class TextureDialogTest {
     @Test
     void aSavedDetailedChoiceOnAServerWithoutDetailedSaysItIsNotSetUp() {
         fixture = new TextureFixture(true, false);
-        chest = new MenuHarness(fixture);
+        chest = new MenuHarness(fixture, this::locked);
         fake = new Fake();
-        dialog = new TextureDialog(fixture.service, fake, (id, message) -> told.add(message), inMatch::contains);
+        dialog = new TextureDialog(fixture.service, fake, (id, message) -> told.add(message), this::locked);
         fixture.saved(ALICE, Quality.DETAILED);
         joined(ALICE);
         dialog.open(chest.player(ALICE));
@@ -412,7 +477,7 @@ class TextureDialogTest {
         dialog.open(chest.player(ALICE));
         assertTrue(fake.shown.isEmpty());
         assertEquals(com.ninja6.ninjaarena.message.Messages.text("texture.locked"), told.getLast());
-        assertEquals("The texture menu cannot be opened right now. Leave your match and try again.", told.getLast());
+        assertEquals("You can't change textures during a match or while spectating.", told.getLast());
         inMatch.clear();
         dialog.open(chest.player(ALICE));
         assertEquals(1, fake.shown.size());

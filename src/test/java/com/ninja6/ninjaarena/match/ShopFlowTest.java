@@ -166,6 +166,15 @@ class ShopFlowTest extends MatchFixture {
     }
 
     @Test
+    void textureChoicesStayLockedDuringShopBreaksInTheLobbyWorld() {
+        toShop();
+        var lock = new com.ninja6.ninjaarena.texture.TextureMenuLock(() -> matches, () -> null);
+        assertTrue(players.get(ALICE).location.getWorld() == lobbyWorld);
+        assertTrue(matches.isInMatch(ALICE));
+        assertTrue(lock.test(ALICE));
+    }
+
+    @Test
     void startReadyAndPurchaseCuesReachOnlyTheirIntendedAudience() {
         var sounds = new Sounds(plugin.getServer()::getPlayer);
         matches.setSounds(sounds);
