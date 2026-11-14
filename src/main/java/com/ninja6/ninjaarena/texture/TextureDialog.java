@@ -137,7 +137,12 @@ public final class TextureDialog {
             return;
         }
         active.saving = quality;
-        show(player, active);
+        if (service.describe(id).bedrock()) {
+            open.remove(id, active);
+            screens.close(player);
+        } else {
+            show(player, active);
+        }
         service.choose(id, quality, result -> {
             if (open.get(id) == active) {
                 active.saving = null;
@@ -182,7 +187,9 @@ public final class TextureDialog {
 
     /** Three short lines leave room for the choice buttons on a Bedrock form. */
     static Content content(TextureService.View view, Quality saving, String note) {
-        String choice = TextureMenu.choiceLine(view);
+        String choice = view.sessionOnly() ? TextureMenu.choiceLine(view)
+                : view.explicit().isPresent() ? text("texture.dialog.choice-saved",
+                        "quality", TextureService.display(view.saved())) : text("texture.dialog.choice-default");
         String status = saving != null ? text("texture.menu.saving") : view.playerStatus();
         String timing = text(view.bedrock() ? "texture.dialog.timing-bedrock"
                 : view.sessionOnly() ? "texture.dialog.timing-session" : "texture.dialog.timing-java");
@@ -201,8 +208,15 @@ public final class TextureDialog {
             status = text("texture.dialog.detailed-unavailable");
             timing = text("texture.dialog.standard-used");
         }
-        return new Content(text("texture.title"), List.of(choice, status, timing), text("texture.menu.standard"),
-                text(view.detailedAvailable() ? "texture.menu.detailed" : "texture.menu.detailed-unavailable"));
+        return new Content(text("texture.title"), List.of(choice, status, timing),
+                choiceLabel(view, Quality.STANDARD), choiceLabel(view, Quality.DETAILED));
+    }
+
+    private static String choiceLabel(TextureService.View view, Quality quality) {
+        String label = text(quality == Quality.STANDARD ? "texture.menu.standard"
+                : view.detailedAvailable() ? "texture.menu.detailed" : "texture.menu.detailed-unavailable");
+        return !view.sessionOnly() && view.explicit().filter(saved -> saved == quality).isPresent()
+                ? text("texture.dialog.button-saved", "label", label) : label;
     }
 
     /** Builds and sends Paper dialogs. Button callbacks hop to the server thread before running. */
