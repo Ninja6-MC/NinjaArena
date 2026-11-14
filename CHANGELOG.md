@@ -305,6 +305,9 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Bedrock texture forms close after a choice and report the result in chat instead of
+  queuing more forms. Java dialogs still update in place. Dialog text is plainer, and
+  choice buttons mark the saved quality.
 - Lobby members no longer lose food or saturation in the lobby world; eating still raises
   both. Non-members, including players in a shop phase and lobby editors, keep vanilla
   hunger.
