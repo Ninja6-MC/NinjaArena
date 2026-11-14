@@ -169,10 +169,12 @@ Items already handed out are not continually rewritten after a later optional
 pack loss; the next kit issue uses the current loaded status.
 
 Shuriken and smoke bombs keep snowball movement and collision. At throw time,
-the projectile's display stack gets a custom model and accent only when all
-match participants, that match's spectators, and everyone else in the arena world
-have loaded Standard. Anyone pending, declined or failed makes that throw a
-plain snowball. The decision is made once and is not revised for late viewers or
+the projectile's display stack gets a custom model and accent only when all Java
+viewers among the match participants, that match's spectators, and everyone else
+in the arena world have loaded Standard. A Java viewer pending, declined or
+failed makes that throw a plain snowball. Bedrock viewers do not count in this
+check and always see a snowball in flight, even when every viewer is Bedrock.
+The decision is made once and is not revised for late viewers or
 status changes during flight. `thrown-visuals: false` forces vanilla flight.
 There are no following display entities, packets or per-viewer metadata.
 

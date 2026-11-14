@@ -315,7 +315,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         startTextures(packSettings);
         ToolVisuals visuals = new ToolVisuals(resourcePacks.packs(),
                 id -> bedrock.isBedrock(id) ? bedrock.customHeld(id) : resourcePacks.packs().loaded(id),
-                () -> getConfig().getBoolean("resource-pack.thrown-visuals", true),
+                bedrock::isBedrock, () -> getConfig().getBoolean("resource-pack.thrown-visuals", true),
                 name -> spectators == null ? List.of() : spectators.players(name), matches::matchOf);
         kitItems = new KitItems();
         NinjaTools.registerItems(kitItems, visuals);

@@ -305,6 +305,8 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Thrown tools use the custom look when every Java viewer has loaded Standard,
+  ignoring Bedrock viewers. Bedrock players always see a snowball in flight.
 - Lobby members no longer lose food or saturation in the lobby world; eating still raises
   both. Non-members, including players in a shop phase and lobby editors, keep vanilla
   hunger.
