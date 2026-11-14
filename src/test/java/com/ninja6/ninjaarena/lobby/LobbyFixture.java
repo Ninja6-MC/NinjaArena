@@ -50,6 +50,8 @@ abstract class LobbyFixture {
         boolean dead;
         boolean refuseTeleport;
         float fallDistance = 12;
+        int foodLevel = 20;
+        float saturation = 5;
         final List<String> messages = new ArrayList<>();
         final Map<org.bukkit.NamespacedKey, Object> tags = new HashMap<>();
         final org.bukkit.persistence.PersistentDataContainer data =
@@ -145,6 +147,8 @@ abstract class LobbyFixture {
                     case "getName" -> fake.name;
                     case "getLocation" -> fake.location.clone();
                     case "getWorld" -> fake.location.getWorld();
+                    case "getFoodLevel" -> fake.foodLevel;
+                    case "getSaturation" -> fake.saturation;
                     case "isOnline" -> fake.online;
                     case "isDead" -> fake.dead;
                     case "teleport" -> {

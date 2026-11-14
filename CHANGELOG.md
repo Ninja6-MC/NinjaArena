@@ -305,6 +305,9 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Lobby members no longer lose food or saturation in the lobby world; eating still raises
+  both. Non-members, including players in a shop phase and lobby editors, keep vanilla
+  hunger.
 - Allow both texture menus in the lobby, including waiting rooms. Texture choices stay
   locked during matches (including shop breaks) and while spectating, with a refusal
   message that names those reasons.

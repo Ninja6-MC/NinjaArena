@@ -20,7 +20,10 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.entity.EntityExhaustionEvent;
+import org.bukkit.event.entity.EntityExhaustionEvent.ExhaustionReason;
 import org.bukkit.event.entity.EntityPlaceEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -85,6 +88,103 @@ class LobbyListenerTest extends LobbyFixture {
         Player bob = add(BOB, "Bob", new Location(overworld, 0, 70, 0));
         EntityDamageEvent elsewhere = damage(bob, DamageCause.FALL);
         listener.onDamage(elsewhere);
+        assertFalse(elsewhere.isCancelled());
+    }
+
+    @Test
+    void exhaustionCannotDrainAMembersSaturation() {
+        Player alice = add(ALICE, "Alice", new Location(overworld, 0, 70, 0));
+        assertTrue(members.enter(alice));
+        players.get(ALICE).foodLevel = 14;
+        players.get(ALICE).saturation = 5;
+
+        for (ExhaustionReason reason : ExhaustionReason.values()) {
+            EntityExhaustionEvent event = new EntityExhaustionEvent(alice, reason, 5);
+            listener.onExhaustion(event);
+            assertTrue(event.isCancelled(), reason.name());
+            assertEquals(5, alice.getSaturation());
+            assertEquals(14, alice.getFoodLevel());
+        }
+    }
+
+    @Test
+    void exhaustionOutsideLobbyMembershipIsUnaffected() {
+        Player alice = add(ALICE, "Alice", inLobby(0.5, 65, 0.5));
+        EntityExhaustionEvent visitor = new EntityExhaustionEvent(alice, ExhaustionReason.SPRINT, 5);
+        listener.onExhaustion(visitor);
+        assertFalse(visitor.isCancelled());
+        assertEquals(5, visitor.getExhaustion());
+
+        editing.edit(alice, "narena");
+        assertTrue(editing.isEditing(ALICE));
+        EntityExhaustionEvent editor = new EntityExhaustionEvent(alice, ExhaustionReason.BLOCK_MINED, 5);
+        listener.onExhaustion(editor);
+        assertFalse(editor.isCancelled());
+
+        editing.done(alice);
+        players.get(ALICE).location = new Location(overworld, 0, 70, 0);
+        EntityExhaustionEvent outside = new EntityExhaustionEvent(alice, ExhaustionReason.SPRINT, 5);
+        listener.onExhaustion(outside);
+        assertFalse(outside.isCancelled());
+
+        assertTrue(members.enter(alice));
+        players.get(ALICE).location = new Location(arenaWorld, 0, 70, 0);
+        EntityExhaustionEvent elsewhere = new EntityExhaustionEvent(alice, ExhaustionReason.SPRINT, 5);
+        listener.onExhaustion(elsewhere);
+        assertFalse(elsewhere.isCancelled());
+    }
+
+    @Test
+    void aMembersFoodDropIsCancelled() {
+        Player alice = add(ALICE, "Alice", new Location(overworld, 0, 70, 0));
+        assertTrue(members.enter(alice));
+        players.get(ALICE).foodLevel = 14;
+
+        FoodLevelChangeEvent drop = new FoodLevelChangeEvent(alice, 13);
+        listener.onFoodLevelChange(drop);
+        assertTrue(drop.isCancelled());
+    }
+
+    @Test
+    void aMemberMayEatAndKeepTheSameFoodLevel() {
+        Player alice = add(ALICE, "Alice", new Location(overworld, 0, 70, 0));
+        assertTrue(members.enter(alice));
+        players.get(ALICE).foodLevel = 14;
+
+        for (int level : List.of(14, 18)) {
+            FoodLevelChangeEvent event = new FoodLevelChangeEvent(alice, level);
+            listener.onFoodLevelChange(event);
+            assertFalse(event.isCancelled());
+            assertEquals(level, event.getFoodLevel());
+        }
+    }
+
+    @Test
+    void aNonMemberInTheLobbyKeepsVanillaHungerIncludingInEditMode() {
+        Player alice = add(ALICE, "Alice", inLobby(0.5, 65, 0.5));
+        FoodLevelChangeEvent visitor = new FoodLevelChangeEvent(alice, 19);
+        listener.onFoodLevelChange(visitor);
+        assertFalse(visitor.isCancelled());
+
+        editing.edit(alice, "narena");
+        assertTrue(editing.isEditing(ALICE));
+        assertFalse(members.isMember(ALICE));
+        FoodLevelChangeEvent editor = new FoodLevelChangeEvent(alice, 19);
+        listener.onFoodLevelChange(editor);
+        assertFalse(editor.isCancelled());
+    }
+
+    @Test
+    void foodChangesOutsideTheLobbyWorldAreUnaffected() {
+        Player alice = add(ALICE, "Alice", new Location(overworld, 0, 70, 0));
+        FoodLevelChangeEvent visitor = new FoodLevelChangeEvent(alice, 19);
+        listener.onFoodLevelChange(visitor);
+        assertFalse(visitor.isCancelled());
+
+        assertTrue(members.enter(alice));
+        players.get(ALICE).location = new Location(arenaWorld, 0, 70, 0);
+        FoodLevelChangeEvent elsewhere = new FoodLevelChangeEvent(alice, 19);
+        listener.onFoodLevelChange(elsewhere);
         assertFalse(elsewhere.isCancelled());
     }
 

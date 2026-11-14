@@ -17,7 +17,9 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.entity.EntityExhaustionEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
@@ -67,6 +69,23 @@ public final class LobbyListener implements Listener {
         event.setCancelled(true);
         if (entity instanceof Player player && event.getCause() == DamageCause.VOID) {
             members.returnToSpawn(player);
+        }
+    }
+
+    /** Stop exhaustion before it can consume a member's saturation or food. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onExhaustion(EntityExhaustionEvent event) {
+        if (event.getEntity() instanceof Player player && PluginWorlds.isLobby(player.getWorld())
+                && members.isMember(player.getUniqueId())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onFoodLevelChange(FoodLevelChangeEvent event) {
+        if (event.getEntity() instanceof Player player && PluginWorlds.isLobby(player.getWorld())
+                && members.isMember(player.getUniqueId()) && event.getFoodLevel() < player.getFoodLevel()) {
+            event.setCancelled(true);
         }
     }
 
