@@ -628,6 +628,7 @@ texture:
   standard: "Standard"
   detailed: "Detailed"
   locked: "You can't change textures during a match or while spectating."
+  menu-refused: "The texture menu could not be opened."
   menu-stale: "That menu is out of date. Reopen it with /ninjaarena textures."
   menu-no-permission: "You do not have permission to use this menu."
   still-saving: "Still saving your last choice. Wait for it to finish."

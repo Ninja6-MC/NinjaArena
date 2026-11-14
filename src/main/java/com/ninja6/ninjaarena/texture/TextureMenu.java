@@ -115,9 +115,9 @@ public final class TextureMenu {
         open.put(id, active);
         render(active);
         if (player.openInventory(holder.inventory) == null) {
-            // Another rule, such as a match's inventory lockdown, refused the window.
+            // Another plugin or rule refused the window.
             open.remove(id, active);
-            notifier.tell(id, text("texture.locked"));
+            notifier.tell(id, text("texture.menu-refused"));
         }
     }
 
