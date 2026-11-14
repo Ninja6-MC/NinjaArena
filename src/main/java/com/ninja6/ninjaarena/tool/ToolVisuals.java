@@ -21,6 +21,7 @@ public final class ToolVisuals {
 
     private final LoadedPacks packs;
     private final java.util.function.Predicate<UUID> customHeld;
+    private final java.util.function.Predicate<UUID> bedrock;
     private final BooleanSupplier thrownVisuals;
     private final Function<String, Collection<UUID>> spectators;
     private final Function<UUID, java.util.Optional<MatchView>> matches;
@@ -39,6 +40,14 @@ public final class ToolVisuals {
         this(packs, customHeld, thrownVisuals, spectators, matches, NinjaTool::create, () -> ItemStack.of(Material.SNOWBALL));
     }
 
+    public ToolVisuals(LoadedPacks packs, java.util.function.Predicate<UUID> customHeld,
+            java.util.function.Predicate<UUID> bedrock, BooleanSupplier thrownVisuals,
+            Function<String, Collection<UUID>> spectators,
+            Function<UUID, java.util.Optional<MatchView>> matches) {
+        this(packs, customHeld, bedrock, thrownVisuals, spectators, matches,
+                NinjaTool::create, () -> ItemStack.of(Material.SNOWBALL));
+    }
+
     ToolVisuals(LoadedPacks packs, BooleanSupplier thrownVisuals,
             Function<String, Collection<UUID>> spectators,
             Function<UUID, java.util.Optional<MatchView>> matches, Items items,
@@ -50,8 +59,17 @@ public final class ToolVisuals {
             Function<String, Collection<UUID>> spectators,
             Function<UUID, java.util.Optional<MatchView>> matches, Items items,
             java.util.function.Supplier<ItemStack> snowball) {
+        this(packs, customHeld, id -> false, thrownVisuals, spectators, matches, items, snowball);
+    }
+
+    ToolVisuals(LoadedPacks packs, java.util.function.Predicate<UUID> customHeld,
+            java.util.function.Predicate<UUID> bedrock, BooleanSupplier thrownVisuals,
+            Function<String, Collection<UUID>> spectators,
+            Function<UUID, java.util.Optional<MatchView>> matches, Items items,
+            java.util.function.Supplier<ItemStack> snowball) {
         this.packs = packs;
         this.customHeld = customHeld;
+        this.bedrock = bedrock;
         this.thrownVisuals = thrownVisuals;
         this.spectators = spectators;
         this.matches = matches;
@@ -74,7 +92,7 @@ public final class ToolVisuals {
         viewers.removeAll(match.disconnectedPlayers());
         viewers.addAll(spectators.apply(match.arena()));
         viewers.addAll(worldPlayers);
-        return viewers.stream().allMatch(packs::loaded);
+        return viewers.stream().filter(id -> !bedrock.test(id)).allMatch(packs::loaded);
     }
 
     public void flight(Snowball projectile, NinjaTool tool, MatchView match, UUID thrower) {
