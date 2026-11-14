@@ -159,6 +159,23 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void textureChoicesStayUnlockedInTheLobbyAndInAWaitingRoom() {
+        var lock = new com.ninja6.ninjaarena.texture.TextureMenuLock(() -> matches, () -> null);
+        lobby.add(ALICE);
+        players.get(ALICE).location = new Location(lobbyWorld, 0, 64, 0);
+        assertFalse(lock.test(ALICE));
+        Room room = openWith(ALICE, BOB);
+        assertFalse(room.isPlaying());
+        assertTrue(lobby.contains(ALICE));
+        assertFalse(lock.test(ALICE));
+        assertFalse(lock.test(BOB));
+        rooms.start(player(ALICE), null);
+        assertTrue(room.isPlaying());
+        assertTrue(lock.test(ALICE));
+        assertTrue(lock.test(BOB));
+    }
+
+    @Test
     void aRoomCanStartAMatchWithoutAnArenaWaitingRoomPoint() throws Exception {
         arenas.startEdit("dojo");
         arenas.update("dojo", arena -> arena.withWaitingRoom(null));

@@ -308,6 +308,9 @@ Java 25, and does not run on Folia.
 - Lobby members no longer lose food or saturation in the lobby world; eating still raises
   both. Non-members, including players in a shop phase and lobby editors, keep vanilla
   hunger.
+- Allow both texture menus in the lobby, including waiting rooms. Texture choices stay
+  locked during matches (including shop breaks) and while spectating, with a refusal
+  message that names those reasons.
 - Short `/narena invite` and `/narena accept` commands now complete online player names;
   `/narena host` completes hand-built arena names, filtered by the typed prefix.
 - Refuse a map reroll when the shared seed is static, telling only the player who asked

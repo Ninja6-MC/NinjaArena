@@ -89,7 +89,10 @@ class SpectatorLifecycleTest extends MatchFixture {
         players.get(CAROL).canSpectate = true;
         inLobby(CAROL);
 
+        var textureLock = new com.ninja6.ninjaarena.texture.TextureMenuLock(() -> matches, () -> viewers);
+        assertFalse(textureLock.test(CAROL));
         viewers.fromLobby(player(CAROL), "dojo");
+        assertTrue(textureLock.test(CAROL));
 
         assertFalse(lobby.contains(CAROL), "the lobby's own teleport out ends membership");
         assertFalse(matches.isInMatch(CAROL));
