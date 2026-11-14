@@ -4,7 +4,6 @@ import com.ninja6.ninjaarena.arena.Arena;
 import com.ninja6.ninjaarena.arena.MapSeed;
 import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchResult;
-import com.ninja6.ninjaarena.match.MatchUpdate.Cause;
 import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.match.PlayedMap;
 import com.ninja6.ninjaarena.match.RoundResult;
@@ -82,7 +81,7 @@ public final class StatsTracker implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onEliminated(PlayerEliminatedEvent event) {
-        if (event.cause() != Cause.DIED) {
+        if (!event.isDeath()) {
             return;
         }
         MatchView match = event.match();

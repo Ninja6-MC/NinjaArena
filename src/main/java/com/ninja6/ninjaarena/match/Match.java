@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -82,6 +83,16 @@ import java.util.function.Supplier;
  * player still in the match is disconnected, its timers wait. A player whose grace runs out
  * {@link #leave leaves}.
  *
+ * <p><b>Disconnecting in a fight.</b> A player who disconnects while alive in COMBAT or
+ * OVERRUN, held ({@link #disconnect}) or not ({@link #quit}), dies for the round: their
+ * elimination counts as a death ({@link PlayerEliminated#death()}). The kill goes to the
+ * last enemy player still in the match who {@link #damaged damaged} them within
+ * {@link MatchSettings#disconnectKillWindowSeconds()}, the whole round when it is 0; with
+ * nobody to credit, the elimination has no killer and their team pays
+ * {@link MatchSettings#disconnectPenaltyPoints()}. Rejoining in the same round does not undo
+ * the death or bring them back into the round, and cannot count it twice: they are no longer
+ * alive in it. A disconnect in any other phase is no death.
+ *
  * <p>Not thread-safe: call it from the server thread.
  */
 public final class Match implements MatchView {
@@ -116,6 +127,11 @@ public final class Match implements MatchView {
     private BooleanSupplier mapReady = () -> true;
     private Supplier<Optional<MapSeed>> mapSeed = Optional::empty;
     private final List<PlayedMap> maps = new ArrayList<>();
+    /**
+     * This round's hits by enemy players: for each player hit, each attacker with the round
+     * second of their last hit, least recent first.
+     */
+    private final Map<UUID, LinkedHashMap<UUID, Integer>> hits = new HashMap<>();
 
     /**
      * @param arena     the arena's name
@@ -257,6 +273,7 @@ public final class Match implements MatchView {
         if (closed || !phase.isInRound() || !alive.remove(player)) {
             return updates;
         }
+        hits.remove(player);
         UUID credited = killer != null && present.contains(killer) && !killer.equals(player) ? killer : null;
         updates.add(new PlayerEliminated(player, teamOf.get(player), Cause.DIED, credited));
         return updates;
@@ -269,6 +286,18 @@ public final class Match implements MatchView {
      * {@link #settle()}.
      */
     public List<MatchUpdate> leave(UUID player) {
+        return leave(player, false);
+    }
+
+    /**
+     * A player disconnected and is not held: they {@link #leave} the match, and their
+     * elimination during COMBAT or OVERRUN counts as a death, as for {@link #disconnect}.
+     */
+    public List<MatchUpdate> quit(UUID player) {
+        return leave(player, true);
+    }
+
+    private List<MatchUpdate> leave(UUID player, boolean quit) {
         List<MatchUpdate> updates = new ArrayList<>();
         if (closed || !present.remove(player)) {
             return updates;
@@ -276,8 +305,10 @@ public final class Match implements MatchView {
         int team = teamOf.get(player);
         away.remove(player);
         if (alive.remove(player)) {
-            updates.add(new PlayerEliminated(player, team, Cause.LEFT, null));
+            updates.add(quit ? outOfRound(player, team, Cause.LEFT) : new PlayerEliminated(player, team, Cause.LEFT,
+                    null));
         }
+        hits.remove(player);
         updates.add(new PlayerLeft(player, team));
         ready.remove(player);
         if (present.isEmpty()) {
@@ -308,7 +339,7 @@ public final class Match implements MatchView {
         }
         int team = teamOf.get(player);
         if (alive.remove(player)) {
-            updates.add(new PlayerEliminated(player, team, Cause.DISCONNECTED, null));
+            updates.add(outOfRound(player, team, Cause.DISCONNECTED));
         }
         ready.remove(player);
         updates.add(new PlayerDisconnected(player, team));
@@ -316,6 +347,43 @@ public final class Match implements MatchView {
             quickStart(updates);
         }
         return updates;
+    }
+
+    /**
+     * An enemy player damaged a player alive in the round, during COMBAT or OVERRUN; kept
+     * for this round to credit a kill if the player disconnects. Ignored otherwise, and for
+     * a player hitting themselves or a teammate.
+     */
+    public void damaged(UUID player, UUID attacker) {
+        if (closed || !phase.isFighting() || !alive.contains(player) || !present.contains(attacker)
+                || player.equals(attacker) || teamOf.get(player).equals(teamOf.get(attacker))) {
+            return;
+        }
+        LinkedHashMap<UUID, Integer> by = hits.computeIfAbsent(player, id -> new LinkedHashMap<>());
+        by.remove(attacker);
+        by.put(attacker, roundElapsed);
+    }
+
+    /**
+     * Takes a player who disconnected, or quit, out of the round: a death during COMBAT or
+     * OVERRUN, credited to the last enemy player still in the match who damaged them within
+     * the window.
+     */
+    private PlayerEliminated outOfRound(UUID player, int team, Cause cause) {
+        LinkedHashMap<UUID, Integer> by = hits.remove(player);
+        if (!phase.isFighting()) {
+            return new PlayerEliminated(player, team, cause, null, false);
+        }
+        UUID killer = null;
+        if (by != null) {
+            int window = settings.disconnectKillWindowSeconds();
+            for (Map.Entry<UUID, Integer> hit : by.entrySet()) {
+                if (present.contains(hit.getKey()) && (window == 0 || roundElapsed - hit.getValue() <= window)) {
+                    killer = hit.getKey();
+                }
+            }
+        }
+        return new PlayerEliminated(player, team, cause, killer, true);
     }
 
     /**
@@ -441,6 +509,7 @@ public final class Match implements MatchView {
         waitingForMap = false;
         alive.clear();
         alive.addAll(connected());
+        hits.clear();
         roundElapsed = 0;
         reachedOverrun = false;
         setPhase(MatchPhase.PREP, settings.prepSeconds(), updates);
@@ -477,6 +546,7 @@ public final class Match implements MatchView {
                 alivePlayers());
         results.add(finished);
         alive.clear();
+        hits.clear();
         roundElapsed = 0;
         setPhase(MatchPhase.ROUND_END, settings.roundEndSeconds(), updates);
         updates.add(new RoundEnded(finished));
@@ -519,6 +589,7 @@ public final class Match implements MatchView {
         table.sort(Comparator.comparingInt(Standing::score).reversed().thenComparingInt(Standing::team));
         result = new MatchResult(arena, reason, winners, table, results);
         alive.clear();
+        hits.clear();
         ready.clear();
         waitingForMap = false;
         roundElapsed = 0;

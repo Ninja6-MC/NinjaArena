@@ -52,4 +52,23 @@ class MatchSettingsTest {
         assertEquals(MatchSettings.MAX_ROUNDS, high.rounds());
         assertEquals(MatchSettings.MAX_EXTRA_ROUNDS, high.extraRounds());
     }
+
+    @Test
+    void disconnectScoringIsReadAndClamped() {
+        assertEquals(0, MatchSettings.DEFAULTS.disconnectKillWindowSeconds(), "the whole round");
+        assertEquals(2, MatchSettings.DEFAULTS.disconnectPenaltyPoints());
+
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("match.disconnect-kill-window-seconds", 10);
+        yaml.set("match.disconnect-penalty-points", 0);
+        MatchSettings settings = MatchSettings.from(yaml.getConfigurationSection("match"));
+        assertEquals(10, settings.disconnectKillWindowSeconds());
+        assertEquals(0, settings.disconnectPenaltyPoints());
+
+        MatchSettings low = new MatchSettings(1, 1, 0, 1, 1, 1, 0, -3, -3);
+        assertEquals(0, low.disconnectKillWindowSeconds());
+        assertEquals(0, low.disconnectPenaltyPoints());
+        assertEquals(MatchSettings.MAX_SECONDS,
+                new MatchSettings(1, 1, 0, 1, 1, 1, 0, 99999, 7).disconnectKillWindowSeconds());
+    }
 }

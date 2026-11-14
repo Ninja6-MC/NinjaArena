@@ -17,9 +17,15 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param extraRounds         most extra rounds played while the leading teams are tied
  *                            after the last scheduled round; still tied after them, the
  *                            leaders share the win
+ * @param disconnectKillWindowSeconds how recently an enemy player must have damaged a player
+ *                            who disconnects during COMBAT or OVERRUN to be credited with the
+ *                            kill; 0 for the whole round so far
+ * @param disconnectPenaltyPoints team points lost when a player disconnects during COMBAT or
+ *                            OVERRUN with no enemy player to credit; 0 for none
  */
 public record MatchSettings(int prepSeconds, int roundSeconds, int overrunLimitSeconds, int roundEndSeconds,
-        int matchEndSeconds, int rounds, int extraRounds) {
+        int matchEndSeconds, int rounds, int extraRounds, int disconnectKillWindowSeconds,
+        int disconnectPenaltyPoints) {
 
     public static final int DEFAULT_PREP_SECONDS = 15;
     public static final int DEFAULT_ROUND_SECONDS = 240;
@@ -28,6 +34,9 @@ public record MatchSettings(int prepSeconds, int roundSeconds, int overrunLimitS
     public static final int DEFAULT_MATCH_END_SECONDS = 10;
     public static final int DEFAULT_ROUNDS = 5;
     public static final int DEFAULT_EXTRA_ROUNDS = 1;
+    /** The whole round. */
+    public static final int DEFAULT_DISCONNECT_KILL_WINDOW_SECONDS = 0;
+    public static final int DEFAULT_DISCONNECT_PENALTY_POINTS = 2;
 
     static final int MAX_SECONDS = 3600;
     static final int MAX_ROUNDS = 25;
@@ -35,7 +44,7 @@ public record MatchSettings(int prepSeconds, int roundSeconds, int overrunLimitS
 
     public static final MatchSettings DEFAULTS = new MatchSettings(DEFAULT_PREP_SECONDS, DEFAULT_ROUND_SECONDS,
             DEFAULT_OVERRUN_LIMIT_SECONDS, DEFAULT_ROUND_END_SECONDS, DEFAULT_MATCH_END_SECONDS, DEFAULT_ROUNDS,
-            DEFAULT_EXTRA_ROUNDS);
+            DEFAULT_EXTRA_ROUNDS, DEFAULT_DISCONNECT_KILL_WINDOW_SECONDS, DEFAULT_DISCONNECT_PENALTY_POINTS);
 
     public MatchSettings {
         prepSeconds = Math.clamp(prepSeconds, 1, MAX_SECONDS);
@@ -45,6 +54,15 @@ public record MatchSettings(int prepSeconds, int roundSeconds, int overrunLimitS
         matchEndSeconds = Math.clamp(matchEndSeconds, 1, MAX_SECONDS);
         rounds = Math.clamp(rounds, 1, MAX_ROUNDS);
         extraRounds = Math.clamp(extraRounds, 0, MAX_EXTRA_ROUNDS);
+        disconnectKillWindowSeconds = Math.clamp(disconnectKillWindowSeconds, 0, MAX_SECONDS);
+        disconnectPenaltyPoints = Math.max(0, disconnectPenaltyPoints);
+    }
+
+    /** With the default disconnect scoring. */
+    public MatchSettings(int prepSeconds, int roundSeconds, int overrunLimitSeconds, int roundEndSeconds,
+            int matchEndSeconds, int rounds, int extraRounds) {
+        this(prepSeconds, roundSeconds, overrunLimitSeconds, roundEndSeconds, matchEndSeconds, rounds, extraRounds,
+                DEFAULT_DISCONNECT_KILL_WINDOW_SECONDS, DEFAULT_DISCONNECT_PENALTY_POINTS);
     }
 
     /** Seconds a disconnected player is held in their match by default. */
@@ -76,6 +94,8 @@ public record MatchSettings(int prepSeconds, int roundSeconds, int overrunLimitS
                 section.getInt("round-end-seconds", DEFAULT_ROUND_END_SECONDS),
                 section.getInt("match-end-seconds", DEFAULT_MATCH_END_SECONDS),
                 section.getInt("rounds", DEFAULT_ROUNDS),
-                section.getInt("extra-rounds", DEFAULT_EXTRA_ROUNDS));
+                section.getInt("extra-rounds", DEFAULT_EXTRA_ROUNDS),
+                section.getInt("disconnect-kill-window-seconds", DEFAULT_DISCONNECT_KILL_WINDOW_SECONDS),
+                section.getInt("disconnect-penalty-points", DEFAULT_DISCONNECT_PENALTY_POINTS));
     }
 }
