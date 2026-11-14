@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -628,6 +629,49 @@ class NinjaArenaCommandTest {
                 command.onTabComplete(host, null, "narena", new String[] {""}));
         assertEquals(List.of("help", "host"), command.onTabComplete(host, null, "narena", new String[] {"H"}));
         assertEquals(List.of("accept"), command.onTabComplete(player, null, "narena", new String[] {"AC"}));
+    }
+
+    @Test
+    void shortInviteAndAcceptCompletePlayerNamesLikeTheirRoomForms() {
+        Player player = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
+        for (String action : List.of("invite", "accept")) {
+            for (String prefix : List.of("", "Al")) {
+                List<String> room = command.onTabComplete(player, null, "narena",
+                        new String[] {"room", action, prefix});
+                assertNull(room, "Bukkit supplies online player names");
+                assertEquals(room, command.onTabComplete(player, null, "narena", new String[] {action, prefix}));
+            }
+            assertEquals(List.of(), command.onTabComplete(player, null, "narena",
+                    new String[] {action, "Alice", ""}));
+        }
+        assertNull(command.onTabComplete(playerWithPermissions(NinjaArenaCommand.HOST), null, "narena",
+                new String[] {"INVITE", ""}));
+        assertNull(command.onTabComplete(playerWithPlay(), null, "narena", new String[] {"ACCEPT", ""}));
+    }
+
+    @Test
+    void shortHostCompletesAllHandBuiltArenaNamesAndFiltersThePrefix() throws Exception {
+        registry.create("dojo", new GridCell(0, 0));
+        registry.create("garden", new GridCell(1, 0));
+        registry.setPickable("garden", false);
+        Player host = playerWithPermissions(NinjaArenaCommand.HOST);
+        assertEquals(List.of("dojo", "garden"), command.onTabComplete(host, null, "narena",
+                new String[] {"host", ""}));
+        assertEquals(List.of("garden"), command.onTabComplete(host, null, "narena",
+                new String[] {"HOST", "G"}));
+        assertEquals(List.of(), command.onTabComplete(host, null, "narena", new String[] {"host", "missing"}));
+        assertEquals(List.of(), command.onTabComplete(host, null, "narena", new String[] {"host", "dojo", ""}));
+    }
+
+    @Test
+    void shortCommandCompletionsRequireTheirOwnPermission() {
+        for (String action : List.of("host", "invite", "accept")) {
+            Player denied = playerWithPermissions(action.equals("accept") ? NinjaArenaCommand.HOST
+                    : NinjaArenaCommand.PLAY);
+            assertEquals(List.of(), command.onTabComplete(denied, null, "narena", new String[] {action, ""}));
+            assertEquals(List.of(), command.onTabComplete(playerWithPermissions(), null, "narena",
+                    new String[] {action, ""}));
+        }
     }
 
     @Test

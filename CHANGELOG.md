@@ -295,6 +295,8 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Short `/narena invite` and `/narena accept` commands now complete online player names;
+  `/narena host` completes hand-built arena names, filtered by the typed prefix.
 - Refuse a map reroll when the shared seed is static, telling only the player who asked
   that the server settings fix the seed, without regenerating or queuing a change.
 - Servers sharing one SQLite file no longer lose matches when they create the file
