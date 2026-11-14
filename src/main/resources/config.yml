@@ -124,12 +124,22 @@ match:
   # back in time, they spectate until the next round (or play at once during prep). When it
   # runs out they leave the match as before. 0 makes a disconnect a leave (0 to 600).
   rejoin-grace-seconds: 60
+  # A player who disconnects during the fight (Combat or Overrun) dies for the round, with
+  # or without the grace above. The last enemy player still in the match who damaged them
+  # within this many seconds gets the kill, with the same points, team score and stats as
+  # any kill. 0 means any time in the round so far (0 to 3600). A rejoin does not undo it.
+  disconnect-kill-window-seconds: 0
+  # Team points lost when nobody can be credited with that kill; the score never goes
+  # below 0. 0 turns the penalty off. A disconnect during prep or the shop costs nothing.
+  disconnect-penalty-points: 2
 
 scoring:
   # Points awarded to the winning team of a round. Draws award nothing; 0 disables it.
   round-win-points: 5
   # Points for killing an opposing player in the same match. Teamkills, suicides,
-  # environmental deaths and leaving award nothing. 0 disables this award.
+  # environmental deaths and leaving award nothing; a disconnect during the fight counts
+  # as a kill for the last enemy who hurt them (match.disconnect-kill-window-seconds). 0
+  # disables this award.
   player-kill-points: 2
 
 points:

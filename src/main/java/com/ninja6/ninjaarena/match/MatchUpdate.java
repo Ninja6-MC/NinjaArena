@@ -27,7 +27,8 @@ public sealed interface MatchUpdate {
         LEFT,
         /**
          * They disconnected and may rejoin within the grace period. They stay in the match and
-         * are back in a later round if they rejoin; if not, {@link PlayerLeft} follows.
+         * are back in a later round if they rejoin; if not, {@link PlayerLeft} follows. During
+         * COMBAT or OVERRUN it counts as a death ({@link PlayerEliminated#death()}).
          */
         DISCONNECTED
     }
@@ -36,8 +37,16 @@ public sealed interface MatchUpdate {
      * A player alive in the current round was taken out of it.
      *
      * @param killer the player in the same match who killed them, or {@code null}
+     * @param death  whether it counts as a death for scoring and stats: always when they
+     *               died, and when they disconnected during COMBAT or OVERRUN, whatever the
+     *               cause says
      */
-    record PlayerEliminated(UUID player, int team, Cause cause, UUID killer) implements MatchUpdate {
+    record PlayerEliminated(UUID player, int team, Cause cause, UUID killer, boolean death) implements MatchUpdate {
+
+        /** A death only if they died. */
+        public PlayerEliminated(UUID player, int team, Cause cause, UUID killer) {
+            this(player, team, cause, killer, cause == Cause.DIED);
+        }
     }
 
     /** A player left the match. Comes after {@link PlayerEliminated} if they were alive in a round. */

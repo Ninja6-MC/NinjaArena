@@ -259,7 +259,8 @@ public final class ReloadFiles {
             case "waiting-room.team-size" -> new double[] {0, 64};
             case "match.prep-seconds", "match.round-seconds", "match.round-end-seconds", "match.match-end-seconds"
                     -> new double[] {1, 3600};
-            case "match.overrun-limit-seconds" -> new double[] {0, 3600};
+            case "match.overrun-limit-seconds", "match.disconnect-kill-window-seconds" -> new double[] {0, 3600};
+            case "match.disconnect-penalty-points" -> new double[] {0, Integer.MAX_VALUE};
             case "match.rounds" -> new double[] {1, 25};
             case "match.extra-rounds" -> new double[] {0, 10};
             case "match.rejoin-grace-seconds" -> new double[] {0, MatchService.MAX_REJOIN_GRACE_SECONDS};

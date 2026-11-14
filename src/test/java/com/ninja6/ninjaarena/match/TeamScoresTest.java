@@ -74,4 +74,20 @@ class TeamScoresTest {
         next.begin();
         assertEquals(0, scores.score(next, 2));
     }
+
+    @Test
+    void aPenaltyNeverTakesATeamBelowZero() {
+        Match match = match();
+        assertFalse(scores.deductPoints(match, 1, 1), "not begun");
+        match.begin();
+        assertTrue(scores.deductPoints(match, 1, 3));
+        assertEquals(0, scores.score(match, 1));
+        scores.addPoints(match, 1, 5);
+        assertTrue(scores.deductPoints(match, 1, 2));
+        assertEquals(3, scores.score(match, 1));
+        assertTrue(scores.deductPoints(match, 1, 10));
+        assertEquals(0, scores.score(match, 1));
+        assertFalse(scores.deductPoints(match, 9, 1), "not a starting team");
+        assertThrows(IllegalArgumentException.class, () -> scores.deductPoints(match, 1, -1));
+    }
 }
