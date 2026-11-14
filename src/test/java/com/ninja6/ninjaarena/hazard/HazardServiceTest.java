@@ -432,6 +432,38 @@ class HazardServiceTest {
     }
 
     @Test
+    void aBlockWaitingInABackedUpQueueIsWarnedAndCollapsedOnce() {
+        GeneratedMaps.Placed placed = place("generated:1", SEED);
+        HazardService.WorldPlan plan = HazardService.worldPlan(placed);
+        Map.Entry<Long, Material> crumble = plan.crumble().entrySet().iterator().next();
+        long at = crumble.getKey();
+        HazardService service = service(HazardSettings.DEFAULTS);
+        MatchView match = match("generated:1");
+        service.prepareRound(match);
+        service.startFight(match);
+        warned.clear();
+        // The falls' starts are queued ahead of the collapse and not worked yet.
+        assertTrue(writer.pending() > 0);
+        feet = at;
+        service.tick();
+        now += HazardService.COLLAPSE_DELAY_TICKS;
+        service.tick();
+        for (int i = 0; i < 3 * HazardService.COLLAPSE_DELAY_TICKS; i++) {
+            now++;
+            service.tick();
+        }
+        assertEquals(crumble.getValue(), blocks.get(HazardService.unpackX(at), HazardService.unpackY(at),
+                HazardService.unpackZ(at)), "the collapse is still waiting in the queue");
+        drain();
+        service.tick();
+        drain();
+        assertEquals(List.of("crack " + ALICE), warned, "one warning");
+        assertEquals(1, hazards.debris, "one collapse");
+        assertEquals(Material.AIR, blocks.get(HazardService.unpackX(at), HazardService.unpackY(at),
+                HazardService.unpackZ(at)));
+    }
+
+    @Test
     void handBuiltArenasAreNeverTouched() {
         place("generated:1", SEED);
         HazardService service = service(HazardSettings.DEFAULTS);

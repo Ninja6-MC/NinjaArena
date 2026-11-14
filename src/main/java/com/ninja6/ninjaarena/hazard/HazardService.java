@@ -15,6 +15,7 @@ import com.ninja6.ninjaarena.terrain.ThemePalette;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -146,6 +148,8 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         final Map<Long, Source> stopped = new LinkedHashMap<>();
         /** Crumbling blocks cracking, and the tick each collapses. */
         final Map<Long, Integer> cracking = new LinkedHashMap<>();
+        /** Crumbling blocks whose collapse is queued and has not run yet. */
+        final Set<Long> collapsing = new HashSet<>();
         /** Collapsed blocks and what they were, put back at the next PREP. */
         final Map<Long, Material> collapsed = new LinkedHashMap<>();
 
@@ -329,6 +333,8 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             map.generation++;
             map.fighting = false;
             map.planning.cancel(false);
+            map.cracking.clear();
+            map.collapsing.clear();
         }
     }
 
@@ -393,7 +399,7 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             }
             long at = under.getAsLong();
             if (map.plan.crumble().containsKey(at) && !map.collapsed.containsKey(at)
-                    && !map.cracking.containsKey(at)) {
+                    && !map.cracking.containsKey(at) && !map.collapsing.contains(at)) {
                 map.cracking.put(at, now + COLLAPSE_DELAY_TICKS);
                 warnings.crack(player);
             }
@@ -411,7 +417,10 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             it.remove();
             long at = due.getKey();
             Material material = map.plan.crumble().get(at);
+            // Pending until the change runs, so it is neither cracked nor queued again meanwhile.
+            map.collapsing.add(at);
             changes.add(change(map, generation, () -> {
+                map.collapsing.remove(at);
                 if (blocks.collapse(unpackX(at), unpackY(at), unpackZ(at), material)) {
                     map.collapsed.put(at, material);
                 }
@@ -543,6 +552,7 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         map.openOnPlan = false;
         map.generation++;
         map.cracking.clear();
+        map.collapsing.clear();
         if (map.plan == null || map.open.isEmpty()) {
             map.allowed.clear();
             return;
@@ -585,6 +595,8 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             map.generation++;
             map.fighting = false;
             map.planning.cancel(false);
+            map.cracking.clear();
+            map.collapsing.clear();
             if (map.plan != null) {
                 removeLava(map);
             }
