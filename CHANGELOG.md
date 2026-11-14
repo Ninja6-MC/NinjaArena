@@ -13,6 +13,16 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- A disconnect during the fight counts as a death. A player who disconnects while alive in
+  COMBAT or OVERRUN, held for the rejoin grace or not, dies for the round, and the kill
+  goes to the last enemy player still in the match who damaged them within
+  `match.disconnect-kill-window-seconds` (default 0, the whole round), with the same team
+  points, personal points and stats as any kill. With nobody to credit, their team loses
+  `match.disconnect-penalty-points` (default 2, 0 for none, never below 0). A disconnect in
+  PREP, SHOP or ROUND_END costs nothing. Rejoining in the same round leaves the death
+  standing: the player spectates until the next round and is never counted twice. New
+  texts `match.disconnect-kill` and `match.disconnect-penalty`; `PlayerEliminatedEvent`
+  gains `isDeath()`, which scoring and stats now count instead of the `DIED` cause.
 - Each match is stored with its map. Stats schema version 3 adds a `matches` table (with
   the `stats.table-prefix`) holding, per map a match was played on, the match id, when
   it ended, the season, the map, the seed and difficulty, the rounds played on it, the
@@ -298,6 +308,8 @@ Java 25, and does not run on Folia.
 - Allow both texture menus in the lobby, including waiting rooms. Texture choices stay
   locked during matches (including shop breaks) and while spectating, with a refusal
   message that names those reasons.
+- Short `/narena invite` and `/narena accept` commands now complete online player names;
+  `/narena host` completes hand-built arena names, filtered by the typed prefix.
 - Refuse a map reroll when the shared seed is static, telling only the player who asked
   that the server settings fix the seed, without regenerating or queuing a change.
 - Servers sharing one SQLite file no longer lose matches when they create the file

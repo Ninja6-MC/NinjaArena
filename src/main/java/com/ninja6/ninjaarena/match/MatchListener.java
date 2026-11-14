@@ -6,6 +6,7 @@ import com.ninja6.ninjaarena.world.CrossWorldTransfers;
 import com.ninja6.ninjaarena.world.PluginWorlds;
 import java.util.Objects;
 import org.bukkit.Location;
+import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -64,6 +65,40 @@ public final class MatchListener implements Listener {
         if (damager instanceof Player attacker && matches.isDisarmed(attacker.getUniqueId())) {
             event.setCancelled(true);
         }
+    }
+
+    /**
+     * Tells the match which enemy player hurt whom, directly, with a projectile or with a
+     * lingering cloud, once nothing has cancelled the hit and it did damage (a hit a shield
+     * fully blocks does not count): the kill credit for a player who disconnects during the
+     * fight.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onHit(EntityDamageByEntityEvent event) {
+        if (!(event.getEntity() instanceof Player victim) || !matches.isInMatch(victim.getUniqueId())
+                || event.getFinalDamage() <= 0) {
+            return;
+        }
+        Player attacker = source(event.getDamager());
+        if (attacker == null) {
+            attacker = source(event.getDamageSource().getCausingEntity());
+        }
+        if (attacker != null) {
+            matches.damaged(victim.getUniqueId(), attacker.getUniqueId());
+        }
+    }
+
+    private static Player source(Entity entity) {
+        if (entity instanceof Player player) {
+            return player;
+        }
+        if (entity instanceof Projectile projectile && projectile.getShooter() instanceof Player player) {
+            return player;
+        }
+        if (entity instanceof AreaEffectCloud cloud && cloud.getSource() instanceof Player player) {
+            return player;
+        }
+        return null;
     }
 
     /**

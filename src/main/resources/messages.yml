@@ -509,6 +509,11 @@ match:
   # Within match.rejoin-grace-seconds a disconnected player is still in the match.
   player-disconnected: "<gray><player> disconnected; they have <seconds> seconds to rejoin."
   player-rejoined: "<gray><player> rejoined the match."
+  # A disconnect during the fight counts as a death: the kill goes to the last enemy player
+  # who hurt them (match.disconnect-kill-window-seconds), or with nobody to credit, their team
+  # loses match.disconnect-penalty-points (never below 0).
+  disconnect-kill: "<gray><player> disconnected mid-fight; <killer> gets the kill."
+  disconnect-penalty: "<gray><player> disconnected mid-fight; team <team> loses <points> points."
   rejoined: "<green>You are back in the match, at your team spawn."
   rejoined-shop: "<green>You are back in the match, in the shop."
   rejoined-spectating: "<yellow>You are back in the match and play again from the next round."

@@ -595,6 +595,14 @@ public final class NinjaArenaCommand implements TabExecutor {
         if (args[0].equalsIgnoreCase(ADMIN_ROUTE)) {
             return completeAdmin(sender, args);
         }
+        if (args[0].equalsIgnoreCase("invite") || args[0].equalsIgnoreCase("accept")) {
+            String permission = args[0].equalsIgnoreCase("invite") ? HOST : PLAY;
+            return args.length == 2 && sender.hasPermission(permission) ? null : List.of();
+        }
+        if (args[0].equalsIgnoreCase("host")) {
+            return args.length == 2 && sender.hasPermission(HOST)
+                    ? ArenaCommand.matching(arena.names(), args[1]) : List.of();
+        }
         if (args[0].equalsIgnoreCase("map")) {
             if (!sender.hasPermission(PLAY)) {
                 return List.of();

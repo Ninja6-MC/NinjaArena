@@ -46,7 +46,12 @@ public final class TeamScoringListener implements Listener {
 
     @EventHandler
     public void onEliminated(PlayerEliminatedEvent event) {
-        if (event.cause() != Cause.DIED) {
+        if (!event.isDeath()) {
+            return;
+        }
+        if (event.killer().isEmpty() && event.cause() != Cause.DIED) {
+            // A disconnect in the fight with nobody to credit costs the team instead.
+            scores.deductPoints(event.match(), event.team(), event.match().settings().disconnectPenaltyPoints());
             return;
         }
         event.killer().ifPresent(killer -> {

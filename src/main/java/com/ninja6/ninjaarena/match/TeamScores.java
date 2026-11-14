@@ -56,6 +56,28 @@ public final class TeamScores implements MatchStandings {
         return true;
     }
 
+    /**
+     * Takes a non-negative penalty from a starting team, never below zero. Returns false
+     * where {@link #addPoints} would.
+     *
+     * @throws IllegalArgumentException if points are negative
+     */
+    public boolean deductPoints(MatchView match, int team, int penalty) {
+        Objects.requireNonNull(match, "match");
+        if (penalty < 0) {
+            throw new IllegalArgumentException("points must be non-negative");
+        }
+        if (match.phase() == MatchPhase.WAITING || match.phase() == MatchPhase.MATCH_END
+                || match.result().isPresent() || !match.startingTeams().contains(team)) {
+            return false;
+        }
+        Map<Integer, Integer> table = points.get(match);
+        if (penalty > 0 && table != null) {
+            table.computeIfPresent(team, (ignored, total) -> Math.max(0, total - penalty));
+        }
+        return true;
+    }
+
     /** Releases the live table after the engine has saved the scores in its result. */
     void finish(MatchView match) {
         points.remove(match);

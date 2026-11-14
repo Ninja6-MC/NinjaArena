@@ -321,6 +321,24 @@ class ConfigReloadTest {
     }
 
     @Test
+    void disconnectScoringIsValidatedLikeTheOtherMatchSettings() throws Exception {
+        for (String bad : List.of("match: {disconnect-kill-window-seconds: -1}",
+                "match: {disconnect-kill-window-seconds: 3601}", "match: {disconnect-kill-window-seconds: 1.5}",
+                "match: {disconnect-penalty-points: -1}", "match: {disconnect-penalty-points: 2.5}")) {
+            write(bad + "\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("rejected"), bad);
+        }
+        assertEquals(List.of(), target.calls);
+
+        write("match: {disconnect-kill-window-seconds: 20, disconnect-penalty-points: 0}\n", EMPTY_KIT);
+        var messages = reload.reload();
+        assertTrue(messages.getFirst().contains("complete"), messages.toString());
+        assertTrue(messages.toString().contains("match.disconnect-kill-window-seconds"), messages.toString());
+        assertEquals(20, target.match.disconnectKillWindowSeconds());
+        assertEquals(0, target.match.disconnectPenaltyPoints());
+    }
+
+    @Test
     void invalidSpectatorLimitKeepsTheLastValidSettings() throws Exception {
         write("spectating: {enabled: false, max-per-match: 3}\n", EMPTY_KIT);
         assertTrue(reload.reload().getFirst().contains("complete"));

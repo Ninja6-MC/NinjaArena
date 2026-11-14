@@ -401,7 +401,7 @@ public final class ArenaCommand {
         };
     }
 
-    private List<String> names() {
+    List<String> names() {
         List<String> names = new ArrayList<>();
         for (Arena arena : registry.all()) {
             names.add(arena.name());

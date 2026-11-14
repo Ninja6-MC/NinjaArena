@@ -475,6 +475,25 @@ connected, its timers wait, and the match is abandoned once the last grace runs 
 Disabling the plugin ends every grace as a leave. `match.rejoin-grace-seconds: 0` keeps a
 disconnect a leave, as before.
 
+### Disconnecting during a fight
+
+A player who disconnects while alive in COMBAT or OVERRUN dies for the round, held or not.
+The kill goes to the last enemy player still in the match who damaged them within
+`match.disconnect-kill-window-seconds` (default 0, the whole round so far; 0 to 3600), by
+melee, projectile or lingering cloud. That player gets everything a kill gives: the team's
+`scoring.player-kill-points`, their own `points.player-kill`, and the kill and the death in
+the stats. If the last damager has left the match, the one before them is credited. With
+nobody to credit, the player's team loses `match.disconnect-penalty-points` (default 2; 0
+turns it off), never going below 0, and the death still counts. Everyone in the match is
+told who got the kill, or what the team lost. A disconnect in PREP, SHOP or ROUND_END is
+no death and costs nothing.
+
+The death stands if the player rejoins in the same round: they spectate their team until
+the next round as any rejoin during the fight does, are not brought back into the round,
+and a second disconnect in that round counts nothing more, since they are no longer alive
+in it. The leave command and teleporting out of the arena are not disconnects and are
+scored as before.
+
 ## Watching live matches
 
 From the lobby, while in no room, run `/narena spectate <arena>` to watch an
@@ -986,7 +1005,9 @@ Leaving, match end and plugin disable clear the bossbar, actionbar and titles.
 Teams earn 5 points for a round win and 2 for killing an opposing player in the same
 match. Configure these awards with `scoring.round-win-points` and
 `scoring.player-kill-points`; zero disables an award and negative values become zero.
-Teamkills, suicides, environmental deaths, leaving and drawn rounds award nothing.
+Teamkills, suicides, environmental deaths, leaving and drawn rounds award nothing. A
+[disconnect during a fight](#disconnecting-during-a-fight) is a kill for the last enemy who
+hurt the player, or costs their team `match.disconnect-penalty-points`.
 Points decide the match standings and whether an extra round is needed. The final points
 table is shown to the match's online players before they go back to the lobby.
 
