@@ -171,6 +171,51 @@ class GeneratedMapsTest {
     }
 
     @Test
+    void aPlacedMapKeepsItsLayoutAndEveryClearIsAnnouncedFirst() {
+        GeneratedMaps maps = fresh();
+        List<String> clearing = new ArrayList<>();
+        maps.onClearing(cell -> clearing.add(cell.describe() + " " + blocks.writes));
+        maps.resize(2);
+        assertEquals(2, clearing.size(), "each cell swept on startup");
+        drain();
+        clearing.clear();
+        maps.prepare("generated:1", new GeneratedMaps.Request(42, 1, 2), outcomes::add);
+        assertTrue(maps.placed("generated:1").isEmpty(), "not placed yet");
+        drain();
+        GeneratedMaps.Ready ready = assertInstanceOf(GeneratedMaps.Ready.class, outcomes.getLast());
+        GeneratedMaps.Placed placed = maps.placed("generated:1").orElseThrow();
+        assertEquals(ready.arena(), placed.arena());
+        assertEquals(ready.arena().bounds().minX(), placed.originX());
+        assertEquals(ready.arena().bounds().minY(), placed.originY());
+        assertEquals(ready.arena().bounds().minZ(), placed.originZ());
+        assertEquals(placed.layout().width(), ready.arena().bounds().maxX() - placed.originX() + 1);
+        assertEquals(List.of(), clearing, "placing is not clearing");
+
+        GridCell cell = maps.cellOf("generated:1").orElseThrow();
+        long writes = blocks.writes;
+        maps.free("generated:1");
+        assertEquals(List.of(cell.describe() + " " + writes), clearing, "told before any block is cleared");
+        assertTrue(maps.placed("generated:1").isEmpty());
+        drain();
+
+        ready(maps, "generated:2", 43);
+        maps.prepareReplacement("generated:2", new GeneratedMaps.Request(44, 1, 2), outcomes::add);
+        drain();
+        GridCell old = maps.cellOf("generated:2").orElseThrow();
+        clearing.clear();
+        maps.commitReplacement("generated:2");
+        assertEquals(1, clearing.size());
+        assertTrue(clearing.getFirst().startsWith(old.describe() + " "), "the replaced map's cell");
+        GeneratedMaps.Placed next = maps.placed("generated:2").orElseThrow();
+        assertEquals("generated:2", next.arena().name(), "the replacement answers under the map's name");
+        assertEquals(next.arena(), maps.get("generated:2").orElseThrow());
+        drain();
+        clearing.clear();
+        maps.close();
+        assertEquals(2, clearing.size(), "every cell on close");
+    }
+
+    @Test
     void freeingAMapMidPlacementDropsTheRestAndClearsTheCell() {
         GeneratedMaps maps = maps(1);
         maps.prepare("generated:1", new GeneratedMaps.Request(42, 1, 2), outcomes::add);

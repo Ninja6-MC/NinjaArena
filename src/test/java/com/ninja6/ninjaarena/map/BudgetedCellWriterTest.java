@@ -293,4 +293,91 @@ class BudgetedCellWriterTest {
         assertEquals(0, writer.pending());
         assertEquals(0, writer.tick());
     }
+
+    /** Changes that record their name, and the tick they ran in, when they run. */
+    private static List<Runnable> changes(String name, int count, List<String> ran, int[] tick) {
+        List<Runnable> changes = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String entry = name + i;
+            changes.add(() -> ran.add(entry + "@" + tick[0]));
+        }
+        return changes;
+    }
+
+    @Test
+    void changesRunInOrderAtMostSixtyFourATickAcrossEveryCell() {
+        List<String> ran = new ArrayList<>();
+        int[] tick = {0};
+        CellWriter.Work first = writer.apply(A, changes("a", 100, ran, tick));
+        CellWriter.Work second = writer.apply(B, changes("b", 100, ran, tick));
+        assertEquals(100, first.total());
+        while (!first.isDone() || !second.isDone()) {
+            tick[0]++;
+            int before = ran.size();
+            tick();
+            assertTrue(ran.size() - before <= CellWriter.MAX_CHANGES_PER_TICK,
+                    "tick " + tick[0] + " ran " + (ran.size() - before));
+            assertTrue(tick[0] < 100);
+        }
+        assertEquals(200, ran.size());
+        assertTrue(tick[0] >= 200 / CellWriter.MAX_CHANGES_PER_TICK, "never all at once");
+        List<String> a = ran.stream().filter(entry -> entry.startsWith("a")).map(entry -> entry.split("@")[0])
+                .toList();
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            expected.add("a" + i);
+        }
+        assertEquals(expected, a, "changes run in the order given");
+        assertTrue(ran.stream().anyMatch(entry -> entry.equals("b0@2")), "the cells take turns tick by tick");
+        assertEquals(100, first.done());
+    }
+
+    @Test
+    void changesAtTheirLimitDoNotHoldBackPlacementInAnotherCell() {
+        List<String> ran = new ArrayList<>();
+        int[] tick = {1};
+        writer.apply(A, changes("a", 1000, ran, tick));
+        CellWriter.Work cleared = writer.clear(B, box(1000, 32));
+        blocks.set(1000, 0, 0, Material.STONE);
+        tick();
+        tick();
+        assertTrue(ran.size() <= 2 * CellWriter.MAX_CHANGES_PER_TICK);
+        assertTrue(cleared.done() > 2L * CellWriter.MAX_CHANGES_PER_TICK,
+                "the clear goes on within the time budget: " + cleared.done());
+    }
+
+    @Test
+    void changesKeepToTheTimeBudget() {
+        List<String> ran = new ArrayList<>();
+        int[] tick = {0};
+        CellWriter.Work work = writer.apply(A, changes("a", 200, ran, tick));
+        budget = 0;
+        tick();
+        assertEquals(0, ran.size(), "a budget of 0 runs no change");
+        budget = BUDGET;
+        tick();
+        assertEquals(CellWriter.MAX_CHANGES_PER_TICK, ran.size());
+        budget = 3 * COST;
+        tick();
+        assertEquals(CellWriter.MAX_CHANGES_PER_TICK + 3, ran.size(), "only the changes that fit in the budget run");
+        budget = BUDGET;
+        run(work);
+        assertEquals(200, ran.size());
+    }
+
+    @Test
+    void cancelledChangesAreDroppedAndAFailingChangeFailsOnlyItsOwnWork() {
+        List<String> ran = new ArrayList<>();
+        int[] tick = {0};
+        CellWriter.Work dropped = writer.apply(A, changes("dropped", 5, ran, tick));
+        dropped.cancel(false);
+        CellWriter.Work failing = writer.apply(A, List.of(() -> {
+            throw new IllegalStateException("broken");
+        }));
+        CellWriter.Work after = writer.apply(A, changes("after", 3, ran, tick));
+        run(after);
+        assertTrue(ran.stream().noneMatch(entry -> entry.startsWith("dropped")));
+        assertTrue(failing.isCompletedExceptionally());
+        assertEquals(3, ran.size());
+    }
 }

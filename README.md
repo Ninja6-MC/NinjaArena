@@ -422,6 +422,38 @@ the blocks. Like the rest of `stability`, these settings are validated on reload
 apply after a restart. See [Placement](docs/terrain-generator.md#placement) for the
 details.
 
+#### Lava and collapses
+
+Generated maps have real lava. When a round's fight starts, the map's lava falls flow:
+falling lava pours down and spreads where it lands, and the match hears
+`hazard-warning`. Lava held in ceilings stays still. A crumbling block (the cracked or
+chiselled blocks of each theme) that a fighting player stands on cracks with
+`hazard-warning` and collapses a second later; it drops as a falling block that never
+lands as a block.
+
+Lava only flows where it was worked out to go with the map: down from its source and up
+to 3 blocks across the floor it lands on, never outside the map, into a spawn, the
+centre or their blends, and never onto the route to the centre or an enemy spawn. Every
+other fluid flow in the arena world stays cancelled, and fire, explosions and entity
+block changes stay off. Hand-built arenas are unchanged.
+
+When the round or match ends, every source is taken away and the lava drains by itself
+within a few seconds; at the next PREP the still lava and the collapsed blocks are put
+back. Freeing a map, or the sweeps of its cell, stop it all at once. Limits, under
+`stability.hazards` in `config.yml`:
+
+| Key | Default | Range | Meaning |
+| :--- | :--- | :--- | :--- |
+| `max-lava-sources-per-map` | 256 | 0 to 256 | Lava sources flowing at once in one map. 0 keeps all lava still. |
+| `max-lava-sources` | 1024 | 0 to 1024 | Lava sources flowing at once across every map. |
+| `lava-flow-seconds` | 300 | 1 to 3600 | How long a source flows before it is taken away, if the round has not ended first. |
+
+Sources start and stop at most 64 a tick, within the placement budget above, never all
+at once: setting many at once is what costs tick time, while lava already flowing costs
+little. The caps keep to what was measured on Paper 26.3 with four maps at once. These
+settings are validated on reload but apply after a restart. See
+[Lava flow and collapses](docs/terrain-generator.md#lava-flow-and-collapses).
+
 ### Where players go
 
 | From | How | To |
@@ -630,8 +662,8 @@ validation. Item providers still resolve at round-kit application time.
 Reload applies immediately. `room-join` plays when someone joins your room, by
 `room accept`, `/narena accept` or a play portal, and reaches its members. Match cues include spectators. Purchases and cooldown
 completions reach only their owner. Cooldown resets at round boundaries or leaving
-are silent. `hazard-warning` is reserved
-for the hazard features and currently has no caller.
+are silent. `hazard-warning` plays to the match when lava
+starts flowing in a generated map, and to a player when a block cracks under them.
 
 ## Player messages
 

@@ -156,6 +156,19 @@ public final class GeneratedMaps {
         }
     }
 
+    /**
+     * A placed map with what it was placed from: the layout, and the world block its
+     * {@code (0, 0, 0)} went to. Map {@code x} and {@code z} run along world {@code x} and
+     * {@code z}.
+     */
+    public record Placed(Arena arena, ArenaLayout layout, int originX, int originY, int originZ) {
+
+        public Placed {
+            Objects.requireNonNull(arena, "arena");
+            Objects.requireNonNull(layout, "layout");
+        }
+    }
+
     private enum State { IDLE, CLEARING, PREPARING, FAILED, READY, HELD }
 
     private static final class Slot {
@@ -166,6 +179,8 @@ public final class GeneratedMaps {
         Arena arena;
         /** What the placed map was generated from, while it is placed. */
         MapSeed seed;
+        /** The placed map's layout and origin, while it is placed. */
+        Placed placed;
         /** The box whose chunks have tickets on; null for none. */
         ArenaBounds ticketed;
         /** Bumped by every change, so a completion that comes too late is dropped. */
@@ -193,6 +208,7 @@ public final class GeneratedMaps {
     private final Logger logger;
     private Search search = Search.DEFAULT;
     private Runnable freed = () -> { };
+    private Consumer<GridCell> clearing = cell -> { };
     private final BooleanSupplier handBuiltKnown;
     private int names;
     private int maxMapSize = PlacementSettings.DEFAULTS.maxMapSize();
@@ -259,6 +275,20 @@ public final class GeneratedMaps {
         freed = () -> {
             earlier.run();
             listener.run();
+        };
+    }
+
+    /**
+     * Told each time a cell starts being cleared, before any block of it is: when its map is
+     * freed or replaced, when a replacement is dropped, when it is swept, and for every cell
+     * on {@link #close}. Whatever runs in the cell stops here.
+     */
+    public void onClearing(Consumer<GridCell> listener) {
+        Objects.requireNonNull(listener, "listener");
+        Consumer<GridCell> earlier = clearing;
+        clearing = cell -> {
+            earlier.accept(cell);
+            listener.accept(cell);
         };
     }
 
@@ -466,6 +496,7 @@ public final class GeneratedMaps {
         target.state = State.PREPARING;
         target.arena = null;
         target.seed = null;
+        target.placed = null;
         int generation = ++target.generation;
         // Tickets before any block is written, so no chunk unloads and drops the work.
         takeTickets(target, region(target.cell));
@@ -530,6 +561,7 @@ public final class GeneratedMaps {
             }
             slot.arena = arena(slot, layout, accepted.points(), originX, originY, originZ);
             slot.seed = new MapSeed(accepted.seed(), request.difficulty());
+            slot.placed = new Placed(slot.arena, layout, originX, originY, originZ);
             slot.state = State.READY;
             logger.info("Generated map " + slot.map + " (seed " + accepted.seed() + ", difficulty "
                     + request.difficulty() + ", " + request.teams() + " teams) is ready in slot cell "
@@ -571,10 +603,12 @@ public final class GeneratedMaps {
 
     /** Clears the box with tickets on, then frees the cell. */
     private void clear(Slot slot, ArenaBounds region) {
+        clearing.accept(slot.cell);
         slot.state = State.CLEARING;
         slot.map = null;
         slot.arena = null;
         slot.seed = null;
+        slot.placed = null;
         int generation = ++slot.generation;
         takeTickets(slot, region);
         slot.clearing = null;
@@ -602,6 +636,16 @@ public final class GeneratedMaps {
         Slot slot = slotOf(Arena.normalizeName(name));
         return slot != null && (slot.state == State.READY || slot.state == State.HELD)
                 ? Optional.of(slot.arena) : Optional.empty();
+    }
+
+    /**
+     * The placed map with its layout and origin; empty unless the map is placed. A committed
+     * replacement answers with its own.
+     */
+    public Optional<Placed> placed(String name) {
+        Slot slot = slotOf(Arena.normalizeName(name));
+        return slot != null && (slot.state == State.READY || slot.state == State.HELD)
+                ? Optional.ofNullable(slot.placed) : Optional.empty();
     }
 
     /**
@@ -758,6 +802,8 @@ public final class GeneratedMaps {
         Arena placed = next.arena;
         next.arena = new Arena(key, placed.cell(), placed.bounds(), placed.waitingRoom(), placed.teamSpawns(),
                 placed.enemySpawns(), false);
+        Placed layout = next.placed;
+        next.placed = new Placed(next.arena, layout.layout(), layout.originX(), layout.originY(), layout.originZ());
         next.state = state;
         logger.info("Map " + key + " is replaced by the one generated in slot cell " + next.cell.describe()
                 + "; slot cell " + old.cell.describe() + " is cleared.");
@@ -787,12 +833,14 @@ public final class GeneratedMaps {
         closed = true;
         replacements.clear();
         for (Slot slot : slots.values()) {
+            clearing.accept(slot.cell);
             slot.generation++;
             releaseTickets(slot);
             slot.state = State.IDLE;
             slot.map = null;
             slot.arena = null;
             slot.seed = null;
+            slot.placed = null;
         }
         writer.close();
     }

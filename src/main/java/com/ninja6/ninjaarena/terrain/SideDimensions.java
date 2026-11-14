@@ -89,4 +89,12 @@ public record SideDimensions(int width, int length, int height) {
     public int blendDepth() {
         return Math.max(1, length / 9);
     }
+
+    /**
+     * Whether a row may hold hazards: outside both flat zones and their blend rows, which
+     * stay clear so the spawn and the centre are never reached by a hazard.
+     */
+    public boolean hazardRow(int z) {
+        return z >= spawnDepth() + blendDepth() && z < length - centreDepth() - blendDepth();
+    }
 }
