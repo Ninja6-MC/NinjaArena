@@ -295,9 +295,8 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
-
-- Lobby members no longer lose food in the lobby world; eating still raises their food
-  level. Non-members, including players in a shop phase and lobby editors, keep vanilla
+- Lobby members no longer lose food or saturation in the lobby world; eating still raises
+  both. Non-members, including players in a shop phase and lobby editors, keep vanilla
   hunger.
 - Refuse a map reroll when the shared seed is static, telling only the player who asked
   that the server settings fix the seed, without regenerating or queuing a change.
