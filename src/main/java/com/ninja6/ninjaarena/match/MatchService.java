@@ -509,8 +509,21 @@ public final class MatchService {
     }
 
     /**
+     * An enemy player hurt a player in the same match. Kept by the match for the round, so a
+     * disconnect during the fight credits the kill to whoever hurt them last
+     * ({@link MatchSettings#disconnectKillWindowSeconds()}).
+     */
+    public void damaged(UUID playerId, UUID attackerId) {
+        Running running = matchOf.get(playerId);
+        if (running != null && matchOf.get(attackerId) == running) {
+            running.match().damaged(playerId, attackerId);
+        }
+    }
+
+    /**
      * Takes a player out of their match. The command takes them to the lobby, a teleport
-     * sends them home, and a quit leaves them for their next join.
+     * sends them home, and a quit leaves them for their next join; a quit during COMBAT or
+     * OVERRUN counts as a death ({@link Match#quit}).
      *
      * @return false if they were not in a match
      */
@@ -523,7 +536,7 @@ public final class MatchService {
             return false;
         }
         releasePlayer(player);
-        apply(running, running.match().leave(playerId));
+        apply(running, exit == Exit.QUIT ? running.match().quit(playerId) : running.match().leave(playerId));
         settleLater(running);
         switch (exit) {
             case QUIT -> {
@@ -555,7 +568,8 @@ public final class MatchService {
      * A player in a match disconnected. With a rejoin grace period, and before the match has
      * ended, they are held in it: out of the round, their kit cleared, everything else kept
      * until they {@link #rejoin} or the grace runs out. Otherwise they leave it as with
-     * {@link Exit#QUIT}.
+     * {@link Exit#QUIT}. Either way, a disconnect while alive in COMBAT or OVERRUN counts as
+     * a death (see {@link Match}).
      *
      * @return false if they were not in a match
      */
@@ -766,9 +780,16 @@ public final class MatchService {
                 case PlayerEliminated out -> {
                     if (out.cause() == MatchUpdate.Cause.DIED) {
                         broadcast(running, msg("match.player-out", "player", name(out.player())));
+                    } else if (out.death() && out.killer() != null) {
+                        broadcast(running, msg("match.disconnect-kill", "player", name(out.player()),
+                                "killer", name(out.killer())), out.player());
+                    } else if (out.death() && match.settings().disconnectPenaltyPoints() > 0) {
+                        broadcast(running, msg("match.disconnect-penalty", "player", name(out.player()),
+                                "team", out.team(), "points", match.settings().disconnectPenaltyPoints()),
+                                out.player());
                     }
                     events.accept(new PlayerEliminatedEvent(match, out.player(), out.team(), out.cause(),
-                            out.killer()));
+                            out.killer(), out.death()));
                 }
                 case PlayerLeft left -> {
                     broadcast(running, msg("match.player-left", "player", name(left.player())));

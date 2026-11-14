@@ -1,6 +1,5 @@
 package com.ninja6.ninjaarena.match;
 
-import com.ninja6.ninjaarena.match.MatchUpdate.Cause;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
@@ -61,7 +60,7 @@ public final class PlayerPoints implements Listener {
 
     @EventHandler
     public void onEliminated(PlayerEliminatedEvent event) {
-        if (event.cause() != Cause.DIED) {
+        if (!event.isDeath()) {
             return;
         }
         event.killer().ifPresent(killer -> {
