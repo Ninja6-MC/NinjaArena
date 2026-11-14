@@ -15,15 +15,19 @@ import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.stats.MatchRecord;
 import com.ninja6.ninjaarena.stats.PlayerStats;
 import com.ninja6.ninjaarena.stats.StatsTracker;
+import com.google.common.base.Function;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.entity.EntityDamageEvent.DamageModifier;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -161,6 +165,28 @@ class DisconnectDeathTest extends MatchFixture {
         feed.onHit(new EntityDamageByEntityEvent(player(BOB), player(CAROL), DamageCause.ENTITY_ATTACK, source, 2));
         quit(CAROL);
         assertEquals(Optional.of(BOB), eliminated(CAROL).orElseThrow().killer());
+    }
+
+    @Test
+    void aHitAShieldFullyBlocksEarnsNoCredit() {
+        toCombat(settings(0, 2));
+        MatchListener feed = new MatchListener(matches, new MatchDeathListener(plugin, matches, arenas));
+        DamageSource source = (DamageSource) Proxy.newProxyInstance(DamageSource.class.getClassLoader(),
+                new Class<?>[] {DamageSource.class}, (p, m, a) -> {
+                    throw new UnsupportedOperationException(m.getName());
+                });
+        Map<DamageModifier, Double> modifiers = new EnumMap<>(DamageModifier.class);
+        modifiers.put(DamageModifier.BASE, 4.0);
+        modifiers.put(DamageModifier.BLOCKING, -4.0);
+        Map<DamageModifier, Function<? super Double, Double>> functions = new EnumMap<>(DamageModifier.class);
+        functions.put(DamageModifier.BASE, damage -> damage);
+        functions.put(DamageModifier.BLOCKING, damage -> -damage);
+        EntityDamageByEntityEvent blocked = new EntityDamageByEntityEvent(player(BOB), player(CAROL),
+                DamageCause.ENTITY_ATTACK, source, modifiers, functions);
+        assertEquals(0, blocked.getFinalDamage());
+        feed.onHit(blocked);
+        quit(CAROL);
+        assertTrue(eliminated(CAROL).orElseThrow().killer().isEmpty(), "Bob did no damage");
     }
 
     @Test

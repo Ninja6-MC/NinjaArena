@@ -69,12 +69,14 @@ public final class MatchListener implements Listener {
 
     /**
      * Tells the match which enemy player hurt whom, directly, with a projectile or with a
-     * lingering cloud, once nothing has cancelled the hit: the kill credit for a player who
-     * disconnects during the fight.
+     * lingering cloud, once nothing has cancelled the hit and it did damage (a hit a shield
+     * fully blocks does not count): the kill credit for a player who disconnects during the
+     * fight.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onHit(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof Player victim) || !matches.isInMatch(victim.getUniqueId())) {
+        if (!(event.getEntity() instanceof Player victim) || !matches.isInMatch(victim.getUniqueId())
+                || event.getFinalDamage() <= 0) {
             return;
         }
         Player attacker = source(event.getDamager());
