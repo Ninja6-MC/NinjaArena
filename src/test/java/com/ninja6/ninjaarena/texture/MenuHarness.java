@@ -42,6 +42,10 @@ final class MenuHarness {
     final List<Screen> screens = new ArrayList<>();
 
     MenuHarness(TextureFixture fixture) {
+        this(fixture, id -> false);
+    }
+
+    MenuHarness(TextureFixture fixture, java.util.function.Predicate<UUID> locked) {
         this.fixture = fixture;
         menu = new TextureMenu(fixture.service, new TextureMenu.Screens() {
             @Override
@@ -74,7 +78,7 @@ final class MenuHarness {
             public ItemStack item(TextureMenu.Item item) {
                 return new TestItemStack(item.icon(), item.name() + "|" + String.join("|", item.lore()), 1);
             }
-        }, (id, message) -> menuTold.add(message));
+        }, (id, message) -> menuTold.add(message), locked);
     }
 
     Screen screen() {

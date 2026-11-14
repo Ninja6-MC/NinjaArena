@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -82,9 +83,17 @@ public final class TextureMenu {
     private final Screens screens;
     private final TextureService.Notifier notifier;
     private final Map<UUID, Active> open = new HashMap<>();
+    private final Predicate<UUID> locked;
     private long tokens;
 
     public TextureMenu(TextureService service, Screens screens, TextureService.Notifier notifier) {
+        this(service, screens, notifier, id -> false);
+    }
+
+    /** {@code locked} is true during a match or while spectating. */
+    public TextureMenu(TextureService service, Screens screens, TextureService.Notifier notifier,
+            Predicate<UUID> locked) {
+        this.locked = Objects.requireNonNull(locked, "locked");
         this.service = Objects.requireNonNull(service, "service");
         this.screens = Objects.requireNonNull(screens, "screens");
         this.notifier = Objects.requireNonNull(notifier, "notifier");
@@ -94,6 +103,10 @@ public final class TextureMenu {
         UUID id = player.getUniqueId();
         if (!player.hasPermission(PERMISSION)) {
             notifier.tell(id, text("command.no-permission"));
+            return;
+        }
+        if (locked.test(id)) {
+            notifier.tell(id, text("texture.locked"));
             return;
         }
         Holder holder = new Holder(id, ++tokens);
@@ -127,6 +140,12 @@ public final class TextureMenu {
             open.remove(id);
             player.closeInventory();
             notifier.tell(id, text("texture.menu-no-permission"));
+            return;
+        }
+        if (locked.test(id)) {
+            open.remove(id, active);
+            player.closeInventory();
+            notifier.tell(id, text("texture.locked"));
             return;
         }
         switch (slot) {

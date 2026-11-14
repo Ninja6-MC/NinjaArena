@@ -627,7 +627,7 @@ texture:
   title: "Arena Texture Quality"
   standard: "Standard"
   detailed: "Detailed"
-  locked: "The texture menu cannot be opened right now. Leave your match and try again."
+  locked: "You can't change textures during a match or while spectating."
   menu-stale: "That menu is out of date. Reopen it with /ninjaarena textures."
   menu-no-permission: "You do not have permission to use this menu."
   still-saving: "Still saving your last choice. Wait for it to finish."

@@ -666,7 +666,9 @@ when they leave. `/narena pack status` shows which case applies.
 Detailed and Close buttons) by default; Bedrock players through Geyser 2.8.2 or newer see
 it as a form. Set `resource-pack.texture-menu: chest` to use the chest menu instead, for
 example with an older Geyser or a proxy setup where the dialog does not show. Both menus
-behave the same, and `/narena pack status` reports which one is in use.
+behave the same, and `/narena pack status` reports which one is in use. You can choose
+textures in the lobby, including while your room is waiting to start. Both menus are
+locked during a match (including shop breaks) and while spectating.
 
 ## Icon artwork
 

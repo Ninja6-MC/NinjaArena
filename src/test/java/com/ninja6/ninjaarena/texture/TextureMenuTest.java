@@ -304,7 +304,7 @@ class TextureMenuTest {
         joined(ALICE);
         h.refuseOpen = true;
         h.menu.open(h.player(ALICE));
-        assertTrue(h.menuTold.getLast().contains("cannot be opened right now"));
+        assertEquals(com.ninja6.ninjaarena.message.Messages.text("texture.locked"), h.menuTold.getLast());
         assertFalse(h.menu.isCurrent(ALICE, h.screen().holder));
     }
 
