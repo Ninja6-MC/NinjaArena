@@ -151,6 +151,7 @@ def source_files(root, variant, version):
 
 
 DASH_COOLDOWN_SECONDS = 8.0
+THROW_COOLDOWN_SECONDS = 0.01
 
 
 def mappings():
@@ -167,6 +168,12 @@ def mappings():
                 definition["components"] = {"minecraft:max_stack_size": 1,
                                             "minecraft:use_cooldown": {"seconds": DASH_COOLDOWN_SECONDS,
                                                                        "cooldown_group": "minecraft:feather"}}
+            else:
+                # Match NinjaTool.cooldownGroup() so the server's packets reach this overlay.
+                # A positive value below one tick preserves the default zero wait; the server
+                # restarts the overlay with the configured duration on each accepted throw.
+                definition["components"] = {"minecraft:use_cooldown": {"seconds": THROW_COOLDOWN_SECONDS,
+                                                                       "cooldown_group": f"ninjaarena:{tool}"}}
             items["minecraft:feather" if tool == "dash" else "minecraft:snowball"].append(definition)
     return json_bytes({"format_version": 2, "items": items})
 

@@ -13,6 +13,7 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Bedrock hotbar cooldown mappings for shuriken and smoke bombs in every team colour (#138).
 - Room screens for creating, joining, spectating, settings, invites and starting, with
   native dialogs and an independent `rooms.menu: chest` fallback.
 - Hazards that grow during a round in generated maps. As the enemy director's intensity
