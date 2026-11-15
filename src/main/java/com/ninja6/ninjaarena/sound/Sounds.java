@@ -16,6 +16,7 @@ import java.util.function.Function;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import org.bukkit.NamespacedKey;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 
@@ -121,7 +122,26 @@ public final class Sounds {
         audience.forEach(id -> player(cue, players.apply(id)));
     }
 
-    /** Entry point for arena hazards when those features are installed. */
+    /**
+     * Plays the cue at a spot in the world to the match's players and spectators who are in
+     * that world, so it is heard from where it comes.
+     */
+    public void at(Cue cue, MatchView match, World world, double x, double y, double z) {
+        Sound sound = settings.get(cue);
+        if (sound == null || world == null) {
+            return;
+        }
+        var audience = new LinkedHashSet<>(match.players());
+        audience.addAll(spectators.apply(match.arena()));
+        for (UUID id : audience) {
+            Player player = players.apply(id);
+            if (player != null && player.isOnline() && world.equals(player.getWorld())) {
+                player.playSound(sound, x, y, z);
+            }
+        }
+    }
+
+    /** The hazard warning to the whole match. */
     public void hazardWarning(MatchView match) {
         match(Cue.HAZARD_WARNING, match);
     }

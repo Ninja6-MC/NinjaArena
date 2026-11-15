@@ -7,8 +7,10 @@ import com.ninja6.ninjaarena.terrain.BlockKind;
 import com.ninja6.ninjaarena.terrain.TerrainTheme;
 import com.ninja6.ninjaarena.terrain.ThemePalette;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.LongSupplier;
@@ -26,6 +28,12 @@ import org.bukkit.scheduler.BukkitTask;
  * slice fits in what is left of the budget; the tick stops when no further block would fit.
  * The very first slice, before anything is measured, is {@link #PROBE} blocks. Every block a
  * job visits counts, whether or not it is written. A budget of 0 does nothing that tick.
+ *
+ * <p><b>Changes.</b> {@link #apply} jobs run one change per block, measured apart from
+ * placing and clearing since a change may cost more than a plain block write. Changes in
+ * every cell together run at most {@link CellWriter#MAX_CHANGES_PER_TICK} a tick; a cell
+ * whose next job is changes and finds that limit reached waits for the next tick at the
+ * back of the turns, and the other cells carry on.
  *
  * <p><b>Fairness.</b> Each cell has its own queue, worked in the order asked, so a clear
  * finishes before the placement queued after it. Cells with work take turns a slice at a
@@ -50,6 +58,8 @@ public final class BudgetedCellWriter implements CellWriter {
     private final Deque<GridCell> turns = new ArrayDeque<>();
     /** Measured nanoseconds per block visited; 0 until the first slice. */
     private double nanosPerBlock;
+    /** Measured nanoseconds per change run; 0 until the first slice of changes. */
+    private double nanosPerChange;
     private long visitedEver;
     /** Blocks left in the turn of the first cell in {@link #turns}, cut short by the budget; 0 for a new turn. */
     private int turnLeft;
@@ -82,6 +92,12 @@ public final class BudgetedCellWriter implements CellWriter {
     public Work clear(GridCell cell, ArenaBounds region) {
         Objects.requireNonNull(region, "region");
         return enqueue(cell, new Clear(region));
+    }
+
+    @Override
+    public Work apply(GridCell cell, List<? extends Runnable> changes) {
+        Objects.requireNonNull(changes, "changes");
+        return enqueue(cell, new Changes(List.copyOf(changes)));
     }
 
     private Work enqueue(GridCell cell, Job job) {
@@ -125,21 +141,40 @@ public final class BudgetedCellWriter implements CellWriter {
         long start = clock.getAsLong();
         long now = start;
         long visited = 0;
+        int changes = 0;
+        List<GridCell> capped = new ArrayList<>();
         while (!turns.isEmpty()) {
-            int quota = turnLeft > 0 ? turnLeft : SLICE;
-            int slice = Math.min(quota, fits(budget - (now - start)));
-            if (slice < 1) {
-                break;
-            }
-            GridCell cell = turns.pollFirst();
-            turnLeft = 0;
+            GridCell cell = turns.peekFirst();
             Deque<Job> queue = queues.get(cell);
             Job job = queue.peekFirst();
             if (job.work.isDone()) {
                 // Cancelled: dropped without using the budget.
+                turns.pollFirst();
+                turnLeft = 0;
                 finish(cell, queue);
                 continue;
             }
+            int quota = turnLeft > 0 ? turnLeft : SLICE;
+            int fit = fits(job, budget - (now - start));
+            int slice = Math.min(quota, fit);
+            boolean change = job instanceof Changes;
+            boolean cutByLimit = false;
+            if (change && slice > MAX_CHANGES_PER_TICK - changes) {
+                slice = MAX_CHANGES_PER_TICK - changes;
+                cutByLimit = true;
+            }
+            if (slice < 1) {
+                if (cutByLimit && fit >= 1) {
+                    // No more changes this tick; the other cells may still have blocks to work.
+                    turns.pollFirst();
+                    turnLeft = 0;
+                    capped.add(cell);
+                    continue;
+                }
+                break;
+            }
+            turns.pollFirst();
+            turnLeft = 0;
             long before = job.work.done();
             RuntimeException failure = null;
             try {
@@ -150,6 +185,9 @@ public final class BudgetedCellWriter implements CellWriter {
             int done = (int) (job.work.done() - before);
             visitedEver += done;
             visited += done;
+            if (change) {
+                changes += done;
+            }
             long after = clock.getAsLong();
             if (failure != null) {
                 finish(cell, queue);
@@ -157,12 +195,12 @@ public final class BudgetedCellWriter implements CellWriter {
                 now = after;
                 continue;
             }
-            measure(after - now, done);
+            measure(change, after - now, done);
             now = after;
             if (job.finished()) {
                 finish(cell, queue);
                 job.work.complete(null);
-            } else if (done < quota) {
+            } else if (done < quota && !cutByLimit) {
                 // The budget ran out mid-turn: the cell finishes its turn first next time.
                 turns.addFirst(cell);
                 turnLeft = quota - done;
@@ -170,6 +208,7 @@ public final class BudgetedCellWriter implements CellWriter {
                 turns.addLast(cell);
             }
         }
+        turns.addAll(capped);
         return visited;
     }
 
@@ -183,24 +222,29 @@ public final class BudgetedCellWriter implements CellWriter {
         }
     }
 
-    /** Blocks that fit in what is left of the budget; at most {@link #SLICE}. */
-    private int fits(long remaining) {
+    /** Blocks or changes of the job that fit in what is left of the budget; at most {@link #SLICE}. */
+    private int fits(Job job, long remaining) {
         if (remaining <= 0) {
             return 0;
         }
-        if (nanosPerBlock <= 0) {
+        double estimate = job instanceof Changes ? nanosPerChange : nanosPerBlock;
+        if (estimate <= 0) {
             return PROBE;
         }
-        return (int) Math.min(SLICE, (long) (remaining / nanosPerBlock));
+        return (int) Math.min(SLICE, (long) (remaining / estimate));
     }
 
-    /** Folds a slice's time into the estimate: the newest slice counts for a quarter. */
-    private void measure(long nanos, int blocks) {
+    /** Folds a slice's time into its estimate: the newest slice counts for a quarter. */
+    private void measure(boolean changes, long nanos, int blocks) {
         if (blocks <= 0 || nanos < 0) {
             return;
         }
         double sample = (double) nanos / blocks;
-        nanosPerBlock = nanosPerBlock <= 0 ? sample : nanosPerBlock * 0.75 + sample * 0.25;
+        if (changes) {
+            nanosPerChange = nanosPerChange <= 0 ? sample : nanosPerChange * 0.75 + sample * 0.25;
+        } else {
+            nanosPerBlock = nanosPerBlock <= 0 ? sample : nanosPerBlock * 0.75 + sample * 0.25;
+        }
     }
 
     @Override
@@ -219,23 +263,69 @@ public final class BudgetedCellWriter implements CellWriter {
         turnLeft = 0;
     }
 
-    /** Work over a box of blocks, column by column, bottom to top. */
+    /** Queued work: a number of blocks or changes, run a slice at a time. */
     private abstract static class Job {
 
         final Work work;
+
+        Job(long total) {
+            this.work = new Work(total);
+        }
+
+        /** Runs at most {@code budget} blocks or changes, counting them on {@link #work} as it goes. */
+        abstract void run(int budget);
+
+        abstract boolean finished();
+    }
+
+    /** Changes run one by one, in order. */
+    private static final class Changes extends Job {
+
+        private final List<? extends Runnable> changes;
+        private int next;
+
+        Changes(List<? extends Runnable> changes) {
+            super(changes.size());
+            this.changes = changes;
+        }
+
+        @Override
+        void run(int budget) {
+            int ran = 0;
+            try {
+                while (ran < budget && next < changes.size()) {
+                    Runnable change = changes.get(next);
+                    next++;
+                    ran++;
+                    change.run();
+                }
+            } finally {
+                work.advance(ran);
+            }
+        }
+
+        @Override
+        boolean finished() {
+            return next >= changes.size();
+        }
+    }
+
+    /** Work over a box of blocks, column by column, bottom to top. */
+    private abstract static class BoxJob extends Job {
+
         private final int sizeY;
         private final int sizeZ;
         private final long volume;
         private long next;
 
-        Job(int sizeX, int sizeY, int sizeZ) {
+        BoxJob(int sizeX, int sizeY, int sizeZ) {
+            super((long) sizeX * sizeY * sizeZ);
             this.sizeY = sizeY;
             this.sizeZ = sizeZ;
             this.volume = (long) sizeX * sizeY * sizeZ;
-            this.work = new Work(volume);
         }
 
-        /** Visits at most {@code budget} blocks, counting them on {@link #work} as it goes. */
+        @Override
         void run(int budget) {
             int visited = 0;
             try {
@@ -253,6 +343,7 @@ public final class BudgetedCellWriter implements CellWriter {
             }
         }
 
+        @Override
         boolean finished() {
             return next >= volume;
         }
@@ -261,7 +352,7 @@ public final class BudgetedCellWriter implements CellWriter {
         abstract void visit(int x, int y, int z);
     }
 
-    private final class Place extends Job {
+    private final class Place extends BoxJob {
 
         private final ArenaLayout layout;
         private final TerrainTheme theme;
@@ -287,7 +378,7 @@ public final class BudgetedCellWriter implements CellWriter {
         }
     }
 
-    private final class Clear extends Job {
+    private final class Clear extends BoxJob {
 
         private final ArenaBounds region;
 

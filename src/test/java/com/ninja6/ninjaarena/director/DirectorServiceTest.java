@@ -193,6 +193,26 @@ class DirectorServiceTest {
     }
 
     @Test
+    void aNewRoundReadsNoIntensityUntilItsDirectorHasRunASecond() {
+        match.combat(0);
+        phase(MatchPhase.COMBAT);
+        phase(MatchPhase.OVERRUN);
+        second();
+        MatchDirector director = service.director(match).orElseThrow();
+        assertEquals(1, director.intensity());
+
+        phase(MatchPhase.ROUND_END);
+        assertEquals(0, director.intensity(), "no intensity once the fight is over");
+        match.nextRound();
+        phase(MatchPhase.PREP);
+        assertEquals(0, director.intensity());
+        phase(MatchPhase.COMBAT);
+        assertEquals(0, director.intensity(), "the last round's OVERRUN is not the new round's intensity");
+        second();
+        assertTrue(director.intensity() < 1, "the new round's own intensity: " + director.intensity());
+    }
+
+    @Test
     void theLoopStopsItselfOnceTheFightIsOver() {
         match.combat(0);
         phase(MatchPhase.COMBAT);

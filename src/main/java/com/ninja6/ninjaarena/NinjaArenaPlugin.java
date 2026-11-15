@@ -47,6 +47,9 @@ import com.ninja6.ninjaarena.lobby.LobbyMembers;
 import com.ninja6.ninjaarena.map.ArenaMaps;
 import com.ninja6.ninjaarena.map.BlockAccess;
 import com.ninja6.ninjaarena.map.GeneratedMaps;
+import com.ninja6.ninjaarena.hazard.HazardService;
+import com.ninja6.ninjaarena.hazard.HazardSettings;
+import com.ninja6.ninjaarena.hazard.WorldHazardBlocks;
 import com.ninja6.ninjaarena.map.SeedPolicy;
 import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.map.BudgetedCellWriter;
@@ -61,6 +64,7 @@ import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchProtectionListener;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchSettings;
+import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.match.PlayerPoints;
 import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
@@ -116,6 +120,7 @@ import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.ArenaWorldSettings;
 import com.ninja6.ninjaarena.world.CrossWorldTransfers;
 import com.ninja6.ninjaarena.world.LobbyWorld;
+import com.ninja6.ninjaarena.world.PluginWorlds;
 import com.ninja6.ninjaarena.world.ArenaExtentListener;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -124,11 +129,14 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.SplittableRandom;
 import java.util.UUID;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.entity.Player;
@@ -159,6 +167,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private ArenaRegistry arenas;
     /** Generated maps in the reserved slot cells; held in memory only. */
     private GeneratedMaps generatedMaps;
+    /** Lava flow and collapses in generated maps during a round. */
+    private HazardService hazards;
+    /** Stops fluids, fire, explosions and entity block changes in the plugin's worlds. */
+    private ArenaProtectionListener arenaProtection;
     /** The tick-time guard enemy spawns and map placement both back off by. */
     private TickTimeGuard tickTime;
     /** Hand-built and generated maps by name, for everything a match looks up. */
@@ -223,8 +235,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ArenaExtentListener(() -> arenaWorld == null
                 ? ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")).borderSize()
                 : arenaWorld.borderSize(), getServer().getWorlds().getFirst().getSpawnLocation()), this);
-        getServer().getPluginManager().registerEvents(new ArenaProtectionListener(
-                () -> arenas == null || arenas.editing().isEmpty()), this);
+        arenaProtection = new ArenaProtectionListener(() -> arenas == null || arenas.editing().isEmpty());
+        getServer().getPluginManager().registerEvents(arenaProtection, this);
         arenaWorld = ArenaWorld.load(ArenaWorldSettings.from(getConfig().getConfigurationSection("arena-world")), getLogger());
         lobbyWorld = LobbyWorld.load(getLogger());
         startLobby();
@@ -315,7 +327,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         startTextures(packSettings);
         ToolVisuals visuals = new ToolVisuals(resourcePacks.packs(),
                 id -> bedrock.isBedrock(id) ? bedrock.customHeld(id) : resourcePacks.packs().loaded(id),
-                () -> getConfig().getBoolean("resource-pack.thrown-visuals", true),
+                bedrock::isBedrock, () -> getConfig().getBoolean("resource-pack.thrown-visuals", true),
                 name -> spectators == null ? List.of() : spectators.players(name), matches::matchOf);
         kitItems = new KitItems();
         NinjaTools.registerItems(kitItems, visuals);
@@ -326,6 +338,46 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 name -> spectators == null ? List.of() : spectators.players(name));
         sounds.load(getConfig(), getLogger()::warning);
         matches.setSounds(sounds);
+        Sounds warningSounds = sounds;
+        hazards.setWarnings(new HazardService.Warnings() {
+            @Override
+            public void lava(MatchView match) {
+                warningSounds.hazardWarning(match);
+            }
+
+            @Override
+            public void crack(UUID player) {
+                warningSounds.player(Sounds.Cue.HAZARD_WARNING, getServer().getPlayer(player));
+            }
+
+            @Override
+            public void late(MatchView match, HazardService.LateType type, int x, int y, int z) {
+                ArenaWorld arena = arenaWorld;
+                if (arena != null) {
+                    arena.currentWorld().ifPresent(world -> warningSounds.at(Sounds.Cue.HAZARD_WARNING, match, world,
+                            x + 0.5, warningY(type, y), z + 0.5));
+                }
+                lateParticles(match, type, x, y, z);
+            }
+
+            @Override
+            public void lateParticles(MatchView match, HazardService.LateType type, int x, int y, int z) {
+                ArenaWorld arena = arenaWorld;
+                if (arena != null) {
+                    arena.currentWorld().ifPresent(world -> world.spawnParticle(
+                            type == HazardService.LateType.LAVA ? Particle.LAVA : Particle.LARGE_SMOKE,
+                            x + 0.5, warningY(type, y), z + 0.5, 12, 0.6, 0.4, 0.6, 0));
+                }
+            }
+
+            /** Held lava's spot is in the ceiling, so its warning shows just below it. */
+            private static double warningY(HazardService.LateType type, int y) {
+                return type == HazardService.LateType.LAVA ? y - 0.5 : y + 0.5;
+            }
+        });
+        // Late hazards follow the enemy director's intensity.
+        DirectorService intensities = directors;
+        hazards.setIntensity(match -> intensities.director(match).map(MatchDirector::intensity).orElse(0.0));
         tools.setSounds(sounds);
         tools.setVisuals(visuals);
         getServer().getPluginManager().registerEvents(tools, this);
@@ -691,6 +743,28 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         registry.setSlotCellsInUse(generatedMaps::inUse);
         world.afterReopen(generatedMaps::reopened);
         maps = new ArenaMaps(registry, generatedMaps);
+        // Lava flows and blocks collapse only as the map's plan allows, a few changes a tick.
+        hazards = new HazardService(generatedMaps::placed, writer, new WorldHazardBlocks(world::currentWorld),
+                HazardSettings.from(getConfig().getConfigurationSection("stability.hazards")),
+                task -> getServer().getScheduler().runTaskAsynchronously(this, task),
+                task -> {
+                    if (isEnabled()) {
+                        getServer().getScheduler().runTask(this, task);
+                    }
+                }, Bukkit::getCurrentTick, getLogger());
+        generatedMaps.onClearing(hazards::forget);
+        hazards.setFeet(player -> {
+            Player online = getServer().getPlayer(player);
+            if (online == null || !PluginWorlds.isArena(online.getWorld())) {
+                return OptionalLong.empty();
+            }
+            Location at = online.getLocation();
+            return OptionalLong.of(HazardService.pack(at.getBlockX(), (int) Math.floor(at.getY() - 0.1),
+                    at.getBlockZ()));
+        });
+        arenaProtection.setFlowFilter(hazards);
+        getServer().getPluginManager().registerEvents(hazards, this);
+        hazards.start(this);
     }
 
     /**
@@ -990,6 +1064,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (deaths != null) {
             deaths.close();
             deaths = null;
+        }
+        if (hazards != null) {
+            // Before the cells close: nothing would hold flowing lava once the plugin is gone.
+            hazards.close();
+            hazards = null;
+        }
+        if (arenaProtection != null) {
+            arenaProtection.setFlowFilter(ArenaProtectionListener.FlowFilter.NONE);
         }
         if (generatedMaps != null) {
             // Queued placement stops and the tickets come off; the cells are cleared on the next start.

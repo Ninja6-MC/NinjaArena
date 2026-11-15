@@ -13,6 +13,44 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Hazards that grow during a round in generated maps. As the enemy director's intensity
+  rises in COMBAT, more of the map's lava held in ceilings is released and whole floating
+  platforms collapse, one on every side at a time and taking turns, until all of them
+  have come at intensity 1, as in OVERRUN. Each is warned of at its spot first: the
+  `hazard-warning` sound is heard there and particles show there every second, and it
+  comes `stability.hazards.warning-seconds` (3) later. Nothing comes once the round has
+  ended, even with a warning pending. Late hazards come at most one every
+  `late-interval-seconds` (5) in a map. A platform that collapses drops as falling blocks
+  that never land, like a crumbling block, and the next PREP puts it back. `HazardPlan`
+  keeps only platforms in the hazard rows, clear of the route's space and the enemy
+  spawns, and only while the side stays crossable with every fall flowing and every
+  kept platform gone. Released lava counts against the source caps from its warning;
+  when the caps leave no room it is skipped without a warning. Every change still goes
+  through the placement budget at 64 a tick. Restart-only, like the rest of `stability`.
+- Real lava flow and collapsing blocks in generated maps. When a round's fight starts,
+  the map's lava falls flow for real: the still column goes and the head is set flowing,
+  so falling lava fills it again and spreads where it lands. Lava held in ceilings stays
+  still for now. Each source's footprint is worked out with the map (`HazardPlan`): its
+  column and a pool of reach 3 where it lands, kept to the side's hazard rows, so no lava
+  reaches outside the map, a spawn, the centre or their blends. A source whose flow would
+  touch the crumble-free route to the centre or an enemy spawn is left still, and the
+  side is checked to stay crossable with every kept source flowing. The arena protection
+  lets lava flow only inside the footprint of a source the plugin set flowing in that
+  map's fight; every other flow in the arena world stays cancelled, and fire, explosions
+  and entity block changes stay off. A crumbling block a fighting player stands on
+  cracks with the `hazard-warning` sound and collapses a second later into a falling
+  block that never lands as one; lava starting plays `hazard-warning` to the match. At
+  most `stability.hazards.max-lava-sources-per-map` (256) sources flow in one map and
+  `max-lava-sources` (1024) across every map, the same number on each side, each for at
+  most `lava-flow-seconds` (300); every start, stop and collapse goes through the
+  placement budget, at most 64 a tick. When a round or match ends every source is taken
+  away and the lava drains; the next PREP puts the still lava and collapsed blocks back.
+  Freeing, replacing or sweeping a slot cell drops it all before the cell is cleared,
+  and plugin disable removes the lava of every footprint at once. Hand-built arenas are
+  unchanged. Restart-only, like the rest of `stability`. Internal: `CellWriter#apply`
+  runs block changes within the budget; `GeneratedMaps#placed` gives a placed map's
+  layout and origin and `onClearing` says when a cell starts being cleared;
+  `HazardService#openLava` starts more sources mid-round for growing hazards.
 - A disconnect during the fight counts as a death. A player who disconnects while alive in
   COMBAT or OVERRUN, held for the rejoin grace or not, dies for the round, and the kill
   goes to the last enemy player still in the match who damaged them within
@@ -308,6 +346,8 @@ Java 25, and does not run on Folia.
 - Bedrock texture forms close after a choice and report the result in chat instead of
   queuing more forms. Java dialogs still update in place. Dialog text is plainer, and
   choice buttons mark the saved quality.
+- Thrown tools use the custom look when every Java viewer has loaded Standard,
+  ignoring Bedrock viewers. Bedrock players always see a snowball in flight.
 - Lobby members no longer lose food or saturation in the lobby world; eating still raises
   both. Non-members, including players in a shop phase and lobby editors, keep vanilla
   hunger.

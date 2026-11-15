@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
 import org.bukkit.World;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -34,10 +35,27 @@ import org.bukkit.event.entity.EntityExplodeEvent;
  * and melting are all stopped. Piston physics and redstone current changes are frozen
  * before a sticky retract can mutate its head or base. Match players are in adventure mode and cannot place or
  * break blocks themselves.
+ *
+ * <p>One exception: lava in the arena world flows where the {@link FlowFilter} allows it,
+ * which is only lava the plugin set flowing in a generated map, inside the footprint worked
+ * out for it. Every other fluid flow there stays cancelled, and so does all of it in the
+ * lobby world. Fire, explosions and every block change by an entity stay cancelled, falling
+ * blocks included: the plugin's own collapses drop falling blocks that never land as one.
  */
 public final class ArenaProtectionListener implements Listener {
 
+    /** Which lava flows in the arena world are allowed. */
+    @FunctionalInterface
+    public interface FlowFilter {
+
+        /** Whether lava may flow from the first block to the second. */
+        boolean allows(int fromX, int fromY, int fromZ, int toX, int toY, int toZ);
+
+        FlowFilter NONE = (fromX, fromY, fromZ, toX, toY, toZ) -> false;
+    }
+
     private final BooleanSupplier protectionEnabled;
+    private FlowFilter flows = FlowFilter.NONE;
 
     public ArenaProtectionListener(ArenaRegistry arenas) {
         Objects.requireNonNull(arenas, "arenas");
@@ -47,6 +65,11 @@ public final class ArenaProtectionListener implements Listener {
     /** Can be registered before initial registry restoration starts. */
     public ArenaProtectionListener(BooleanSupplier protectionEnabled) {
         this.protectionEnabled = Objects.requireNonNull(protectionEnabled, "protectionEnabled");
+    }
+
+    /** Sets which lava flows are allowed in the arena world; {@link FlowFilter#NONE} for none. */
+    public void setFlowFilter(FlowFilter flows) {
+        this.flows = Objects.requireNonNull(flows, "flows");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -102,7 +125,18 @@ public final class ArenaProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onFlow(BlockFromToEvent event) {
-        cancelInArenaWorld(event.getBlock().getWorld(), event::setCancelled);
+        Block from = event.getBlock();
+        if (!protectedWorld(from.getWorld())) {
+            return;
+        }
+        if (PluginWorlds.isArena(from.getWorld()) && from.getType() == Material.LAVA) {
+            Block to = event.getToBlock();
+            if (to.getWorld() == from.getWorld()
+                    && flows.allows(from.getX(), from.getY(), from.getZ(), to.getX(), to.getY(), to.getZ())) {
+                return;
+            }
+        }
+        event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
