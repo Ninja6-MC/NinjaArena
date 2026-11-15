@@ -1105,6 +1105,7 @@ class RoomFlowTest extends MatchFixture {
         assertEquals(lastMessage(BOB), refusal);
         assertFalse(rooms.isMember(BOB));
 
+        rooms.enterLobby(bob);
         h.menus.open(alice);
         h.press(alice, "Your room");
         h.press(alice, "Invite players");
@@ -1262,6 +1263,29 @@ class RoomFlowTest extends MatchFixture {
         int shown = h.shows;
         form.press().run(alice, 0, java.util.Map.of());
         assertEquals(shown, h.shows);
+    }
+
+    @Test
+    void inviteScreensAndChatListOnlyFreeLobbyPlayersWithPlayPermission() {
+        rooms.create(player(ALICE));
+        rooms.create(player(BOB));
+        matches.start("temple", List.of(List.of(CAROL), List.of(DAVE)));
+        assertTrue(rooms.isMember(BOB));
+        assertTrue(matches.isInMatch(CAROL));
+        assertFalse(lobby.contains(CAROL));
+        assertTrue(rooms.enterLobby(player(EVE)));
+        assertTrue(rooms.enterLobby(player(FRANK)));
+        players.get(FRANK).permissions.remove(NinjaArenaCommand.PLAY);
+
+        assertEquals(List.of(EVE), rooms.inviteCandidates(player(ALICE)).stream()
+                .map(Player::getUniqueId).toList());
+        players.get(ALICE).messages.clear();
+        rooms.invite(player(ALICE), null);
+        assertEquals(2, players.get(ALICE).messages.size());
+        assertTrue(lastMessage(ALICE).contains("Eve"));
+        assertFalse(lastMessage(ALICE).contains("Bob"));
+        assertFalse(lastMessage(ALICE).contains("Carol"));
+        assertFalse(lastMessage(ALICE).contains("Frank"));
     }
 
 }
