@@ -6,6 +6,7 @@ import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.match.MatchService;
+import com.ninja6.ninjaarena.match.MatchSettings;
 import com.ninja6.ninjaarena.portal.LobbyMode;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.placeholder.StatsPlaceholders;
@@ -140,6 +141,9 @@ public final class ReloadFiles {
                 String problem;
                 if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
                     problem = PlayerPortalSettings.problem(path, text);
+                } else if (path.equals("rooms.menu")) {
+                    problem = text.trim().equalsIgnoreCase("dialog") || text.trim().equalsIgnoreCase("chest")
+                            ? null : "expected dialog or chest";
                 } else if (path.startsWith("resource-pack.")) {
                     problem = null; // Validated together below, including enabled-pack completeness.
                 } else if (path.equals("shop.menu")) {
@@ -267,6 +271,8 @@ public final class ReloadFiles {
             case "match.disconnect-penalty-points" -> new double[] {0, Integer.MAX_VALUE};
             case "match.rounds" -> new double[] {1, 25};
             case "match.extra-rounds" -> new double[] {0, 10};
+            case "match.spectate-radius"
+                    -> new double[] {MatchSettings.MIN_SPECTATE_RADIUS, MatchSettings.MAX_SPECTATE_RADIUS};
             case "match.rejoin-grace-seconds" -> new double[] {0, MatchService.MAX_REJOIN_GRACE_SECONDS};
             case "shop.max-seconds", "shop.quick-start-seconds" -> new double[] {1, 3600};
             case "shop.map-wait-limit-seconds" -> new double[] {0, 3600};

@@ -199,6 +199,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** What a new room starts from, {@code waiting-room} in config.yml; replaced on reload. */
     private volatile WaitingRoomSettings roomDefaults = WaitingRoomSettings.DEFAULTS;
     private RoomService rooms;
+    private com.ninja6.ninjaarena.room.RoomMenus roomMenus;
     private LobbyReturns lobbyReturns;
     private StatsStore stats;
     private Rewards rewards;
@@ -263,6 +264,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         matches.setShopArea(() -> shopLobby.layout().shop(lobbyWorld.world()));
         shopCrossing = transfers.allow(matches::crossesWorlds);
         deaths = new MatchDeathListener(this, matches, maps);
+        deaths.setSpectateRadius(MatchSettings.spectateRadius(getConfig().getConfigurationSection("match")));
         getServer().getPluginManager().registerEvents(deaths, this);
         getServer().getPluginManager().registerEvents(new MatchListener(matches, deaths, transfers), this);
         MatchProtectionListener protection = new MatchProtectionListener(matches,
@@ -466,6 +468,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 match -> enemyDirectors.director(match).map(director -> (int) director.enemies().stream()
                         .filter(MatchDirector.Enemy::isAlive).count()).orElse(0), tools::throwState);
         getServer().getPluginManager().registerEvents(hud, this);
+        hud.setSpectatorHint(deaths::spectatorHint);
         hud.setSounds(sounds);
         hud.setCooldownCheck(tools::checkCooldowns);
         hud.start(this);
@@ -546,6 +549,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         protection.setFriendlyFire(friendlyFire);
                         scoring.setSettings(awards, inMatch.matches());
                         inMatch.setSettings(settings);
+                    }
+
+                    @Override
+                    public void spectateRadius(int radius) {
+                        deaths.setSpectateRadius(radius);
                     }
 
                     @Override
@@ -653,6 +661,17 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         command.setLobby(lobbyEditing);
         command.setIntro(lobbyIntro::open);
         command.setRooms(roomList);
+        java.util.concurrent.Executor roomMain = task -> getServer().getScheduler().runTask(this, task);
+        var roomChest = new com.ninja6.ninjaarena.room.RoomMenu(
+                new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), roomMain);
+        String roomMode = com.ninja6.ninjaarena.room.RoomMenuMode.parse(getConfig().get("rooms.menu"),
+                message -> getLogger().warning(message)).label();
+        roomMenus = new com.ninja6.ninjaarena.room.RoomMenus(roomList, () -> roomMode,
+                new com.ninja6.ninjaarena.room.RoomDialog(roomMain), roomChest, watching::fromLobby,
+                message -> getLogger().warning(message));
+        getServer().getPluginManager().registerEvents(
+                new com.ninja6.ninjaarena.room.RoomMenuListener(roomChest, roomMenus), this);
+        command.setRoomScreen(roomMenus::open);
         command.setAdminMaps(new AdminMaps(generatedMaps, roomList::hasSpareCell,
                 () -> roomList.seedPolicy().map(policy -> policy.settings().defaults().difficulty())
                         .orElse(SeedSettings.DEFAULT_DIFFICULTY), getLogger()));
@@ -1048,6 +1067,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (spectators != null) {
             spectators.close();
             spectators = null;
+        }
+        if (roomMenus != null) {
+            roomMenus.closeAll(id -> getServer().getPlayer(id));
+            roomMenus = null;
         }
         if (rooms != null) {
             rooms.close();

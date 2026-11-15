@@ -426,6 +426,27 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     // ---- Commands ----
 
+    /** Display name shared with room screens, including members who are temporarily offline. */
+    public String playerName(UUID id) {
+        return name(id);
+    }
+
+    /** Online players the host may invite; presses still use {@link #invite} to recheck. */
+    public List<Player> inviteCandidates(Player host) {
+        Room room = roomOf.get(host.getUniqueId());
+        if (room == null || !room.host().equals(host.getUniqueId())) {
+            return List.of();
+        }
+        return freeInvitePlayers();
+    }
+
+    private List<Player> freeInvitePlayers() {
+        return lobby.members().stream().filter(id -> !roomOf.containsKey(id))
+                .map(id -> plugin.getServer().getPlayer(id))
+                .filter(Objects::nonNull)
+                .filter(player -> player.hasPermission(NinjaArenaCommand.PLAY)).toList();
+    }
+
     @Override
     public void show(Player player) {
         Room room = roomOf.get(player.getUniqueId());
@@ -619,15 +640,15 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return;
         }
         if (invitee == null) {
-            List<UUID> free = lobby.members().stream().filter(id -> !roomOf.containsKey(id)).toList();
+            List<Player> free = freeInvitePlayers();
             if (free.isEmpty()) {
                 tell(player, "room.invite-list-empty");
                 return;
             }
             tell(player, "room.invite-list-header");
-            for (UUID id : free) {
-                player.sendMessage(msg("room.invite-list-line", "player", name(id),
-                        "invite", button("room.button-invite", "invite " + name(id))));
+            for (Player target : free) {
+                player.sendMessage(msg("room.invite-list-line", "player", target.getName(),
+                        "invite", button("room.button-invite", "invite " + target.getName())));
             }
             return;
         }

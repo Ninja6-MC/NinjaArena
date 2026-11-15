@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -57,6 +58,7 @@ public final class MatchHud implements Listener {
     private final ToIntFunction<MatchView> enemies;
     private final BiFunction<UUID, NinjaTool, ThrowState> tools;
     private final Map<MatchView, Display> displays = new IdentityHashMap<>();
+    private Function<Player, Optional<Component>> spectatorHint = player -> Optional.empty();
     private Sounds sounds;
     private Consumer<MatchView> cooldowns = match -> { };
 
@@ -72,6 +74,11 @@ public final class MatchHud implements Listener {
         this.points = Objects.requireNonNull(points, "points");
         this.enemies = Objects.requireNonNull(enemies, "enemies");
         this.tools = Objects.requireNonNull(tools, "tools");
+    }
+
+    /** Eliminated players use the action bar for their tether instead of the active HUD. */
+    public void setSpectatorHint(Function<Player, Optional<Component>> hint) {
+        spectatorHint = Objects.requireNonNull(hint, "hint");
     }
 
     public void setSounds(Sounds sounds) {
@@ -185,6 +192,9 @@ public final class MatchHud implements Listener {
     private void refresh(MatchView match) {
         if (match.phase() == MatchPhase.WAITING || match.phase() == MatchPhase.MATCH_END) {
             remove(match);
+            if (match.phase() == MatchPhase.MATCH_END) {
+                each(match, player -> spectatorHint.apply(player).ifPresent(player::sendActionBar));
+            }
             return;
         }
         Display display = displays.computeIfAbsent(match, ignored -> new Display());
@@ -235,7 +245,8 @@ public final class MatchHud implements Listener {
             if (display.viewers.putIfAbsent(player.getUniqueId(), player) == null) {
                 player.showBossBar(display.bar);
             }
-            player.sendActionBar(statusLine(totals, livingEnemies, match, player.getUniqueId()));
+            player.sendActionBar(spectatorHint.apply(player)
+                    .orElseGet(() -> statusLine(totals, livingEnemies, match, player.getUniqueId())));
         });
     }
 

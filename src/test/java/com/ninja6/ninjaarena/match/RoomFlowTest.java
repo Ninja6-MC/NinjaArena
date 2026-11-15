@@ -1073,4 +1073,219 @@ class RoomFlowTest extends MatchFixture {
         playToTheEnd("dojo");
         assertTrue(rooms.hasLease(queued), "granted when the match ends");
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void screensCreateConfigureInviteJoinKickStartAndLeaveThroughTheRoomService(boolean dialog) throws Exception {
+        var h = new RoomScreenHarness(rooms, dialog);
+        Player alice = h.wrap(player(ALICE));
+        Player bob = h.wrap(player(BOB));
+        h.menus.open(alice);
+        h.press(alice, "Create a room");
+        h.press(alice, "Create a room");
+        Room room = room(ALICE);
+        assertEquals(1, room.size());
+        h.menus.open(alice);
+        h.press(alice, "Your room");
+        if (!dialog) {
+            assertTrue(lobby.contains(ALICE));
+            var menuOpen = new org.bukkit.event.inventory.InventoryOpenEvent(h.view(alice, h.windows.get(ALICE)));
+            new com.ninja6.ninjaarena.kit.InventoryLockdownListener(lobby::contains).onOpen(menuOpen);
+            assertFalse(menuOpen.isCancelled());
+        }
+        h.press(alice, "Settings");
+        h.press(alice, "Privacy");
+        h.press(alice, "Save", dialog ? "invite" : "Invite only");
+        assertTrue(room.settings().inviteOnly());
+
+        h.menus.open(bob);
+        h.press(bob, "Room list");
+        h.press(bob, "Join Alice (1)");
+        String refusal = lastMessage(BOB);
+        rooms.accept(bob, "Alice");
+        assertEquals(lastMessage(BOB), refusal);
+        assertFalse(rooms.isMember(BOB));
+
+        rooms.enterLobby(bob);
+        h.menus.open(alice);
+        h.press(alice, "Your room");
+        h.press(alice, "Invite players");
+        h.press(alice, "Invite Bob");
+        assertTrue(room.isInvited(BOB));
+        h.menus.open(bob);
+        h.press(bob, "Room list");
+        h.press(bob, "Join Alice (1)");
+        assertEquals(room, rooms.roomOf(BOB).orElseThrow());
+
+        h.menus.open(alice);
+        h.press(alice, "Your room");
+        h.press(alice, "Remove players");
+        h.press(alice, "Remove Bob");
+        assertFalse(rooms.isMember(BOB));
+        rooms.invite(alice, "Bob");
+        rooms.accept(bob, "Alice");
+
+        for (var setting : List.of(new String[] {"Team size", "4"}, new String[] {"Players needed", "2"},
+                new String[] {"Teams", "2"})) {
+            h.menus.open(alice);
+            h.press(alice, "Your room");
+            h.press(alice, "Settings");
+            h.press(alice, setting[0]);
+            h.press(alice, "Save", setting[1]);
+        }
+        assertEquals(4, room.settings().teamSize());
+        assertEquals(2, room.settings().players());
+        assertEquals(2, room.settings().teams());
+
+        arenas.setPickable("garden", true);
+        players.get(ALICE).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+        h.menus.open(alice);
+        h.press(alice, "Your room");
+        h.press(alice, "Settings");
+        h.press(alice, "Map");
+        h.press(alice, "Map: garden");
+        assertEquals("garden", room.arena());
+        h.menus.open(alice);
+        h.press(alice, "Your room");
+        h.press(alice, "Start match");
+        int shown = h.shows;
+        h.press(alice, "Start match");
+        assertTrue(room.isPlaying());
+        assertTrue(matches.isInMatch(ALICE));
+        assertEquals(shown, h.shows, "A finished action must not queue another Bedrock form");
+
+        Player carol = h.wrap(player(CAROL));
+        h.menus.open(carol);
+        h.press(carol, "Room list");
+        h.press(carol, "Spectate Alice");
+        assertEquals(List.of("garden"), h.watched);
+        h.menus.open(bob);
+        h.press(bob, "Your room");
+        h.press(bob, "Leave room");
+        assertFalse(rooms.isMember(BOB));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void screenPermissionAndSettingsRefusalsMatchCommandsAndCancelDoesNotSave(boolean dialog) {
+        var h = new RoomScreenHarness(rooms, dialog);
+        Player alice = h.wrap(player(ALICE));
+        h.menus.open(alice);
+        h.press(alice, "Create a room");
+        players.get(ALICE).permissions.remove(RoomService.CREATE);
+        h.press(alice, "Create a room");
+        String refused = lastMessage(ALICE);
+        rooms.create(alice);
+        assertEquals(lastMessage(ALICE), refused);
+        assertTrue(rooms.rooms().isEmpty());
+        players.get(ALICE).permissions.add(RoomService.CREATE);
+        rooms.create(alice);
+        var before = room(ALICE).settings();
+        h.menus.open(alice);
+        h.press(alice, "Your room");
+        h.press(alice, "Settings");
+        h.press(alice, "Teams");
+        h.press(alice, "Save", "4");
+        refused = lastMessage(ALICE);
+        rooms.settings(alice, "teams", "4");
+        assertEquals(lastMessage(ALICE), refused);
+        assertEquals(before, room(ALICE).settings());
+        h.menus.open(alice);
+        h.press(alice, "Your room");
+        h.press(alice, "Settings");
+        h.press(alice, "Privacy");
+        h.press(alice, "Cancel");
+        assertEquals(before, room(ALICE).settings());
+    }
+
+    @Test
+    void oldDialogCallbacksAreIgnoredAfterNavigationQuitAndRoomReplacement() {
+        var h = new RoomScreenHarness(rooms, true);
+        Player alice = h.wrap(player(ALICE));
+        h.menus.open(alice);
+        var old = h.forms.get(ALICE);
+        h.press(alice, "Create a room");
+        old.press().run(alice, 0, java.util.Map.of());
+        assertEquals(2, h.shows);
+        h.menus.forget(ALICE);
+        h.press(alice, "Create a room");
+        assertTrue(rooms.rooms().isEmpty());
+        rooms.create(alice);
+        h.menus.open(alice);
+        h.press(alice, "Your room");
+        rooms.leave(alice);
+        rooms.create(alice);
+        h.press(alice, "Leave room");
+        assertTrue(rooms.isMember(ALICE));
+        assertTrue(lastMessage(ALICE).contains("room changed"));
+    }
+
+    @Test
+    void failedDialogsUseTheChestForTheSameScreenAndOnlyWarnOnce() {
+        var h = new RoomScreenHarness(rooms, true);
+        h.failDialog = true;
+        Player alice = h.wrap(player(ALICE));
+        h.menus.open(alice);
+        h.press(alice, "Create a room");
+        h.press(alice, "Create a room");
+        assertTrue(rooms.isMember(ALICE));
+        assertEquals(1, h.warnings.size());
+        h.refuseChest = true;
+        h.menus.open(alice);
+        assertTrue(lastMessage(ALICE).contains("could not be opened"));
+    }
+
+    @Test
+    void dialogCallbacksRecheckOwnerPermissionAndAreConsumedOnce() {
+        var h = new RoomScreenHarness(rooms, true);
+        Player alice = h.wrap(player(ALICE));
+        Player bob = h.wrap(player(BOB));
+        h.menus.open(alice);
+        h.press(alice, "Create a room");
+        var form = h.forms.get(ALICE);
+        form.press().run(bob, 0, java.util.Map.of());
+        assertTrue(rooms.rooms().isEmpty());
+        players.get(ALICE).permissions.remove(NinjaArenaCommand.PLAY);
+        form.press().run(alice, 0, java.util.Map.of());
+        assertTrue(rooms.rooms().isEmpty());
+        assertEquals(com.ninja6.ninjaarena.message.Messages.text("command.no-permission"), lastMessage(ALICE));
+        players.get(ALICE).permissions.add(NinjaArenaCommand.PLAY);
+        h.menus.open(alice);
+        h.press(alice, "Create a room");
+        form = h.forms.get(ALICE);
+        form.press().run(alice, 0, java.util.Map.of());
+        int messages = players.get(ALICE).messages.size();
+        form.press().run(alice, 0, java.util.Map.of());
+        assertEquals(messages, players.get(ALICE).messages.size());
+        assertEquals(1, rooms.rooms().size());
+        h.menus.open(alice);
+        form = h.forms.get(ALICE);
+        h.menus.closeAll(id -> alice);
+        int shown = h.shows;
+        form.press().run(alice, 0, java.util.Map.of());
+        assertEquals(shown, h.shows);
+    }
+
+    @Test
+    void inviteScreensAndChatListOnlyFreeLobbyPlayersWithPlayPermission() {
+        rooms.create(player(ALICE));
+        rooms.create(player(BOB));
+        matches.start("temple", List.of(List.of(CAROL), List.of(DAVE)));
+        assertTrue(rooms.isMember(BOB));
+        assertTrue(matches.isInMatch(CAROL));
+        assertFalse(lobby.contains(CAROL));
+        assertTrue(rooms.enterLobby(player(EVE)));
+        assertTrue(rooms.enterLobby(player(FRANK)));
+        players.get(FRANK).permissions.remove(NinjaArenaCommand.PLAY);
+
+        assertEquals(List.of(EVE), rooms.inviteCandidates(player(ALICE)).stream()
+                .map(Player::getUniqueId).toList());
+        players.get(ALICE).messages.clear();
+        rooms.invite(player(ALICE), null);
+        assertEquals(2, players.get(ALICE).messages.size());
+        assertTrue(lastMessage(ALICE).contains("Eve"));
+        assertFalse(lastMessage(ALICE).contains("Bob"));
+        assertFalse(lastMessage(ALICE).contains("Carol"));
+        assertFalse(lastMessage(ALICE).contains("Frank"));
+    }
+
 }

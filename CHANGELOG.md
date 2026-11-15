@@ -18,6 +18,8 @@ Java 25, and does not run on Folia.
   text for Java and Bedrock, refresh once per purchase and wait for the server response.
   Set `shop.menu: chest` for the inventory fallback. The board survives lobby editing
   and is recreated after lobby reset without duplicating on restart.
+- Room screens for creating, joining, spectating, settings, invites and starting, with
+  native dialogs and an independent `rooms.menu: chest` fallback.
 - Hazards that grow during a round in generated maps. As the enemy director's intensity
   rises in COMBAT, more of the map's lava held in ceilings is released and whole floating
   platforms collapse, one on every side at a time and taking turns, until all of them
@@ -348,6 +350,13 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Bedrock texture forms close after a choice and report the result in chat instead of
+  queuing more forms. Java dialogs still update in place. Dialog text is plainer, and
+  choice buttons mark the saved quality.
+- Eliminated players see their spectator tether's teammate or base and radius on the
+  action bar. Movement stops at the edge instead of snapping back to the anchor; recovery
+  still returns cameras left outside the allowed area. `match.spectate-radius` defaults
+  to 16 blocks, accepts 4 to 64 and applies immediately on reload.
 - Thrown tools use the custom look when every Java viewer has loaded Standard,
   ignoring Bedrock viewers. Bedrock players always see a snowball in flight.
 - Lobby members no longer lose food or saturation in the lobby world; eating still raises

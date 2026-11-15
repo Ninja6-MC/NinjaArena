@@ -518,10 +518,10 @@ choice from the overlay state (pending, loaded, declined, failed or removed).
 
 The choice is saved by XUID and applies on the next connection only. The current
 connection keeps the quality frozen at negotiation, nothing is swapped live and no
-reconnect is forced. The message is: `Saved: Detailed. Applies on your next
-connection. Pack loading cannot be observed.` NinjaArena never reports a Bedrock
-pack as loaded; the menu shows only the saved choice, the quality selected for
-this connection, unavailable files and the existing enforcement status.
+reconnect is forced. The message is: `Saved: Detailed. It loads when you rejoin.`
+NinjaArena never reports a Bedrock pack as loaded; the menu shows only the saved
+choice, the quality selected for this connection, unavailable files and the
+existing enforcement status.
 
 The Geyser selector reads only the in-memory snapshot, with no Bukkit call or
 database access, and is installed after the snapshot loads. Until then, and while

@@ -257,7 +257,7 @@ The host sets the room up with `/narena room settings`:
 `/narena room invite Bob` sends Bob a **[Join]** button; `/narena room invite` on its own
 lists the lobby players in no room, each with an **[Invite]** button. A player joins with
 the button or `/narena room accept <host>`; a public room needs no invitation. In
-`/narena room` the host sees a **[Remove]** button beside each player, the same as
+`/narena room`, hosts can open **Your room → Remove players**, the same as
 `/narena room kick <player>`. A removed player goes back to the lobby and cannot rejoin a
 public room unless invited again. Players are put on the smallest team and kept within one
 player of each other. Settings and removals wait until the room is back in the lobby.
@@ -268,6 +268,21 @@ A player who comes through a play portal also joins an open room, as described u
 When the host leaves, the room passes to the player who has waited in it longest and has
 `ninjaarena.room.create`. When nobody left has it, the room closes and its players stay in
 the lobby. A running match goes on either way.
+
+### Room screens
+
+Open `/narena room` to create or browse rooms, join or spectate, and manage your room.
+Hosts can edit privacy, player and team counts, choose a map when permitted, invite or
+remove players, and start a match. Each settings screen saves one value; Cancel discards
+that edit. Finished actions close the screen on both Java and Bedrock. Open it again to
+see current state. The existing room subcommands and clickable chat invites remain available.
+
+`rooms.menu: dialog` (the default) uses native Java dialogs and Geyser forms on Bedrock.
+Set `rooms.menu: chest` and restart for chest menus on every screen, including in rooms,
+matches and while spectating. This setting is independent of `resource-pack.texture-menu`.
+If sending a dialog fails, that screen falls back to its chest menu. In chest settings,
+left-click the value to advance, right-click to go back, then press Save. Long lists have
+Previous and Next page buttons in the chest menu; dialogs show the full list.
 
 ### Arena slots
 
@@ -649,6 +664,7 @@ match players or restarts a match.
 | `waiting-room.min-players` and `team-size` | Apply to the next room opened; rooms already open keep their settings. |
 | Deprecated `waiting-room.lobby` | Applies to the next portal entry. It and the unused `max-players`, `countdown-seconds` and `radius` are accepted with a warning in the reply and the log (see [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms)). |
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| `match.spectate-radius` | Applies immediately to eliminated players in running matches. |
 | `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
 | Shop screen | `shop.menu` applies to the next screen opened. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
@@ -1028,10 +1044,14 @@ point. The same reasons are logged at most once per round each, at FINE by defau
 Players in a match drop no items or XP on death and keep their inventory and levels.
 After respawning, eliminated players spectate living teammates until the next round.
 Spectator cameras can target only their own team; movement and teleports stay inside the
-arena and within 16 blocks of a living teammate. If nobody on the team remains alive and
-inside the arena, spectators wait near their own team base.
-Spectators can detach the camera to move within that limit or choose another teammate;
-the tether reattaches only after an invalid target or movement outside the allowed area.
+arena and within `match.spectate-radius` blocks of a living teammate (default 16, range
+4 to 64; reload applies immediately). If nobody on the team remains alive and inside the
+arena, spectators wait near their own team base. The action bar names a nearby teammate
+or the base and shows the radius, refreshed once a second through the match HUD.
+Spectators can detach the camera to move within that limit or choose another teammate.
+Moving past the edge stops that move. If the team moves away or the spectator is already
+outside the allowed area, the tether returns them to an anchor and reattaches the camera
+when a valid teammate is available.
 
 The next round returns spectators to Adventure mode at their team base; with the
 [shop phase](#shop-phase) on, that happens when the shop opens, in its area. A player
