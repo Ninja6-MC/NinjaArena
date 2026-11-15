@@ -329,6 +329,10 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Eliminated players see their spectator tether's teammate or base and radius on the
+  action bar. Movement stops at the edge instead of snapping back to the anchor; recovery
+  still returns cameras left outside the allowed area. `match.spectate-radius` defaults
+  to 16 blocks, accepts 4 to 64 and applies immediately on reload.
 - Lobby members no longer lose food or saturation in the lobby world; eating still raises
   both. Non-members, including players in a shop phase and lobby editors, keep vanilla
   hunger.

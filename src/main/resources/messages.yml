@@ -516,6 +516,8 @@ match:
   disconnect-penalty: "<gray><player> disconnected mid-fight; team <team> loses <points> points."
   rejoined: "<green>You are back in the match, at your team spawn."
   rejoined-shop: "<green>You are back in the match, in the shop."
+  spectate-teammate: "<yellow>Spectating: stay within <radius> blocks of <teammate>"
+  spectate-base: "<yellow>Spectating: stay within <radius> blocks of your team's base"
   rejoined-spectating: "<yellow>You are back in the match and play again from the next round."
   prep: "<gold>Round <round> of <rounds>. The fight starts in <seconds> seconds."
   prep-extra: "<gold>Extra round! The fight starts in <seconds> seconds."

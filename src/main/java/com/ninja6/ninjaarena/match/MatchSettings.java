@@ -65,6 +65,17 @@ public record MatchSettings(int prepSeconds, int roundSeconds, int overrunLimitS
                 DEFAULT_DISCONNECT_KILL_WINDOW_SECONDS, DEFAULT_DISCONNECT_PENALTY_POINTS);
     }
 
+    public static final int DEFAULT_SPECTATE_RADIUS = 16;
+    public static final int MIN_SPECTATE_RADIUS = 4;
+    public static final int MAX_SPECTATE_RADIUS = 64;
+
+    /** The live spectator tether radius, independent of a match's captured settings. */
+    public static int spectateRadius(ConfigurationSection section) {
+        int radius = section == null ? DEFAULT_SPECTATE_RADIUS
+                : section.getInt("spectate-radius", DEFAULT_SPECTATE_RADIUS);
+        return Math.clamp(radius, MIN_SPECTATE_RADIUS, MAX_SPECTATE_RADIUS);
+    }
+
     /** Seconds a disconnected player is held in their match by default. */
     public static final int DEFAULT_REJOIN_GRACE_SECONDS = 60;
 

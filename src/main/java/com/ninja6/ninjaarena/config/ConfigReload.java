@@ -35,6 +35,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
  */
 public final class ConfigReload {
 
+    private static final String SPECTATE_RADIUS = "match.spectate-radius";
     private static final String REJOIN_GRACE = "match.rejoin-grace-seconds";
 
     public interface Target {
@@ -52,6 +53,9 @@ public final class ConfigReload {
         void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring);
         /** A new {@code match.rejoin-grace-seconds}, for disconnects from now on. */
         default void rejoinGrace(int seconds) {
+        }
+        /** A new tether radius, including for players already spectating a match. */
+        default void spectateRadius(int radius) {
         }
         default void points(PointsSettings settings) {
         }
@@ -187,8 +191,8 @@ public final class ConfigReload {
                     refused.add(text("reload.resize-refused", "path", path));
                     next.set(path, effective.get(path));
                 }
-            } else if (path.equals(REJOIN_GRACE)) {
-                // Applies to disconnects from now on, running matches included.
+            } else if (path.equals(REJOIN_GRACE) || path.equals(SPECTATE_RADIUS)) {
+                // Live settings, running matches included.
                 changed.add(path);
             } else if (path.startsWith("match.") || path.startsWith("scoring.") || path.startsWith("points.")
                     || path.startsWith("shop.")) {
@@ -252,6 +256,9 @@ public final class ConfigReload {
         if (differs("match.", next) || differs("scoring.", next)) {
             target.match(MatchSettings.from(next.getConfigurationSection("match")), next.getBoolean("match.friendly-fire"),
                     ScoringSettings.from(next.getConfigurationSection("scoring")));
+        }
+        if (!same(effective.get(SPECTATE_RADIUS), next.get(SPECTATE_RADIUS))) {
+            target.spectateRadius(MatchSettings.spectateRadius(next.getConfigurationSection("match")));
         }
         if (!same(effective.get(REJOIN_GRACE), next.get(REJOIN_GRACE))) {
             target.rejoinGrace(MatchSettings.rejoinGraceSeconds(next.getConfigurationSection("match")));

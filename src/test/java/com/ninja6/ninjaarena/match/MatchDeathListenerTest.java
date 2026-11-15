@@ -239,7 +239,8 @@ class MatchDeathListenerTest extends MatchFixture {
                 new Location(overworld, base.getX(), base.getY(), base.getZ()))) {
             var move = new PlayerMoveEvent(player(ALICE), base, to);
             deaths.onMove(move);
-            assertEquals(base, move.getTo());
+            assertTrue(move.isCancelled());
+            assertEquals(to, move.getTo(), "cancelling retains the requested destination, not an anchor teleport");
             var teleport = new PlayerTeleportEvent(player(ALICE), base, to, PlayerTeleportEvent.TeleportCause.SPECTATE);
             deaths.onTeleport(teleport);
             assertTrue(teleport.isCancelled());
@@ -248,6 +249,74 @@ class MatchDeathListenerTest extends MatchFixture {
         var living = new PlayerTeleportEvent(player(CAROL), base, new Location(overworld, 0, 64, 0));
         deaths.onTeleport(living);
         assertFalse(living.isCancelled());
+    }
+
+    @Test
+    void crossingTheEdgeStopsAtThePreviousPositionWithoutATeleport() {
+        startTwoOnTwo();
+        death(ALICE, BOB);
+        respawn(ALICE);
+        player(ALICE).setSpectatorTarget(null);
+        Location edge = player(CAROL).getLocation().add(16, 0, 0);
+        players.get(ALICE).location = edge.clone();
+        int teleports = players.get(ALICE).teleports.size();
+        var move = new PlayerMoveEvent(player(ALICE), edge, edge.clone().add(0.1, 0, 0));
+        deaths.onMove(move);
+        assertTrue(move.isCancelled());
+        deaths.tick();
+        assertEquals(teleports, players.get(ALICE).teleports.size());
+        assertEquals(edge, player(ALICE).getLocation());
+        assertNull(player(ALICE).getSpectatorTarget());
+    }
+
+    @Test
+    void anAnchorThatMovedAwayStillRecoversTheSpectatorOnMoveOrTick() {
+        startTwoOnTwo();
+        death(ALICE, BOB);
+        respawn(ALICE);
+        player(ALICE).setSpectatorTarget(null);
+        Location from = player(ALICE).getLocation();
+        players.get(CAROL).location = from.clone().add(30, 0, 0);
+        var move = new PlayerMoveEvent(player(ALICE), from, from.clone().add(0.1, 0, 0));
+        deaths.onMove(move);
+        assertFalse(move.isCancelled());
+        assertEquals(player(CAROL).getLocation(), move.getTo());
+        int teleports = players.get(ALICE).teleports.size();
+        deaths.tick();
+        assertEquals(teleports + 1, players.get(ALICE).teleports.size());
+        assertEquals(player(CAROL).getLocation(), player(ALICE).getLocation());
+    }
+
+    @Test
+    void liveRadiusControlsMovementAndHintsNameTheNearbyTeammateOrBase() {
+        matches.start("dojo", List.of(List.of(ALICE, CAROL, DAVE), List.of(BOB)));
+        players.get(CAROL).location = new Location(arenaWorld, 30, 64, 30);
+        players.get(DAVE).location = new Location(arenaWorld, 60, 64, 60);
+        death(ALICE, BOB);
+        respawn(ALICE);
+        deaths.setSpectateRadius(8);
+        assertEquals("Spectating: stay within 8 blocks of Carol", hint());
+        player(ALICE).setSpectatorTarget(null);
+        players.get(ALICE).location = player(DAVE).getLocation();
+        assertEquals("Spectating: stay within 8 blocks of Dave", hint());
+        Location from = player(ALICE).getLocation();
+        var move = new PlayerMoveEvent(player(ALICE), from, from.clone().add(9, 0, 0));
+        deaths.onMove(move);
+        assertTrue(move.isCancelled());
+        deaths.setSpectateRadius(12);
+        move.setCancelled(false);
+        deaths.onMove(move);
+        assertFalse(move.isCancelled());
+        death(CAROL, BOB);
+        death(DAVE, BOB);
+        deaths.tick();
+        assertEquals("Spectating: stay within 12 blocks of your team's base", hint());
+        assertTrue(deaths.spectatorHint(player(BOB)).isEmpty());
+    }
+
+    private String hint() {
+        return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                .serialize(deaths.spectatorHint(player(ALICE)).orElseThrow());
     }
 
     @Test
@@ -264,7 +333,7 @@ class MatchDeathListenerTest extends MatchFixture {
         var move = new PlayerMoveEvent(player(ALICE), player(ALICE).getLocation(),
                 new Location(arenaWorld, SPAWN_2.x(), SPAWN_2.y(), SPAWN_2.z()));
         deaths.onMove(move);
-        assertAt(SPAWN_1, move.getTo());
+        assertTrue(move.isCancelled());
     }
 
     @Test
