@@ -91,6 +91,7 @@ public final class NinjaArenaCommand implements TabExecutor {
     private TextureCommands textures;
     private LobbyCommands lobby;
     private RoomCommands rooms;
+    private Consumer<Player> roomScreen;
     private AdminMapCommands adminMaps;
     private Consumer<Player> intro;
     private Function<Player, MatchService.Ready> shopReady;
@@ -107,6 +108,11 @@ public final class NinjaArenaCommand implements TabExecutor {
     /** Without it the room subcommands say the feature is unavailable. */
     public void setRooms(RoomCommands rooms) {
         this.rooms = rooms;
+    }
+
+    /** Opens the main room screen; explicit subcommands keep their chat behavior. */
+    public void setRoomScreen(Consumer<Player> roomScreen) {
+        this.roomScreen = roomScreen;
     }
 
     /** Without it the admin generate subcommand says the feature is unavailable. */
@@ -426,7 +432,13 @@ public final class NinjaArenaCommand implements TabExecutor {
             return;
         }
         switch (action) {
-            case "" -> rooms.show(player);
+            case "" -> {
+                if (roomScreen == null) {
+                    rooms.show(player);
+                } else {
+                    roomScreen.accept(player);
+                }
+            }
             case "create", "leave" -> {
                 if (args.length != 2) {
                     usage(sender, label, "room " + action);

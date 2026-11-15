@@ -140,6 +140,9 @@ public final class ReloadFiles {
                 String problem;
                 if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
                     problem = PlayerPortalSettings.problem(path, text);
+                } else if (path.equals("rooms.menu")) {
+                    problem = text.trim().equalsIgnoreCase("dialog") || text.trim().equalsIgnoreCase("chest")
+                            ? null : "expected dialog or chest";
                 } else if (path.startsWith("resource-pack.")) {
                     problem = null; // Validated together below, including enabled-pack completeness.
                 } else if (path.startsWith("events.messages.")) {

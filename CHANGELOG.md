@@ -13,6 +13,9 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+
+- Room screens for creating, joining, spectating, settings, invites and starting, with
+  native dialogs and an independent `rooms.menu: chest` fallback.
 - Real lava flow and collapsing blocks in generated maps. When a round's fight starts,
   the map's lava falls flow for real: the still column goes and the head is set flowing,
   so falling lava fills it again and spreads where it lands. Lava held in ceilings stays

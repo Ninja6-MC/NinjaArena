@@ -426,6 +426,24 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     // ---- Commands ----
 
+    /** Display name shared with room screens, including members who are temporarily offline. */
+    public String playerName(UUID id) {
+        return name(id);
+    }
+
+    /** Online players the host may invite; presses still use {@link #invite} to recheck. */
+    public List<Player> inviteCandidates(Player host) {
+        Room room = roomOf.get(host.getUniqueId());
+        if (room == null || !room.host().equals(host.getUniqueId())) {
+            return List.of();
+        }
+        return plugin.getServer().getOnlinePlayers().stream()
+                .filter(Player::isOnline)
+                .filter(player -> !room.contains(player.getUniqueId()))
+                .filter(player -> player.hasPermission(NinjaArenaCommand.PLAY))
+                .map(player -> (Player) player).toList();
+    }
+
     @Override
     public void show(Player player) {
         Room room = roomOf.get(player.getUniqueId());
