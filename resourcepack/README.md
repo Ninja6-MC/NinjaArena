@@ -224,7 +224,7 @@ still refuses a throw until ready. Their mapped duration is a positive 0.01 seco
 because the default throw cooldown is 0; the server restarts the overlay with the
 configured duration on each accepted throw. Dash keeps its `minecraft:feather`
 category, 8-second mapped duration and stack size of 1. The throw overlays are not yet
-verified on a real Bedrock client; that check remains to be done on Medium.
+verified on a real Bedrock client.
 
 Run these explicit steps in an empty staging/output location:
 

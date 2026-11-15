@@ -930,7 +930,7 @@ and `ninjaarena:smoke_bomb` categories matching the server; dash keeps
 until ready. The mapped dash duration is the default 8 seconds; throws use a positive
 0.01-second placeholder because their default cooldown is 0. The server restarts the
 overlay with the configured time on each use. The throw overlays are not yet verified
-on a real Bedrock client; that check remains to be done on Medium.
+on a real Bedrock client.
 
 Tools work only for players alive in the round during COMBAT and OVERRUN. During PREP,
 between rounds, or once eliminated, a throw or dash is cancelled and the item kept. Smoke
