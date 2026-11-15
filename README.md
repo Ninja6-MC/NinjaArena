@@ -441,10 +441,16 @@ details.
 
 Generated maps have real lava. When a round's fight starts, the map's lava falls flow:
 falling lava pours down and spreads where it lands, and the match hears
-`hazard-warning`. Lava held in ceilings stays still. A crumbling block (the cracked or
-chiselled blocks of each theme) that a fighting player stands on cracks with
-`hazard-warning` and collapses a second later; it drops as a falling block that never
-lands as a block.
+`hazard-warning`. Lava held in ceilings stays still until it is released. A crumbling
+block (the cracked or chiselled blocks of each theme) that a fighting player stands on
+cracks with `hazard-warning` and collapses a second later; it drops as a falling block
+that never lands as a block.
+
+Hazards grow during the fight with the enemy director's intensity: more of the lava held
+in ceilings is released, and whole floating platforms collapse, one on every side at a
+time, until all of them have come by full intensity in OVERRUN. Each one is warned of at
+its spot a few seconds ahead with `hazard-warning` and particles, and none comes once the
+round has ended. A platform that is part of the only way to the centre never collapses.
 
 Lava only flows where it was worked out to go with the map: down from its source and up
 to 3 blocks across the floor it lands on, never outside the map, into a spawn, the
@@ -462,6 +468,8 @@ back. Freeing a map, or the sweeps of its cell, stop it all at once. Limits, und
 | `max-lava-sources-per-map` | 256 | 0 to 256 | Lava sources flowing at once in one map. 0 keeps all lava still. |
 | `max-lava-sources` | 1024 | 0 to 1024 | Lava sources flowing at once across every map. |
 | `lava-flow-seconds` | 300 | 1 to 3600 | How long a source flows before it is taken away, if the round has not ended first. |
+| `warning-seconds` | 3 | 1 to 30 | How long a growing hazard's warning comes before it. |
+| `late-interval-seconds` | 5 | 1 to 600 | The least time between two growing hazards' warnings in one map. |
 
 Sources start and stop at most 64 a tick, within the placement budget above, never all
 at once: setting many at once is what costs tick time, while lava already flowing costs
@@ -678,7 +686,8 @@ Reload applies immediately. `room-join` plays when someone joins your room, by
 `room accept`, `/narena accept` or a play portal, and reaches its members. Match cues include spectators. Purchases and cooldown
 completions reach only their owner. Cooldown resets at round boundaries or leaving
 are silent. `hazard-warning` plays to the match when lava
-starts flowing in a generated map, and to a player when a block cracks under them.
+starts flowing in a generated map, to a player when a block cracks under them, and at
+the spot of a growing hazard a few seconds before it comes.
 
 ## Player messages
 

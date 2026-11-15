@@ -28,6 +28,16 @@ import java.util.Objects;
  * <p><b>Collapses.</b> Every crumbling block ({@link BlockKind#CRUMBLE},
  * {@link BlockKind#CRUMBLE_PLATFORM}). The route never relies on one.
  *
+ * <p><b>Late hazards.</b> Hazards that start partway through a round. Held ceiling lava
+ * ({@link Kind#HANGING}) is late lava: it is held until it is released. A late collapse is a
+ * whole floating platform: the {@link BlockKind#PLATFORM} and {@link BlockKind#CRUMBLE_PLATFORM}
+ * cells joined face to face, inside the hazard rows and clear of the route's space and the
+ * enemy spawns. The generator has no other kind of bridge, so a platform is also what spans
+ * a gap. Platforms are kept in turn only while the side stays crossable without crumbling
+ * blocks with every kept lava footprint full and every kept platform gone
+ * ({@link MovementSolver#crossableWithLava}, the gone cells read as blocked), so no late
+ * collapse, in any order and with any lava flowing, cuts the only route.
+ *
  * <p>Every side is the same model turned about the centre, so the plan is worked out on
  * one side and turned to each team. Sources are listed team by team for each side source in
  * turn, so the first {@code n * teams} are the same {@code n} sources on every side.
@@ -41,6 +51,8 @@ public final class HazardPlan {
     public static final int ROUTE_MARGIN = 1;
 
     private static final int[][] DIRECTIONS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
+    private static final int[][] NEIGHBOURS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
 
     /** What a lava source is in the model. */
     public enum Kind {
@@ -68,13 +80,30 @@ public final class HazardPlan {
     public record Crumble(ArenaLayout.Position block, BlockKind kind) {
     }
 
+    /**
+     * A floating platform on one team's side that may collapse as a whole late in a round, in
+     * the map frame.
+     *
+     * @param blocks every block of it, top layer first
+     * @param spot   the air above its top, nearest its middle: where its warning is given
+     */
+    public record Platform(int team, List<Crumble> blocks, ArenaLayout.Position spot) {
+
+        public Platform {
+            blocks = List.copyOf(blocks);
+            Objects.requireNonNull(spot, "spot");
+        }
+    }
+
     private final List<LavaSource> sources;
     private final List<Crumble> crumble;
+    private final List<Platform> platforms;
     private final int teams;
 
-    private HazardPlan(List<LavaSource> sources, List<Crumble> crumble, int teams) {
+    private HazardPlan(List<LavaSource> sources, List<Crumble> crumble, List<Platform> platforms, int teams) {
         this.sources = List.copyOf(sources);
         this.crumble = List.copyOf(crumble);
+        this.platforms = List.copyOf(platforms);
         this.teams = teams;
     }
 
@@ -126,7 +155,11 @@ public final class HazardPlan {
         }
         if (!heads.isEmpty() && !solver.crossableWithLava(lava)) {
             heads.clear();
+            kinds.clear();
+            footprints.clear();
+            lava = new boolean[size.volume()];
         }
+        List<List<ArenaLayout.Position>> sidePlatforms = platforms(side, keep, lava, solver);
         List<LavaSource> sources = new ArrayList<>();
         for (int i = 0; i < heads.size(); i++) {
             for (int team = 1; team <= layout.teamCount(); team++) {
@@ -152,7 +185,19 @@ public final class HazardPlan {
                 }
             }
         }
-        return new HazardPlan(sources, crumble, layout.teamCount());
+        List<Platform> platforms = new ArrayList<>();
+        for (List<ArenaLayout.Position> platform : sidePlatforms) {
+            ArenaLayout.Position spot = spot(platform);
+            for (int team = 1; team <= layout.teamCount(); team++) {
+                List<Crumble> blocks = new ArrayList<>();
+                for (ArenaLayout.Position cell : platform) {
+                    blocks.add(new Crumble(layout.toMap(team, cell.x(), cell.y(), cell.z()),
+                            side.at(cell.x(), cell.y(), cell.z())));
+                }
+                platforms.add(new Platform(team, blocks, layout.toMap(team, spot.x(), spot.y(), spot.z())));
+            }
+        }
+        return new HazardPlan(sources, crumble, platforms, layout.teamCount());
     }
 
     /** The lava sources whose flow is allowed, team by team for each side source. */
@@ -163,6 +208,14 @@ public final class HazardPlan {
     /** The blocks that may collapse. */
     public List<Crumble> crumble() {
         return crumble;
+    }
+
+    /**
+     * The floating platforms that may collapse late in a round, team by team for each side
+     * platform, like {@link #sources()}.
+     */
+    public List<Platform> platforms() {
+        return platforms;
     }
 
     /** The layout's team count: sources come in groups of this many, one per team. */
@@ -186,6 +239,115 @@ public final class HazardPlan {
             }
         }
         return false;
+    }
+
+    /**
+     * The side's platforms that may collapse, in side coordinates and scan order, each top
+     * layer first. One that leaves the hazard rows or touches the kept space is left out; the
+     * rest are kept in turn while the side stays crossable with the lava and every platform
+     * kept so far gone.
+     */
+    private static List<List<ArenaLayout.Position>> platforms(TerrainModel side, boolean[] keep, boolean[] lava,
+            MovementSolver solver) {
+        SideDimensions size = side.dimensions();
+        boolean[] seen = new boolean[size.volume()];
+        List<List<ArenaLayout.Position>> candidates = new ArrayList<>();
+        for (int z = 0; z < size.length(); z++) {
+            for (int x = 0; x < size.width(); x++) {
+                for (int y = 0; y < size.height(); y++) {
+                    if (seen[index(size, x, y, z)] || !platform(side.at(x, y, z))) {
+                        continue;
+                    }
+                    List<ArenaLayout.Position> cells = new ArrayList<>();
+                    boolean usable = true;
+                    List<ArenaLayout.Position> queue = new ArrayList<>();
+                    queue.add(new ArenaLayout.Position(x, y, z));
+                    seen[index(size, x, y, z)] = true;
+                    for (int at = 0; at < queue.size(); at++) {
+                        ArenaLayout.Position cell = queue.get(at);
+                        cells.add(cell);
+                        usable &= size.hazardRow(cell.z()) && !keep[index(size, cell.x(), cell.y(), cell.z())];
+                        for (int[] step : NEIGHBOURS) {
+                            int nx = cell.x() + step[0];
+                            int ny = cell.y() + step[1];
+                            int nz = cell.z() + step[2];
+                            if (nx >= 0 && nx < size.width() && ny >= 0 && ny < size.height() && nz >= 0
+                                    && nz < size.length() && !seen[index(size, nx, ny, nz)]
+                                    && platform(side.at(nx, ny, nz))) {
+                                seen[index(size, nx, ny, nz)] = true;
+                                queue.add(new ArenaLayout.Position(nx, ny, nz));
+                            }
+                        }
+                    }
+                    if (usable) {
+                        cells.sort((a, b) -> b.y() != a.y() ? Integer.compare(b.y(), a.y())
+                                : a.z() != b.z() ? Integer.compare(a.z(), b.z()) : Integer.compare(a.x(), b.x()));
+                        candidates.add(cells);
+                    }
+                }
+            }
+        }
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        boolean[] gone = lava.clone();
+        for (List<ArenaLayout.Position> platform : candidates) {
+            mark(gone, size, platform);
+        }
+        if (solver.crossableWithLava(gone)) {
+            return candidates;
+        }
+        List<List<ArenaLayout.Position>> kept = new ArrayList<>();
+        gone = lava.clone();
+        for (List<ArenaLayout.Position> platform : candidates) {
+            boolean[] next = gone.clone();
+            mark(next, size, platform);
+            if (solver.crossableWithLava(next)) {
+                gone = next;
+                kept.add(platform);
+            }
+        }
+        return kept;
+    }
+
+    private static boolean platform(BlockKind kind) {
+        return kind == BlockKind.PLATFORM || kind == BlockKind.CRUMBLE_PLATFORM;
+    }
+
+    private static void mark(boolean[] cells, SideDimensions size, List<ArenaLayout.Position> platform) {
+        for (ArenaLayout.Position cell : platform) {
+            cells[index(size, cell.x(), cell.y(), cell.z())] = true;
+        }
+    }
+
+    /** The air above a platform's top layer, at the top cell nearest the top layer's middle. */
+    private static ArenaLayout.Position spot(List<ArenaLayout.Position> platform) {
+        int top = platform.getFirst().y();
+        long sumX = 0;
+        long sumZ = 0;
+        int count = 0;
+        for (ArenaLayout.Position cell : platform) {
+            if (cell.y() == top) {
+                sumX += cell.x();
+                sumZ += cell.z();
+                count++;
+            }
+        }
+        double middleX = (double) sumX / count;
+        double middleZ = (double) sumZ / count;
+        ArenaLayout.Position best = platform.getFirst();
+        double bestDistance = Double.MAX_VALUE;
+        for (ArenaLayout.Position cell : platform) {
+            if (cell.y() != top) {
+                break;
+            }
+            double distance = (cell.x() - middleX) * (cell.x() - middleX) + (cell.z() - middleZ) * (cell.z() - middleZ);
+            if (distance < bestDistance) {
+                best = cell;
+                bestDistance = distance;
+            }
+        }
+        return new ArenaLayout.Position(best.x(), best.y() + 1, best.z());
     }
 
     /** The source, its column and its pool, in side coordinates, kept to the hazard rows. */

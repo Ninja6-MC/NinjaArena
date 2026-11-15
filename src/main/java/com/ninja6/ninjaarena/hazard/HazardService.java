@@ -30,6 +30,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
+import java.util.function.ToDoubleFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Material;
@@ -48,8 +49,8 @@ import org.bukkit.scheduler.BukkitTask;
  * {@link HazardSettings#maxSources()} across every map, the same number on every team's
  * side; the match hears the hazard warning. A fall's still column is taken away and its
  * head set flowing, so the column fills again with real falling lava that spreads where it
- * lands. Held ceiling lava stays held until {@link #openLava} releases it. A source flows
- * for at most {@link HazardSettings#flowSeconds()}, then it is taken away. Only the cells of
+ * lands. Held ceiling lava stays held until a late hazard or {@link #openLava} releases it.
+ * A source flows for at most {@link HazardSettings#flowSeconds()}, then it is taken away. Only the cells of
  * a flowing source's footprint may take its flow ({@link #allows}, through
  * {@link ArenaProtectionListener}): every other flow in the arena world stays cancelled, so
  * lava never leaves the footprint, the map, or reaches a spawn, the centre or the route.
@@ -57,6 +58,17 @@ import org.bukkit.scheduler.BukkitTask;
  * <p><b>Collapses.</b> A crumbling block a fighting player stands on cracks: the player hears
  * the hazard warning, and {@link #COLLAPSE_DELAY_TICKS} later the block collapses. It turns to
  * air and a falling block of it drops from there, which never lands as a block.
+ *
+ * <p><b>Late hazards.</b> During the fight, more hazards start as the director's intensity
+ * rises ({@link #setIntensity}): held ceiling lava is released and whole floating platforms
+ * collapse ({@link HazardPlan#platforms()}), one hazard on every side at a time, in the plan's
+ * order. At intensity {@code i} the first {@code floor(i * n)} of the map's {@code n} late
+ * hazards are due, so all of them are at intensity 1, as in OVERRUN. At most one is warned of
+ * every {@link HazardSettings#lateIntervalSeconds()} in a map. Each is warned of first at its
+ * spot on every side ({@link Warnings#late}), with particles again every second, and happens
+ * {@link HazardSettings#warningSeconds()} later, only if the round is still on: the round's end
+ * drops every warning still pending. Late lava counts against the source caps from its warning
+ * on; when the caps leave no room it is skipped, without a warning.
  *
  * <p><b>Changes.</b> Every block change goes through the {@link CellWriter} as a change in the
  * map's slot cell, at most {@link CellWriter#MAX_CHANGES_PER_TICK} a tick across every map,
@@ -84,6 +96,9 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
 
     static final int TICKS_PER_SECOND = 20;
 
+    /** Ticks between bursts of particles while a late hazard is coming. */
+    static final int PARTICLE_TICKS = TICKS_PER_SECOND;
+
     /** Where players stand, for collapses. */
     @FunctionalInterface
     public interface Feet {
@@ -100,6 +115,18 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
 
         /** A block cracks under the player. */
         void crack(UUID player);
+
+        /**
+         * A late hazard is coming at the spot on one side: the hazard warning heard there, with
+         * particles. It happens {@link HazardSettings#warningSeconds()} later, unless the round
+         * ends first.
+         */
+        default void late(MatchView match, LateType type, int x, int y, int z) {
+        }
+
+        /** The particles again, every second while the late hazard at the spot is coming. */
+        default void lateParticles(MatchView match, LateType type, int x, int y, int z) {
+        }
 
         Warnings NONE = new Warnings() {
             @Override
@@ -120,10 +147,48 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         }
     }
 
-    /** A map's plan in world coordinates. */
-    record WorldPlan(List<Source> sources, Map<Long, Material> crumble, int teams) {
+    /** What a late hazard does. */
+    public enum LateType {
+        /** Held ceiling lava is released. */
+        LAVA,
+        /** A floating platform collapses. */
+        COLLAPSE
+    }
 
-        static final WorldPlan EMPTY = new WorldPlan(List.of(), Map.of(), 1);
+    /** A floating platform in world coordinates: its blocks packed, what each is, and its warning spot. */
+    record Platform(long[] blocks, Material[] materials, long spot) {
+    }
+
+    /** One late hazard on every side: held lava sources, or platforms, one per side. */
+    record Late(LateType type, List<Source> lava, List<Platform> platforms) {
+
+        long[] spots() {
+            return type == LateType.LAVA ? lava.stream().mapToLong(Source::at).toArray()
+                    : platforms.stream().mapToLong(Platform::spot).toArray();
+        }
+    }
+
+    /** A map's plan in world coordinates, with its late hazards in the order they come. */
+    record WorldPlan(List<Source> sources, Map<Long, Material> crumble, List<Late> late, int teams) {
+
+        static final WorldPlan EMPTY = new WorldPlan(List.of(), Map.of(), List.of(), 1);
+    }
+
+    /** A late hazard warned of and not happened yet. */
+    private static final class Pending {
+
+        final Late late;
+        final int due;
+        /** Lava sources it holds room for under the caps. */
+        final int reserved;
+        int particles;
+
+        Pending(Late late, int due, int reserved, int particles) {
+            this.late = late;
+            this.due = due;
+            this.reserved = reserved;
+            this.particles = particles;
+        }
     }
 
     /** One generated map's hazards. */
@@ -152,6 +217,14 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         final Set<Long> collapsing = new HashSet<>();
         /** Collapsed blocks and what they were, put back at the next PREP. */
         final Map<Long, Material> collapsed = new LinkedHashMap<>();
+        /** Late hazards of the plan dealt with this round, warned of or skipped. */
+        int released;
+        /** The tick from which the next late hazard may be warned of. */
+        int nextLate = Integer.MIN_VALUE;
+        /** Late hazards warned of and still to come. */
+        final List<Pending> pending = new ArrayList<>();
+        /** Lava sources pending late hazards hold room for. */
+        int reserved;
 
         MapHazards(GeneratedMaps.Placed placed) {
             this.placed = placed;
@@ -171,6 +244,7 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
     private final Map<GridCell, MapHazards> maps = new LinkedHashMap<>();
     private Feet feet = player -> OptionalLong.empty();
     private Warnings warnings = Warnings.NONE;
+    private ToDoubleFunction<MatchView> intensity = match -> 0;
     private BukkitTask task;
     private boolean closed;
 
@@ -199,6 +273,14 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
 
     public void setWarnings(Warnings warnings) {
         this.warnings = Objects.requireNonNull(warnings, "warnings");
+    }
+
+    /**
+     * The match's intensity from 0 to 1, read during its fight for late hazards: the
+     * director's, {@code MatchDirector#intensity}. Without it no late hazard comes.
+     */
+    public void setIntensity(ToDoubleFunction<MatchView> intensity) {
+        this.intensity = Objects.requireNonNull(intensity, "intensity");
     }
 
     /** Checks feet and time limits every {@link #CHECK_TICKS} ticks until {@link #close()}. */
@@ -302,19 +384,34 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         return 0;
     }
 
-    /** Lava sources flowing or queued to, in one map's cell. */
+    /** Lava sources flowing, queued to, or warned of as late hazards, in one map's cell. */
     public int openSources(GridCell cell) {
         MapHazards map = maps.get(cell);
-        return map == null ? 0 : map.open.size();
+        return map == null ? 0 : held(map);
     }
 
-    /** Lava sources flowing or queued to, across every map. */
+    /** Lava sources flowing, queued to, or warned of as late hazards, across every map. */
     public int openSources() {
         int total = 0;
         for (MapHazards map : maps.values()) {
-            total += map.open.size();
+            total += held(map);
         }
         return total;
+    }
+
+    /** Late hazards warned of and still to come, in one map's cell. */
+    public int pendingLate(GridCell cell) {
+        MapHazards map = maps.get(cell);
+        return map == null ? 0 : map.pending.size();
+    }
+
+    private static int held(MapHazards map) {
+        return map.open.size() + map.reserved;
+    }
+
+    /** Room left under both source caps for the map. */
+    private int room(MapHazards map) {
+        return Math.min(settings.maxSourcesPerMap() - held(map), settings.maxSources() - openSources());
     }
 
     /** Whether the map in the cell has its plan worked out. */
@@ -335,6 +432,8 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             map.planning.cancel(false);
             map.cracking.clear();
             map.collapsing.clear();
+            map.pending.clear();
+            map.reserved = 0;
         }
     }
 
@@ -357,7 +456,10 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
 
     // ---- Tick ----
 
-    /** Cracks blocks under fighting players, collapses those due and stops sources past the time limit. */
+    /**
+     * Cracks blocks under fighting players, collapses those due, stops sources past the time
+     * limit, and warns of and starts late hazards.
+     */
     public void tick() {
         int now = currentTick.getAsInt();
         for (MapHazards map : List.copyOf(maps.values())) {
@@ -367,6 +469,88 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             stopExpired(map, now);
             crack(map, now);
             collapseDue(map, now);
+            late(map, now);
+        }
+    }
+
+    private void late(MapHazards map, int now) {
+        fireDue(map, now);
+        if (map.match == null) {
+            return;
+        }
+        List<Late> late = map.plan.late();
+        double level = intensity.applyAsDouble(map.match);
+        level = Double.isFinite(level) ? Math.clamp(level, 0, 1) : 0;
+        int due = (int) Math.floor(level * late.size());
+        while (map.released < due && now >= map.nextLate) {
+            Late next = late.get(map.released++);
+            int reserve = 0;
+            if (next.type() == LateType.LAVA) {
+                reserve = (int) next.lava().stream().filter(source -> !map.open.containsKey(source.at())).count();
+                if (reserve < next.lava().size() || room(map) < reserve) {
+                    // Already flowing, or no room under the caps: skipped, never warned of.
+                    continue;
+                }
+                map.reserved += reserve;
+            }
+            map.pending.add(new Pending(next, now + settings.warningSeconds() * TICKS_PER_SECOND, reserve,
+                    now + PARTICLE_TICKS));
+            for (long spot : next.spots()) {
+                warnings.late(map.match, next.type(), unpackX(spot), unpackY(spot), unpackZ(spot));
+            }
+            map.nextLate = now + settings.lateIntervalSeconds() * TICKS_PER_SECOND;
+        }
+        for (Pending pending : map.pending) {
+            if (now >= pending.particles) {
+                pending.particles = now + PARTICLE_TICKS;
+                for (long spot : pending.late.spots()) {
+                    warnings.lateParticles(map.match, pending.late.type(), unpackX(spot), unpackY(spot),
+                            unpackZ(spot));
+                }
+            }
+        }
+    }
+
+    /** Starts the late hazards whose warning time is up. */
+    private void fireDue(MapHazards map, int now) {
+        List<Runnable> changes = new ArrayList<>();
+        int generation = map.generation;
+        for (Iterator<Pending> it = map.pending.iterator(); it.hasNext(); ) {
+            Pending pending = it.next();
+            if (pending.due > now) {
+                continue;
+            }
+            it.remove();
+            Late late = pending.late;
+            if (late.type() == LateType.LAVA) {
+                map.reserved -= pending.reserved;
+                List<Source> chosen = late.lava().stream().filter(source -> !map.open.containsKey(source.at()))
+                        .toList();
+                if (chosen.size() == late.lava().size()) {
+                    start(map, chosen);
+                }
+                continue;
+            }
+            for (Platform platform : late.platforms()) {
+                for (int i = 0; i < platform.blocks().length; i++) {
+                    long at = platform.blocks()[i];
+                    Material material = platform.materials()[i];
+                    if (map.collapsed.containsKey(at) || map.collapsing.contains(at)) {
+                        continue;
+                    }
+                    map.cracking.remove(at);
+                    map.collapsing.add(at);
+                    changes.add(change(map, generation, () -> {
+                        map.collapsing.remove(at);
+                        if (blocks.collapse(unpackX(at), unpackY(at), unpackZ(at), material)) {
+                            map.collapsed.put(at, material);
+                        }
+                    }));
+                }
+            }
+        }
+        if (!changes.isEmpty()) {
+            writer.apply(map.cell, changes);
         }
     }
 
@@ -489,8 +673,7 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
 
     private int open(MapHazards map, HazardPlan.Kind kind, int count) {
         int teams = map.plan.teams();
-        int room = Math.min(settings.maxSourcesPerMap() - map.open.size(), settings.maxSources() - openSources());
-        int wanted = Math.min(count, room);
+        int wanted = Math.min(count, room(map));
         wanted -= Math.floorMod(wanted, teams);
         List<Source> chosen = new ArrayList<>();
         List<Source> sources = map.plan.sources();
@@ -503,6 +686,12 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         if (chosen.isEmpty()) {
             return 0;
         }
+        start(map, chosen);
+        return chosen.size();
+    }
+
+    /** Starts the sources: their footprints open and changes set them flowing. */
+    private void start(MapHazards map, List<Source> chosen) {
         int generation = map.generation;
         List<Runnable> changes = new ArrayList<>();
         for (Source source : chosen) {
@@ -526,7 +715,6 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             }));
         }
         writer.apply(map.cell, changes);
-        return chosen.size();
     }
 
     /** Stops the source: its footprint closes and a change takes it away. */
@@ -553,6 +741,10 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         map.generation++;
         map.cracking.clear();
         map.collapsing.clear();
+        map.pending.clear();
+        map.reserved = 0;
+        map.released = 0;
+        map.nextLate = Integer.MIN_VALUE;
         if (map.plan == null || map.open.isEmpty()) {
             map.allowed.clear();
             return;
@@ -597,6 +789,8 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             map.planning.cancel(false);
             map.cracking.clear();
             map.collapsing.clear();
+            map.pending.clear();
+            map.reserved = 0;
             if (map.plan != null) {
                 removeLava(map);
             }
@@ -664,7 +858,59 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
                 crumble.put(pack(x, y, z), ThemePalette.material(layout.side().theme(), block.kind()));
             }
         }
-        return new WorldPlan(List.copyOf(sources), crumble, plan.teams());
+        List<List<Platform>> platforms = new ArrayList<>();
+        List<HazardPlan.Platform> plannedPlatforms = plan.platforms();
+        for (int i = 0; i + plan.teams() <= plannedPlatforms.size(); i += plan.teams()) {
+            List<Platform> group = new ArrayList<>();
+            for (HazardPlan.Platform platform : plannedPlatforms.subList(i, i + plan.teams())) {
+                Platform placed = platform(map, platform, bounds);
+                if (placed != null) {
+                    group.add(placed);
+                }
+            }
+            if (group.size() == plan.teams()) {
+                platforms.add(List.copyOf(group));
+            }
+        }
+        List<List<Source>> hanging = new ArrayList<>();
+        for (int i = 0; i + plan.teams() <= sources.size(); i += plan.teams()) {
+            if (sources.get(i).kind() == HazardPlan.Kind.HANGING) {
+                hanging.add(List.copyOf(sources.subList(i, i + plan.teams())));
+            }
+        }
+        // Lava and collapses take turns, each in the plan's order.
+        List<Late> late = new ArrayList<>();
+        for (int i = 0; i < Math.max(hanging.size(), platforms.size()); i++) {
+            if (i < hanging.size()) {
+                late.add(new Late(LateType.LAVA, hanging.get(i), List.of()));
+            }
+            if (i < platforms.size()) {
+                late.add(new Late(LateType.COLLAPSE, List.of(), platforms.get(i)));
+            }
+        }
+        return new WorldPlan(List.copyOf(sources), crumble, List.copyOf(late), plan.teams());
+    }
+
+    /** A platform in world coordinates; null if any block is outside the map or its hazard zone. */
+    private static Platform platform(GeneratedMaps.Placed map, HazardPlan.Platform platform, ArenaBounds bounds) {
+        ArenaLayout layout = map.layout();
+        List<HazardPlan.Crumble> cells = platform.blocks();
+        long[] blocks = new long[cells.size()];
+        Material[] materials = new Material[cells.size()];
+        for (int i = 0; i < blocks.length; i++) {
+            ArenaLayout.Position at = cells.get(i).block();
+            int x = map.originX() + at.x();
+            int y = map.originY() + at.y();
+            int z = map.originZ() + at.z();
+            if (!HazardPlan.inHazardZone(layout, at.x(), at.y(), at.z()) || !bounds.contains(x, y, z)) {
+                return null;
+            }
+            blocks[i] = pack(x, y, z);
+            materials[i] = ThemePalette.material(layout.side().theme(), cells.get(i).kind());
+        }
+        ArenaLayout.Position spot = platform.spot();
+        return new Platform(blocks, materials, pack(map.originX() + spot.x(), map.originY() + spot.y(),
+                map.originZ() + spot.z()));
     }
 
     private static Source source(GeneratedMaps.Placed map, HazardPlan.LavaSource source, ArenaBounds bounds) {

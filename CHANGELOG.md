@@ -16,6 +16,20 @@ Java 25, and does not run on Folia.
 
 - Room screens for creating, joining, spectating, settings, invites and starting, with
   native dialogs and an independent `rooms.menu: chest` fallback.
+- Hazards that grow during a round in generated maps. As the enemy director's intensity
+  rises in COMBAT, more of the map's lava held in ceilings is released and whole floating
+  platforms collapse, one on every side at a time and taking turns, until all of them
+  have come at intensity 1, as in OVERRUN. Each is warned of at its spot first: the
+  `hazard-warning` sound is heard there and particles show there every second, and it
+  comes `stability.hazards.warning-seconds` (3) later. Nothing comes once the round has
+  ended, even with a warning pending. Late hazards come at most one every
+  `late-interval-seconds` (5) in a map. A platform that collapses drops as falling blocks
+  that never land, like a crumbling block, and the next PREP puts it back. `HazardPlan`
+  keeps only platforms in the hazard rows, clear of the route's space and the enemy
+  spawns, and only while the side stays crossable with every fall flowing and every
+  kept platform gone. Released lava counts against the source caps from its warning;
+  when the caps leave no room it is skipped without a warning. Every change still goes
+  through the placement budget at 64 a tick. Restart-only, like the rest of `stability`.
 - Real lava flow and collapsing blocks in generated maps. When a round's fight starts,
   the map's lava falls flow for real: the still column goes and the head is set flowing,
   so falling lava fills it again and spreads where it lands. Lava held in ceilings stays
