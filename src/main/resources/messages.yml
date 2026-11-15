@@ -772,6 +772,7 @@ shop:
     title: "Round Shop"
     balance: "Balance: <points> points"
     buy: "<name> | <price> pts | <left> left"
+    buy-bedrock: "<name>: <price> pts, <left> left"
     ready: "Ready"
     close: "Close"
     back: "Categories"
@@ -798,4 +799,4 @@ shop:
   limit-reached: "<red>You reached this item's buy limit for the round."
   unknown-item: "<red>This shop item is unavailable."
   no-permission: "<red>You do not have permission to use the shop."
-  closed: "<red>The shop is closed."
+  closed: "<red>The shop is only open between rounds."

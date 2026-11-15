@@ -94,9 +94,11 @@ public final class NinjaArenaCommand implements TabExecutor {
     private AdminMapCommands adminMaps;
     private Consumer<Player> intro;
     private Function<Player, MatchService.Ready> shopReady;
-    private java.util.function.Consumer<Player> shopOpen;
+    private Consumer<Player> shopOpen;
 
-    public void setShopOpen(java.util.function.Consumer<Player> shopOpen) { this.shopOpen = shopOpen; }
+    public void setShopOpen(Consumer<Player> shopOpen) {
+        this.shopOpen = Objects.requireNonNull(shopOpen, "shopOpen");
+    }
 
     public void setIntro(Consumer<Player> intro) {
         this.intro = Objects.requireNonNull(intro, "intro");

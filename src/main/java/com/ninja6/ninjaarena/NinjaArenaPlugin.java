@@ -408,7 +408,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         var shopChest = new com.ninja6.ninjaarena.shop.ShopMenu(
                 new com.ninja6.ninjaarena.shop.ShopMenu.BukkitScreens(), shopMain);
         shopMenus = new com.ninja6.ninjaarena.shop.ShopMenus(matches, shop, points,
-                () -> getConfig().get("shop.menu"), new com.ninja6.ninjaarena.shop.ShopDialog(shopMain),
+                () -> getConfig().get("shop.menu"), bedrock,
+                new com.ninja6.ninjaarena.shop.ShopDialog(shopMain, getServer()::getPlayer),
                 shopChest, getLogger()::warning);
         getServer().getPluginManager().registerEvents(shopChest, this);
         getServer().getPluginManager().registerEvents(

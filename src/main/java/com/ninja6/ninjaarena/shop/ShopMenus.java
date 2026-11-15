@@ -7,6 +7,7 @@ import com.ninja6.ninjaarena.match.MatchPhase;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.match.PlayerPoints;
+import com.ninja6.ninjaarena.resourcepack.BedrockIntegration;
 import com.ninja6.ninjaarena.shop.ShopCatalogue.Category;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,39 +43,42 @@ public final class ShopMenus {
     private final Shop shop;
     private final PlayerPoints points;
     private final Supplier<Object> mode;
+    private final BedrockIntegration integration;
     private final Surface dialog;
     private final Surface chest;
     private final java.util.function.Consumer<String> log;
     private final Map<UUID, Active> open = new HashMap<>();
     private long tokens;
-    private boolean warned;
+    private boolean warnedMode;
+    private boolean warnedDialog;
 
     public ShopMenus(MatchService matches, Shop shop, PlayerPoints points, Supplier<Object> mode,
-            Surface dialog, Surface chest, java.util.function.Consumer<String> log) {
+            BedrockIntegration integration, Surface dialog, Surface chest, java.util.function.Consumer<String> log) {
         this.matches = matches;
         this.shop = shop;
         this.points = points;
         this.mode = mode;
+        this.integration = integration;
         this.dialog = dialog;
         this.chest = chest;
         this.log = log;
     }
 
     public void open(Player player) {
-        MatchView match = allowed(player);
+        MatchView match = allowed(player, "shop.closed");
         if (match == null) { return; }
         Object setting = mode.get();
         boolean useChest = setting instanceof String value && value.equalsIgnoreCase("chest");
         if (setting != null && !useChest && !(setting instanceof String value && value.equalsIgnoreCase("dialog"))) {
-            if (!warned) {
+            if (!warnedMode) {
                 log.accept("shop.menu must be dialog or chest. Using dialog.");
-                warned = true;
+                warnedMode = true;
             }
         }
         render(player, match, match.round(), null, 0, useChest ? chest : dialog, "");
     }
 
-    private MatchView allowed(Player player) {
+    private MatchView allowed(Player player, String closedMessage) {
         if (!player.hasPermission("ninjaarena.play")) {
             player.sendMessage(msg("command.no-permission"));
             return null;
@@ -82,7 +86,7 @@ public final class ShopMenus {
         MatchView match = matches.matchOf(player.getUniqueId()).orElse(null);
         if (match == null || !match.contains(player.getUniqueId()) || match.isDisconnected(player.getUniqueId())
                 || match.phase() != MatchPhase.SHOP || match.result().isPresent()) {
-            player.sendMessage(msg("shop.not-in-shop"));
+            player.sendMessage(msg(closedMessage));
             return null;
         }
         return match;
@@ -98,7 +102,7 @@ public final class ShopMenus {
             if (action.kind() == Kind.CLOSE) { active.surface().close(player); }
             return;
         }
-        MatchView match = allowed(player);
+        MatchView match = allowed(player, action.kind() == Kind.READY ? "shop.not-in-shop" : "shop.closed");
         if (match != active.match() || match.round() != active.round()) {
             active.surface().close(player);
             if (match != null) { player.sendMessage(msg("shop.menu.stale")); }
@@ -138,19 +142,20 @@ public final class ShopMenus {
 
     private void render(Player player, MatchView match, int round, Category category, int page,
             Surface surface, String note) {
-        Content content = content(match, player.getUniqueId(), category, page, note);
+        UUID owner = player.getUniqueId();
+        Content content = content(match, owner, category, page, note);
         long token = ++tokens;
         open.put(player.getUniqueId(), new Active(match, round, category, page, surface, token,
                 java.util.stream.Stream.concat(content.buttons().stream().map(Button::action),
                         java.util.stream.Stream.of(new Action(Kind.CLOSE), new Action(Kind.DISMISS))).toList()));
         try {
-            surface.show(player, content, (presser, action) -> press(presser, player.getUniqueId(), token, action));
+            surface.show(player, content, (presser, action) -> press(presser, owner, token, action));
         } catch (RuntimeException | LinkageError e) {
             open.remove(player.getUniqueId());
             if (surface == dialog) {
-                if (!warned) {
+                if (!warnedDialog) {
                     log.accept("The shop dialog could not be shown: " + e.getMessage() + "; using chest.");
-                    warned = true;
+                    warnedDialog = true;
                 }
                 try {
                     dialog.close(player);
@@ -178,7 +183,8 @@ public final class ShopMenus {
             int from = Math.min(Math.max(0, page) * PAGE_SIZE, listed.size());
             listed.subList(from, Math.min(from + PAGE_SIZE, listed.size())).forEach(entry -> {
                 String name = name(entry.id());
-                buttons.add(new Button(text("shop.menu.buy", "name", name, "price", entry.price(),
+                buttons.add(new Button(text(integration.isBedrock(player) ? "shop.menu.buy-bedrock" : "shop.menu.buy",
+                        "name", name, "price", entry.price(),
                         "left", shop.remaining(match, player, entry.id())), new Action(Kind.BUY, entry.id())));
             });
             if (page > 0) { buttons.add(new Button(text("shop.menu.previous"), new Action(Kind.PREVIOUS))); }

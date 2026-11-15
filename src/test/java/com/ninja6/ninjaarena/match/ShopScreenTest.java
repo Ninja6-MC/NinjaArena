@@ -135,6 +135,7 @@ class ShopScreenTest extends MatchFixture {
     private Chests chests;
     private InventoryLockdownListener lockdown;
     private Object mode = "dialog";
+    private final List<String> warnings = new ArrayList<>();
     private final BedrockIntegration integration = new BedrockIntegration() {
         @Override public boolean isBedrock(UUID id) { return id.equals(CAROL); }
         @Override public boolean customHeld(UUID id) { return false; }
@@ -156,6 +157,8 @@ class ShopScreenTest extends MatchFixture {
         var tools = new NinjaTools(matches, plugin.getServer()::getPlayer,
                 name -> arenas.get(name).map(a -> a.bounds()), ToolSettings.DEFAULTS,
                 () -> 0L, (victim, damage, projectile, thrower) -> { }, location -> null);
+        // Initialise effect constants before the catalogue resolves one through the test registry.
+        org.bukkit.potion.PotionEffectType.SPEED.getKey();
         var catalogue = ShopCatalogue.open(dir.resolve("shop.yml"), plugin.getLogger(), () -> {
             try (var in = getClass().getClassLoader().getResourceAsStream("shop.yml")) {
                 java.nio.file.Files.copy(in, dir.resolve("shop.yml"));
@@ -166,7 +169,7 @@ class ShopScreenTest extends MatchFixture {
         lockdown = new InventoryLockdownListener(id -> true);
         dialogs = new Dialogs();
         chests = new Chests();
-        menus = new ShopMenus(matches, shop, points, () -> mode, dialogs, chests.menu, warning -> { });
+        menus = new ShopMenus(matches, shop, points, () -> mode, integration, dialogs, chests.menu, warnings::add);
         players.values().forEach(p -> { p.canShop = true; p.permissions.add("ninjaarena.play"); });
     }
 
@@ -194,14 +197,13 @@ class ShopScreenTest extends MatchFixture {
 
     @Test void javaAndReportedBedrockBuyAndReadyWithExactlyOneFreshDialogPerPurchase() {
         toShop();
-        assertFalse(integration.isBedrock(ALICE));
-        assertTrue(integration.isBedrock(CAROL));
         for (UUID id : List.of(ALICE, CAROL)) {
             menus.open(player(id));
             assertTrue(last().content().lines().getFirst().startsWith("Balance: "));
             category(last(), "CONSUMABLES");
             Shown buying = last();
-            assertEquals("Cooked beef | 1 pts | 2 left", buying.content().buttons().getFirst().label());
+            assertEquals(id.equals(CAROL) ? "Cooked beef: 1 pts, 2 left" : "Cooked beef | 1 pts | 2 left",
+                    buying.content().buttons().getFirst().label());
             int before = points.points(match(), id);
             int shown = dialogs.shown.size();
             press(buying, Kind.BUY);
@@ -228,13 +230,15 @@ class ShopScreenTest extends MatchFixture {
             int slot = root.labels().entrySet().stream().filter(e -> e.getValue().equals("Consumables"))
                     .findFirst().orElseThrow().getKey();
             chests.click(id, slot, ClickType.LEFT);
-            assertEquals("Cooked beef | 1 pts | 2 left", chests.windows.getLast().labels().get(0));
+            assertEquals(id.equals(CAROL) ? "Cooked beef: 1 pts, 2 left" : "Cooked beef | 1 pts | 2 left",
+                    chests.windows.getLast().labels().get(0));
             int balance = points.points(match(), id);
             chests.click(id, 0, ClickType.SHIFT_LEFT);
             assertEquals(balance, points.points(match(), id));
             chests.click(id, 0, ClickType.LEFT);
             assertEquals(balance - 1, points.points(match(), id));
-            assertEquals("Cooked beef | 1 pts | 1 left", chests.windows.getLast().labels().get(0));
+            assertEquals(id.equals(CAROL) ? "Cooked beef: 1 pts, 1 left" : "Cooked beef | 1 pts | 1 left",
+                    chests.windows.getLast().labels().get(0));
             var ready = chests.windows.getLast().labels().entrySet().stream()
                     .filter(e -> e.getValue().equals("Ready")).findFirst().orElseThrow().getKey();
             chests.click(id, ready, ClickType.RIGHT);
@@ -268,7 +272,7 @@ class ShopScreenTest extends MatchFixture {
         for (String selected : List.of("dialog", "chest")) {
             mode = selected;
             menus.open(player(ALICE));
-            assertEquals("You can only get ready while your match is in the shop.", players.get(ALICE).messages.getLast());
+            assertEquals("The shop is only open between rounds.", players.get(ALICE).messages.getLast());
         }
         startTwoOnTwo();
         menus.open(player(ALICE));
@@ -300,6 +304,15 @@ class ShopScreenTest extends MatchFixture {
         ticks(30);
         press(shown, Kind.BUY);
         assertEquals(before, points.points(match(), ALICE));
+        assertEquals("The shop is only open between rounds.", players.get(ALICE).messages.getLast());
+    }
+
+    @Test void readyAfterTheShopClosesKeepsTheReadyRefusalMessage() {
+        toShop();
+        menus.open(player(ALICE));
+        Shown shown = last();
+        ticks(30);
+        press(shown, Kind.READY);
         assertEquals("You can only get ready while your match is in the shop.", players.get(ALICE).messages.getLast());
     }
 
@@ -376,6 +389,28 @@ class ShopScreenTest extends MatchFixture {
         press(last(), Kind.BUY);
         assertTrue(last().content().lines().contains("You do not have enough points."));
         assertEquals(0, points.points(match(), ALICE));
+    }
+
+    @Test void invalidModeAndDialogFallbackEachWarnOnce() {
+        toShop();
+        mode = "invalid";
+        dialogs.fail = true;
+        menus.open(chests.wrap(ALICE));
+        menus.open(chests.wrap(CAROL));
+        assertEquals(2, warnings.size());
+        assertTrue(warnings.get(0).contains("shop.menu must be dialog or chest"));
+        assertTrue(warnings.get(1).contains("The shop dialog could not be shown"));
+    }
+
+    @Test void dialogFallbackDoesNotSuppressALaterInvalidModeWarning() {
+        toShop();
+        dialogs.fail = true;
+        menus.open(chests.wrap(ALICE));
+        mode = "invalid";
+        menus.open(chests.wrap(CAROL));
+        assertEquals(2, warnings.size());
+        assertTrue(warnings.get(0).contains("The shop dialog could not be shown"));
+        assertTrue(warnings.get(1).contains("shop.menu must be dialog or chest"));
     }
 
 }
