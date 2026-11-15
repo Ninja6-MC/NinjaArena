@@ -777,6 +777,27 @@ class ConfigReloadTest {
     }
 
     @Test
+    void hazardSettingsAreValidatedAndRestartOnly() throws Exception {
+        for (String config : List.of("stability:\n  hazards:\n    max-lava-sources-per-map: 257\n",
+                "stability:\n  hazards:\n    max-lava-sources-per-map: -1\n",
+                "stability:\n  hazards:\n    max-lava-sources: 1025\n",
+                "stability:\n  hazards:\n    max-lava-sources: 2.5\n",
+                "stability:\n  hazards:\n    lava-flow-seconds: 0\n",
+                "stability:\n  hazards:\n    lava-flow-seconds: 3601\n",
+                "stability:\n  hazards:\n    unknown: 1\n")) {
+            write(config, EMPTY_KIT);
+            var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate, config);
+            assertTrue(failure.getMessage().contains("stability.hazards."), failure.getMessage());
+        }
+        write("stability:\n  hazards:\n    max-lava-sources-per-map: 64\n    lava-flow-seconds: 60\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertTrue(report.get(3).contains("stability.hazards.max-lava-sources-per-map (restart required)"),
+                report.get(3));
+        assertTrue(report.get(3).contains("stability.hazards.lava-flow-seconds (restart required)"), report.get(3));
+        assertTrue(target.calls.isEmpty());
+    }
+
+    @Test
     void placementSettingsAreValidatedAndRestartOnly() throws Exception {
         for (String config : List.of("stability:\n  placement:\n    budget-ms: 0.05\n",
                 "stability:\n  placement:\n    budget-ms: 51\n",

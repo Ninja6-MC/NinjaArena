@@ -248,6 +248,19 @@ stability:
     # which caps the blocks each map clears and places. 256 gives a 240-block map, 64 high:
     # about 3.7 million blocks to clear and as many to place for four teams.
     max-map-size: 256
+  # Real lava flow in generated maps. When a round's fight starts, the map's lava falls
+  # flow for real; lava held in ceilings stays still. Only lava the plugin started flows,
+  # and only where it was worked out to reach: never outside the map, into a spawn, the
+  # centre or the route to it. Sources start and stop at most 64 a tick within the placement
+  # budget above, and every source is taken away when the round ends.
+  hazards:
+    # Lava sources flowing at once in one map (0 to 256) and across every map (0 to 1024).
+    # 0 keeps all lava still.
+    max-lava-sources-per-map: 256
+    max-lava-sources: 1024
+    # How long a source flows before it is taken away, if the round has not ended first
+    # (1 to 3600 seconds). The lava it fed drains within a few seconds.
+    lava-flow-seconds: 300
 
 director:
   # Log why an enemy did not spawn (each reason at most once per round per match) at INFO

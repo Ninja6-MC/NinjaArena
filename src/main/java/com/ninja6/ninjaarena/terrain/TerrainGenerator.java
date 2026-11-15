@@ -314,8 +314,7 @@ public final class TerrainGenerator {
 
         /** Keep both blends clear too, leaving the spawn an unobstructed apron. */
         private boolean hazardRow(int z) {
-            return z >= dimensions.spawnDepth() + dimensions.blendDepth()
-                    && z < length - dimensions.centreDepth() - dimensions.blendDepth();
+            return dimensions.hazardRow(z);
         }
 
         private void cutGaps() {

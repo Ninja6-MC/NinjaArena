@@ -1,6 +1,7 @@
 package com.ninja6.ninjaarena.config;
 
 import com.ninja6.ninjaarena.event.EventSettings;
+import com.ninja6.ninjaarena.hazard.HazardSettings;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
 import com.ninja6.ninjaarena.map.SeedSettings;
@@ -281,6 +282,10 @@ public final class ReloadFiles {
             case "stability.placement.slow-budget-ms" -> new double[] {0, 50};
             case "stability.placement.recovery-seconds" -> new double[] {0, 600};
             case "stability.placement.max-map-size" -> new double[] {32, 4096};
+            case "stability.hazards.max-lava-sources-per-map" -> new double[] {0, HazardSettings.MAX_SOURCES_PER_MAP};
+            case "stability.hazards.max-lava-sources" -> new double[] {0, HazardSettings.MAX_SOURCES};
+            case "stability.hazards.lava-flow-seconds" ->
+                    new double[] {HazardSettings.MIN_FLOW_SECONDS, HazardSettings.MAX_FLOW_SECONDS};
             case "director.spawn.view-angle" -> new double[] {0, 180};
             case "director.threat-budget.base" -> new double[] {0, Double.MAX_VALUE};
             case "director.enemy-costs.zombie", "director.enemy-costs.skeleton", "director.enemy-costs.spider",
