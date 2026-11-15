@@ -232,8 +232,7 @@ class ShopFlowTest extends MatchFixture {
         assertTrue(at(shopSpot, matches.respawnPoint(DAVE).orElseThrow()), "Dave respawns in the shop");
         assertEquals(List.of(ALICE, CAROL, BOB, DAVE), match.players());
         assertTrue(players.get(ALICE).messages.contains(
-                "Shop open: spend your points before round 2. It closes in 4 seconds; /narena shop ready when you are"
-                        + " done."));
+                "Shop open: spend your points before round 2. It closes in 4 seconds; /narena shop to buy or get ready."));
 
         // Dave's respawn and post-respawn teleport put him in the shop; he stays in the match.
         players.get(DAVE).dead = false;

@@ -616,7 +616,7 @@ class NinjaArenaCommandTest {
                         + " start its match",
                 "/ninjaarena map <list|set <arena|generated [seed] [difficulty]>|next|reroll> - list pickable maps,"
                         + " change your room map, or ask for the next or a new seed",
-                "/ninjaarena shop ready - say you are ready in the shop between rounds"), messages);
+                "/ninjaarena shop [ready] - open the shop or say you are ready"), messages);
 
         messages.clear();
         Player host = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.HOST);
@@ -1041,6 +1041,18 @@ class NinjaArenaCommandTest {
     }
 
     @Test
+    void bareShopOpensTheScreenAndKeepsTheRoutePermissionAndPlayerChecks() {
+        List<Player> opened = new ArrayList<>();
+        command.setShopOpen(opened::add);
+        Player player = playerWithPlay();
+        run(player, "shop");
+        assertEquals(List.of(player), opened);
+        run(playerWithPermissions("ninjaarena.spectate"), "shop");
+        assertEquals(List.of(player), opened);
+        assertEquals("You do not have permission to use this command.", messages.getLast());
+    }
+
+    @Test
     void shopReadyTellsThePlayerWhatTheButtonDid() {
         run(playerWithPlay(), "shop ready");
         assertEquals(List.of("The shop is not available yet in the Arena."), messages);
@@ -1066,7 +1078,7 @@ class NinjaArenaCommandTest {
         messages.clear();
         run(player, "shop");
         run(player, "shop ready now");
-        assertEquals(List.of("Usage: /narena shop ready", "Usage: /narena shop ready"), messages);
+        assertEquals(List.of("The shop is not available yet in the Arena.", "Usage: /narena shop [ready]"), messages);
         assertEquals(3, asked.size());
         assertEquals(List.of("ready"), command.onTabComplete(player, null, "narena", new String[] {"shop", "r"}));
         assertEquals(List.of(), command.onTabComplete(playerWithPermissions("ninjaarena.spectate"), null, "narena",

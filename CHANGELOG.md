@@ -14,6 +14,11 @@ Java 25, and does not run on Folia.
 
 ### Added
 - Bedrock hotbar cooldown mappings for shuriken and smoke bombs in every team colour (#138).
+- A between-round shop screen with balance, categories, prices, remaining purchases
+  and Ready, opened by `/narena shop` or the shop-area board. Paper dialogs use plain
+  text for Java and Bedrock, refresh once per purchase and wait for the server response.
+  Set `shop.menu: chest` for the inventory fallback. The board survives lobby editing
+  and is recreated after lobby reset without duplicating on restart.
 - Room screens for creating, joining, spectating, settings, invites and starting, with
   native dialogs and an independent `rooms.menu: chest` fallback.
 - Hazards that grow during a round in generated maps. As the enemy director's intensity
@@ -346,6 +351,8 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Room chat buttons show Bedrock players the command to type for joining, inviting,
+  removing players and starting; Java players keep the existing clickable buttons.
 - Bedrock texture forms close after a choice and report the result in chat instead of
   queuing more forms. Java dialogs still update in place. Dialog text is plainer, and
   choice buttons mark the saved quality.
