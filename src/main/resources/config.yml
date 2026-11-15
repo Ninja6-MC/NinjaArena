@@ -525,3 +525,9 @@ sounds:
     sound: minecraft:block.note_block.bell
     volume: 0.4
     pitch: 0.8
+
+# Room screens opened by /narena room. Independent of resource-pack.texture-menu.
+# dialog: native Java dialogs / Bedrock forms; chest: inventory menus for every screen.
+# A dialog that cannot be sent falls back to a chest menu. Restart to apply.
+rooms:
+  menu: dialog

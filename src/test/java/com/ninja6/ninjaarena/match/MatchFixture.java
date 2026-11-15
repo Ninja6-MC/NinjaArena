@@ -211,6 +211,8 @@ abstract class MatchFixture {
                     case "getPlayerExact" -> players.values().stream()
                             .filter(fake -> fake.online && fake.name.equalsIgnoreCase((String) args[0]))
                             .map(fake -> fake.proxy).findFirst().orElse(null);
+                    case "getOnlinePlayers" -> players.values().stream().filter(fake -> fake.online)
+                            .map(fake -> fake.proxy).toList();
                     case "getScheduler" -> scheduler;
                     default -> throw new UnsupportedOperationException(method.getName());
                 });

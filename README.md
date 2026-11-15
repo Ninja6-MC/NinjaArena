@@ -257,7 +257,7 @@ The host sets the room up with `/narena room settings`:
 `/narena room invite Bob` sends Bob a **[Join]** button; `/narena room invite` on its own
 lists the lobby players in no room, each with an **[Invite]** button. A player joins with
 the button or `/narena room accept <host>`; a public room needs no invitation. In
-`/narena room` the host sees a **[Remove]** button beside each player, the same as
+`/narena room`, hosts can open **Your room → Remove players**, the same as
 `/narena room kick <player>`. A removed player goes back to the lobby and cannot rejoin a
 public room unless invited again. Players are put on the smallest team and kept within one
 player of each other. Settings and removals wait until the room is back in the lobby.
@@ -268,6 +268,21 @@ A player who comes through a play portal also joins an open room, as described u
 When the host leaves, the room passes to the player who has waited in it longest and has
 `ninjaarena.room.create`. When nobody left has it, the room closes and its players stay in
 the lobby. A running match goes on either way.
+
+### Room screens
+
+Open `/narena room` to create or browse rooms, join or spectate, and manage your room.
+Hosts can edit privacy, player and team counts, choose a map when permitted, invite or
+remove players, and start a match. Each settings screen saves one value; Cancel discards
+that edit. Finished actions close the screen on both Java and Bedrock. Open it again to
+see current state. The existing room subcommands and clickable chat invites remain available.
+
+`rooms.menu: dialog` (the default) uses native Java dialogs and Geyser forms on Bedrock.
+Set `rooms.menu: chest` and restart for chest menus on every screen, including in rooms,
+matches and while spectating. This setting is independent of `resource-pack.texture-menu`.
+If sending a dialog fails, that screen falls back to its chest menu. In chest settings,
+left-click the value to advance, right-click to go back, then press Save. Long lists have
+Previous and Next page buttons in the chest menu; dialogs show the full list.
 
 ### Arena slots
 

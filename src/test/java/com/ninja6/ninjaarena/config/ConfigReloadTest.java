@@ -1034,4 +1034,15 @@ class ConfigReloadTest {
             Messages.use(Messages.bundled());
         }
     }
+    @Test
+    void roomMenuModeIsValidatedAndRequiresRestartIndependentlyOfTextureMenus() throws Exception {
+        write("rooms:\n  menu: chest\n", EMPTY_KIT);
+        var report = reload.reload();
+        assertTrue(report.get(3).contains("rooms.menu (restart required)"));
+        assertEquals("dialog", target.published.getString("rooms.menu"));
+        write("rooms:\n  menu: invalid\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("expected dialog or chest"));
+    }
+
 }

@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
+import org.bukkit.entity.Player;
 import org.bukkit.Location;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -93,6 +94,16 @@ class SpectatorLifecycleTest extends MatchFixture {
         assertFalse(textureLock.test(CAROL));
         viewers.fromLobby(player(CAROL), "dojo");
         assertTrue(textureLock.test(CAROL));
+
+        var roomScreens = new RoomScreenHarness(null, false);
+        Player roomViewer = roomScreens.wrap(player(CAROL));
+        roomScreens.chest.show(roomViewer, new com.ninja6.ninjaarena.room.RoomScreen("Rooms", List.of(),
+                List.of(), null, "Close"), (p, index, values) -> { });
+        var menuOpen = new org.bukkit.event.inventory.InventoryOpenEvent(
+                roomScreens.view(roomViewer, roomScreens.windows.get(CAROL)));
+        new com.ninja6.ninjaarena.kit.InventoryLockdownListener(
+                new ArenaBusy(() -> matches, () -> viewers)).onOpen(menuOpen);
+        assertFalse(menuOpen.isCancelled());
 
         assertFalse(lobby.contains(CAROL), "the lobby's own teleport out ends membership");
         assertFalse(matches.isInMatch(CAROL));

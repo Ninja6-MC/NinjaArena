@@ -843,6 +843,19 @@ class NinjaArenaCommandTest {
     }
 
     @Test
+    void bareRoomOpensTheScreenWhileExplicitCommandsStillDispatchToTheService() {
+        recordMapCalls();
+        List<Player> opened = new ArrayList<>();
+        command.setRoomScreen(opened::add);
+        Player player = playerWithPlay();
+        run(player, "room");
+        assertEquals(List.of(player), opened);
+        run(player, "room create");
+        run(playerWithPermissions(), "room");
+        assertEquals(1, opened.size());
+    }
+
+    @Test
     void mapNextRerollAndSetGeneratedNeedTheMapChangeNode() {
         List<String> calls = recordMapCalls();
         Player host = playerWithPermissions(NinjaArenaCommand.PLAY);

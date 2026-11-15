@@ -197,6 +197,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     /** What a new room starts from, {@code waiting-room} in config.yml; replaced on reload. */
     private volatile WaitingRoomSettings roomDefaults = WaitingRoomSettings.DEFAULTS;
     private RoomService rooms;
+    private com.ninja6.ninjaarena.room.RoomMenus roomMenus;
     private LobbyReturns lobbyReturns;
     private StatsStore stats;
     private Rewards rewards;
@@ -638,6 +639,17 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         command.setLobby(lobbyEditing);
         command.setIntro(lobbyIntro::open);
         command.setRooms(roomList);
+        java.util.concurrent.Executor roomMain = task -> getServer().getScheduler().runTask(this, task);
+        var roomChest = new com.ninja6.ninjaarena.room.RoomMenu(
+                new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), roomMain);
+        String roomMode = com.ninja6.ninjaarena.room.RoomMenuMode.parse(getConfig().get("rooms.menu"),
+                message -> getLogger().warning(message)).label();
+        roomMenus = new com.ninja6.ninjaarena.room.RoomMenus(roomList, () -> roomMode,
+                new com.ninja6.ninjaarena.room.RoomDialog(roomMain), roomChest, watching::fromLobby,
+                message -> getLogger().warning(message));
+        getServer().getPluginManager().registerEvents(
+                new com.ninja6.ninjaarena.room.RoomMenuListener(roomChest, roomMenus), this);
+        command.setRoomScreen(roomMenus::open);
         command.setAdminMaps(new AdminMaps(generatedMaps, roomList::hasSpareCell,
                 () -> roomList.seedPolicy().map(policy -> policy.settings().defaults().difficulty())
                         .orElse(SeedSettings.DEFAULT_DIFFICULTY), getLogger()));
@@ -1021,6 +1033,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (spectators != null) {
             spectators.close();
             spectators = null;
+        }
+        if (roomMenus != null) {
+            roomMenus.closeAll(id -> getServer().getPlayer(id));
+            roomMenus = null;
         }
         if (rooms != null) {
             rooms.close();

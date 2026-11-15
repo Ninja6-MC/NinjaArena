@@ -13,6 +13,8 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Room screens for creating, joining, spectating, settings, invites and starting, with
+  native dialogs and an independent `rooms.menu: chest` fallback.
 - Hazards that grow during a round in generated maps. As the enemy director's intensity
   rises in COMBAT, more of the map's lava held in ceilings is released and whole floating
   platforms collapse, one on every side at a time and taking turns, until all of them
