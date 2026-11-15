@@ -258,7 +258,7 @@ class GeneratedRoomFlowTest extends MatchFixture {
         assertEquals("Generating the room's map from seed 42 at difficulty 1...", messages(ALICE).getLast());
         assertTrue(maps.get(name).isEmpty(), "not placed yet");
         rooms.start(player(ALICE), null);
-        assertEquals("Arena " + name + " is not ready for a match yet.", messages(ALICE).getLast());
+        assertEquals("The room's map is still being built (0%). Start once it is ready.", messages(ALICE).getLast());
         assertFalse(room.isPlaying());
 
         drain();

@@ -612,7 +612,7 @@ class NinjaArenaCommandTest {
                 "/ninjaarena textures - choose Standard or Detailed ninja tool textures",
                 "/ninjaarena intro - show the lobby introduction again",
                 "/ninjaarena accept <host> - join a room you were invited to; same as room accept",
-                "/ninjaarena room [create|settings|invite|accept|kick|start|leave] - open a room, invite players and"
+                "/ninjaarena room [create|settings|invite|accept|kick|start|preview|leave] - open a room, invite players and"
                         + " start its match",
                 "/ninjaarena map <list|set <arena|generated [seed] [difficulty]>|next|reroll> - list pickable maps,"
                         + " change your room map, or ask for the next or a new seed",
@@ -838,6 +838,7 @@ class NinjaArenaCommandTest {
             @Override public void kick(Player player, String member) { }
             @Override public void start(CommandSender sender, String host) { }
             @Override public void leave(Player player) { }
+            @Override public void preview(Player player) { }
         });
         return calls;
     }
@@ -975,6 +976,7 @@ class NinjaArenaCommandTest {
             @Override public void kick(Player player, String member) { calls.add("kick " + member); }
             @Override public void start(CommandSender sender, String host) { calls.add("start " + host); }
             @Override public void leave(Player player) { calls.add("leave"); }
+            @Override public void preview(Player player) { calls.add("preview"); }
         });
         Player chooser = playerWithPermissions(NinjaArenaCommand.PLAY, NinjaArenaCommand.MAP_CHANGE);
         run(chooser, "MAP SET garden");
@@ -998,20 +1000,20 @@ class NinjaArenaCommandTest {
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"map", "set", ""}));
         for (String line : List.of("room", "ROOM create", "room settings", "room settings privacy invite",
                 "room invite", "room invite Bob", "room accept Alice", "room kick Bob", "room start",
-                "room start Alice", "room leave")) {
+                "room start Alice", "room leave", "room preview")) {
             run(player, line);
         }
         assertEquals(List.of("show", "create", "settings null null", "settings privacy invite", "invite null",
-                "invite Bob", "accept Alice", "kick Bob", "start null", "start Alice", "leave"), calls);
+                "invite Bob", "accept Alice", "kick Bob", "start null", "start Alice", "leave", "preview"), calls);
 
         calls.clear();
         messages.clear();
         for (String line : List.of("room settings players", "room create now", "room accept", "room kick",
-                "room start Alice Bob", "room invite Bob Carol", "room teleport")) {
+                "room start Alice Bob", "room invite Bob Carol", "room teleport", "room preview now")) {
             run(player, line);
         }
         assertEquals(List.of(), calls);
-        assertEquals(7, messages.size());
+        assertEquals(8, messages.size());
         assertTrue(messages.stream().allMatch(message -> message.startsWith("Usage: /narena room")), messages.toString());
 
         CommandSender console = (CommandSender) Proxy.newProxyInstance(ConsoleCommandSender.class.getClassLoader(),
@@ -1032,7 +1034,7 @@ class NinjaArenaCommandTest {
         calls.clear();
         run(playerWithPermissions("ninjaarena.spectate"), "room create");
         assertEquals(List.of(), calls, "the route needs the play node");
-        assertEquals(List.of("create", "settings", "invite", "accept", "kick", "start", "leave"),
+        assertEquals(List.of("create", "settings", "invite", "accept", "kick", "start", "preview", "leave"),
                 command.onTabComplete(player, null, "narena", new String[] {"room", ""}));
         assertEquals(List.of("privacy"), command.onTabComplete(player, null, "narena",
                 new String[] {"room", "settings", "pr"}));

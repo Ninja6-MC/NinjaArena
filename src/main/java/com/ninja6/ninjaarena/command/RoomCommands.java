@@ -52,4 +52,10 @@ public interface RoomCommands {
 
     /** Leaves the room and stays in the lobby. */
     void leave(Player player);
+
+    /**
+     * Looks over the room's placed generated map in spectator mode, or back to the room from
+     * a preview.
+     */
+    void preview(Player player);
 }

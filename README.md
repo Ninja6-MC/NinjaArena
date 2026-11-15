@@ -178,7 +178,8 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `room invite [player]` | Host | Invite a player with a join button, or list lobby players with invite buttons |
 | `room accept <host>` | `ninjaarena.play` | Join a host's room: a public one, or one that invited you |
 | `room kick <player>` | Host | Remove a player from the room to the lobby |
-| `room start [host]` | Host, or `ninjaarena.admin` for any room | Start the room's match |
+| `room start [host]` | Host, or `ninjaarena.admin` for any room | Start the room's match; refused while its generated map is still being built |
+| `room preview` | `ninjaarena.play` | Look over the room's placed generated map in spectator mode; again to return to the room |
 | `room leave` | `ninjaarena.play` | Leave the room and stay in the lobby |
 | `map list` | `ninjaarena.play` | List pickable maps, and generated maps when they are on |
 | `map set <arena>` | `ninjaarena.map.change`, host | Change your room's map to a pickable hand-built arena while it is in the lobby |
@@ -486,9 +487,10 @@ settings are validated on reload but apply after a restart. See
 | A room | `/narena room leave` | The lobby, out of the room |
 | The lobby | `/narena leave` | Home, restoring the snapshot |
 | Spectating | `/narena leave`, or the match ends | The lobby |
+| A map preview | `/narena room preview` or `/narena leave`, the room's match starting, leaving the room or the room closing, or the map being cleared | The lobby, still in the room unless they left it |
 | Anywhere in the plugin's worlds | A teleport out of them | Home, restoring the snapshot |
 | A match | Quit, then rejoin within `match.rejoin-grace-seconds` | Back in the match (see below) |
-| A room, a match, the lobby or spectating | Quit, then rejoin | The lobby, with the snapshot kept |
+| A room, a match, the lobby, spectating or a map preview | Quit, then rejoin | The lobby, with the snapshot kept |
 
 A player the lobby cannot take is sent home instead. Rejoining puts a player in the lobby
 only while the server keeps running; after a restart they are restored home on joining, as
