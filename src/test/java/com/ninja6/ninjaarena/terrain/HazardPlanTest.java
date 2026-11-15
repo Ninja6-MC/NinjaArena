@@ -199,4 +199,97 @@ class HazardPlanTest {
         assertTrue(size.hazardRow(size.length() - size.centreDepth() - size.blendDepth() - 1));
         assertFalse(size.hazardRow(size.length() - size.centreDepth() - size.blendDepth()));
     }
+
+    /** The side cells of team 1's platforms, of the first {@code count} side platforms. */
+    private static boolean[] sidePlatforms(ArenaLayout layout, HazardPlan plan, int count) {
+        SideDimensions size = layout.side().dimensions();
+        boolean[] gone = new boolean[size.volume()];
+        int seen = 0;
+        for (HazardPlan.Platform platform : plan.platforms()) {
+            if (platform.team() != 1) {
+                continue;
+            }
+            if (seen++ >= count) {
+                break;
+            }
+            for (HazardPlan.Crumble block : platform.blocks()) {
+                ArenaLayout.Position at = block.block();
+                ArenaLayout.Position local = layout.toSide(1, at.x(), at.y(), at.z());
+                gone[(local.z() * size.width() + local.x()) * size.height() + local.y()] = true;
+            }
+        }
+        return gone;
+    }
+
+    private static boolean[] or(boolean[] a, boolean[] b) {
+        boolean[] both = a.clone();
+        for (int i = 0; i < b.length; i++) {
+            both[i] |= b[i];
+        }
+        return both;
+    }
+
+    @Test
+    void latePlatformsAreWholePlatformsInTheHazardZoneAndTheRouteSurvivesEachCollapse() {
+        int platforms = 0;
+        for (int difficulty = 2; difficulty <= TerrainGenerator.MAX_DIFFICULTY; difficulty++) {
+            for (long seed = 0; seed < 4; seed++) {
+                int teams = seed % 2 == 0 ? 2 : 4;
+                MapSearch.Outcome outcome = MapSearch.search(seed * 6151 + difficulty, difficulty, teams);
+                if (!(outcome instanceof MapSearch.Accepted accepted)) {
+                    continue;
+                }
+                ArenaLayout layout = accepted.layout();
+                MovementSolver solver = MovementSolver.solve(layout.side(), MovementModel.DEFAULT);
+                HazardPlan plan = HazardPlan.of(layout, solver);
+                assertEquals(0, plan.platforms().size() % teams, "the same platforms on every side");
+                for (int i = 0; i < plan.platforms().size(); i++) {
+                    HazardPlan.Platform platform = plan.platforms().get(i);
+                    assertEquals(i % teams + 1, platform.team());
+                    assertFalse(platform.blocks().isEmpty());
+                    for (HazardPlan.Crumble block : platform.blocks()) {
+                        ArenaLayout.Position at = block.block();
+                        assertTrue(block.kind() == BlockKind.PLATFORM || block.kind() == BlockKind.CRUMBLE_PLATFORM);
+                        assertEquals(block.kind(), layout.at(at.x(), at.y(), at.z()));
+                        assertTrue(HazardPlan.inHazardZone(layout, at.x(), at.y(), at.z()), at.toString());
+                        assertFalse(spawnOrCentre(layout, at));
+                    }
+                    ArenaLayout.Position spot = platform.spot();
+                    assertEquals(BlockKind.AIR, layout.at(spot.x(), spot.y(), spot.z()), "the warning is in the open");
+                }
+                // Late hazards come one after another, lava held in ceilings and platforms; the
+                // route holds with every fall flowing and each further one released or collapsed.
+                boolean[] lava = sideLava(layout, plan);
+                int sidePlatforms = plan.platforms().size() / teams;
+                platforms += sidePlatforms;
+                for (int count = 0; count <= sidePlatforms; count++) {
+                    assertTrue(solver.crossableWithLava(or(lava, sidePlatforms(layout, plan, count))),
+                            "still crossable after " + count + " platforms collapse");
+                }
+            }
+        }
+        assertTrue(platforms > 0, "some maps have platforms that may collapse");
+    }
+
+    @Test
+    void aPlatformThatIsTheOnlyWayAcrossNeverCollapsesAndOneBesideItDoes() {
+        int far = 9 + MovementModel.DEFAULT.maxGap();
+        TerrainModel side = new TestSide().trench(9, far, 2)
+                // A bridge over the trench, the only way across.
+                .fill(6, TestSide.GROUND, 9, 9, TestSide.GROUND, far, BlockKind.PLATFORM)
+                // A platform floating off to the side.
+                .fill(0, 20, 10, 1, 20, 11, BlockKind.PLATFORM)
+                .build();
+        MovementSolver solver = MovementSolver.solve(side, MovementModel.DEFAULT);
+        assertTrue(solver.report().crossableWithoutCrumble());
+        ArenaLayout layout = new ArenaLayout(side, 2);
+        HazardPlan plan = HazardPlan.of(layout, solver);
+        assertEquals(2, plan.platforms().size(), "only the floating platform, once for each team");
+        HazardPlan.Platform kept = plan.platforms().getFirst();
+        assertEquals(4, kept.blocks().size());
+        assertTrue(kept.blocks().stream().allMatch(block -> layout.toSide(1, block.block().x(), block.block().y(),
+                block.block().z()).x() <= 1));
+        assertEquals(21, layout.toSide(1, kept.spot().x(), kept.spot().y(), kept.spot().z()).y());
+        assertTrue(solver.crossableWithLava(sidePlatforms(layout, plan, 1)));
+    }
 }

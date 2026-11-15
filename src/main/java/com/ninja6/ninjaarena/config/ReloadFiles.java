@@ -286,6 +286,10 @@ public final class ReloadFiles {
             case "stability.hazards.max-lava-sources" -> new double[] {0, HazardSettings.MAX_SOURCES};
             case "stability.hazards.lava-flow-seconds" ->
                     new double[] {HazardSettings.MIN_FLOW_SECONDS, HazardSettings.MAX_FLOW_SECONDS};
+            case "stability.hazards.warning-seconds" ->
+                    new double[] {HazardSettings.MIN_WARNING_SECONDS, HazardSettings.MAX_WARNING_SECONDS};
+            case "stability.hazards.late-interval-seconds" ->
+                    new double[] {HazardSettings.MIN_LATE_INTERVAL_SECONDS, HazardSettings.MAX_LATE_INTERVAL_SECONDS};
             case "director.spawn.view-angle" -> new double[] {0, 180};
             case "director.threat-budget.base" -> new double[] {0, Double.MAX_VALUE};
             case "director.enemy-costs.zombie", "director.enemy-costs.skeleton", "director.enemy-costs.spider",

@@ -350,7 +350,8 @@ does not assert times.
   an accepted map keeps a route from every team spawn to the centre that never relies
   on one, so they need no path check of their own. That guarantee covers crumbling
   blocks only; a hazard that adds lava or removes any other block must be checked again,
-  as `HazardPlan` does for flowing lava ([Lava flow and collapses](#lava-flow-and-collapses)).
+  as `HazardPlan` does for flowing lava and collapsing platforms
+  ([Lava flow and collapses](#lava-flow-and-collapses)).
 * **#166** tunes `MovementModel` and `ChallengeMinimums` by play.
 
 ## Determinism rules
@@ -714,6 +715,42 @@ it collapses. It is set to air without physics and a falling block of it drops f
 with `cancelDrop` set, so it never lands as a block and drops no item; the arena
 protection's cancelling of entity block changes stays as it was.
 
+### Late hazards
+
+Hazards that grow during a round (#162) need no new block kind, so every golden digest
+stays as it was. Held ceiling lava (`HANGING_LAVA`) is already the late lava: it is held
+until it is released. The generator makes no bridges, so the late collapse is a whole
+floating platform: the `PLATFORM` and `CRUMBLE_PLATFORM` cells joined face to face.
+`HazardPlan#platforms` keeps a platform only if every cell is in the hazard rows and out
+of the space the lava keeps clear (the crumble-free route's space with its margin, and
+around the enemy spawns). The platforms are then checked with `crossableWithLava`, every
+kept lava footprint full and each platform's cells read as blocked, neither floor nor
+air: all of them together if that holds, otherwise one by one in scan order, each kept
+only if the side stays crossable with it and those kept before it gone. A collapse only
+turns those cells to air, so the route holds whichever late hazards have come, in any
+order. Each platform is listed top layer first with a warning spot in the air above the
+middle of its top layer, and, like the sources, once for each team in turn.
+
+`HazardService` turns the late hazards into one list per map: a held lava source on every
+side and a platform on every side take turns, each in the plan's order. During the fight
+(COMBAT and OVERRUN) it reads the director's intensity (`MatchDirector#intensity`); at
+intensity `i` the first `floor(i * n)` of the map's `n` late hazards are due, so all of
+them are at 1, which OVERRUN gives unless the stability gate lowers it. A lower intensity
+later takes nothing back. At most one is warned of every `late-interval-seconds` (5) in a
+map. The warning is `hazard-warning` heard at the spot on every side by the match's
+players and spectators in the arena world, with particles there at once and every second
+after, and the hazard comes `warning-seconds` (3) later, at the first check from then:
+the held lava is set flowing, or the platform's blocks collapse like a crumbling block.
+Released lava holds room under both source caps from its warning; when the caps leave no
+room it is skipped without a warning. Collapses take no room under the caps. Every change
+still goes through `CellWriter#apply` at 64 a tick.
+
+The round's end, the match's end, a cleared cell and plugin disable drop every warning
+still pending, so a hazard never comes once the round is over, even one due at that very
+tick. A warning given in COMBAT still comes in OVERRUN. The next PREP puts back the held
+lava and the collapsed platforms with everything else, and the late hazards start again
+from the first.
+
 ### Changes and clean-up
 
 Every start, stop, restore and collapse is a change through `CellWriter#apply` in the
@@ -723,7 +760,7 @@ which always run.
 
 | When | What happens |
 | :--- | :--- |
-| Round end (any phase but PREP, COMBAT and OVERRUN), match end | Nothing flows from that moment; cracking blocks no longer collapse; every source is set to air with physics, and the lava it fed drains by itself |
+| Round end (any phase but PREP, COMBAT and OVERRUN), match end | Nothing flows from that moment; cracking blocks no longer collapse; pending late hazards are dropped; every source is set to air with physics, and the lava it fed drains by itself |
 | Next PREP on the same map | The removed heads and held lava are put back still, and the collapsed blocks put back, while the teams are at their spawns |
 | Time limit | That source is taken away the same way |
 | Map freed or replaced, cell swept (`GeneratedMaps#onClearing`) | Everything for the map is dropped without block changes, before the cell's clear removes the lava with everything else |

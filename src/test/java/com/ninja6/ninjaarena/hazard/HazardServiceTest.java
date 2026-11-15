@@ -41,6 +41,8 @@ class HazardServiceTest {
     private static final int DIFFICULTY = 4;
     /** A seed whose map has lava falls that may flow and crumbling blocks. */
     private static final long SEED = seed();
+    /** A seed whose map has held lava and platforms that may come late. */
+    private static final long LATE_SEED = lateSeed();
 
     private final FakeBlocks blocks = new FakeBlocks();
     private final BudgetedCellWriter writer = FakeWriters.perTick(blocks, 1 << 20);
@@ -48,6 +50,10 @@ class HazardServiceTest {
             Runnable::run, Runnable::run, quiet());
     private final Hazards hazards = new Hazards(blocks);
     private final List<String> warned = new ArrayList<>();
+    /** Late warnings: spot packed, and the tick it was warned of. */
+    private final Map<Long, Integer> lateWarned = new java.util.HashMap<>();
+    private final List<String> particles = new ArrayList<>();
+    private double level;
     private int now;
     private Long feet;
 
@@ -68,6 +74,20 @@ class HazardServiceTest {
             }
         }
         throw new IllegalStateException("no seed with lava falls");
+    }
+
+    private static long lateSeed() {
+        for (long seed = 1; seed < 400; seed++) {
+            if (MapSearch.search(seed, DIFFICULTY, 2) instanceof MapSearch.Accepted accepted
+                    && accepted.seed() == seed) {
+                HazardPlan plan = HazardPlan.of(accepted.layout(), MovementModel.DEFAULT);
+                long held = plan.sources().stream().filter(source -> source.kind() == HazardPlan.Kind.HANGING).count();
+                if (held >= 4 && plan.platforms().size() >= 4) {
+                    return seed;
+                }
+            }
+        }
+        throw new IllegalStateException("no seed with late hazards");
     }
 
     /** Blocks in memory, with what the service did to them. */
@@ -151,7 +171,19 @@ class HazardServiceTest {
             public void crack(UUID player) {
                 warned.add("crack " + player);
             }
+
+            @Override
+            public void late(MatchView match, HazardService.LateType type, int x, int y, int z) {
+                warned.add("late " + type);
+                lateWarned.put(HazardService.pack(x, y, z), now);
+            }
+
+            @Override
+            public void lateParticles(MatchView match, HazardService.LateType type, int x, int y, int z) {
+                particles.add(type + " " + x + " " + y + " " + z);
+            }
         });
+        service.setIntensity(match -> level);
         return service;
     }
 
@@ -517,5 +549,277 @@ class HazardServiceTest {
             assertEquals(at[1], HazardService.unpackY(packed));
             assertEquals(at[2], HazardService.unpackZ(packed));
         }
+    }
+
+    // ---- Late hazards ----
+
+    private static List<HazardService.Late> late(HazardService.WorldPlan plan, HazardService.LateType type) {
+        return plan.late().stream().filter(late -> late.type() == type).toList();
+    }
+
+    private int lateWarnings() {
+        return (int) warned.stream().filter(line -> line.startsWith("late ")).count();
+    }
+
+    /** Whether the late hazard happened: its lava started or its platforms gone. */
+    private boolean happened(HazardService.Late late) {
+        if (late.type() == HazardService.LateType.LAVA) {
+            return late.lava().stream().allMatch(source -> hazards.started.contains(source.at()));
+        }
+        for (HazardService.Platform platform : late.platforms()) {
+            for (long block : platform.blocks()) {
+                if (blocks.get(HazardService.unpackX(block), HazardService.unpackY(block),
+                        HazardService.unpackZ(block)) != Material.AIR) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean untouched(HazardService.Late late) {
+        if (late.type() == HazardService.LateType.LAVA) {
+            return late.lava().stream().noneMatch(source -> hazards.started.contains(source.at()));
+        }
+        for (HazardService.Platform platform : late.platforms()) {
+            for (int i = 0; i < platform.blocks().length; i++) {
+                long block = platform.blocks()[i];
+                if (blocks.get(HazardService.unpackX(block), HazardService.unpackY(block),
+                        HazardService.unpackZ(block)) != platform.materials()[i]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** Ticks the service and the writer for the seconds given, a check at a time. */
+    private void run(HazardService service, int seconds) {
+        for (int i = 0; i < seconds * HazardService.TICKS_PER_SECOND / HazardService.CHECK_TICKS; i++) {
+            now += HazardService.CHECK_TICKS;
+            service.tick();
+            writer.tick();
+        }
+    }
+
+    @Test
+    void theLatePlanTakesTurnsBetweenHeldLavaAndPlatformsOnEverySide() {
+        HazardService.WorldPlan plan = HazardService.worldPlan(place("generated:1", LATE_SEED));
+        assertFalse(late(plan, HazardService.LateType.LAVA).isEmpty());
+        assertFalse(late(plan, HazardService.LateType.COLLAPSE).isEmpty());
+        assertEquals(HazardService.LateType.LAVA, plan.late().getFirst().type());
+        assertEquals(HazardService.LateType.COLLAPSE, plan.late().get(1).type());
+        for (HazardService.Late late : plan.late()) {
+            assertEquals(plan.teams(), late.spots().length, "one on every side");
+            for (HazardService.Source source : late.lava()) {
+                assertEquals(HazardPlan.Kind.HANGING, source.kind());
+            }
+        }
+    }
+
+    @Test
+    void lateHazardsComeOnlyInTheFightAndGrowWithIntensity() {
+        GeneratedMaps.Placed placed = place("generated:1", LATE_SEED);
+        HazardService.WorldPlan plan = HazardService.worldPlan(placed);
+        int total = plan.late().size();
+        HazardService service = service(HazardSettings.DEFAULTS);
+        MatchView match = match("generated:1");
+        level = 1;
+        phase(service, match, MatchPhase.WAITING, MatchPhase.PREP);
+        drain();
+        run(service, 30);
+        assertEquals(0, lateWarnings(), "nothing late before the fight");
+
+        phase(service, match, MatchPhase.PREP, MatchPhase.COMBAT);
+        warned.clear();
+        level = 0;
+        run(service, 30);
+        assertEquals(0, lateWarnings(), "nothing at intensity 0");
+
+        level = 0.5;
+        int half = (int) Math.floor(0.5 * total);
+        assertTrue(half >= 1);
+        run(service, 1);
+        assertEquals(plan.teams(), lateWarnings(), "one late hazard, warned of on every side");
+        run(service, HazardSettings.DEFAULTS.lateIntervalSeconds() - 2);
+        assertEquals(plan.teams(), lateWarnings(), "the next waits for the interval");
+        run(service, half * HazardSettings.DEFAULTS.lateIntervalSeconds() + 10);
+        assertEquals(half * plan.teams(), lateWarnings(), "as many as the intensity allows");
+
+        level = 0.2;
+        run(service, 20);
+        assertEquals(half * plan.teams(), lateWarnings(), "a lower intensity takes nothing back nor adds");
+
+        phase(service, match, MatchPhase.COMBAT, MatchPhase.OVERRUN);
+        level = 1;
+        run(service, total * HazardSettings.DEFAULTS.lateIntervalSeconds() + 10);
+        assertEquals(total * plan.teams(), lateWarnings(), "every late hazard by full intensity");
+        for (HazardService.Late late : plan.late()) {
+            assertTrue(happened(late), "each happened after its warning");
+        }
+        assertEquals(0, service.pendingLate(placed.arena().cell()));
+    }
+
+    @Test
+    void everyLateHazardIsWarnedOfAtItsSpotTheLeadTimeBeforeIt() {
+        GeneratedMaps.Placed placed = place("generated:1", LATE_SEED);
+        HazardService.WorldPlan plan = HazardService.worldPlan(placed);
+        HazardSettings settings = new HazardSettings(256, 1024, 300, 4, 1);
+        HazardService service = service(settings);
+        MatchView match = match("generated:1");
+        service.prepareRound(match);
+        service.startFight(match);
+        drain();
+        level = 1;
+        int lead = settings.warningSeconds() * HazardService.TICKS_PER_SECOND;
+        Map<HazardService.Late, Integer> happenedAt = new java.util.HashMap<>();
+        for (int i = 0; i < 60 * HazardService.TICKS_PER_SECOND / HazardService.CHECK_TICKS; i++) {
+            now += HazardService.CHECK_TICKS;
+            service.tick();
+            drain();
+            for (HazardService.Late late : plan.late()) {
+                if (happenedAt.containsKey(late) || untouched(late)) {
+                    continue;
+                }
+                assertTrue(happened(late), "all at once, on every side");
+                happenedAt.put(late, now);
+                Integer warnedAt = null;
+                for (long spot : late.spots()) {
+                    assertTrue(lateWarned.containsKey(spot), "warned of at its spot on every side first");
+                    warnedAt = warnedAt == null ? lateWarned.get(spot) : warnedAt;
+                    assertEquals(warnedAt, lateWarned.get(spot), "on every side at once");
+                }
+                assertEquals(warnedAt + lead, now, "the lead time after its warning, to the check");
+            }
+        }
+        assertEquals(plan.late().size(), happenedAt.size(), "every one came");
+        assertTrue(particles.size() >= plan.late().size() * (settings.warningSeconds() - 1) * plan.teams(),
+                "particles every second while each comes");
+    }
+
+    @Test
+    void nothingHappensAfterTheRoundEndsEvenWithAWarningPending() {
+        GeneratedMaps.Placed placed = place("generated:1", LATE_SEED);
+        HazardService.WorldPlan plan = HazardService.worldPlan(placed);
+        HazardService service = service(HazardSettings.DEFAULTS);
+        MatchView match = match("generated:1");
+        phase(service, match, MatchPhase.WAITING, MatchPhase.PREP);
+        phase(service, match, MatchPhase.PREP, MatchPhase.COMBAT);
+        drain();
+        level = 1;
+        now += HazardService.CHECK_TICKS;
+        service.tick();
+        assertEquals(plan.teams(), lateWarnings());
+        HazardService.Late first = plan.late().getFirst();
+        int open = service.openSources();
+        assertEquals(1, service.pendingLate(placed.arena().cell()));
+
+        // A phase change within the fight keeps it coming.
+        phase(service, match, MatchPhase.COMBAT, MatchPhase.OVERRUN);
+        // The round ends just as it is due.
+        now += HazardSettings.DEFAULTS.warningSeconds() * HazardService.TICKS_PER_SECOND;
+        phase(service, match, MatchPhase.OVERRUN, MatchPhase.ROUND_END);
+        assertEquals(0, service.pendingLate(placed.arena().cell()));
+        assertTrue(service.openSources() < open, "its room under the caps is given back");
+        for (int i = 0; i < 100; i++) {
+            now += HazardService.CHECK_TICKS;
+            service.tick();
+        }
+        drain();
+        assertTrue(untouched(first), "never happens");
+
+        // The same at the match end, with a collapse pending.
+        phase(service, match, MatchPhase.ROUND_END, MatchPhase.PREP);
+        phase(service, match, MatchPhase.PREP, MatchPhase.COMBAT);
+        drain();
+        now += HazardService.CHECK_TICKS;
+        service.tick();
+        now += HazardSettings.DEFAULTS.lateIntervalSeconds() * HazardService.TICKS_PER_SECOND;
+        service.tick();
+        HazardService.Late collapse = plan.late().get(1);
+        assertEquals(HazardService.LateType.COLLAPSE, collapse.type());
+        assertTrue(untouched(collapse));
+        service.onMatchEnd(new MatchEndEvent(match, null));
+        now += 10 * HazardService.TICKS_PER_SECOND;
+        service.tick();
+        drain();
+        assertTrue(untouched(collapse), "never happens after the match end");
+        assertEquals(0, service.pendingLate(placed.arena().cell()));
+    }
+
+    @Test
+    void theCapsAndThePerTickLimitHoldAtFullIntensityInFourMatches() {
+        maps.resize(4);
+        drain();
+        List<GeneratedMaps.Placed> placed = new ArrayList<>();
+        List<MatchView> matches = new ArrayList<>();
+        for (int i = 1; i <= 4; i++) {
+            placed.add(place("generated:" + i, LATE_SEED));
+            matches.add(match("generated:" + i));
+        }
+        int perMap = 6;
+        int all = 14;
+        HazardService service = service(new HazardSettings(perMap, all, 300, 1, 1));
+        level = 1;
+        for (MatchView match : matches) {
+            phase(service, match, MatchPhase.WAITING, MatchPhase.PREP);
+            phase(service, match, MatchPhase.PREP, MatchPhase.COMBAT);
+            phase(service, match, MatchPhase.COMBAT, MatchPhase.OVERRUN);
+        }
+        int most = 0;
+        for (int i = 0; i < 2000; i++) {
+            now += HazardService.CHECK_TICKS;
+            service.tick();
+            for (int t = 0; t < HazardService.CHECK_TICKS; t++) {
+                int before = hazards.calls;
+                writer.tick();
+                most = Math.max(most, hazards.calls - before);
+            }
+            assertTrue(service.openSources() <= all, "every map together: " + service.openSources());
+            for (GeneratedMaps.Placed map : placed) {
+                assertTrue(service.openSources(map.arena().cell()) <= perMap);
+            }
+        }
+        assertTrue(most <= CellWriter.MAX_CHANGES_PER_TICK, "at most 64 changes a tick: " + most);
+        assertEquals(all - all % 2, service.openSources(), "the caps are filled, not passed");
+        int collapsed = 0;
+        for (HazardService.Late late : late(HazardService.worldPlan(placed.getFirst()),
+                HazardService.LateType.COLLAPSE)) {
+            assertTrue(happened(late), "collapses need no room under the lava caps");
+            collapsed++;
+        }
+        assertTrue(collapsed > 0);
+    }
+
+    @Test
+    void lateCollapsesAndReleasedLavaArePutBackAtTheNextPrep() {
+        GeneratedMaps.Placed placed = place("generated:1", LATE_SEED);
+        HazardService.WorldPlan plan = HazardService.worldPlan(placed);
+        HazardService service = service(new HazardSettings(256, 1024, 300, 1, 1));
+        MatchView match = match("generated:1");
+        phase(service, match, MatchPhase.WAITING, MatchPhase.PREP);
+        drain();
+        phase(service, match, MatchPhase.PREP, MatchPhase.COMBAT);
+        level = 1;
+        run(service, plan.late().size() + 5);
+        drain();
+        for (HazardService.Late late : plan.late()) {
+            assertTrue(happened(late));
+        }
+        phase(service, match, MatchPhase.COMBAT, MatchPhase.ROUND_END);
+        drain();
+        phase(service, match, MatchPhase.ROUND_END, MatchPhase.PREP);
+        drain();
+        hazards.started.clear();
+        for (HazardService.Late late : plan.late()) {
+            assertTrue(untouched(late), "back as it was");
+            for (HazardService.Source source : late.lava()) {
+                assertEquals(Material.LAVA, blocks.get(source.x(), source.y(), source.z()), "held again");
+            }
+        }
+        warned.clear();
+        phase(service, match, MatchPhase.PREP, MatchPhase.COMBAT);
+        run(service, 3);
+        assertTrue(lateWarnings() > 0, "the next round's late hazards come again");
     }
 }

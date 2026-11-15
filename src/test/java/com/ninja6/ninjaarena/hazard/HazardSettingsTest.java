@@ -20,6 +20,9 @@ class HazardSettingsTest {
             assertEquals(256, section.getInt("max-lava-sources-per-map"));
             assertEquals(1024, section.getInt("max-lava-sources"));
             assertEquals(300, section.getInt("lava-flow-seconds"));
+            assertEquals(3, section.getInt("warning-seconds"));
+            assertEquals(5, section.getInt("late-interval-seconds"));
+            assertEquals(new HazardSettings(256, 1024, 300, 3, 5), HazardSettings.DEFAULTS);
             assertEquals(new HazardSettings(256, 1024, 300), HazardSettings.DEFAULTS);
             assertEquals(HazardSettings.DEFAULTS, HazardSettings.from(section));
             for (String key : section.getKeys(false)) {
@@ -41,5 +44,7 @@ class HazardSettingsTest {
     void valuesAreClampedToTheMeasuredCaps() {
         assertEquals(new HazardSettings(256, 1024, 3600), new HazardSettings(10_000, 10_000, 10_000));
         assertEquals(new HazardSettings(0, 0, 1), new HazardSettings(-1, -1, 0));
+        assertEquals(new HazardSettings(0, 0, 1, 30, 600), new HazardSettings(0, 0, 1, 31, 601));
+        assertEquals(new HazardSettings(0, 0, 1, 1, 1), new HazardSettings(0, 0, 1, 0, 0));
     }
 }
