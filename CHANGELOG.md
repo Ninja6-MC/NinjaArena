@@ -350,6 +350,8 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Room chat buttons show Bedrock players the command to type for joining, inviting,
+  removing players and starting; Java players keep the existing clickable buttons.
 - Bedrock texture forms close after a choice and report the result in chat instead of
   queuing more forms. Java dialogs still update in place. Dialog text is plainer, and
   choice buttons mark the saved quality.

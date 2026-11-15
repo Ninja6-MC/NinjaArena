@@ -34,6 +34,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
@@ -131,6 +132,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     private Supplier<Optional<String>> featured = Optional::empty;
     private Runnable heldWorld;
     private Sounds sounds;
+    private Predicate<UUID> bedrock = id -> false;
     private GeneratedMaps generated;
     private SeedPolicy seeds;
     /** The seed each generated map placed or being prepared was asked for, by map name. */
@@ -167,6 +169,11 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     /** The featured map of the scheduled event running now, {@code ArenaEvents#arena}; by default none. */
     public void setFeatured(Supplier<Optional<String>> featured) {
         this.featured = Objects.requireNonNull(featured, "featured");
+    }
+
+    /** Identifies recipients whose chat cannot run click events; by default none. */
+    public void setBedrock(Predicate<UUID> bedrock) {
+        this.bedrock = Objects.requireNonNull(bedrock, "bedrock");
     }
 
     public void setSounds(Sounds sounds) {
@@ -465,12 +472,12 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         boolean host = room.host().equals(player.getUniqueId());
         for (UUID member : room.members()) {
             Component kick = host && !member.equals(room.host())
-                    ? button("room.button-kick", "kick " + name(member)) : Component.empty();
+                    ? button(player, "room.button-kick", "kick " + name(member)) : Component.empty();
             player.sendMessage(msg(member.equals(room.host()) ? "room.info-host" : "room.info-member",
                     "player", name(member), "team", room.teamOf(member), "kick", kick));
         }
         if (host && !room.isPlaying() && room.canStart() && hasLease(room)) {
-            player.sendMessage(msg("room.start-ready", "start", button("room.button-start", "start")));
+            player.sendMessage(msg("room.start-ready", "start", button(player, "room.button-start", "start")));
         }
     }
 
@@ -648,7 +655,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             tell(player, "room.invite-list-header");
             for (Player target : free) {
                 player.sendMessage(msg("room.invite-list-line", "player", target.getName(),
-                        "invite", button("room.button-invite", "invite " + target.getName())));
+                        "invite", button(player, "room.button-invite", "invite " + target.getName())));
             }
             return;
         }
@@ -672,7 +679,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         }
         room.invite(targetId);
         target.sendMessage(msg("room.invited-you", "host", player.getName(), "arena", room.arena(),
-                "accept", button("room.button-accept", "accept " + player.getName())));
+                "accept", button(target, "room.button-accept", "accept " + player.getName())));
         tell(player, "room.invited", "player", target.getName());
     }
 
@@ -1639,7 +1646,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             String host = name(room.host());
             Component state = room.isPlaying() ? msg("room.list-playing")
                     : room.isFull() ? msg("room.list-full")
-                    : room.admits(id) ? button("room.button-accept", "accept " + host)
+                    : room.admits(id) ? button(player, "room.button-accept", "accept " + host)
                     : msg("room.privacy-invite");
             player.sendMessage(msg(isFeatured(room.arena()) ? "room.list-line-featured" : "room.list-line",
                     "host", host, "arena", room.arena(), "count", count(room), "state", state));
@@ -1684,9 +1691,11 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         return settings.teamSize() == 0 ? msg("room.team-size-any") : Component.text(settings.teamSize());
     }
 
-    /** A button from {@code messages.yml} that runs a room subcommand when clicked. */
-    private static Component button(String key, String subcommand) {
-        return msg(key).clickEvent(ClickEvent.runCommand(ROOT + subcommand));
+    /** A chat button, or the command to type for a Bedrock recipient. */
+    private Component button(Player recipient, String key, String subcommand) {
+        String command = ROOT + subcommand;
+        return bedrock.test(recipient.getUniqueId()) ? msg(key + "-bedrock", "command", command)
+                : msg(key).clickEvent(ClickEvent.runCommand(command));
     }
 
     private static Integer parse(String value) {

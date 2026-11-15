@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.match;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ninja6.ninjaarena.arena.ArenaBounds;
@@ -828,6 +829,48 @@ class RoomFlowTest extends MatchFixture {
         rooms.show(player(BOB));
         assertTrue(players.get(BOB).messageComponents.stream().noneMatch(line -> clickIn(line) != null),
                 "only the host gets buttons");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void roomChatActionsMatchTheRecipientsClient(boolean bedrock) {
+        // The host and guest use different clients, so invitations must check the recipient.
+        rooms.setBedrock(id -> id.equals(ALICE) ? bedrock : !bedrock);
+        rooms.create(player(ALICE));
+        rooms.invite(player(ALICE), "Bob");
+        assertChatAction(players.get(BOB).messageComponents.getLast(), !bedrock,
+                "Alice invited you to their room on arena dojo. ", "[Join]", "accept Alice", "join");
+        rooms.accept(player(BOB), "Alice");
+        assertTrue(room(ALICE).contains(BOB));
+
+        rooms.show(player(ALICE));
+        Component bobLine = players.get(ALICE).messageComponents.stream()
+                .filter(line -> plain(line).startsWith("- Bob")).findFirst().orElseThrow();
+        assertChatAction(bobLine, bedrock, "- Bob (team 2) ", "[Remove]", "kick Bob", "remove");
+        assertChatAction(players.get(ALICE).messageComponents.getLast(), bedrock,
+                "Enough players are here. ", "[Start]", "start", "start");
+
+        rooms.create(player(CAROL));
+        rooms.leave(player(CAROL));
+        rooms.invite(player(ALICE), null);
+        assertChatAction(players.get(ALICE).messageComponents.getLast(), bedrock,
+                "- Carol ", "[Invite]", "invite Carol", "invite");
+
+        rooms.show(player(EVE));
+        assertChatAction(players.get(EVE).messageComponents.getLast(), !bedrock,
+                "- Alice on dojo (2/2) ", "[Join]", "accept Alice", "join");
+    }
+
+    private static void assertChatAction(Component message, boolean bedrock, String prefix,
+            String label, String subcommand, String action) {
+        String command = "/ninjaarena room " + subcommand;
+        if (bedrock) {
+            assertEquals(prefix + "Type " + command + " to " + action + ".", plain(message));
+            assertNull(clickIn(message));
+        } else {
+            assertEquals(prefix + label, plain(message));
+            assertEquals(ClickEvent.runCommand(command), clickIn(message));
+        }
     }
 
     @Test
