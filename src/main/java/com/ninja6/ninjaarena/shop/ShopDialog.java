@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.shop;
 
 import static com.ninja6.ninjaarena.message.Messages.text;
 
+import com.ninja6.ninjaarena.dialog.DialogRelay;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.DialogBase;
@@ -13,7 +14,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
-import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
 import org.bukkit.entity.Player;
@@ -46,20 +46,10 @@ public final class ShopDialog implements ShopMenus.Surface {
 
     private ActionButton button(String label, ShopMenus.Action action, ShopMenus.Press press, Duration lifetime) {
         return ActionButton.builder(Component.text(label)).width(250)
-                .action(DialogAction.customClick((response, audience) -> {
-                    relay(audience, action, press);
-                }, ClickCallback.Options.builder().uses(ClickCallback.UNLIMITED_USES)
+                .action(DialogAction.customClick((response, audience) -> DialogRelay.onMain(audience,
+                        mainThread, players, current -> press.pressed(current, action)),
+                        ClickCallback.Options.builder().uses(ClickCallback.UNLIMITED_USES)
                         .lifetime(lifetime).build())).build();
-    }
-
-    void relay(Audience audience, ShopMenus.Action action, ShopMenus.Press press) {
-        if (audience instanceof Player player) {
-            UUID id = player.getUniqueId();
-            mainThread.execute(() -> {
-                Player current = players.apply(id);
-                if (current != null) { press.pressed(current, action); }
-            });
-        }
     }
 
     @Override

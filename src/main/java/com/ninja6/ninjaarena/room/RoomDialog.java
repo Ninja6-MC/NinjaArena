@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.room;
 
+import com.ninja6.ninjaarena.dialog.DialogRelay;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.DialogBase;
@@ -15,7 +16,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
-import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
 import org.bukkit.entity.Player;
@@ -67,19 +67,10 @@ public final class RoomDialog implements RoomScreen.Screens {
                     if (audience instanceof Player) {
                         String value = screen.input() == null ? null : response.getText("value");
                         Map<String, String> values = value == null ? Map.of() : Map.of("value", value);
-                        relay(audience, index, values, press);
+                        DialogRelay.onMain(audience, main, players,
+                                current -> press.run(current, index, values));
                     }
                 }, CALLBACK_OPTIONS)).build();
-    }
-
-    void relay(Audience audience, int index, Map<String, String> values, RoomScreen.Press press) {
-        if (audience instanceof Player player) {
-            UUID id = player.getUniqueId();
-            main.execute(() -> {
-                Player current = players.apply(id);
-                if (current != null) { press.run(current, index, values); }
-            });
-        }
     }
 
     @Override

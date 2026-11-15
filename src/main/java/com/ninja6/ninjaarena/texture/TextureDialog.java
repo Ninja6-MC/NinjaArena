@@ -2,6 +2,7 @@ package com.ninja6.ninjaarena.texture;
 
 import static com.ninja6.ninjaarena.message.Messages.text;
 
+import com.ninja6.ninjaarena.dialog.DialogRelay;
 import com.ninja6.ninjaarena.resourcepack.BedrockSelections.Quality;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
@@ -18,7 +19,6 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
 import org.bukkit.entity.Player;
@@ -257,19 +257,9 @@ public final class TextureDialog {
         private ActionButton button(String label, Button button, Press press, ClickCallback.Options options) {
             return ActionButton.builder(Component.text(label))
                     .width(200)
-                    .action(DialogAction.customClick((response, audience) -> relay(audience, button, press), options))
+                    .action(DialogAction.customClick((response, audience) -> DialogRelay.onMain(audience,
+                            mainThread, players, current -> press.pressed(current, button)), options))
                     .build();
-        }
-
-        void relay(Audience audience, Button button, Press press) {
-            if (audience instanceof Player presser) {
-                // The callback is not guaranteed to run on the server thread.
-                UUID id = presser.getUniqueId();
-                mainThread.execute(() -> {
-                    Player current = players.apply(id);
-                    if (current != null) { press.pressed(current, button); }
-                });
-            }
         }
 
         @Override
