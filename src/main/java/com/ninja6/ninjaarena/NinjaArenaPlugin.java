@@ -681,6 +681,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         rooms = new RoomService(this, arenas, inMatch, lobbyEntry, () -> roomDefaults, transfers, arenaWorld::hold,
                 MaxActive.read(getConfig(), getLogger()::warning));
         rooms.setSounds(sounds);
+        rooms.setBedrock(bedrock::isBedrock);
         // Reserves arenas.max-active slot cells and clears them before any room can use one.
         rooms.setGeneratedMaps(generatedMaps);
         rooms.setSeedPolicy(new SeedPolicy(seedSettings(), System::currentTimeMillis,
