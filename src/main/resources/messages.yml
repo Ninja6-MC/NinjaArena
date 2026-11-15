@@ -666,7 +666,7 @@ texture:
   reset: "Reset <player> to Standard."
   reset-removed: "Reset <player> to Standard. Their Detailed overlay was removed."
   next:
-    bedrock: "<saved> Applies on your next connection. Pack loading cannot be observed."
+    bedrock: "<saved> It loads when you rejoin."
     next-connection: "<saved> Applies on your next connection."
     overlay-removed: "<saved> The Detailed overlay is removed for this connection."
     requesting: "<saved> Requesting the Detailed overlay now. If you decline it, Standard stays active."

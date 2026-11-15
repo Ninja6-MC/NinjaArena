@@ -631,7 +631,7 @@ class TextureServiceTest {
         f.settle();
         var result = f.choose(FLOOD, Quality.DETAILED);
         assertTrue(result.saved());
-        assertEquals("Saved: Detailed. Applies on your next connection. Pack loading cannot be observed.",
+        assertEquals("Saved: Detailed. It loads when you rejoin.",
                 result.message());
         assertFalse(result.message().toLowerCase().contains("loaded"));
         assertTrue(f.wire.sent.isEmpty());
@@ -657,7 +657,7 @@ class TextureServiceTest {
         assertFalse(f.choose(FLOOD, Quality.DETAILED).saved());
         var standard = f.choose(FLOOD, Quality.STANDARD);
         assertTrue(standard.saved());
-        assertEquals("Saved: Standard. Applies on your next connection. Pack loading cannot be observed.",
+        assertEquals("Saved: Standard. It loads when you rejoin.",
                 standard.message());
     }
 
