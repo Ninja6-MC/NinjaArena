@@ -9,6 +9,7 @@ import io.papermc.paper.registry.data.dialog.DialogBase;
 import io.papermc.paper.registry.data.dialog.action.DialogAction;
 import io.papermc.paper.registry.data.dialog.body.DialogBody;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -221,16 +222,21 @@ public final class TextureDialog {
 
     /** Builds and sends Paper dialogs. Button callbacks hop to the server thread before running. */
     public static final class PaperScreens implements Screens {
+        // On-demand texture screens can be reopened after ten minutes without a choice.
+        private static final Duration CALLBACK_LIFETIME = Duration.ofMinutes(10);
+        static final ClickCallback.Options CALLBACK_OPTIONS = ClickCallback.Options.builder()
+                .uses(ClickCallback.UNLIMITED_USES).lifetime(CALLBACK_LIFETIME).build();
         private final Executor mainThread;
+        private final Function<UUID, Player> players;
 
-        public PaperScreens(Executor mainThread) {
+        public PaperScreens(Executor mainThread, Function<UUID, Player> players) {
             this.mainThread = Objects.requireNonNull(mainThread, "mainThread");
+            this.players = Objects.requireNonNull(players, "players");
         }
 
         @Override
         public void show(Player player, Content content, Press press) {
-            ClickCallback.Options options = ClickCallback.Options.builder()
-                    .uses(ClickCallback.UNLIMITED_USES).build();
+            ClickCallback.Options options = CALLBACK_OPTIONS;
             List<ActionButton> buttons = List.of(
                     button(content.standard(), Button.STANDARD, press, options),
                     button(content.detailed(), Button.DETAILED, press, options),
@@ -255,10 +261,14 @@ public final class TextureDialog {
                     .build();
         }
 
-        private void relay(Audience audience, Button button, Press press) {
+        void relay(Audience audience, Button button, Press press) {
             if (audience instanceof Player presser) {
                 // The callback is not guaranteed to run on the server thread.
-                mainThread.execute(() -> press.pressed(presser, button));
+                UUID id = presser.getUniqueId();
+                mainThread.execute(() -> {
+                    Player current = players.apply(id);
+                    if (current != null) { press.pressed(current, button); }
+                });
             }
         }
 

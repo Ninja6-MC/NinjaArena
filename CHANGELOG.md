@@ -350,6 +350,8 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Texture and room dialog callbacks expire after 10 and 30 minutes and look up players
+  on the server thread so a disconnected player is not retained by a queued press.
 - Room chat buttons show Bedrock players the command to type for joining, inviting,
   removing players and starting; Java players keep the existing clickable buttons.
 - Bedrock texture forms close after a choice and report the result in chat instead of
