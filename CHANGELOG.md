@@ -343,6 +343,9 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Bedrock texture forms close after a choice and report the result in chat instead of
+  queuing more forms. Java dialogs still update in place. Dialog text is plainer, and
+  choice buttons mark the saved quality.
 - Eliminated players see their spectator tether's teammate or base and radius on the
   action bar. Movement stops at the edge instead of snapping back to the anchor; recovery
   still returns cameras left outside the allowed area. `match.spectate-radius` defaults

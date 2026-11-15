@@ -278,7 +278,7 @@ class TextureMenuTest {
         assertTrue(screen.items.get(12).contains("Applies on your next connection."));
         h.menu.click(h.player(FLOOD), screen.holder, TextureMenu.DETAILED_SLOT);
         fixture.settle();
-        assertEquals("Saved: Detailed. Applies on your next connection. Pack loading cannot be observed.",
+        assertEquals("Saved: Detailed. It loads when you rejoin.",
                 h.menuTold.getLast());
         assertTrue(screen.items.get(14).contains("this connection was given Standard"));
         assertTrue(fixture.wire.sent.isEmpty());
