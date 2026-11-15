@@ -261,6 +261,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         matches.setShopArea(() -> shopLobby.layout().shop(lobbyWorld.world()));
         shopCrossing = transfers.allow(matches::crossesWorlds);
         deaths = new MatchDeathListener(this, matches, maps);
+        deaths.setSpectateRadius(MatchSettings.spectateRadius(getConfig().getConfigurationSection("match")));
         getServer().getPluginManager().registerEvents(deaths, this);
         getServer().getPluginManager().registerEvents(new MatchListener(matches, deaths, transfers), this);
         MatchProtectionListener protection = new MatchProtectionListener(matches,
@@ -444,6 +445,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 match -> enemyDirectors.director(match).map(director -> (int) director.enemies().stream()
                         .filter(MatchDirector.Enemy::isAlive).count()).orElse(0), tools::throwState);
         getServer().getPluginManager().registerEvents(hud, this);
+        hud.setSpectatorHint(deaths::spectatorHint);
         hud.setSounds(sounds);
         hud.setCooldownCheck(tools::checkCooldowns);
         hud.start(this);
@@ -524,6 +526,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         protection.setFriendlyFire(friendlyFire);
                         scoring.setSettings(awards, inMatch.matches());
                         inMatch.setSettings(settings);
+                    }
+
+                    @Override
+                    public void spectateRadius(int radius) {
+                        deaths.setSpectateRadius(radius);
                     }
 
                     @Override

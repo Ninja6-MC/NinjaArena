@@ -1,5 +1,7 @@
 package com.ninja6.ninjaarena.match;
 
+import static com.ninja6.ninjaarena.message.Messages.msg;
+
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.destroystokyo.paper.event.player.PlayerStartSpectatingEntityEvent;
 import com.ninja6.ninjaarena.arena.MapSource;
@@ -9,11 +11,13 @@ import com.ninja6.ninjaarena.match.event.PlayerRejoinMatchEvent;
 import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.PluginWorlds;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -36,8 +40,7 @@ import org.bukkit.scheduler.BukkitTask;
  */
 public final class MatchDeathListener implements Listener {
 
-    /** Free movement is limited to this distance from a teammate, or the base if none remain. */
-    static final double SPECTATE_RADIUS = 16;
+    private int spectateRadius = MatchSettings.DEFAULT_SPECTATE_RADIUS;
 
     private final Plugin plugin;
     private final MatchService matches;
@@ -49,6 +52,27 @@ public final class MatchDeathListener implements Listener {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.matches = Objects.requireNonNull(matches, "matches");
         this.arenas = Objects.requireNonNull(arenas, "arenas");
+    }
+
+    public void setSpectateRadius(int radius) {
+        spectateRadius = Math.clamp(radius, MatchSettings.MIN_SPECTATE_RADIUS, MatchSettings.MAX_SPECTATE_RADIUS);
+    }
+
+    /** Shown by the match HUD on its gentle refresh, sharing its single action bar. */
+    public Optional<Component> spectatorHint(Player player) {
+        if (!isSpectating(player.getUniqueId())) {
+            return Optional.empty();
+        }
+        return matches.matchOf(player.getUniqueId()).map(match -> {
+            Location location = player.getLocation();
+            Player teammate = match.playersOf(match.teamOf(player.getUniqueId())).stream()
+                    .map(plugin.getServer()::getPlayer).filter(candidate -> validTarget(candidate, player, match))
+                    .min(Comparator.comparingDouble(candidate -> location.getWorld().equals(candidate.getLocation().getWorld())
+                            ? location.distanceSquared(candidate.getLocation()) : Double.MAX_VALUE))
+                    .orElse(null);
+            return teammate == null ? msg("match.spectate-base", "radius", spectateRadius)
+                    : msg("match.spectate-teammate", "radius", spectateRadius, "teammate", teammate.getName());
+        });
     }
 
     public void start() {
@@ -175,7 +199,12 @@ public final class MatchDeathListener implements Listener {
         if (isSpectating(event.getPlayer().getUniqueId())) {
             matches.matchOf(event.getPlayer().getUniqueId()).ifPresent(match -> {
                 if (!allowedPosition(event.getTo(), match, event.getPlayer())) {
-                    anchor(event.getPlayer(), match).ifPresent(event::setTo);
+                    if (allowedPosition(event.getFrom(), match, event.getPlayer())) {
+                        event.setCancelled(true);
+                    } else {
+                        // The team moved away or the camera is already outside the arena.
+                        anchor(event.getPlayer(), match).ifPresent(event::setTo);
+                    }
                 }
             });
         }
@@ -286,9 +315,9 @@ public final class MatchDeathListener implements Listener {
                         .isPresent();
     }
 
-    private static boolean near(Location location, Location anchor) {
+    private boolean near(Location location, Location anchor) {
         return location.getWorld().equals(anchor.getWorld())
-                && location.distanceSquared(anchor) <= SPECTATE_RADIUS * SPECTATE_RADIUS;
+                && location.distanceSquared(anchor) <= spectateRadius * spectateRadius;
     }
 
     private static void clearCamera(Player player) {
