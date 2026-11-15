@@ -88,6 +88,48 @@ class ToolVisualsTest {
         assertTrue(visuals.customFlight(match, world));
     }
 
+    private ToolVisuals withBedrock(Set<UUID> bedrock) {
+        return new ToolVisuals(loaded::contains, loaded::contains, bedrock::contains, () -> flight,
+                arena -> List.of(spectator), id -> Optional.of(match));
+    }
+
+    @Test
+    void bedrockViewersDoNotNeedTheJavaPackFromAnyViewerSource() {
+        world.add(outsider);
+        for (UUID id : List.of(thrower, rival, spectator, outsider)) {
+            loaded.remove(id);
+            assertTrue(withBedrock(Set.of(id)).customFlight(match, world), id.toString());
+            loaded.add(id);
+        }
+    }
+
+    @Test
+    void unloadedJavaViewerStillDisablesCustomFlightWithOrWithoutBedrock() {
+        world.add(outsider);
+        for (UUID javaViewer : List.of(thrower, rival, spectator, outsider)) {
+            loaded.remove(javaViewer);
+            assertFalse(withBedrock(Set.of()).customFlight(match, world), javaViewer.toString());
+            for (UUID bedrockViewer : List.of(thrower, rival, spectator, outsider)) {
+                if (bedrockViewer.equals(javaViewer)) continue;
+                loaded.remove(bedrockViewer);
+                assertFalse(withBedrock(Set.of(bedrockViewer)).customFlight(match, world),
+                        javaViewer + " with Bedrock viewer " + bedrockViewer);
+                loaded.add(bedrockViewer);
+            }
+            loaded.add(javaViewer);
+        }
+    }
+
+    @Test
+    void onlyBedrockViewersAllowCustomFlightUnlessDisabledByOperator() {
+        world.add(outsider);
+        loaded.clear();
+        var bedrockVisuals = withBedrock(Set.of(thrower, rival, spectator, outsider));
+        assertTrue(bedrockVisuals.customFlight(match, world));
+        flight = false;
+        assertFalse(bedrockVisuals.customFlight(match, world));
+    }
+
     @Test
     void operatorFallbackAlwaysDisablesCustomFlight() {
         flight = false;
