@@ -43,7 +43,7 @@ public final class NinjaArenaCommand implements TabExecutor {
     private static final List<String> DIFFICULTIES = List.of("1", "2", "3", "4", "5");
     /** The shop phase between rounds: {@code shop ready}. */
     public static final String SHOP = "shop";
-    private static final String SHOP_USAGE = "shop ready";
+    private static final String SHOP_USAGE = "shop [ready]";
     public static final String TEXTURES = "textures";
     public static final String ADMIN_ROUTE = "admin";
     /** What {@code map set} takes to play generated maps instead of a hand-built arena. */
@@ -95,6 +95,11 @@ public final class NinjaArenaCommand implements TabExecutor {
     private AdminMapCommands adminMaps;
     private Consumer<Player> intro;
     private Function<Player, MatchService.Ready> shopReady;
+    private Consumer<Player> shopOpen;
+
+    public void setShopOpen(Consumer<Player> shopOpen) {
+        this.shopOpen = Objects.requireNonNull(shopOpen, "shopOpen");
+    }
 
     public void setIntro(Consumer<Player> intro) {
         this.intro = Objects.requireNonNull(intro, "intro");
@@ -261,18 +266,17 @@ public final class NinjaArenaCommand implements TabExecutor {
                 case "map" -> map(sender, label, args);
                 case ROOM -> room(sender, label, args);
                 case SHOP -> {
-                    if (args.length != 2 || !args[1].equalsIgnoreCase("ready")) {
+                    if (args.length > 2 || args.length == 2 && !args[1].equalsIgnoreCase("ready")) {
                         usage(sender, label, route.usage());
                     } else if (!(sender instanceof Player player)) {
                         sender.sendMessage(msg("command.players-only"));
+                    } else if (args.length == 1) {
+                        if (shopOpen == null) { unavailable(sender, msg("command.feature.shop")); }
+                        else { shopOpen.accept(player); }
                     } else if (shopReady == null) {
                         unavailable(sender, msg("command.feature.shop"));
                     } else {
-                        player.sendMessage(msg(switch (shopReady.apply(player)) {
-                            case READY -> "shop.ready";
-                            case ALREADY_READY -> "shop.already-ready";
-                            case NOT_IN_SHOP -> "shop.not-in-shop";
-                        }));
+                        player.sendMessage(msg(com.ninja6.ninjaarena.shop.ShopMenus.readyKey(shopReady.apply(player))));
                     }
                 }
                 case "pack" -> {

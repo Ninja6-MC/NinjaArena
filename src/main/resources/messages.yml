@@ -73,7 +73,7 @@ help:
   accept: "join a room you were invited to; same as room accept"
   map: "list pickable maps, change your room map, or ask for the next or a new seed"
   room: "open a room, invite players and start its match"
-  shop: "say you are ready in the shop between rounds"
+  shop: "open the shop or say you are ready"
   host: "open an invite-only room on an arena of your choice"
   invite: "invite a player to your room; same as room invite"
   arena: "create, edit and set up arenas"
@@ -822,7 +822,26 @@ reload:
 # The shop phase between rounds and shop purchase results, which the shop screen will
 # show when it is available.
 shop:
-  open: "<gold>Shop open: spend your points before round <round>. It closes in <seconds> seconds; /narena shop ready when you are done."
+  board: "<gold>Round Shop\n<white>Click to buy or get ready"
+  menu:
+    title: "Round Shop"
+    balance: "Balance: <points> points"
+    buy: "<name> | <price> pts | <left> left"
+    buy-bedrock: "<name>: <price> pts, <left> left"
+    ready: "Ready"
+    close: "Close"
+    back: "Categories"
+    previous: "Previous page"
+    next: "Next page"
+    empty: "No items available. You can get ready."
+    stale: "<yellow>This shop changed. Open /narena shop again."
+    failed: "<red>Could not open the shop. Try /narena shop."
+    category:
+      armour: "Armour"
+      tools: "Tools"
+      potions: "Potions"
+      consumables: "Consumables"
+  open: "<gold>Shop open: spend your points before round <round>. It closes in <seconds> seconds; /narena shop to buy or get ready."
   ready: "<green>You are ready for the next round."
   already-ready: "<yellow>You are already ready."
   not-in-shop: "<red>You can only get ready while your match is in the shop."
@@ -835,4 +854,4 @@ shop:
   limit-reached: "<red>You reached this item's buy limit for the round."
   unknown-item: "<red>This shop item is unavailable."
   no-permission: "<red>You do not have permission to use the shop."
-  closed: "<red>The shop is closed."
+  closed: "<red>The shop is only open between rounds."
