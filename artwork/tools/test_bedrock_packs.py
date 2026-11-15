@@ -72,7 +72,7 @@ class BedrockPacksTest(unittest.TestCase):
         self.assertEqual(4, len(identities))
         self.assertEqual("passed", self.verify()["result"])
 
-    def test_mapping_has_fifteen_appearance_only_variants_and_unchanged_bases(self):
+    def test_mapping_has_fifteen_variants_with_independent_cooldowns_and_unchanged_bases(self):
         mapping = json.loads(packs.mappings())
         self.assertEqual(2, mapping["format_version"])
         self.assertEqual({"minecraft:snowball", "minecraft:feather"}, set(mapping["items"]))
@@ -97,7 +97,10 @@ class BedrockPacksTest(unittest.TestCase):
                                      definition["components"])
                 else:
                     self.assertEqual("minecraft:snowball", base)
-                    self.assertNotIn("components", definition)
+                    self.assertIn(tool, ("shuriken", "smoke_bomb"))
+                    self.assertEqual({"minecraft:use_cooldown": {"seconds": 0.01,
+                                                               "cooldown_group": f"ninjaarena:{tool}"}},
+                                     definition["components"])
         self.assertEqual(15, len(identifiers))
         for variant in packs.java.VARIANTS:
             atlas = json.loads(packs.source_files(packs.ROOT, variant, VERSION)["textures/item_texture.json"])

@@ -919,16 +919,18 @@ each player receives per round, and leaving an entry out turns that tool off for
 
 | Kit ID | Item | Default kit | Effect |
 | :--- | :--- | :--- | :--- |
-| `ninjaarena:smoke-bomb` | Snowball | 1 (unlimited) | Thrown. Where it lands, a 3-block cloud lasts 4 seconds and blinds rival players inside it. |
-| `ninjaarena:shuriken` | Snowball | 1 (unlimited) | Thrown. A hit deals 2 damage and makes a rival glow for 3 seconds. |
+| `ninjaarena:smoke-bomb` | Snowball | 1 (unlimited) | Thrown. Where it lands, a 3-block cloud lasts 4 seconds and blinds rival players inside it. Configured cooldown shown on Java and with the new Geyser mappings on Bedrock. |
+| `ninjaarena:shuriken` | Snowball | 1 (unlimited) | Thrown. A hit deals 2 damage and makes a rival glow for 3 seconds. Configured cooldown shown on Java and with the new Geyser mappings on Bedrock. |
 | `ninjaarena:dash` | Feather | 1 | Right-click for a short forward burst. 8-second cooldown, shown on the item on Java and, with the Geyser mappings installed, on Bedrock (see the Bedrock note below). Not consumed. |
 
-Bedrock shows the dash cooldown on the hotbar slot only when the Geyser mappings
-are installed: they give the Bedrock dash item a cooldown category matching the one the
-server sends. Mappings from before this change leave the slot without an overlay, though
-dash is still refused until ready. The mapped duration is the default 8 seconds; the
-server restarts the overlay with the configured time on each use. Not verified on a real
-Bedrock client.
+Bedrock shows each tool's cooldown on its hotbar slot when the matching Geyser
+mappings are installed. The new throw mappings use separate `ninjaarena:shuriken`
+and `ninjaarena:smoke_bomb` categories matching the server; dash keeps
+`minecraft:feather`. Older mappings show no throw overlay, but a throw is still refused
+until ready. The mapped dash duration is the default 8 seconds; throws use a positive
+0.01-second placeholder because their default cooldown is 0. The server restarts the
+overlay with the configured time on each use. The throw overlays are not yet verified
+on a real Bedrock client.
 
 Tools work only for players alive in the round during COMBAT and OVERRUN. During PREP,
 between rounds, or once eliminated, a throw or dash is cancelled and the item kept. Smoke
@@ -941,7 +943,7 @@ cleared at the end of each round and match, when a player leaves or is eliminate
 plugin disable. Durations, radius, damage, cooldown and dash speed are under `tools` in
 `config.yml`.
 
-Each thrown tool has its own Java item cooldown group, so using a shuriken never greys
+Each thrown tool has its own item cooldown group, so using a shuriken never greys
 out a smoke bomb. Under each of `tools.shuriken` and `tools.smoke-bomb`:
 
 - `cooldown-seconds`: 0-60, default `0` (no cooldown).
@@ -957,7 +959,7 @@ the round. Counts refill at round start, including delayed respawns into the new
 match its total `amount` to the limit; a mismatch logs one warning per tool per load.
 Reload changes the settings for new throws and keeps running cooldown deadlines and
 throws already counted this round. Match the kit amount when changing a limit; kit
-changes apply next round. Bedrock cooldown mappings for thrown tools are pending.
+changes apply next round.
 
 `plugin.tools().isMarked(uuid)` reports whether a player is glowing from a shuriken hit,
 and `plugin.tools().inSmoke(location)` whether a place is inside a smoke cloud, for enemy

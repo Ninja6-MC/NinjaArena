@@ -216,6 +216,16 @@ The string is presentation only. Recognition still reads only `ninjaarena:tool`.
 Kits compute the current team when giving tools for each round; already-issued
 items are not continually rewritten.
 
+The new mappings give every shuriken and smoke bomb colour a separate cooldown
+category, `ninjaarena:shuriken` or `ninjaarena:smoke_bomb`, matching the server's
+cooldown packets. Installed together with these mappings, throws show their configured
+cooldown on the Bedrock hotbar. Older mappings show no throw overlay, but the server
+still refuses a throw until ready. Their mapped duration is a positive 0.01 seconds
+because the default throw cooldown is 0; the server restarts the overlay with the
+configured duration on each accepted throw. Dash keeps its `minecraft:feather`
+category, 8-second mapped duration and stack size of 1. The throw overlays are not yet
+verified on a real Bedrock client.
+
 Run these explicit steps in an empty staging/output location:
 
 ```sh
