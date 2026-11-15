@@ -9,6 +9,7 @@ import com.ninja6.ninjaarena.match.MatchView;
 import com.ninja6.ninjaarena.match.PlayerPoints;
 import com.ninja6.ninjaarena.resourcepack.BedrockIntegration;
 import com.ninja6.ninjaarena.shop.ShopCatalogue.Category;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,7 +27,7 @@ public final class ShopMenus {
         public Action(Kind kind) { this(kind, ""); }
     }
     public record Button(String label, Action action) { }
-    public record Content(String title, List<String> lines, List<Button> buttons) { }
+    public record Content(String title, List<String> lines, List<Button> buttons, Duration callbackLifetime) { }
     @FunctionalInterface
     public interface Press {
         void pressed(Player player, Action action);
@@ -198,7 +199,9 @@ public final class ShopMenus {
         lines.add(text("shop.menu.balance", "points", points.points(match, player)));
         if (entries.isEmpty()) { lines.add(text("shop.menu.empty")); }
         if (!note.isEmpty()) { lines.add(note); }
-        return new Content(text("shop.menu.title"), List.copyOf(lines), List.copyOf(buttons));
+        return new Content(text("shop.menu.title"), List.copyOf(lines), List.copyOf(buttons),
+                Duration.ofSeconds((long) match.shopSettings().maxSeconds()
+                        + match.shopSettings().mapWaitLimitSeconds() + 60));
     }
 
     /** Catalogue ids are the names in the format; do not change the catalogue schema. */

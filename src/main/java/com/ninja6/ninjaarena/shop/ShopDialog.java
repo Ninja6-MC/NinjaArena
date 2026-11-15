@@ -31,7 +31,7 @@ public final class ShopDialog implements ShopMenus.Surface {
     @Override
     public void show(Player player, ShopMenus.Content content, ShopMenus.Press press) {
         List<ActionButton> buttons = content.buttons().stream()
-                .map(button -> button(button.label(), button.action(), press)).toList();
+                .map(button -> button(button.label(), button.action(), press, content.callbackLifetime())).toList();
         List<DialogBody> body = content.lines().stream()
                 .map(line -> (DialogBody) DialogBody.plainMessage(Component.text(line))).toList();
         player.showDialog(Dialog.create(factory -> factory.empty()
@@ -39,16 +39,17 @@ public final class ShopDialog implements ShopMenus.Surface {
                         .canCloseWithEscape(true).pause(false)
                         .afterAction(DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE).build())
                 .type(DialogType.multiAction(buttons).columns(1)
-                        .exitAction(button(text("shop.menu.close"), new ShopMenus.Action(ShopMenus.Kind.CLOSE), press))
+                        .exitAction(button(text("shop.menu.close"), new ShopMenus.Action(ShopMenus.Kind.CLOSE),
+                                press, content.callbackLifetime()))
                         .build())));
     }
 
-    private ActionButton button(String label, ShopMenus.Action action, ShopMenus.Press press) {
+    private ActionButton button(String label, ShopMenus.Action action, ShopMenus.Press press, Duration lifetime) {
         return ActionButton.builder(Component.text(label)).width(250)
                 .action(DialogAction.customClick((response, audience) -> {
                     relay(audience, action, press);
                 }, ClickCallback.Options.builder().uses(ClickCallback.UNLIMITED_USES)
-                        .lifetime(Duration.ofMinutes(3)).build())).build();
+                        .lifetime(lifetime).build())).build();
     }
 
     void relay(Audience audience, ShopMenus.Action action, ShopMenus.Press press) {

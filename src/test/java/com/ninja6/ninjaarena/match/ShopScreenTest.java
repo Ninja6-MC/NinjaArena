@@ -195,6 +195,16 @@ class ShopScreenTest extends MatchFixture {
         shown.press().pressed(shown.player(), new Action(Kind.CATEGORY, category));
     }
 
+    @Test void callbackLifetimeCoversTheMatchesLongestConfiguredShopAndMapWait() {
+        matches.setShopSettings(new ShopSettings(true, 3600, 5, 3600));
+        toShop();
+        matches.setShopSettings(ShopSettings.DEFAULTS);
+        menus.open(player(ALICE));
+        assertEquals(java.time.Duration.ofSeconds(7260), last().content().callbackLifetime());
+        category(last(), "CONSUMABLES");
+        assertEquals(java.time.Duration.ofSeconds(7260), last().content().callbackLifetime());
+    }
+
     @Test void javaAndReportedBedrockBuyAndReadyWithExactlyOneFreshDialogPerPurchase() {
         toShop();
         for (UUID id : List.of(ALICE, CAROL)) {
