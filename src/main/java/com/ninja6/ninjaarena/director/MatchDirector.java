@@ -187,9 +187,14 @@ public final class MatchDirector {
         }
     }
 
-    /** The intensity of the last second, from 0 to 1. */
+    /**
+     * The intensity of the last second of the current round's fight, from 0 to 1. It is 0
+     * outside COMBAT and OVERRUN, and in a new round until its first second has run, so the
+     * last round's intensity never carries over: the loop stops when a fight ends, without
+     * another second to clear it.
+     */
     public double intensity() {
-        return intensity;
+        return match.phase().isFighting() && match.round() == round ? intensity : 0;
     }
 
     /** The current round's budget; 0 before the first fight. */

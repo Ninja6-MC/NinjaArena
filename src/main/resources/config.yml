@@ -261,6 +261,14 @@ stability:
     # How long a source flows before it is taken away, if the round has not ended first
     # (1 to 3600 seconds). The lava it fed drains within a few seconds.
     lava-flow-seconds: 300
+    # Late hazards: during the fight, more of the map's held ceiling lava is released and
+    # whole floating platforms collapse as the enemy director's intensity rises, all of
+    # them by the end of OVERRUN at full intensity. Each one is warned of at its spot with
+    # the hazard-warning sound and particles this long before it happens (1 to 30 seconds),
+    # and nothing happens once the round has ended.
+    warning-seconds: 3
+    # The least time between two late hazards' warnings in one map (1 to 600 seconds).
+    late-interval-seconds: 5
 
 director:
   # Log why an enemy did not spawn (each reason at most once per round per match) at INFO
@@ -506,7 +514,8 @@ sounds:
     sound: minecraft:entity.player.levelup
     volume: 0.6
     pitch: 1.0
-  # Reserved for future hazard warnings; currently has no caller.
+  # Lava starts flowing in a generated map (the match hears it), a crumbling block cracks
+  # under a player, and a late hazard is about to happen (heard at its spot).
   hazard-warning:
     enabled: true
     sound: minecraft:block.note_block.bell
