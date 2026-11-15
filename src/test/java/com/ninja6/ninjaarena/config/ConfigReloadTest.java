@@ -799,6 +799,10 @@ class ConfigReloadTest {
                 "stability:\n  hazards:\n    max-lava-sources: 2.5\n",
                 "stability:\n  hazards:\n    lava-flow-seconds: 0\n",
                 "stability:\n  hazards:\n    lava-flow-seconds: 3601\n",
+                "stability:\n  hazards:\n    warning-seconds: 0\n",
+                "stability:\n  hazards:\n    warning-seconds: 31\n",
+                "stability:\n  hazards:\n    late-interval-seconds: 0\n",
+                "stability:\n  hazards:\n    late-interval-seconds: 601\n",
                 "stability:\n  hazards:\n    unknown: 1\n")) {
             write(config, EMPTY_KIT);
             var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate, config);

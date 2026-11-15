@@ -136,6 +136,7 @@ import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.entity.Player;
@@ -350,7 +351,35 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             public void crack(UUID player) {
                 warningSounds.player(Sounds.Cue.HAZARD_WARNING, getServer().getPlayer(player));
             }
+
+            @Override
+            public void late(MatchView match, HazardService.LateType type, int x, int y, int z) {
+                ArenaWorld arena = arenaWorld;
+                if (arena != null) {
+                    arena.currentWorld().ifPresent(world -> warningSounds.at(Sounds.Cue.HAZARD_WARNING, match, world,
+                            x + 0.5, warningY(type, y), z + 0.5));
+                }
+                lateParticles(match, type, x, y, z);
+            }
+
+            @Override
+            public void lateParticles(MatchView match, HazardService.LateType type, int x, int y, int z) {
+                ArenaWorld arena = arenaWorld;
+                if (arena != null) {
+                    arena.currentWorld().ifPresent(world -> world.spawnParticle(
+                            type == HazardService.LateType.LAVA ? Particle.LAVA : Particle.LARGE_SMOKE,
+                            x + 0.5, warningY(type, y), z + 0.5, 12, 0.6, 0.4, 0.6, 0));
+                }
+            }
+
+            /** Held lava's spot is in the ceiling, so its warning shows just below it. */
+            private static double warningY(HazardService.LateType type, int y) {
+                return type == HazardService.LateType.LAVA ? y - 0.5 : y + 0.5;
+            }
         });
+        // Late hazards follow the enemy director's intensity.
+        DirectorService intensities = directors;
+        hazards.setIntensity(match -> intensities.director(match).map(MatchDirector::intensity).orElse(0.0));
         tools.setSounds(sounds);
         tools.setVisuals(visuals);
         getServer().getPluginManager().registerEvents(tools, this);
