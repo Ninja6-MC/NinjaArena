@@ -142,6 +142,9 @@ public final class ReloadFiles {
                     problem = PlayerPortalSettings.problem(path, text);
                 } else if (path.startsWith("resource-pack.")) {
                     problem = null; // Validated together below, including enabled-pack completeness.
+                } else if (path.equals("shop.menu")) {
+                    problem = java.util.Set.of("dialog", "chest").contains(text.toLowerCase(java.util.Locale.ROOT))
+                            ? null : "expected dialog or chest";
                 } else if (path.startsWith("events.messages.")) {
                     problem = text.isBlank() || text.length() > 1000 ? "expected 1 to 1000 characters" : null;
                 } else if (path.startsWith("events.")) {

@@ -154,6 +154,9 @@ points:
   round-win: 6
 
 shop:
+  # Screen opened by /narena shop and the shop board: dialog or chest.
+  # Dialogs also become Bedrock forms; a failed dialog falls back to a chest.
+  menu: dialog
   # A shop phase between rounds, in the lobby world's shop area. Players, eliminated
   # players and spectators go there after each round that another round follows, and
   # come back at the next prep. false goes straight from one round to the next.

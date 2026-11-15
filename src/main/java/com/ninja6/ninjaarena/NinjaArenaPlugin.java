@@ -181,6 +181,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private TeamScores scores;
     private PlayerPoints points;
     private Shop shop;
+    private com.ninja6.ninjaarena.shop.ShopMenus shopMenus;
+    private com.ninja6.ninjaarena.shop.ShopBoard shopBoard;
     private MatchHud hud;
     private DirectorService directors;
     private EnemyLifecycle enemyLifecycle;
@@ -373,6 +375,25 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         shop = new Shop(matches, points, kitItems, tools,
                 getServer()::getPlayer, getLogger(), catalogue, match -> match.phase() == MatchPhase.SHOP);
         shop.setSounds(sounds);
+        java.util.concurrent.Executor shopMain = task -> getServer().getScheduler().runTask(this, task);
+        var shopChest = new com.ninja6.ninjaarena.shop.ShopMenu(
+                new com.ninja6.ninjaarena.shop.ShopMenu.BukkitScreens(), shopMain);
+        shopMenus = new com.ninja6.ninjaarena.shop.ShopMenus(matches, shop, points,
+                () -> getConfig().get("shop.menu"), new com.ninja6.ninjaarena.shop.ShopDialog(shopMain),
+                shopChest, getLogger()::warning);
+        getServer().getPluginManager().registerEvents(shopChest, this);
+        getServer().getPluginManager().registerEvents(
+                new com.ninja6.ninjaarena.shop.ShopListener(shopMenus, getServer()::getPlayer), this);
+        shopBoard = new com.ninja6.ninjaarena.shop.ShopBoard(lobbyWorld.world(), lobbyMembers.layout(), shopMenus::open);
+        getServer().getPluginManager().registerEvents(shopBoard, this);
+        var board = shopBoard;
+        var boardAt = board.location();
+        lobbyWorld.world().getChunkAtAsync(boardAt).thenAccept(chunk -> shopMain.execute(() -> {
+            if (shopBoard == board) {
+                chunk.addPluginChunkTicket(this);
+                board.place();
+            }
+        }));
         roundKits.setAfterKit(shop::apply);
         getServer().getPluginManager().registerEvents(shop, this);
         roundKits.warnToolAmounts(ToolSettings.from(getConfig().getConfigurationSection("tools")));
@@ -606,6 +627,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 () -> roomList.seedPolicy().map(policy -> policy.settings().defaults().difficulty())
                         .orElse(SeedSettings.DEFAULT_DIFFICULTY), getLogger()));
         command.setShopReady(inMatch::ready);
+        command.setShopOpen(shopMenus::open);
         getCommand("ninjaarena").setExecutor(command);
         getCommand("ninjaarena").setTabCompleter(command);
         getLogger().info("NinjaArena enabled.");
@@ -911,6 +933,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 com.ninja6.ninjaarena.lobby.LobbyIntro::showDialog, player -> members.isMember(player.getUniqueId()));
         members.setArrival(lobbyIntro::arrived);
         lobbyEditing = new LobbyEditing(build, members::spawn, busy, world::save, () -> {
+            if (shopBoard != null) { shopBoard.place(); }
             for (Player player : world.getPlayers()) {
                 members.returnToSpawn(player);
             }
@@ -950,6 +973,16 @@ public final class NinjaArenaPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (shopMenus != null) {
+            shopMenus.closeAll(getServer()::getPlayer);
+            shopMenus = null;
+        }
+        if (shopBoard != null) {
+            shopBoard.close();
+            var boardAt = shopBoard.location();
+            boardAt.getWorld().removePluginChunkTicket(boardAt.getBlockX() >> 4, boardAt.getBlockZ() >> 4, this);
+            shopBoard = null;
+        }
         if (textureMenu != null) {
             textureMenu.closeAll(getServer()::getPlayer);
             textureMenu = null;

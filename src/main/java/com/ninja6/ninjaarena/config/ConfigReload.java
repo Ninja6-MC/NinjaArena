@@ -191,7 +191,7 @@ public final class ConfigReload {
                 // Applies to disconnects from now on, running matches included.
                 changed.add(path);
             } else if (path.startsWith("match.") || path.startsWith("scoring.") || path.startsWith("points.")
-                    || path.startsWith("shop.")) {
+                    || (path.startsWith("shop.") && !path.equals("shop.menu"))) {
                 postponed.add(text("reload.next-match", "path", path));
             } else {
                 changed.add(path);

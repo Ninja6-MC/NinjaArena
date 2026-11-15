@@ -94,6 +94,15 @@ public final class Shop implements Listener {
         definition = next;
     }
 
+    /** Purchases still available for one entry in the current round. */
+    public int remaining(MatchView match, UUID player, String itemId) {
+        ShopCatalogue.Entry entry = catalogue(match).items().get(itemId);
+        if (entry == null) { return 0; }
+        Purchases cart = purchases.getOrDefault(match, Map.of()).get(player);
+        int bought = cart == null ? 0 : cart.counts.getOrDefault(itemId, 0);
+        return Math.max(0, entry.limit() - bought);
+    }
+
     public Result buy(MatchView match, Player player, String itemId) {
         UUID id = player.getUniqueId();
         if (!match.contains(id) || matches.matchOf(id).filter(current -> current == match).isEmpty()

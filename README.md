@@ -185,7 +185,7 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `map set generated [seed] [difficulty]` | `ninjaarena.map.change`, host | Play [generated maps](#seed-modes): from the seed modes, or from a seed set by hand |
 | `map next` | `ninjaarena.map.change`, host | The next seed of the rotation at your map's next generation |
 | `map reroll` | `ninjaarena.map.change`, host | A new random seed at your map's next generation |
-| `shop ready` | `ninjaarena.play` | Say you are ready in the [shop between rounds](#shop-phase) |
+| `shop [ready]` | `ninjaarena.play` | Open the [shop between rounds](#shop-phase), or say you are ready |
 | `host <arena>` | `ninjaarena.host` | Open an invite-only room on the named arena |
 | `invite <player>` | `ninjaarena.host` | Invite a player to your room; the same as `room invite <player>` |
 | `arena <subcommand>` | `ninjaarena.admin` | Register, build and inspect arenas |
@@ -556,8 +556,8 @@ give either `material` or a registered plugin `id`, plus an `amount` within its 
 limit. The bundled file includes examples and comments for each key.
 
 Buying requires `ninjaarena.shop.use`, default true and inherited by `ninjaarena.play`.
-It is open only while the buyer's match is in its [shop phase](#shop-phase); there is no
-buy command or shop screen yet. A match keeps its starting catalogue.
+It is open only while the buyer's match is in its [shop phase](#shop-phase).
+A match keeps its starting catalogue.
 Purchases apply after its round kit is rebuilt, including delayed respawns, and last
 one round. Potion effects and extra-use bonuses are explicitly cleared at round end;
 armour and consumables disappear at the next kit rebuild.
@@ -568,6 +568,21 @@ such as a full inventory, is also refunded. Leaving drops both the ledger and pu
 a refund never recreates a departed player's ledger.
 
 ## Shop phase
+
+Open `/narena shop`, or use or attack the shop board in the lobby's shop area, while
+in your match's SHOP phase. The screen shows your personal balance, catalogue
+categories, and buy buttons with each item's name, points price and remaining
+purchases this round. Names come from catalogue ids with spaces in place of hyphens
+and underscores. A purchase reports its result and refreshes the screen once. Ready
+uses the same path as `/narena shop ready` and closes the screen.
+
+`shop.menu: dialog` (default) sends a Paper dialog, shown by Geyser as a Bedrock form.
+All purchase details are text, so Bedrock needs no item pictures. `shop.menu: chest`
+uses an inventory menu; a failed dialog also falls back to it. Lists page at 36 entries.
+The setting is read when a player opens the shop, including after a config reload.
+Screens open only after a player action and close when their shop phase ends.
+The board is a text display with an interaction target; lobby reset recreates it,
+and edit mode cannot destroy it. It is removed on disable and replaced on startup.
 
 With `shop.enabled: true`, the default, a round end that another round follows, an extra
 round included, leads to a SHOP phase before the next prep. The last round, the final
@@ -627,6 +642,7 @@ match players or restarts a match.
 | Deprecated `waiting-room.lobby` | Applies to the next portal entry. It and the unused `max-players`, `countdown-seconds` and `radius` are accepted with a warning in the reply and the log (see [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms)). |
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
+| Shop screen | `shop.menu` applies to the next screen opened. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
 | Seed modes | Every `maps` key applies at each slot's next generation, including the spare cell for `regenerate: round`. A map already placed, a running match and a shop break under way keep theirs. A rotation keeps its place while its `seeds` list is the same; a change of `seed-sharing` starts every rotation and random seed again. Warnings about the new settings go to the log. |
 | Spectator admission | Enable or disable new admissions and change the cap immediately. Existing viewers may finish watching. |

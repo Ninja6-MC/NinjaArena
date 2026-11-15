@@ -117,6 +117,21 @@ class ConfigReloadTest {
     }
 
     @Test
+    void shopMenuReloadAppliesToTheNextOpeningAndRejectsInvalidModes() throws Exception {
+        write("shop:\n  menu: chest\n", EMPTY_KIT);
+        List<String> report = reload.reload();
+        assertTrue(report.get(1).contains("shop.menu"));
+        assertEquals("Postponed: none.", report.get(2));
+        assertEquals("chest", target.published.getString("shop.menu"));
+        write("shop:\n  menu: forms\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("shop.menu: expected dialog or chest"));
+        assertEquals("chest", target.published.getString("shop.menu"));
+        write("shop:\n  menu: dialog\n", EMPTY_KIT);
+        assertTrue(reload.reload().get(1).contains("shop.menu"));
+        assertEquals("dialog", target.published.getString("shop.menu"));
+    }
+
+    @Test
     void seedModesApplyAtEachSlotsNextGenerationOnReload() throws Exception {
         write("""
                 maps:

@@ -13,6 +13,11 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- A between-round shop screen with balance, categories, prices, remaining purchases
+  and Ready, opened by `/narena shop` or the shop-area board. Paper dialogs use plain
+  text for Java and Bedrock, refresh once per purchase and wait for the server response.
+  Set `shop.menu: chest` for the inventory fallback. The board survives lobby editing
+  and is recreated after lobby reset without duplicating on restart.
 - Real lava flow and collapsing blocks in generated maps. When a round's fight starts,
   the map's lava falls flow for real: the still column goes and the head is set flowing,
   so falling lava fills it again and spreads where it lands. Lava held in ceilings stays
