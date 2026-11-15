@@ -79,6 +79,27 @@ class MatchHudTest extends MatchFixture {
     }
 
     @Test
+    void spectatorHintSharesTheHudRefreshAndActivePlayersKeepTheirStatus() {
+        useHud(new MatchSettings(1, 1, 1, 1, 2, 1, 0));
+        deaths = new MatchDeathListener(plugin, matches, arenas);
+        hud.setSpectatorHint(deaths::spectatorHint);
+        startTwoOnTwo();
+        matches.died(player(ALICE), player(BOB));
+        deaths.onEliminated(events.stream().filter(PlayerEliminatedEvent.class::isInstance)
+                .map(PlayerEliminatedEvent.class::cast).findFirst().orElseThrow());
+        players.get(ALICE).actionBars.clear();
+        hud.tick();
+        assertEquals(List.of("Spectating: stay within 16 blocks of Carol"), players.get(ALICE).actionBars);
+        assertTrue(players.get(CAROL).actionBars.getLast().contains("Points"));
+        deaths.tick();
+        assertEquals(1, players.get(ALICE).actionBars.size(), "the per-tick tether never spams the action bar");
+        advance(4);
+        assertEquals(MatchPhase.MATCH_END, matches.matchOf(ALICE).orElseThrow().phase());
+        assertEquals("Spectating: stay within 16 blocks of Carol", players.get(ALICE).actionBars.getLast());
+        assertTrue(players.get(ALICE).bossBars.isEmpty(), "the result pause still hides the round bar");
+    }
+
+    @Test
     void cooldownsAreCheckedOnlyOnTheScheduledRefresh() {
         useHud(SETTINGS);
         var checked = new ArrayList<MatchView>();

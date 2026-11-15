@@ -634,6 +634,7 @@ match players or restarts a match.
 | `waiting-room.min-players` and `team-size` | Apply to the next room opened; rooms already open keep their settings. |
 | Deprecated `waiting-room.lobby` | Applies to the next portal entry. It and the unused `max-players`, `countdown-seconds` and `radius` are accepted with a warning in the reply and the log (see [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms)). |
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
+| `match.spectate-radius` | Applies immediately to eliminated players in running matches. |
 | `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
 | Seed modes | Every `maps` key applies at each slot's next generation, including the spare cell for `regenerate: round`. A map already placed, a running match and a shop break under way keep theirs. A rotation keeps its place while its `seeds` list is the same; a change of `seed-sharing` starts every rotation and random seed again. Warnings about the new settings go to the log. |
@@ -1012,10 +1013,14 @@ point. The same reasons are logged at most once per round each, at FINE by defau
 Players in a match drop no items or XP on death and keep their inventory and levels.
 After respawning, eliminated players spectate living teammates until the next round.
 Spectator cameras can target only their own team; movement and teleports stay inside the
-arena and within 16 blocks of a living teammate. If nobody on the team remains alive and
-inside the arena, spectators wait near their own team base.
-Spectators can detach the camera to move within that limit or choose another teammate;
-the tether reattaches only after an invalid target or movement outside the allowed area.
+arena and within `match.spectate-radius` blocks of a living teammate (default 16, range
+4 to 64; reload applies immediately). If nobody on the team remains alive and inside the
+arena, spectators wait near their own team base. The action bar names a nearby teammate
+or the base and shows the radius, refreshed once a second through the match HUD.
+Spectators can detach the camera to move within that limit or choose another teammate.
+Moving past the edge stops that move. If the team moves away or the spectator is already
+outside the allowed area, the tether returns them to an anchor and reattaches the camera
+when a valid teammate is available.
 
 The next round returns spectators to Adventure mode at their team base; with the
 [shop phase](#shop-phase) on, that happens when the shop opens, in its area. A player

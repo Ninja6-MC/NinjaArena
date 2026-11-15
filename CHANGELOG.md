@@ -343,6 +343,10 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Eliminated players see their spectator tether's teammate or base and radius on the
+  action bar. Movement stops at the edge instead of snapping back to the anchor; recovery
+  still returns cameras left outside the allowed area. `match.spectate-radius` defaults
+  to 16 blocks, accepts 4 to 64 and applies immediately on reload.
 - Thrown tools use the custom look when every Java viewer has loaded Standard,
   ignoring Bedrock viewers. Bedrock players always see a snowball in flight.
 - Lobby members no longer lose food or saturation in the lobby world; eating still raises

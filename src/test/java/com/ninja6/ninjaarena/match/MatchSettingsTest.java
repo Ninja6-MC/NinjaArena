@@ -54,6 +54,17 @@ class MatchSettingsTest {
     }
 
     @Test
+    void spectatorRadiusIsReadDefaultedAndClamped() throws IOException {
+        assertEquals(16, MatchSettings.spectateRadius(null));
+        assertEquals(16, MatchSettings.spectateRadius(bundledConfig().getConfigurationSection("match")));
+        YamlConfiguration yaml = new YamlConfiguration();
+        for (int[] pair : new int[][] {{8, 8}, {0, 4}, {100, 64}}) {
+            yaml.set("match.spectate-radius", pair[0]);
+            assertEquals(pair[1], MatchSettings.spectateRadius(yaml.getConfigurationSection("match")));
+        }
+    }
+
+    @Test
     void disconnectScoringIsReadAndClamped() {
         assertEquals(0, MatchSettings.DEFAULTS.disconnectKillWindowSeconds(), "the whole round");
         assertEquals(2, MatchSettings.DEFAULTS.disconnectPenaltyPoints());

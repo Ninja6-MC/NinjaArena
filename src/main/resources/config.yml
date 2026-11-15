@@ -132,6 +132,10 @@ match:
   # Team points lost when nobody can be credited with that kill; the score never goes
   # below 0. 0 turns the penalty off. A disconnect during prep or the shop costs nothing.
   disconnect-penalty-points: 2
+  # Eliminated players can fly this many blocks from a living teammate, or their base
+  # when none remain. Movement stops at the edge; the action bar explains the tether.
+  # 4 to 64 blocks. Reload applies immediately, including to running matches.
+  spectate-radius: 16
 
 scoring:
   # Points awarded to the winning team of a round. Draws award nothing; 0 disables it.

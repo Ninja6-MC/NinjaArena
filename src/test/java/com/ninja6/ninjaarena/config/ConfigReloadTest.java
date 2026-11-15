@@ -79,6 +79,8 @@ class ConfigReloadTest {
             calls.add("match"); match = settings; this.friendlyFire = friendlyFire; this.scoring = scoring;
         }
         @Override public void points(PointsSettings settings) { calls.add("points"); points = settings; }
+        Integer spectateRadius;
+        @Override public void spectateRadius(int radius) { calls.add("spectateRadius"); spectateRadius = radius; }
         Integer rejoinGrace;
         @Override public void rejoinGrace(int seconds) { calls.add("rejoinGrace"); rejoinGrace = seconds; }
         com.ninja6.ninjaarena.match.ShopSettings shopPhase;
@@ -318,6 +320,28 @@ class ConfigReloadTest {
         write("match: {rejoin-grace-seconds: 0}\n", EMPTY_KIT);
         reload.reload();
         assertEquals(0, target.rejoinGrace, "0 turns rejoining off");
+    }
+
+    @Test
+    void spectatorRadiusReloadsImmediatelyAndInvalidValuesKeepTheLastRadius() throws Exception {
+        write("match: {spectate-radius: 8}\n", EMPTY_KIT);
+        var messages = reload.reload();
+        assertTrue(messages.getFirst().contains("complete"), messages.toString());
+        assertEquals(8, target.spectateRadius);
+        assertTrue(messages.get(1).contains("match.spectate-radius"), messages.toString());
+        assertFalse(messages.get(2).contains("match.spectate-radius"), "not postponed to the next match");
+        target.calls.clear();
+        for (String bad : List.of("3", "65", "8.5", "oops")) {
+            write("match: {spectate-radius: " + bad + "}\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("rejected"), bad);
+            assertEquals(8, target.spectateRadius);
+            assertTrue(target.calls.isEmpty());
+        }
+        for (int radius : List.of(4, 64)) {
+            write("match: {spectate-radius: " + radius + "}\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("complete"));
+            assertEquals(radius, target.spectateRadius);
+        }
     }
 
     @Test
