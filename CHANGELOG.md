@@ -13,6 +13,11 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Team colours in a match: names on name tags and in the player list, and glow
+  outlines, take the team's tool colour (red, blue, green, yellow) from the first
+  preparation until the match ends, for players and viewers. Each match uses its own
+  scoreboard and gives every player their previous one back on leaving, a disconnect,
+  the match end and plugin disable; the main scoreboard is never changed (#221).
 - Bedrock hotbar cooldown mappings for shuriken and smoke bombs in every team colour (#138).
 - A between-round shop screen with balance, categories, prices, remaining purchases
   and Ready, opened by `/narena shop` or the shop-area board. Paper dialogs use plain

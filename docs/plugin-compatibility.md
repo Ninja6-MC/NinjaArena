@@ -188,6 +188,18 @@ Verify portal entry, invite and accept, menus, kit controls, dash, death and
 disconnect/rejoin restoration with a Bedrock client on a test backend. See
 [Floodgate setup][floodgate].
 
+### Scoreboard, sidebar and name tag plugins
+
+**Code review only.** For team colours, each match gives its players and viewers a
+scoreboard of its own, with one team per match team, and leaves the main scoreboard
+and its teams alone. A sidebar, below-name or player-list display that another plugin
+puts on the main scoreboard, or on a scoreboard of its own, is hidden during the match
+and back when the player leaves it, quits or the match ends. A plugin that gives a
+player a new scoreboard during a match wins: NinjaArena does not take it back, and
+that player sees no team colours until their next match. Friendly fire stays with
+NinjaArena's own rule, since the match teams allow it. Geyser shows the colour on
+Bedrock name tags; confirm it with a Bedrock client on a test backend.
+
 ### LuckPerms with shared MariaDB
 
 **Published configuration and recorded live.** Shared storage makes global

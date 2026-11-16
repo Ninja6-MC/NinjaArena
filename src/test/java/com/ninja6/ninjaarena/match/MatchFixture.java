@@ -102,6 +102,7 @@ abstract class MatchFixture {
         Vector velocity;
         boolean gliding;
         int fireTicks;
+        org.bukkit.scoreboard.Scoreboard scoreboard;
         Player proxy;
 
         Fake(UUID id, String name) {
@@ -363,6 +364,11 @@ abstract class MatchFixture {
                     case "showTitle" -> { fake.titles.add((Title) args[0]); yield null; }
                     case "clearTitle" -> { fake.titles.clear(); yield null; }
                     case "playSound" -> { fake.sounds.add((Sound) args[0]); yield null; }
+                    case "getScoreboard" -> fake.scoreboard;
+                    case "setScoreboard" -> {
+                        fake.scoreboard = (org.bukkit.scoreboard.Scoreboard) args[0];
+                        yield null;
+                    }
                     case "hashCode" -> id.hashCode();
                     case "equals" -> proxy == args[0];
                     default -> throw new UnsupportedOperationException(method.getName());
