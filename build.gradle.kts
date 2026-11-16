@@ -117,3 +117,13 @@ tasks.register<JavaExec>("generateLobbyBuild") {
     mainClass.set("com.ninja6.ninjaarena.lobby.LobbyBuildGenerator")
     args(file("src/main/resources/lobby/obsidian-lobby.yml"), file("src/main/resources/lobby/obsidian-lobby.nbt"))
 }
+
+// Writes the generated lobby's piece structures from their readable spec. LobbyPiecesTest
+// fails while the committed structures differ from what this writes.
+tasks.register<JavaExec>("generateLobbyPieces") {
+    group = "build"
+    description = "Writes src/main/resources/lobby/pieces/*.nbt from generated-lobby.yml."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.ninja6.ninjaarena.lobby.LobbyPiecesGenerator")
+    args(file("src/main/resources/lobby/generated-lobby.yml"), file("src/main/resources/lobby/pieces"))
+}

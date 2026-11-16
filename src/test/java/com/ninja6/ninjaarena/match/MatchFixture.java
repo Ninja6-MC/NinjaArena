@@ -102,6 +102,7 @@ abstract class MatchFixture {
         Vector velocity;
         boolean gliding;
         int fireTicks;
+        org.bukkit.scoreboard.Scoreboard scoreboard;
         Player proxy;
 
         Fake(UUID id, String name) {
@@ -115,6 +116,8 @@ abstract class MatchFixture {
     protected final List<Runnable> repeating = new ArrayList<>();
     protected int cancellations;
     protected final List<UUID> restored = new ArrayList<>();
+    /** What the restore home returns. */
+    protected RestoreResult restoreResult = RestoreResult.RESTORED;
     protected final List<UUID> readied = new ArrayList<>();
     protected final List<MatchEvent> events = new ArrayList<>();
     protected final MemoryCopies copies = new MemoryCopies();
@@ -156,7 +159,7 @@ abstract class MatchFixture {
         plugin = plugin();
         matches = new MatchService(plugin, arenas, () -> arenaWorld, SETTINGS, player -> {
             restored.add(player.getUniqueId());
-            return RestoreResult.RESTORED;
+            return restoreResult;
         }, events::add, player -> readied.add(player.getUniqueId()));
         deaths = new MatchDeathListener(plugin, matches, arenas);
         listener = new MatchListener(matches, deaths);
@@ -363,6 +366,11 @@ abstract class MatchFixture {
                     case "showTitle" -> { fake.titles.add((Title) args[0]); yield null; }
                     case "clearTitle" -> { fake.titles.clear(); yield null; }
                     case "playSound" -> { fake.sounds.add((Sound) args[0]); yield null; }
+                    case "getScoreboard" -> fake.scoreboard;
+                    case "setScoreboard" -> {
+                        fake.scoreboard = (org.bukkit.scoreboard.Scoreboard) args[0];
+                        yield null;
+                    }
                     case "hashCode" -> id.hashCode();
                     case "equals" -> proxy == args[0];
                     default -> throw new UnsupportedOperationException(method.getName());

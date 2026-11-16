@@ -499,7 +499,9 @@ class NinjaArenaCommandTest {
 
         waiting = false;
         run(player, "LEAVE");
-        assertEquals(List.of("You are not in an arena."), messages);
+        assertEquals(List.of("There is nothing to leave: you are not in the lobby, a room, a match, "
+                + "a map preview or spectating."),
+                messages);
 
         messages.clear();
         run(player, "arena list");
@@ -612,8 +614,8 @@ class NinjaArenaCommandTest {
                 "/ninjaarena textures - choose Standard or Detailed ninja tool textures",
                 "/ninjaarena intro - show the lobby introduction again",
                 "/ninjaarena accept <host> - join a room you were invited to; same as room accept",
-                "/ninjaarena room [create|settings|invite|accept|kick|start|preview|leave] - open a room, invite players and"
-                        + " start its match",
+                "/ninjaarena room [create|settings|invite|accept|requests|accept-request|decline-request|kick|cohost|uncohost|handback|start|preview|leave]"
+                        + " - open a room, invite players, name co-hosts and start its match",
                 "/ninjaarena map <list|set <arena|generated [seed] [difficulty]>|next|reroll> - list pickable maps,"
                         + " change your room map, or ask for the next or a new seed",
                 "/ninjaarena shop [ready] - open the shop or say you are ready"), messages);
@@ -835,7 +837,13 @@ class NinjaArenaCommandTest {
             @Override public void settings(Player player, String setting, String value) { }
             @Override public void invite(Player player, String invitee) { }
             @Override public void accept(Player player, String host) { }
+            @Override public void requests(Player player) { calls.add("requests"); }
+            @Override public void acceptRequest(Player player, String requester) { calls.add("accept-request " + requester); }
+            @Override public void declineRequest(Player player, String requester) { calls.add("decline-request " + requester); }
             @Override public void kick(Player player, String member) { }
+            @Override public void cohost(Player player, String member) { }
+            @Override public void uncohost(Player player, String member) { }
+            @Override public void handBack(Player player) { }
             @Override public void start(CommandSender sender, String host) { }
             @Override public void leave(Player player) { }
             @Override public void preview(Player player) { }
@@ -973,7 +981,13 @@ class NinjaArenaCommandTest {
             }
             @Override public void invite(Player player, String invitee) { calls.add("invite " + invitee); }
             @Override public void accept(Player player, String host) { calls.add("accept " + host); }
+            @Override public void requests(Player player) { calls.add("requests"); }
+            @Override public void acceptRequest(Player player, String requester) { calls.add("accept-request " + requester); }
+            @Override public void declineRequest(Player player, String requester) { calls.add("decline-request " + requester); }
             @Override public void kick(Player player, String member) { calls.add("kick " + member); }
+            @Override public void cohost(Player player, String member) { calls.add("cohost " + member); }
+            @Override public void uncohost(Player player, String member) { calls.add("uncohost " + member); }
+            @Override public void handBack(Player player) { calls.add("handback"); }
             @Override public void start(CommandSender sender, String host) { calls.add("start " + host); }
             @Override public void leave(Player player) { calls.add("leave"); }
             @Override public void preview(Player player) { calls.add("preview"); }
@@ -1000,20 +1014,26 @@ class NinjaArenaCommandTest {
         assertEquals(List.of(), command.onTabComplete(player, null, "narena", new String[] {"map", "set", ""}));
         for (String line : List.of("room", "ROOM create", "room settings", "room settings privacy invite",
                 "room invite", "room invite Bob", "room accept Alice", "room kick Bob", "room start",
-                "room start Alice", "room leave", "room preview")) {
+                "room start Alice", "room leave", "room preview", "room cohost Bob", "room uncohost Bob",
+                "room handback", "room requests", "room accept-request Bob", "room decline-request Carol",
+                "room settings privacy ask")) {
             run(player, line);
         }
         assertEquals(List.of("show", "create", "settings null null", "settings privacy invite", "invite null",
-                "invite Bob", "accept Alice", "kick Bob", "start null", "start Alice", "leave", "preview"), calls);
+                "invite Bob", "accept Alice", "kick Bob", "start null", "start Alice", "leave", "preview",
+                "cohost Bob", "uncohost Bob", "handback", "requests", "accept-request Bob", "decline-request Carol",
+                "settings privacy ask"), calls);
 
         calls.clear();
         messages.clear();
         for (String line : List.of("room settings players", "room create now", "room accept", "room kick",
-                "room start Alice Bob", "room invite Bob Carol", "room teleport", "room preview now")) {
+                "room start Alice Bob", "room invite Bob Carol", "room teleport", "room preview now",
+                "room cohost", "room uncohost Bob Carol", "room handback Alice",
+                "room requests Bob", "room accept-request", "room decline-request Bob Carol")) {
             run(player, line);
         }
         assertEquals(List.of(), calls);
-        assertEquals(8, messages.size());
+        assertEquals(14, messages.size());
         assertTrue(messages.stream().allMatch(message -> message.startsWith("Usage: /narena room")), messages.toString());
 
         CommandSender console = (CommandSender) Proxy.newProxyInstance(ConsoleCommandSender.class.getClassLoader(),
@@ -1034,11 +1054,13 @@ class NinjaArenaCommandTest {
         calls.clear();
         run(playerWithPermissions("ninjaarena.spectate"), "room create");
         assertEquals(List.of(), calls, "the route needs the play node");
-        assertEquals(List.of("create", "settings", "invite", "accept", "kick", "start", "preview", "leave"),
-                command.onTabComplete(player, null, "narena", new String[] {"room", ""}));
+        assertEquals(List.of("create", "settings", "invite", "accept", "kick", "cohost", "uncohost", "handback",
+                "start", "preview", "leave", "requests", "accept-request", "decline-request"), command.onTabComplete(player, null, "narena", new String[] {"room", ""}));
+        assertNull(command.onTabComplete(player, null, "narena", new String[] {"room", "cohost", ""}),
+                "online player names");
         assertEquals(List.of("privacy"), command.onTabComplete(player, null, "narena",
                 new String[] {"room", "settings", "pr"}));
-        assertEquals(List.of("public", "invite"), command.onTabComplete(player, null, "narena",
+        assertEquals(List.of("public", "ask", "invite"), command.onTabComplete(player, null, "narena",
                 new String[] {"room", "settings", "privacy", ""}));
     }
 

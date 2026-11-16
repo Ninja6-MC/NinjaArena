@@ -64,6 +64,9 @@ import org.junit.jupiter.params.provider.ValueSource;
  * the player back in the lobby or home, and never leaves them in spectator mode.
  */
 class MapPreviewFlowTest extends MatchFixture {
+    private static final String PREVIEW_LEFT_HOME =
+            "You left the map preview and your room. /narena leave has nothing more to leave.";
+
 
     private static final String HOME = "world";
 
@@ -137,7 +140,7 @@ class MapPreviewFlowTest extends MatchFixture {
         previews = new MapPreviews(plugin, () -> arenaWorld, snapshots::hasPending, player -> restores.restore(player));
         rooms.setPreviews(previews);
         returns = new LobbyReturns(id -> lobby.contains(id) || rooms.isMember(id) || matches.isInMatch(id)
-                || rooms.isPreviewing(id), rooms::enterLobby);
+                || rooms.isPreviewing(id), rooms::rejoin);
         MatchListener crossing = new MatchListener(matches, deaths, transfers);
         teleportEvents = event -> {
             previews.onTeleport(event);
@@ -412,14 +415,19 @@ class MapPreviewFlowTest extends MatchFixture {
         assertEquals(room, rooms.roomOf(BOB).orElseThrow());
 
         rooms.preview(player(BOB));
-        assertEquals("The map preview has ended; you are back in the lobby.", last(BOB));
+        assertEquals("You left the map preview. You are in the lobby, still in your room; "
+                + "/narena leave again leaves the room.",
+                last(BOB));
         assertBackInRoom(BOB, room);
 
         // /narena leave ends the preview first, and only that.
         startPreview(BOB, room);
-        assertTrue(previews.end(player(BOB)));
+        assertTrue(previews.leave(player(BOB)));
+        assertEquals("You left the map preview. You are in the lobby, still in your room; "
+                + "/narena leave again leaves the room.",
+                last(BOB));
         assertBackInRoom(BOB, room);
-        assertFalse(previews.end(player(BOB)), "nothing more to end");
+        assertFalse(previews.leave(player(BOB)), "nothing more to end");
     }
 
     @Test
@@ -465,7 +473,7 @@ class MapPreviewFlowTest extends MatchFixture {
         lobbyRefuses = true;
         switch (way) {
             case "preview" -> rooms.preview(player(CAROL));
-            case "leave" -> assertTrue(previews.end(player(CAROL)));
+            case "leave" -> assertTrue(previews.leave(player(CAROL)));
             case "check" -> {
                 room.setPlaying(true);
                 rooms.tick();
@@ -477,6 +485,9 @@ class MapPreviewFlowTest extends MatchFixture {
         lobbyRefuses = false;
         assertHome(CAROL);
         assertFalse(rooms.isMember(CAROL), "out of the room as soon as they are home");
+        if (way.equals("preview") || way.equals("leave")) {
+            assertEquals(PREVIEW_LEFT_HOME, last(CAROL));
+        }
 
         rooms.start(player(ALICE), null);
         assertTrue(room.isPlaying());
@@ -533,6 +544,45 @@ class MapPreviewFlowTest extends MatchFixture {
         assertEquals(room, rooms.roomOf(BOB).orElseThrow(), "and can join the room again");
     }
 
+    private void rejoin(UUID id) {
+        fake(id).online = true;
+        new JoinRestore(restores, (ticks, task) -> nextTick.add(task), plugin.getServer()::getPlayer,
+                player -> lobby.contains(player) || rooms.isPreviewing(player), returns).onJoin(id);
+        runNextTick();
+    }
+
+    @Test
+    void aHostWhoDisconnectsWhilePreviewingIsBackInTheLobbyAndHostsTheRoomOnRejoin() {
+        Room room = placedRoom();
+        startPreview(ALICE, room);
+        quit(ALICE);
+        assertFalse(rooms.isPreviewing(ALICE));
+        assertTrue(room.isHostAway(), "held for the host grace");
+        rooms.tick();
+        assertTrue(room.contains(ALICE));
+        assertTrue(rooms.hasLease(room));
+        assertTrue(rooms.canPreview(room), "the map stays placed");
+
+        rejoin(ALICE);
+        assertBackInRoom(ALICE, room);
+        assertEquals(ALICE, room.host());
+        assertFalse(room.isHostAway());
+        assertEquals("Alice is back and hosts the room again.", last(BOB));
+    }
+
+    @Test
+    void aPreviewingHostTheClosedLobbyTurnsAwayOnRejoinGoesHomeAndTheRoomIsHandedOn() {
+        Room room = placedRoom();
+        startPreview(ALICE, room);
+        quit(ALICE);
+        lobbyRefuses = true;
+        rejoin(ALICE);
+        assertHome(ALICE);
+        assertFalse(room.contains(ALICE));
+        assertEquals(BOB, room.host());
+        assertTrue(rooms.hasLease(room));
+    }
+
     @Test
     void aCrashWhilePreviewingRestoresThePlayerHomeOnTheirNextJoin() {
         Room room = placedRoom();
@@ -572,8 +622,9 @@ class MapPreviewFlowTest extends MatchFixture {
         assertFalse(rooms.isPreviewing(BOB));
         assertEquals(GameMode.ADVENTURE, fake(BOB).gameMode);
         assertTrue(snapshots.hasPending(BOB), "kept for their next join");
-        assertEquals("Your belongings could not be returned yet. Rejoin the server, or ask an admin if this keeps"
-                + " happening.", last(BOB));
+        List<String> bob = fake(BOB).messages;
+        assertEquals(List.of(PREVIEW_LEFT_HOME, "Your belongings could not be returned yet. Rejoin the server, or"
+                + " ask an admin if this keeps happening."), bob.subList(bob.size() - 2, bob.size()));
 
         startPreview(ALICE, room);
         rooms.close();

@@ -5,6 +5,7 @@ import static com.ninja6.ninjaarena.message.Messages.msg;
 import com.ninja6.ninjaarena.lobby.LobbyLayout;
 import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -26,20 +27,29 @@ import org.bukkit.persistence.PersistentDataType;
 public final class ShopBoard implements Listener, AutoCloseable {
     private static final NamespacedKey KEY = new NamespacedKey("ninjaarena", "shop_board");
     private final World world;
-    private final Location at;
+    private final Supplier<LobbyLayout> layout;
     private final Consumer<Player> open;
 
     public ShopBoard(World world, LobbyLayout layout, Consumer<Player> open) {
+        this(world, () -> layout, open);
+    }
+
+    /** @param layout the lobby layout in use, asked each time; a regenerated lobby moves the board */
+    public ShopBoard(World world, Supplier<LobbyLayout> layout, Consumer<Player> open) {
         this.world = world;
-        var point = layout.boards().get("shop");
-        this.at = new Location(world, point.x(), point.y(), point.z(), point.yaw(), point.pitch());
+        this.layout = layout;
         this.open = open;
     }
 
-    public Location location() { return at.clone(); }
+    /** Where the board stands in the layout in use. */
+    public Location location() {
+        var point = layout.get().boards().get("shop");
+        return new Location(world, point.x(), point.y(), point.z(), point.yaw(), point.pitch());
+    }
 
-    /** Call after the board's chunk is loaded, on enable and after a lobby reset. */
+    /** Call after the board's chunk is loaded, on enable and after the lobby is placed again. */
     public void place() {
+        Location at = location();
         close();
         world.spawn(at, TextDisplay.class, display -> {
             mark(display);

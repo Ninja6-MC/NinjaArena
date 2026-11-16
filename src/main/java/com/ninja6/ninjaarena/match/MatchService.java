@@ -528,6 +528,20 @@ public final class MatchService {
      * @return false if they were not in a match
      */
     public boolean leave(Player player, Exit exit) {
+        return leave(player, exit, "match.left");
+    }
+
+    /**
+     * {@link #leave} by {@link Exit#COMMAND} for a player who has just left the match's room
+     * too: one message tells them they left both.
+     *
+     * @return false if they were not in a match
+     */
+    public boolean leaveWithRoom(Player player) {
+        return leave(player, Exit.COMMAND, "match.left-room");
+    }
+
+    private boolean leave(Player player, Exit exit, String leftKey) {
         UUID playerId = player.getUniqueId();
         held.remove(playerId);
         heldNames.remove(playerId);
@@ -543,11 +557,16 @@ public final class MatchService {
                 // The restore listener marks the snapshot; it is restored on the next join.
             }
             case COMMAND -> {
-                player.sendMessage(msg("match.left"));
-                sendBack(player);
+                // Said once the lobby has taken or refused them; any restore result follows it.
+                if (toLobby(player)) {
+                    player.sendMessage(msg(leftKey));
+                } else {
+                    player.sendMessage(msg("match.left-home"));
+                    sendHome(player);
+                }
             }
             case TELEPORTED -> {
-                player.sendMessage(msg("match.left"));
+                player.sendMessage(msg("match.left-home"));
                 // Not inside the teleport event that saw the player leave.
                 homeBound.add(playerId);
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -1045,15 +1064,18 @@ public final class MatchService {
 
     /** To the lobby, or home when the lobby cannot take the player. */
     private void sendBack(Player player) {
-        boolean placed;
+        if (!toLobby(player)) {
+            sendHome(player);
+        }
+    }
+
+    /** Whether the lobby took the player; nothing else happens when it did not. */
+    private boolean toLobby(Player player) {
         try {
-            placed = lobby.test(player);
+            return lobby.test(player);
         } catch (RuntimeException e) {
             plugin.getLogger().log(Level.SEVERE, "Could not send " + player.getName() + " to the lobby.", e);
-            placed = false;
-        }
-        if (!placed) {
-            sendHome(player);
+            return false;
         }
     }
 

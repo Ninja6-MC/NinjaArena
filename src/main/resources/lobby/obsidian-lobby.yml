@@ -1,8 +1,9 @@
-# The bundled obsidian lobby, placed in the lobby world the first time the plugin finds it
-# without one, and again by /ninjaarena admin lobby reset.
+# The obsidian lobby earlier versions placed in the lobby world. Servers that have it keep
+# it until /ninjaarena admin lobby reset replaces it with the generated lobby
+# (generated-lobby.yml); new lobby worlds get the generated lobby.
 #
 # This file is both the source of obsidian-lobby.nbt and the list of marked spots the
-# plugin reads. After changing blocks, size or data-version, run
+# plugin reads for those servers. After changing blocks, size or data-version, run
 #
 #     ./gradlew generateLobbyBuild
 #

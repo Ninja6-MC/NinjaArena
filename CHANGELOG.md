@@ -18,6 +18,55 @@ Java 25, and does not run on Folia.
   `regenerate: round`, lava and late hazards, then leave so the arena world retires,
   reopens and retires again. Its results are in `docs/stability-soak.md`, and the README
   recommends keeping `arenas.max-active` at its default of 4 (#166).
+- Joining a room by standing on its pad in the generated lobby (#220). Each open room takes
+  the lowest-numbered free pad until it closes; rooms beyond the pad count stay in the room
+  list. Standing anywhere on the plate for `lobby.pads.join-seconds` (default 5, 1 to 30)
+  joins a public room, sends a join request to an ask-to-join room or says an invite-only
+  room is invite only, through the usual join checks; the countdown is a title. Only lobby
+  members in no room use pads. Each pad has a label with the host, player count and state,
+  and dust fog on its ring coloured by the state, sent per viewer for nearby pads to
+  recently active players, with per-viewer caps for Java and Bedrock. Labels are removed
+  when a room closes, while the lobby is built and on disable. The obsidian lobby has no
+  pads, so nothing changes there.
+- Ask-to-join rooms (`privacy: ask`), with expiring requests, a per-player per-room
+  cooldown and host or co-host approval through chat, native Java dialogs, Bedrock forms
+  or chest menus (#218). New commands: `room requests`, `room accept-request` and
+  `room decline-request`. Request timers reload for new requests; play portals skip
+  ask rooms, including for invited players; invited players can still enter invite-only
+  rooms through portals. Decisions and changes in room or requester eligibility end
+  requests; stale forms cannot decide a replacement request.
+- Lobby Create room and live Open rooms boards (#146), placed at the layout marks, with
+  Java and Bedrock click targets. The list shows host, players/needed, privacy, map and
+  state, with an overflow count. Spots come from the active layout, missing entities are
+  replaced and duplicates removed after startup, chunk loads and lobby reset; chunk tickets are
+  shared with the shop board. Text and restart-only board settings are configurable.
+- Room co-hosts, the creator's crown and a host grace in the lobby (#217). The host names
+  co-hosts with `/narena room cohost` and `uncohost`, chat buttons or the room screen;
+  co-hosts can start the match, invite and remove plain members, while settings and the map
+  stay with the host. A departing host hands the room to a co-host first, then to the
+  longest-waiting member, both needing `ninjaarena.room.create`. The player who opened the
+  room has a crown in the room list, the room view and the status line whenever they are in
+  it; back after a hand-over they get the crown, not the host role, and the host can hand
+  the room back with `/narena room handback`. A host who disconnects in the lobby stays host
+  for `rooms.host-grace-seconds` (default 60): the room keeps its slot, members are told,
+  starting and removals wait, and a host back in time is in the lobby hosting the room
+  again. Other members and matches are unchanged. The grace ends with a closed lobby, on
+  disable and on restart.
+- Team colours in a match: names on name tags and in the player list, and glow
+  outlines, take the team's tool colour (red, blue, green, yellow) from the first
+  preparation until the match ends, for players and viewers. Each match uses its own
+  scoreboard and gives every player their previous one back on leaving, a disconnect,
+  the match end and plugin disable; the main scoreboard is never changed (#221).
+- A generated lobby sized to `arenas.max-active`: one room pad per arena slot, at most 32
+  in one ring, around a centre that grows with the pads, with corner squares, cushions and
+  a barrier wall with trees, assembled from bundled pieces (#219). It is generated once and
+  saved, and again only when the pad count changes or an admin runs `admin lobby reset`,
+  never while anyone is in the lobby world or a match is running, and placed over ticks
+  within the placement budget it shares with generated maps. Nobody can enter or edit the
+  lobby while it is built; players it would take in go home instead. A build stopped by a
+  restart is finished on the next start. Regenerating replaces admin edits inside it.
+  Bounds, spawn, shop area and boards come from it. A server with the obsidian lobby keeps
+  it, logs a notice once, and switches with `admin lobby reset`.
 - Bedrock hotbar cooldown mappings for shuriken and smoke bombs in every team colour (#138).
 - A between-round shop screen with balance, categories, prices, remaining purchases
   and Ready, opened by `/narena shop` or the shop-area board. Paper dialogs use plain
@@ -351,6 +400,14 @@ Java 25, and does not run on Folia.
 
 - Each Java connection gets one Detailed overlay request through `ResourcePacks`;
   `overlay(UUID)` reports its state.
+
+- Every `/narena leave` outcome now says what the next leave does, and where the player
+  is when they stay in the lobby: `room.left`, `lobby.left`, `match.left` and
+  `command.not-in-arena` are reworded, and `match.left-room`, `match.left-home`,
+  `room.preview-left`, `room.preview-left-home`, `spectate.left` and `spectate.left-home`
+  are new. Leaving a match also leaves its room with one message instead of two. A leave
+  that sends the player home is said before the restore, whose failure is reported after
+  it, so the message never claims they are home (#216).
 
 ### Deprecated
 - `/narena portal lobby` still sets a portal's choice, which now only picks which open

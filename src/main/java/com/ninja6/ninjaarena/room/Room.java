@@ -23,7 +23,14 @@ import java.util.function.Predicate;
  * <p>Teams are kept even by {@link WaitingRoom}, the same balancing the waiting rooms use: a
  * player who joins goes to the smallest team, and a departure that leaves one team two
  * ahead moves a player across. Nothing here counts down: the match starts only when the
- * host or an admin presses start, and only once {@link #canStart()}.
+ * host, a co-host or an admin presses start, and only once {@link #canStart()}.
+ *
+ * <p><b>Hosts.</b> The host may make members co-hosts ({@link #addCohost}). The player who
+ * opened the room is its creator for as long as it is open ({@link #creator()}), whether
+ * they host it, are in it or not. When the host leaves, the room passes to the
+ * longest-waiting co-host that may host, else to the longest-waiting member that may. A
+ * host who disconnects in the lobby can be held away for a grace ({@link #holdHost}); they
+ * stay host and member until it runs out or they are back.
  *
  * <p>Compared by identity, so a room keeps its arena lease when its host changes.
  * Server thread only.
@@ -31,6 +38,10 @@ import java.util.function.Predicate;
 public final class Room {
 
     private UUID host;
+    private final UUID creator;
+    private final Set<UUID> cohosts = new HashSet<>();
+    /** Seconds left for an away host to come back; 0 while the host is not away. */
+    private int hostGrace;
     private RoomSettings settings;
     private String arena;
     private final SequencedSet<UUID> members = new LinkedHashSet<>();
@@ -47,6 +58,7 @@ public final class Room {
     /** A room with only its host in it. */
     public Room(UUID host, String arena, RoomSettings settings) {
         this.host = Objects.requireNonNull(host, "host");
+        this.creator = host;
         this.arena = Objects.requireNonNull(arena, "arena");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.teams = teams(settings, List.of());
@@ -60,6 +72,106 @@ public final class Room {
 
     public RoomSettings settings() {
         return settings;
+    }
+
+    /** The player who opened the room, in it or not, host or not. */
+    public UUID creator() {
+        return creator;
+    }
+
+    /** Whether the player who opened the room is in it now. */
+    public boolean hasCreator() {
+        return members.contains(creator);
+    }
+
+    /** Whether the member is a co-host: they may start the match, invite and remove players. */
+    public boolean isCohost(UUID player) {
+        return cohosts.contains(player);
+    }
+
+    /** Whether the player is the host or a co-host. */
+    public boolean isManager(UUID player) {
+        return host.equals(player) || cohosts.contains(player);
+    }
+
+    /** The co-hosts, the longest waiting first. */
+    public List<UUID> cohosts() {
+        return members.stream().filter(cohosts::contains).toList();
+    }
+
+    /**
+     * Makes a member a co-host.
+     *
+     * @return false if they already are one
+     * @throws IllegalArgumentException if they are not a member, or are the host
+     */
+    public boolean addCohost(UUID player) {
+        if (!members.contains(player) || host.equals(player)) {
+            throw new IllegalArgumentException("only a member other than the host can be a co-host");
+        }
+        return cohosts.add(player);
+    }
+
+    /** Makes a co-host a plain member again; false if they were not one. */
+    public boolean removeCohost(UUID player) {
+        return cohosts.remove(player);
+    }
+
+    /**
+     * Hands the room to another member, who stops being a co-host; the host before becomes a
+     * co-host.
+     *
+     * @throws IllegalArgumentException if they are not a member, or host already
+     */
+    public void handTo(UUID player) {
+        if (!members.contains(player) || host.equals(player)) {
+            throw new IllegalArgumentException("only a member other than the host can be handed the room");
+        }
+        cohosts.remove(player);
+        cohosts.add(host);
+        host = player;
+        hostGrace = 0;
+    }
+
+    /**
+     * The host disconnected in the lobby: they stay host and member for this many seconds,
+     * counted down by {@link #countDownGrace}.
+     *
+     * @throws IllegalArgumentException if the seconds are not positive
+     */
+    public void holdHost(int seconds) {
+        if (seconds <= 0) {
+            throw new IllegalArgumentException("seconds must be positive");
+        }
+        hostGrace = seconds;
+    }
+
+    /** Whether the host is away and held for their grace. */
+    public boolean isHostAway() {
+        return hostGrace > 0;
+    }
+
+    /** Seconds left of the away host's grace; 0 while the host is not away. */
+    public int hostGraceLeft() {
+        return hostGrace;
+    }
+
+    /**
+     * One second of the away host's grace has passed.
+     *
+     * @return true when this ran it out
+     */
+    public boolean countDownGrace() {
+        if (hostGrace == 0) {
+            return false;
+        }
+        hostGrace--;
+        return hostGrace == 0;
+    }
+
+    /** The away host is back, or is let go: no grace any more. */
+    public void endGrace() {
+        hostGrace = 0;
     }
 
     public String arena() {
@@ -190,10 +302,15 @@ public final class Room {
 
     /**
      * Whether the player may join: a public room takes anyone it has not removed, an
-     * invite-only room only those invited.
+     * ask and invite-only rooms take invited players directly; other ask joins need approval.
      */
     public boolean admits(UUID player) {
-        return invited.contains(player) || !settings.inviteOnly() && !kicked.contains(player);
+        return invited.contains(player) || settings.privacy() == RoomSettings.Privacy.PUBLIC && !kicked.contains(player);
+    }
+
+    /** A removed player still needs an invitation before requesting entry. */
+    public boolean canRequest(UUID player) {
+        return settings.asksToJoin() && !kicked.contains(player);
     }
 
     /**
@@ -213,7 +330,8 @@ public final class Room {
 
     /**
      * Takes a player out and rebalances the teams. A host who leaves hands the room to the
-     * longest-waiting member that {@code canHost} accepts.
+     * longest-waiting co-host that {@code canHost} accepts, else to the longest-waiting
+     * member it accepts; the new host is no longer a co-host. Any grace of the host ends.
      *
      * @return the team moves, or empty if they were not in the room
      */
@@ -222,8 +340,15 @@ public final class Room {
             return Optional.empty();
         }
         List<WaitingRoom.Move> moves = teams.leave(player).map(WaitingRoom.Left::moves).orElse(List.of());
+        cohosts.remove(player);
         if (player.equals(host)) {
-            members.stream().filter(canHost).findFirst().ifPresent(next -> host = next);
+            hostGrace = 0;
+            members.stream().filter(cohosts::contains).filter(canHost).findFirst()
+                    .or(() -> members.stream().filter(canHost).findFirst())
+                    .ifPresent(next -> {
+                        host = next;
+                        cohosts.remove(next);
+                    });
         }
         return Optional.of(moves);
     }

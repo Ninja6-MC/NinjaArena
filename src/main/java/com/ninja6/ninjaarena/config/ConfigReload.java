@@ -13,6 +13,7 @@ import com.ninja6.ninjaarena.match.ShopSettings;
 import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.room.MaxActive;
+import com.ninja6.ninjaarena.room.RoomService;
 import com.ninja6.ninjaarena.shop.ShopCatalogue;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
@@ -37,6 +38,7 @@ public final class ConfigReload {
 
     private static final String SPECTATE_RADIUS = "match.spectate-radius";
     private static final String REJOIN_GRACE = "match.rejoin-grace-seconds";
+    private static final String HOST_GRACE = RoomService.HOST_GRACE_KEY;
 
     public interface Target {
         boolean canResize();
@@ -53,6 +55,12 @@ public final class ConfigReload {
         void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring);
         /** A new {@code match.rejoin-grace-seconds}, for disconnects from now on. */
         default void rejoinGrace(int seconds) {
+        }
+        /** A new {@code rooms.host-grace-seconds}, for host disconnects from now on. */
+        default void hostGrace(int seconds) {
+        }
+        /** New request deadlines apply to requests sent from now on. */
+        default void roomRequests(int lifetime, int cooldown) {
         }
         /** A new tether radius, including for players already spectating a match. */
         default void spectateRadius(int radius) {
@@ -179,7 +187,7 @@ public final class ConfigReload {
                     || path.startsWith(SeedSettings.SECTION + ".")) {
                 continue;
             }
-            if (path.equals("rooms.menu") || path.startsWith("director.") || path.startsWith("stability.")
+            if (path.startsWith("lobby.boards.") || path.startsWith("lobby.pads.") || path.equals("rooms.menu") || path.startsWith("director.") || path.startsWith("stability.")
                     || path.startsWith("resource-pack.") && !path.equals("resource-pack.thrown-visuals")
                     || path.startsWith("stats.") && !path.equals("stats.season")) {
                 refused.add(text("reload.restart-required", "path", path));
@@ -191,7 +199,7 @@ public final class ConfigReload {
                     refused.add(text("reload.resize-refused", "path", path));
                     next.set(path, effective.get(path));
                 }
-            } else if (path.equals(REJOIN_GRACE) || path.equals(SPECTATE_RADIUS)) {
+            } else if (path.equals(REJOIN_GRACE) || path.equals(SPECTATE_RADIUS) || path.equals(HOST_GRACE)) {
                 // Live settings, running matches included.
                 changed.add(path);
             } else if (path.startsWith("match.") || path.startsWith("scoring.") || path.startsWith("points.")
@@ -262,6 +270,14 @@ public final class ConfigReload {
         }
         if (!same(effective.get(REJOIN_GRACE), next.get(REJOIN_GRACE))) {
             target.rejoinGrace(MatchSettings.rejoinGraceSeconds(next.getConfigurationSection("match")));
+        }
+        if (!same(effective.get(HOST_GRACE), next.get(HOST_GRACE))) {
+            target.hostGrace(next.getInt(HOST_GRACE, RoomService.DEFAULT_HOST_GRACE_SECONDS));
+        }
+        if (!same(effective.get(RoomService.REQUEST_LIFETIME_KEY), next.get(RoomService.REQUEST_LIFETIME_KEY))
+                || !same(effective.get(RoomService.REQUEST_COOLDOWN_KEY), next.get(RoomService.REQUEST_COOLDOWN_KEY))) {
+            target.roomRequests(next.getInt(RoomService.REQUEST_LIFETIME_KEY, RoomService.DEFAULT_REQUEST_LIFETIME),
+                    next.getInt(RoomService.REQUEST_COOLDOWN_KEY, RoomService.DEFAULT_REQUEST_COOLDOWN));
         }
         if (differs("points.", next)) {
             target.points(PointsSettings.from(next.getConfigurationSection("points")));

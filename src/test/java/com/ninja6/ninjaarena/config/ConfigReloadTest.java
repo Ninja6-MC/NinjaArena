@@ -83,6 +83,12 @@ class ConfigReloadTest {
         @Override public void spectateRadius(int radius) { calls.add("spectateRadius"); spectateRadius = radius; }
         Integer rejoinGrace;
         @Override public void rejoinGrace(int seconds) { calls.add("rejoinGrace"); rejoinGrace = seconds; }
+        List<Integer> requestTimes;
+        @Override public void roomRequests(int lifetime, int cooldown) {
+            calls.add("roomRequests"); requestTimes = List.of(lifetime, cooldown);
+        }
+        Integer hostGrace;
+        @Override public void hostGrace(int seconds) { calls.add("hostGrace"); hostGrace = seconds; }
         com.ninja6.ninjaarena.match.ShopSettings shopPhase;
         @Override public void shopPhase(com.ninja6.ninjaarena.match.ShopSettings settings) {
             calls.add("shopPhase");
@@ -335,6 +341,40 @@ class ConfigReloadTest {
         write("match: {rejoin-grace-seconds: 0}\n", EMPTY_KIT);
         reload.reload();
         assertEquals(0, target.rejoinGrace, "0 turns rejoining off");
+    }
+
+    @Test
+    void roomRequestTimersReloadLiveAndInvalidValuesKeepThePreviousSettings() throws Exception {
+        write("rooms: {request-lifetime-seconds: 15, request-cooldown-seconds: 0}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertEquals(List.of(15, 0), target.requestTimes);
+        target.calls.clear();
+        for (String bad : List.of("request-lifetime-seconds: 0", "request-lifetime-seconds: 601",
+                "request-cooldown-seconds: -1", "request-cooldown-seconds: 601", "request-lifetime-seconds: 1.5")) {
+            write("rooms: {" + bad + "}\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("rejected"), bad);
+        }
+        assertFalse(target.calls.contains("roomRequests"));
+        assertEquals(List.of(15, 0), target.requestTimes);
+    }
+
+    @Test
+    void theRoomHostGraceAppliesAtOnceAndBadValuesAreRejected() throws Exception {
+        write("rooms: {host-grace-seconds: 20}\n", EMPTY_KIT);
+        var messages = reload.reload();
+        assertTrue(messages.getFirst().contains("complete"), messages.toString());
+        assertEquals(20, target.hostGrace);
+        assertTrue(messages.get(1).contains("rooms.host-grace-seconds"), messages.toString());
+        assertEquals(List.of("hostGrace"), target.calls.stream().filter(call -> call.equals("hostGrace")).toList());
+
+        target.calls.clear();
+        for (String bad : List.of("rooms: {host-grace-seconds: -1}", "rooms: {host-grace-seconds: 601}",
+                "rooms: {host-grace-seconds: 1.5}")) {
+            write(bad + "\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("rejected"), bad);
+        }
+        assertFalse(target.calls.contains("hostGrace"));
+        assertEquals(20, target.hostGrace);
     }
 
     @Test
@@ -1036,7 +1076,8 @@ class ConfigReloadTest {
             assertTrue(report.get(1).contains("messages.yml"), report.toString());
             assertEquals("Go, ninjas!", Messages.text("match.fight"));
             // Keys the server file leaves out keep their default, with one warning each.
-            assertEquals("You left the match.", Messages.text("match.left"));
+            assertEquals("You left the match. You are in the lobby; /narena leave again takes you home.",
+                    Messages.text("match.left"));
             assertEquals(1, warnings.stream()
                     .filter("messages.yml: match.left is missing; using the default."::equals).count());
             assertEquals("Changed: none.", withWarnings.reload().get(1));

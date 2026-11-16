@@ -141,6 +141,34 @@ class SpectatorLifecycleTest extends MatchFixture {
     }
 
     @Test
+    void aSpectatorTheLobbyRefusesIsToldBeforeTheRestoreAndItsResult() throws Exception {
+        viewers.setLobby(player -> false);
+        matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
+        snapshots.save(snapshot(DAVE));
+        viewers.arrived(player(DAVE), "dojo");
+        assertTrue(viewers.leave(player(DAVE)));
+        assertEquals("You stopped watching. /narena leave has nothing more to leave.",
+                players.get(DAVE).messages.getLast());
+        assertTrue(restored.contains(DAVE), "home");
+
+        var failingRestores = new RestoreService(new SnapshotService(snapshots, plugin.getLogger()),
+                (player, snapshot) -> {
+                    throw new RestoreService.RestoreException("refused");
+                }, plugin.getLogger());
+        Spectators failing = new Spectators(plugin, arenas, matches, failingRestores, () -> arenaWorld,
+                new SpectatorSettings(true, 1));
+        failing.setLobbyMembers(lobby::contains);
+        failing.setLobby(player -> false);
+        snapshots.save(snapshot(CAROL));
+        failing.arrived(player(CAROL), "dojo");
+        assertTrue(failing.leave(player(CAROL)));
+        List<String> carol = players.get(CAROL).messages;
+        assertEquals(List.of("You stopped watching. /narena leave has nothing more to leave.",
+                "Your belongings could not be returned. Rejoin the server to try again."),
+                carol.subList(carol.size() - 2, carol.size()));
+    }
+
+    @Test
     void leavingSpectatingGoesToTheLobbyWithTheSnapshotKept() throws Exception {
         List<UUID> lobby = lobbyFor(viewers);
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
@@ -148,6 +176,8 @@ class SpectatorLifecycleTest extends MatchFixture {
         viewers.arrived(player(DAVE), "dojo");
 
         assertTrue(viewers.leave(player(DAVE)));
+        assertEquals("You stopped watching. You are in the lobby; /narena leave again takes you home.",
+                players.get(DAVE).messages.getLast());
         assertEquals(List.of(DAVE), lobby);
         assertEquals(List.of(), restored);
         assertTrue(snapshots.exists(DAVE));

@@ -15,6 +15,7 @@ import com.ninja6.ninjaarena.reward.RewardSettings;
 import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
 import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
 import com.ninja6.ninjaarena.room.MaxActive;
+import com.ninja6.ninjaarena.room.RoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -153,6 +154,8 @@ public final class ReloadFiles {
                     problem = text.isBlank() || text.length() > 1000 ? "expected 1 to 1000 characters" : null;
                 } else if (path.startsWith("events.")) {
                     problem = null; // EventSettings validates the time zone and HTTPS endpoint.
+                } else if (path.startsWith("lobby.pads.fog.colours.")) {
+                    problem = text.matches("#?[0-9A-Fa-f]{6}") ? null : "expected a colour like \"#55FF55\"";
                 } else {
                     problem = StatsSettings.problem(path, text);
                 }
@@ -259,6 +262,15 @@ public final class ReloadFiles {
 
     private static double[] range(String path) {
         return switch (path) {
+            case "lobby.boards.update-seconds" -> new double[] {1, 60};
+            case "lobby.boards.max-rooms" -> new double[] {1, 10};
+            case "lobby.pads.join-seconds" -> new double[] {1, 30};
+            case "lobby.pads.fog.distance" -> new double[] {4, 64};
+            case "lobby.pads.fog.active-seconds" -> new double[] {5, 600};
+            case "lobby.pads.fog.interval-ticks" -> new double[] {5, 40};
+            case "lobby.pads.fog.per-block" -> new double[] {1, 4};
+            case "lobby.pads.fog.max-particles" -> new double[] {8, 128};
+            case "lobby.pads.fog.bedrock-max-particles" -> new double[] {0, 128};
             case "resource-pack.timeout-seconds" -> new double[] {1, 600};
             case "arena-world.border-size" -> new double[] {16, 2048};
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};
@@ -274,6 +286,9 @@ public final class ReloadFiles {
             case "match.spectate-radius"
                     -> new double[] {MatchSettings.MIN_SPECTATE_RADIUS, MatchSettings.MAX_SPECTATE_RADIUS};
             case "match.rejoin-grace-seconds" -> new double[] {0, MatchService.MAX_REJOIN_GRACE_SECONDS};
+            case RoomService.REQUEST_LIFETIME_KEY -> new double[] {1, 600};
+            case RoomService.REQUEST_COOLDOWN_KEY -> new double[] {0, 600};
+            case RoomService.HOST_GRACE_KEY -> new double[] {0, RoomService.MAX_HOST_GRACE_SECONDS};
             case "shop.max-seconds", "shop.quick-start-seconds" -> new double[] {1, 3600};
             case "shop.map-wait-limit-seconds" -> new double[] {0, 3600};
             case "points.player-kill", "points.enemy-kill-per-cost", "points.round-survive", "points.round-win"

@@ -78,6 +78,6 @@ permissions:
     default: op
     children: {}
   ninjaarena.admin.lobby:
-    description: Edit the lobby and reset it to the bundled build
+    description: Edit the lobby and generate it again
     default: op
     children: {}

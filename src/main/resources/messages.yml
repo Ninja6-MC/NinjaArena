@@ -38,7 +38,7 @@ command:
   no-permission: "<red>You do not have permission to use this command."
   players-only: "<red>Only players can use this Arena command."
   leave-players-only: "<red>Only players can leave an arena."
-  not-in-arena: "<red>You are not in an arena."
+  not-in-arena: "<red>There is nothing to leave: you are not in the lobby, a room, a match, a map preview or spectating."
   usage: "<red>Usage: /<label> <usage>"
   unknown: "<red>Unknown command <command>. Available commands:"
   help-header: "<gold>The Arena commands:"
@@ -72,7 +72,7 @@ help:
   intro: "show the lobby introduction again"
   accept: "join a room you were invited to; same as room accept"
   map: "list pickable maps, change your room map, or ask for the next or a new seed"
-  room: "open a room, invite players and start its match"
+  room: "open a room, invite players, name co-hosts and start its match"
   shop: "open the shop or say you are ready"
   host: "open an invite-only room on an arena of your choice"
   invite: "invite a player to your room; same as room invite"
@@ -342,11 +342,40 @@ intro:
   close: "Close"
   lobby-only: "<red>Enter the lobby to view the introduction."
 
-# The lobby world and /ninjaarena admin lobby. <label> is the command as typed.
+# The lobby world and /ninjaarena admin lobby. <label> is the command as typed, <pads> the
+# generated lobby's room pads and <count> the players in the lobby world.
 lobby:
+  boards:
+    create: "<gold>Create room</gold>\n<gray>Click to create a room</gray>"
+    list-title: '<gold>Open rooms</gold>'
+    empty: '<gray>No rooms are open.</gray>'
+    room: "<yellow><host></yellow> <players>/<needed> <privacy>\n<gray><map> · <state></gray>"
+    waiting: 'Waiting'
+    building: 'Building'
+    playing: 'In match'
+    more: '<gray>+<count> more rooms</gray>'
+    list-click: '<gray>Click to browse rooms</gray>'
+  # Room pads of the generated lobby. label stands over a room's pad: <host>, <players> of
+  # the <needed> to start, and <state>, one of the state texts, so the state is never told by
+  # the fog colour alone. countdown is the title while a player stands on a pad, <seconds>
+  # left; the subtitle says what the pad does then: join, ask (a join request) or invite.
+  pads:
+    label: "<gold><host>\n<white><players>/<needed> <gray>·</gray> <state>"
+    state:
+      open: '<green>Open'
+      ask: '<yellow>Ask to join'
+      invite: '<light_purple>Invite only'
+      full: '<red>Full'
+      playing: '<aqua>In match'
+    countdown: "<gold><seconds>"
+    countdown-join: "<yellow>Stay on the pad to join the room of <host>"
+    countdown-ask: "<yellow>Stay on the pad to ask to join the room of <host>"
+    countdown-invite: "<yellow>The room of <host> is invite only"
+
   joined: "<green>You are in the lobby."
   join-failed: "<red>You could not join the lobby, so you were sent back."
-  left: "<yellow>You left the lobby."
+  # Said before the restore home, whose failure is reported after it.
+  left: "<yellow>You left the lobby. /narena leave has nothing more to leave."
   edit-started: "<green>Lobby edit mode is on: you can change the lobby. Use /<label> admin lobby done to save and finish."
   edit-already: "<yellow>You are already editing the lobby. Use /<label> admin lobby done to finish."
   edit-busy: "<red>Leave your match, waiting room or the lobby before editing the lobby."
@@ -354,7 +383,12 @@ lobby:
   edit-done: "<green>Lobby edit mode is off and the lobby is saved."
   edit-ended: "<yellow>Lobby edit mode ended because you left the lobby world."
   not-editing: "<red>You are not editing the lobby."
-  reset: "<green>The lobby is back to the bundled build. Changes made in edit mode are gone."
+  building: "<yellow>The lobby is being built. Try again in a moment."
+  edit-building: "<yellow>The lobby is being built. Edit it once it is done."
+  reset-queued: "<yellow>The lobby is generated again once nobody is in the lobby world and no match is running; <count> in the lobby world now. A restart keeps the reset queued."
+  reset-started: "<yellow>Generating the lobby with <pads> room pads."
+  reset: "<green>The lobby is generated with <pads> room pads. Changes made in edit mode are gone."
+  reset-busy: "<yellow>The lobby is being generated already."
   reset-failed: "<red>The lobby could not be reset: <reason>"
 
 # Rooms: /ninjaarena room and its subcommands. <host> and <player> are player names,
@@ -363,7 +397,16 @@ lobby:
 # <accept> and <start> are those buttons, or nothing where none applies.
 room:
   screen:
+    requests: "Join requests"
+    request-player: "Request from <player>"
+    request-info: "<player> would like to join your room."
+    accept-request: "Accept request"
+    decline-request: "Decline request"
+    request-join: "Ask <host> (<size>)"
+    ask: "Ask to join"
+    privacy-line: "Privacy: <privacy>"
     title:
+      requests: "Join requests"
       main: "Rooms"
       create: "Create a room"
       list: "Room list"
@@ -372,6 +415,7 @@ room:
       map: "Choose a map"
       invite: "Invite players"
       kick: "Remove players"
+      cohosts: "Co-hosts"
       start: "Start your room"
     create: "Create a room"
     list: "Room list"
@@ -379,11 +423,14 @@ room:
     settings: "Settings"
     invite: "Invite players"
     kick: "Remove players"
+    cohosts: "Co-hosts"
+    handback: "Hand back to <player>"
     start: "Start match"
     leave: "Leave room"
     preview: "Preview map"
     preview-end: "Return from preview"
     start-building: "Start (map still building)"
+    start-host-away: "Start (the host is away)"
     back: "Back"
     close: "Close"
     cancel: "Cancel"
@@ -406,6 +453,10 @@ room:
     choose-map: "Map: <map>"
     invite-player: "Invite <player>"
     kick-player: "Remove <player>"
+    cohost-player: "Make <player> a co-host"
+    uncohost-player: "Make <player> a member"
+    cohosts-info: "Co-hosts can start the match, invite and remove players. Settings and the map stay yours."
+    cohosts-empty: "Nobody else is in your room yet."
     input-value: "<label>: <value>"
     cycle: "Left: next value. Right: previous."
     hint: "Create a room, join one, or manage your room."
@@ -414,6 +465,10 @@ room:
     save-info: "Choose one value and Save. Cancel leaves it unchanged."
     start-info: "Start when your room has enough players and its map is ready."
     summary: "Host: <host>. Map: <arena>. Players: <size>, needed: <players>."
+    # The player who opened the room, while they are in it.
+    creator: "♛ Opened by <player>"
+    cohosts-line: "Co-hosts: <players>"
+    host-away: "The host, <player>, is away: <seconds> seconds left to come back."
     stale: "<yellow>Your room changed. Open /narena room again."
     refused: "<yellow>The room menu could not be opened. Use /narena room subcommands."
   map-no-permission: "<red>You do not have permission to change your room's map."
@@ -465,18 +520,56 @@ room:
   list-featured: "<gold>Featured map: <arena>. Matches there earn the event bonus while the event runs."
   list-header: "<gold>Open rooms:"
   list-empty: "<yellow>No rooms are open. Create one with /narena room create."
-  list-line: "<gray>- <host> on <arena> <count> <state>"
-  list-line-featured: "<gray>- <host> on <gold><arena></gold> (featured) <count> <state>"
+  # <crown> marks a host who opened the room, or names the player who did when they are in
+  # it but no longer host (list-creator).
+  list-line: "<gray>- <host><crown> on <arena> <count> <state>"
+  list-line-featured: "<gray>- <host><crown> on <gold><arena></gold> (featured) <count> <state>"
+  list-creator: " (<gold>♛</gold> <player>)"
+  list-host-away: "<yellow>host away"
   list-playing: "<gold>in a match"
   list-full: "<yellow>full"
   not-host: "<yellow>Only the host of the room can do that."
-  not-host-or-admin: "<yellow>Only the host or an admin can start the match of this room."
+  not-host-or-admin: "<yellow>Only the host, a co-host or an admin can start the match of this room."
+  not-host-or-cohost: "<yellow>Only the host or a co-host of the room can do that."
   no-room: "<yellow><host> has no room."
   info-header: "<gold>Room of <host> on arena <arena>, <privacy>"
   info-settings: "<gray>Players <size>, <required> needed to start. Teams: <teams>. Team size: <team-size>."
-  info-host: "<gray>- <player> (host, team <team>)"
-  info-member: "<gray>- <player> (team <team>) <kick>"
+  # The crown after the name of the player who opened the room.
+  crown: " <gold>♛</gold>"
+  info-host: "<gray>- <player><crown> (host, team <team>)"
+  info-cohost: "<gray>- <player><crown> (co-host, team <team>) <kick>"
+  info-member: "<gray>- <player><crown> (team <team>) <kick>"
+  info-host-away: "<yellow>The host, <player>, is away: <seconds> seconds left to come back."
   start-ready: "<green>Enough players are here. <start>"
+  privacy-ask: "ask to join"
+  request-sent: "<green>Request sent to the room of <host>. It expires in <seconds> seconds."
+  request-received: "<yellow><player> asks to join your room. <accept> <decline> <view>"
+  request-accepted: "<green>Your request to join the room of <host> was accepted."
+  request-declined: "<yellow>Your request to join the room of <host> was declined."
+  request-expired: "<yellow>Your request to join the room of <host> expired."
+  request-cancelled: "<yellow>Your request to join the room of <host> ended."
+  request-public: "<yellow>Your request to join the room of <host> ended because the room is now public. You can join it now."
+  request-invite: "<yellow>Your request to join the room of <host> ended because the room is now invite only."
+  request-closed: "<yellow>Your request to join the room of <host> ended because the room closed."
+  request-started: "<yellow>Your request to join the room of <host> ended because its match started."
+  request-left-lobby: "<yellow>Your request to join the room of <host> ended because you left the lobby."
+  request-approver-changed: "<yellow>You can no longer approve requests for this room."
+  request-cooldown: "<yellow>Wait <seconds> seconds before requesting this room again."
+  request-pending: "<yellow>Your request to the room of <host> is still pending."
+  request-unavailable: "<red>The room of <host> cannot take you now. Try again."
+  request-missing: "<yellow>That request is no longer pending."
+  request-decision: "<green>Handled the request from <player>."
+  request-failed: "<yellow><player> could not join. Their request has ended."
+  requests-empty: "<gray>No pending join requests."
+  requests-header: "<gold>Pending join requests:"
+  button-request: "<green>[Ask to join]"
+  button-request-bedrock: "<green>Type <command> to ask to join."
+  button-accept-request: "<green>[Accept]"
+  button-accept-request-bedrock: "<green>Type <command> to accept."
+  button-decline-request: "<red>[Decline]"
+  button-decline-request-bedrock: "<red>Type <command> to decline."
+  button-requests: "<yellow>[Requests]"
+  button-requests-bedrock: "<yellow>Type <command> to view requests."
   privacy-public: "public"
   privacy-invite: "invite only"
   team-size-any: "no limit"
@@ -485,10 +578,16 @@ room:
   button-invite: "<green>[Invite]"
   button-accept: "<green>[Join]"
   button-start: "<gold>[Start]"
+  button-cohost: "<gold>[Co-host]"
+  button-uncohost: "<yellow>[Plain member]"
+  button-handback: "<gold>[Hand back]"
   button-kick-bedrock: "<red>Type <command> to remove."
   button-invite-bedrock: "<green>Type <command> to invite."
   button-accept-bedrock: "<green>Type <command> to join."
   button-start-bedrock: "<gold>Type <command> to start."
+  button-cohost-bedrock: "<gold>Type <command> to make co-host."
+  button-uncohost-bedrock: "<yellow>Type <command> to make a plain member."
+  button-handback-bedrock: "<gold>Type <command> to hand back."
   invite-list-header: "<gold>Players in the lobby you can invite:"
   invite-list-line: "<gray>- <player> <invite>"
   invite-list-empty: "<yellow>Nobody in the lobby is free to invite. Use /narena room invite \\<player> for someone elsewhere."
@@ -498,27 +597,54 @@ room:
   cannot-invite: "<yellow><player> cannot join rooms."
   invited: "<green>Invited <player> to your room."
   invited-you: "<yellow><host> invited you to their room on arena <arena>. <accept>"
+  # A co-host's invitation.
+  invited-you-by: "<yellow><player> invited you to the room of <host> on arena <arena>. <accept>"
   no-invitation: "<yellow>The room of <host> is invite only, and you have no invitation."
   full: "<yellow>The room of <host> is full."
   playing: "<yellow>The room of <host> is in a match. Try again when it is back in the lobby."
   joined: "<green>You joined the room of <host> on team <team>."
   player-joined: "<gray><player> joined the room on team <team> <count>."
-  left: "<yellow>You left the room."
+  left: "<yellow>You left the room. You are in the lobby; /narena leave again takes you home."
   player-left: "<gray><player> left the room <count>."
   team: "<yellow>You are on team <team>."
   kicked: "<yellow><host> removed you from their room."
+  kicked-by: "<yellow><player> removed you from the room of <host>."
+  kick-host: "<yellow>You cannot remove the host."
+  # A co-host trying to remove another co-host.
+  kick-manager: "<yellow>Only the host can remove <player>."
   player-kicked: "<gray><player> was removed from the room."
   kick-not-member: "<yellow><player> is not in your room."
   kick-self: "<yellow>You cannot remove yourself. Use /narena room leave."
   kick-playing: "<yellow>Players can be removed once the room is back in the lobby."
   new-host: "<gold><player> is now the host of the room."
+  # Co-hosts may start the match, invite and remove plain members; settings and the map stay the host's.
+  cohost-added: "<gold><player> is now a co-host: they can start the match, invite and remove players."
+  cohost-removed: "<gray><player> is no longer a co-host."
+  cohost-already: "<yellow><player> is already a co-host."
+  cohost-not: "<yellow><player> is not a co-host."
+  cohost-self: "<yellow>You host the room already."
+  # Handing the room back to the player who opened it.
+  handback-offer: "<gold><player>, who opened this room, is in it. <handback>"
+  handback-self: "<yellow>You opened this room and host it already."
+  handback-no-creator: "<yellow><player>, who opened this room, is not in it."
+  handback-cannot-host: "<yellow><player> cannot host rooms."
+  handed-back: "<gold><player> handed the room back to <creator>, who opened it."
+  creator-returned: "<gold>You opened this room, so it shows your crown again. Its host can hand it back to you."
+  creator-back: "<gold><player>, who opened this room, is back. <handback>"
+  # rooms.host-grace-seconds: a host who disconnects in the lobby stays host for a while.
+  host-away: "<yellow>The host, <player>, disconnected. The room waits <seconds> seconds for them; starting and removing players wait until then."
+  host-back: "<green><player> is back and hosts the room again."
+  host-gone: "<yellow><player> did not come back in time."
+  host-away-wait: "<yellow>The host, <player>, is away. Wait for them, or <seconds> seconds for the room to be handed on."
+  # Said to a host back in time whom the lobby cannot take, before they are restored home.
+  host-grace-lost: "<yellow>The lobby could not take you back, so you are out of your room and go home. /narena leave has nothing more to leave."
   closed: "<yellow>The room closed: nobody left in it can host."
   closed-no-arena: "<yellow>The room closed: its arena was deleted and no other arena is set up."
   arena-changed: "<yellow>Arena <old> was deleted, so the room now plays on arena <arena>."
   settings-playing: "<yellow>Settings can be changed once the room is back in the lobby."
   settings-unknown: "<red>Unknown setting <setting>. Use players, teams, team-size or privacy."
   settings-range: "<red><setting> must be a whole number from <min> to <max>."
-  settings-privacy: "<red>privacy must be public or invite."
+  settings-privacy: "<red>privacy must be public, ask or invite."
   settings-capacity: "<red>That leaves no space for <size> players."
   settings-changed: "<gray><player> set <setting> to <value>."
   already-playing: "<yellow>The room is already in a match."
@@ -531,6 +657,9 @@ room:
   build-progress: "<gold>Building the room's map: <percent>%"
   preview-started: "<green>Previewing the room's map. Use /narena room preview or /narena leave to return to the room."
   preview-ended: "<green>The map preview has ended; you are back in the lobby."
+  preview-left: "<green>You left the map preview. You are in the lobby, still in your room; /narena leave again leaves the room."
+  # When the lobby cannot take them: said before they are sent home, out of the room.
+  preview-left-home: "<yellow>You left the map preview and your room. /narena leave has nothing more to leave."
   preview-unavailable: "<red>Map previews are not available on this server."
   preview-playing: "<yellow>The map cannot be previewed while the room is playing."
   preview-hand-built: "<yellow>Only a generated map can be previewed."
@@ -544,6 +673,9 @@ room:
   status-waiting: "<gray>Room <count>: waiting for players"
   status-ready: "<green>Room <count>: ready to start"
   status-queued: "<gold>Waiting for an arena: number <position> in the queue"
+  status-host-away: "<yellow>Room <count>: waiting <seconds>s for <player> to come back"
+  # Before the status line while the player who opened the room is in it.
+  status-creator: "<gold>♛ <player></gold><gray> | "
   status-playing: "<gold>Playing in arena <arena>"
 
 # /ninjaarena admin generate: reproducing a seed's layout in a free slot cell. <cell> is
@@ -567,12 +699,20 @@ spectate:
   send-failed: "<red>You could not be sent to the match."
   mode-failed: "<red>You could not enter spectator mode."
   restore-failed: "<red>Your belongings could not be returned. Rejoin the server to try again."
+  left: "<yellow>You stopped watching. You are in the lobby; /narena leave again takes you home."
+  # When the lobby cannot take them: said before they are sent home.
+  left-home: "<yellow>You stopped watching. /narena leave has nothing more to leave."
 
 # A running match. team-separator joins team numbers.
 match:
   arena-unavailable: "<red>Arena <arena> is not available, so the match could not start."
   arena-not-prepared: "<red>Arena <arena> could not be prepared, so the match could not start."
-  left: "<yellow>You left the match."
+  # left: back in the lobby; left-room: with the match's room, by /narena leave; left-home:
+  # sent home, by teleporting out or because the lobby could not take them, and said before
+  # that restore, whose failure is reported after it.
+  left: "<yellow>You left the match. You are in the lobby; /narena leave again takes you home."
+  left-room: "<yellow>You left the match and its room. You are in the lobby; /narena leave again takes you home."
+  left-home: "<yellow>You left the match. /narena leave has nothing more to leave."
   player-out: "<gray><player> is out for this round."
   player-left: "<gray><player> left the match."
   # Within match.rejoin-grace-seconds a disconnected player is still in the match.

@@ -21,10 +21,13 @@ through its toolchain support; the wrapper downloads Gradle itself.
 On Windows, use `gradlew.bat build`. The plugin JAR is written to `build/libs/`, and
 `./gradlew test` runs the unit tests on their own.
 
-The bundled lobby structure, `src/main/resources/lobby/obsidian-lobby.nbt`, is generated
-from the readable spec beside it, `obsidian-lobby.yml`, which also marks the lobby's
-spawn, room area, shop area and board positions. After changing the spec, run
-`./gradlew generateLobbyBuild` and commit both files; the tests fail while they differ.
+The generated lobby is assembled from the pieces in `src/main/resources/lobby/pieces/`,
+vanilla structure files written from the readable spec beside them,
+`generated-lobby.yml`. After changing a piece, run `./gradlew generateLobbyPieces` and
+commit the spec and the structures; the tests fail while they differ. The obsidian lobby
+of earlier versions, `obsidian-lobby.nbt`, is generated the same way from
+`obsidian-lobby.yml` with `./gradlew generateLobbyBuild`; its spec also gives the layout of
+servers that still have it.
 
 The seeded terrain generator for generated maps, its determinism rules and how to
 update its golden digests are described in the
@@ -124,11 +127,11 @@ nether portal, but from crying obsidian:
    empty inventory as an admin portal.
 
 A player-built portal belongs to no arena: it puts the player in an open room with space
-that admits them (a public room, or an invite-only one that invited them), one on an
-event's featured map first, then the one with the most players. With none, it leaves
-them in the lobby to create or be invited to one. Vanilla does nothing with crying
-obsidian, so these portals never clash with nether portals; obsidian cannot be chosen as
-the frame block.
+that admits them (a public room, or an invite-only one that invited them; ask rooms are
+skipped), one on an event's featured map first, then the one with the most players. With
+none, it leaves them in the lobby to create or be invited to one. Vanilla does nothing
+with crying obsidian, so these portals never clash with nether portals; obsidian cannot
+be chosen as the frame block.
 
 Breaking, burning, blowing up or pushing any block of the frame removes the portal; the
 corners, the opening and blocks around the frame do not count, so ordinary block updates
@@ -172,13 +175,18 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `leaderboard <stat> [all_time\|season]` | `ninjaarena.leaderboard` | Show the [top ten for a stat](docs/leaderboards.md) |
 | `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from the lobby, while in no room |
 | `accept <host>` | `ninjaarena.play` | Join a host's room; the same as `room accept` |
-| `room` | `ninjaarena.play` | Show your room, with remove buttons for its host; outside a room, list the open rooms and an event's featured map |
+| `room` | `ninjaarena.play` | Show your room, with remove and co-host buttons for its host and remove buttons for its co-hosts; outside a room, list the open rooms and an event's featured map |
 | `room create` | `ninjaarena.room.create` | Open a room in the lobby and become its host |
 | `room settings [players\|teams\|team-size\|privacy <value>]` | Host | Show or change the room's settings |
-| `room invite [player]` | Host | Invite a player with a join button, or list lobby players with invite buttons |
-| `room accept <host>` | `ninjaarena.play` | Join a host's room: a public one, or one that invited you |
-| `room kick <player>` | Host | Remove a player from the room to the lobby |
-| `room start [host]` | Host, or `ninjaarena.admin` for any room | Start the room's match; refused while its generated map is still being built |
+| `room requests` | Host or co-host | List pending join requests and open their screen |
+| `room accept-request <player>`, `room decline-request <player>` | Host or co-host | Decide a pending request; acceptance rechecks admission |
+| `room invite [player]` | Host or co-host | Invite a player with a join button, or list lobby players with invite buttons |
+| `room accept <host>` | `ninjaarena.play` | Join a public or invited room, or request entry to an ask room |
+| `room kick <player>` | Host, or co-host for plain members | Remove a player from the room to the lobby |
+| `room cohost <player>` | Host | Make a member a [co-host](#co-hosts-and-the-creator) |
+| `room uncohost <player>` | Host | Make a co-host a plain member again |
+| `room handback` | Host | Hand the room back to the player who opened it, when they are in it |
+| `room start [host]` | Host or co-host, or `ninjaarena.admin` for any room | Start the room's match; refused while its generated map is still being built or its host is away |
 | `room preview` | `ninjaarena.play` | Look over the room's placed generated map in spectator mode; again to return to the room |
 | `room leave` | `ninjaarena.play` | Leave the room and stay in the lobby |
 | `map list` | `ninjaarena.play` | List pickable maps, and generated maps when they are on |
@@ -194,7 +202,7 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
 | `event <subcommand>` | `ninjaarena.event.manage` | List, inspect, start or cancel scheduled arena events |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration, kits and messages |
-| `admin lobby <edit\|done\|reset>` | `ninjaarena.admin.lobby` | Change the lobby in edit mode, or put the bundled lobby back |
+| `admin lobby <edit\|done\|reset>` | `ninjaarena.admin.lobby` | Change the lobby in edit mode, or generate the lobby again |
 | `admin generate <seed> [difficulty] [2\|4]` | `ninjaarena.admin.generate` | [Reproduce a seed's layout](#reproducing-a-layout) in a free slot cell |
 | `admin generate free` | `ninjaarena.admin.generate` | Clear that layout and free its cell |
 
@@ -233,8 +241,9 @@ ready and no other room holds it, else the first by name that is ready and that 
 room holds. When no hand-built arena is ready, the room plays [generated
 maps](#seed-modes) from the seed modes instead, for two teams, so a server with no
 hand-built arena at all works out of the box. Nothing in a room counts down, and no
-match starts any other way. The host, or an admin, presses start with `/narena room
-start` once the room has its required player count; below it the start is refused.
+match starts any other way. The host, a co-host or an admin presses start with
+`/narena room start` once the room has its required player count; below it the start is
+refused.
 
 Hosts with `ninjaarena.map.change` (default op, inherited from `ninjaarena.admin`) can
 use `/narena map set <arena>` while their room is in the lobby. Admins mark a hand-built
@@ -253,7 +262,8 @@ The host sets the room up with `/narena room settings`:
 - `teams`: how many teams (1 to the arena's team spawns; by default all of them).
 - `team-size`: the most players on one team (0 for no limit; by default
   `waiting-room.team-size`). The room is full at the team size times the team count.
-- `privacy`: `public`, which anyone may join, or `invite`, which only invited players may.
+- `privacy`: `public`, which anyone may join; `ask`, which requires a host or co-host's
+  approval; or `invite`, which only invited players may join.
 
 `/narena room invite Bob` sends Bob a **[Join]** button; `/narena room invite` on its own
 lists the lobby players in no room, each with an **[Invite]** button. A player joins with
@@ -263,18 +273,143 @@ the button or `/narena room accept <host>`; a public room needs no invitation. I
 public room unless invited again. Players are put on the smallest team and kept within one
 player of each other. Settings and removals wait until the room is back in the lobby.
 
+In an `ask` room, a join command, room-list click or screen button sends a request instead
+of joining. An explicit invitation still allows direct entry; a removed player needs an
+invitation before requesting again. The requester enters the lobby and hears whether the
+request was sent, accepted, declined, expired or cancelled. Hosts and co-hosts get
+**[Accept]**, **[Decline]** and **[Requests]** chat buttons; Bedrock receives the commands
+to type. `/narena room requests` lists pending requests and opens the decision screen.
+`/narena room accept-request <player>` and `decline-request <player>` work in chat too.
+Acceptance uses the usual join checks, including capacity, lobby entry and membership in
+another room. Failed acceptance ends the request and grants no invitation.
+
+Requests last `rooms.request-lifetime-seconds` (default 60, 1 to 600). Each player may
+request the same room once per `rooms.request-cooldown-seconds` (default 30, 0 to 600;
+0 disables the cooldown). A refusal gives the seconds left. One pending request per
+player per room is allowed. Requests end on a decision or expiry, leaving the lobby,
+joining or creating a room, disconnecting, room closure, match start, privacy change or
+plugin disable. They are kept in memory only. Reload applies both timers to new requests;
+existing deadlines stay fixed. Play portals skip `ask` rooms, including for invited
+players. Invited players can still enter `invite` rooms through a play portal.
+
 A player who comes through a play portal also joins an open room, as described under
 [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms).
 
-When the host leaves, the room passes to the player who has waited in it longest and has
-`ninjaarena.room.create`. When nobody left has it, the room closes and its players stay in
-the lobby. A running match goes on either way.
+When the host leaves, the room passes to the co-host who has waited in it longest and has
+`ninjaarena.room.create`, else to the player who has waited longest and has it. When
+nobody left has it, the room closes and its players stay in the lobby. A running match goes
+on either way.
+
+### Lobby room boards
+
+The lobby's marked `create-room` and `room-list` spots automatically show text boards.
+Click or attack **Create room** to run the same action as `/narena room create`, with
+its permissions and lobby-entry checks. Click **Open rooms** to browse the room list
+screen. The list shows host, players/needed, privacy, map and waiting, building or
+in-match state, with an overflow count after `lobby.boards.max-rooms` (default 5).
+It refreshes every `lobby.boards.update-seconds` (default 1). Each board can be disabled
+under `lobby.boards`; these settings take effect after a plugin restart.
+
+Both boards use text displays with explicit line breaks and reachable interaction
+entities. Both attack and use work on Java and Bedrock; no item pictures are needed.
+Text comes from `messages.yml`. Board spots and facing come from the active lobby
+layout on startup and reset.
+Lost entities are replaced, tagged duplicates removed, and board chunk tickets shared
+with the shop board until their last user releases them. The lobby world stays loaded
+when arena worlds retire. A layout missing a mark skips that board with one warning.
+
+### Room pads
+
+In the generated lobby ([The lobby world](#the-lobby-world)) each open room has a pad while
+one is free. A room takes the lowest-numbered free pad when it opens, rooms taken oldest
+first, and keeps it until it closes; the freed pad goes to the oldest room without one.
+Rooms beyond the pad count have no pad and are only in the room list. A free pad shows
+nothing, and standing on it does nothing. The obsidian lobby of earlier versions has no
+pads, so none of this happens there. Assignments are kept in memory, like the rooms, so a
+restart starts with no rooms and no pads in use.
+
+Standing anywhere on a room's 5 x 5 plate for `lobby.pads.join-seconds` (default 5, 1 to
+30) acts on the room:
+
+| Room | Standing on its pad |
+| :--- | :--- |
+| Public | Joins it |
+| Ask to join | Sends a join request, as `/narena room accept <host>` does, with its cooldown and messages |
+| Invite only | Says the room is invite only; a player who was invited joins |
+
+Moving, turning, jumping and chatting on the plate keep the countdown going. Stepping off
+cancels it, and stepping back on starts it again from the full time. After the pad acts it
+does nothing more for that player until they step off. The countdown is a title, since the
+room status line uses the action bar. Only lobby members in no room use pads: players in
+a shop phase and spectators in the lobby world do not. Joining takes the same path as an
+invitation's accept, with its checks: a full room, a room in a match, a lobby closed while
+it is built and a player already in a room are refused with the usual messages. A pad
+whose room is in a match or full does not count down, since a full room takes nobody, an
+invited player included; it counts from the full time once there is space.
+
+Each assigned pad has a label over its plate with the host, the players and the needed
+count, and the room's state in words: open, ask to join, invite only, full or in match.
+Low dust fog on the plate's outer ring has the state's colour, set under
+`lobby.pads.fog.colours`. Labels are text displays that are not saved with the world:
+they are removed when a room closes, while the lobby is built and on plugin disable, and
+put back at the new pad spots after a build. A lobby generated again with fewer pads frees
+the pads that are gone; their rooms wait in the room list for a free pad.
+
+Fog is sent to each viewer on their own: only for pads within `fog.distance` blocks
+(default 16) of them, and only while they moved, looked, chatted or used a command in the
+last `fog.active-seconds` (default 30). A draw every `fog.interval-ticks` (default 10) puts
+`fog.per-block` particles (default 1) on each of a pad's 16 ring blocks, nearest pad first,
+up to `fog.max-particles` a viewer (default 48, three pads). A ring the cap cuts into is
+thinned evenly all round, starting one block further on each draw, rather than cut short.
+Bedrock viewers, whose client
+gets each particle translated by Geyser, have their own cap, `fog.bedrock-max-particles`
+(default 16, one pad; 0 sends them none). At the defaults a Java viewer gets at most 96 and
+a Bedrock viewer at most 32 particles a second. Estimated from the packet sizes, not
+measured on a client, that is about 6 KB a second for a Java viewer and under 4 KB for a
+Bedrock viewer before Bedrock's batch compression; an idle or distant player costs nothing.
+`lobby.pads` takes effect after a plugin restart.
+
+### Co-hosts and the creator
+
+The host can make any other member a co-host with `/narena room cohost <player>`, the
+**[Co-host]** button in `/narena room`, or **Your room → Co-hosts**, and a plain member
+again with `uncohost`. Co-hosts can start the match, invite players and remove plain
+members; settings, the map, naming co-hosts and removing the host or a co-host stay with
+the host. A co-host who leaves the room comes back as a plain member.
+
+The player who opened the room is its creator for as long as it is open. While they are in
+it, a crown (♛) follows their name in the room list and the room view, and starts every
+member's status line. A creator who leaves and comes back after the room was handed on
+gets the crown back, not the host role; the host is told, with a **[Hand back]** button.
+`/narena room handback` (or **Your room → Hand back to …**) makes the creator host again,
+if they have `ninjaarena.room.create`, and the host before becomes a co-host.
+
+### Host grace
+
+A host who disconnects while the room waits in the lobby stays its host for
+`rooms.host-grace-seconds` (default 60, 0 to 600). The members are told, the status line
+counts down, and the room list shows it. Meanwhile the room keeps its arena slot lease and
+its members, others can still join and be invited, and starting (by a co-host or an admin
+too) and removals wait. A host who rejoins in time is put back in the lobby and hosts the
+room again; one who comes back by a play portal does too. When the grace runs out, the room
+is handed on as above, or closes. Only the host gets this grace: other members leave the
+room when they disconnect, and a host who disconnects from a match keeps
+`match.rejoin-grace-seconds` instead, as [below](#rejoining-a-match).
+
+A lobby build waits while any room member is away, so it does not start during a grace. If
+the lobby still cannot take a returning host (it is closed or refuses them), the grace ends
+at once: they are out of the room, which is handed on, and they are restored home. The grace
+is kept in memory only: disabling the plugin closes every room, grace or not, and after a
+restart the host is restored home on joining. `rooms.host-grace-seconds: 0` hands the room
+on at once, as before, and a reload applies to disconnects from then on.
 
 ### Room screens
 
 Open `/narena room` to create or browse rooms, join or spectate, and manage your room.
 Hosts can edit privacy, player and team counts, choose a map when permitted, invite or
-remove players, and start a match. Each settings screen saves one value; Cancel discards
+remove players, name co-hosts, hand the room back to its creator, and start a match.
+Hosts and co-hosts get Join requests, Invite, Remove and Start. Join requests opens a
+list, then one Accept/Decline screen; deciding closes it without opening another copy. Each settings screen saves one value; Cancel discards
 that edit. Finished actions close the screen on both Java and Bedrock. Open it again to
 see current state. The existing room subcommands and clickable chat invites remain available.
 
@@ -496,7 +631,13 @@ settings are validated on reload but apply after a restart. See
 | A map preview | `/narena room preview` or `/narena leave`, the room's match starting, leaving the room or the room closing, or the map being cleared | The lobby, still in the room unless they left it |
 | Anywhere in the plugin's worlds | A teleport out of them | Home, restoring the snapshot |
 | A match | Quit, then rejoin within `match.rejoin-grace-seconds` | Back in the match (see below) |
+| A room's host in the lobby or a map preview | Quit, then rejoin within `rooms.host-grace-seconds` | The lobby, still hosting the room (see [Host grace](#host-grace)) |
 | A room, a match, the lobby, spectating or a map preview | Quit, then rejoin | The lobby, with the snapshot kept |
+
+Each `/narena leave` message says where the player now is and what the next
+`/narena leave` does: from a map preview, "You left the map preview. You are in the lobby,
+still in your room; /narena leave again leaves the room." Leaving a match also leaves its
+room in one message.
 
 A player the lobby cannot take is sent home instead. Rejoining puts a player in the lobby
 only while the server keeps running; after a restart they are restored home on joining, as
@@ -567,7 +708,8 @@ the named match is open to spectators. Play portals lead to the lobby.
 
 Viewers can fly within the arena's three-dimensional bounds. Entity cameras, arena
 interactions, and teleports outside the bounds are blocked. Viewers are outside the
-team rosters, countdown minimum, scoring, and enemy director. Use `/narena leave` to go
+team rosters, countdown minimum, scoring, and enemy director, but see each team's
+[colour](#round-feedback). Use `/narena leave` to go
 to the lobby, or wait for the match to end, which takes you there too. Disconnecting frees
 the spectator slot immediately and puts you in the lobby on your next join.
 
@@ -612,7 +754,7 @@ All purchase details are text, so Bedrock needs no item pictures. `shop.menu: ch
 uses an inventory menu; a failed dialog also falls back to it. Lists page at 36 entries.
 The setting is read when a player opens the shop, including after a config reload.
 Screens open only after a player action and close when their shop phase ends.
-The board is a text display with an interaction target; lobby reset recreates it,
+The board is a text display with an interaction target; a new lobby build recreates it,
 and edit mode cannot destroy it. It is removed on disable and replaced on startup.
 
 With `shop.enabled: true`, the default, a round end that another round follows, an extra
@@ -674,6 +816,8 @@ match players or restarts a match.
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | `match.spectate-radius` | Applies immediately to eliminated players in running matches. |
 | `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
+| `rooms.request-lifetime-seconds`, `rooms.request-cooldown-seconds` | Applies immediately to new requests and cooldowns. Existing deadlines stay fixed. |
+| `rooms.host-grace-seconds` | Applies immediately to hosts who disconnect from then on. A host already away keeps the grace they were given; 0 hands the room on at the next host disconnect. |
 | Shop screen | `shop.menu` applies to the next screen opened. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
 | Seed modes | Every `maps` key applies at each slot's next generation, including the spare cell for `regenerate: round`. A map already placed, a running match and a shop break under way keep theirs. A rotation keeps its place while its `seeds` list is the same; a change of `seed-sharing` starts every rotation and random seed again. Warnings about the new settings go to the log. |
@@ -812,19 +956,67 @@ world it is saved normally and never unloaded. It has the same rules: inventorie
 kept on death, time stays at noon, the weather stays clear, no mobs spawn and fire,
 explosions, fluids and other environmental block changes are blocked at all times.
 
-The first time the plugin finds the lobby world without its build, it places the bundled
-obsidian lobby there: a walled platform around 0, 64, 0 with a spawn, a room area, a
-shop area and spots for boards. The world records that it has the build, so every later
-start and every retirement of the arena world leaves the lobby as it is. The world spawn
-is set to the lobby spawn.
+The first time the plugin finds the lobby world without its build, it generates the lobby
+there, centred on 0, 64, 0, with one room pad per arena slot (`arenas.max-active`, at most
+32 pads in one ring). Each open room takes a pad, and players join it by standing on it
+([Room pads](#room-pads)); rooms beyond the pads wait in the room list. The lobby is put
+together from pieces of a reference build: a green centre with the emblem, pads of
+diamond in gold frames, corner squares with cushions, and a barrier wall 15 blocks high
+with a tree on every post.
+
+| Pads | Where they go | Centre |
+| :--- | :--- | :--- |
+| 1 | North | 13 x 13 |
+| 2 | North and south | 13 x 13 |
+| 3 | North, west and east | 13 x 13 |
+| 4 to 8 | Round-robin north, south, west and east, at most two a side | 13 x 13 |
+| 9 to 32 | The same, the ring widening as a side takes more | 6 x (most pads on one side) + 1 |
+
+The emblem is drawn at a whole-number scale, the centre's size divided by 13 and rounded
+down. The floor is the centre plus 14 blocks square: a 32-pad lobby is 63 x 63. The spawn
+is the middle of the emblem, the shop area is the south-east corner square, and the
+create-room, room-list and shop boards stand in the north-west, north-east and south-east
+corners. Each post's tree is picked from the tree variants with a random seeded by the
+lobby world's seed, so the same pad count gives the same lobby. The lobby bounds, used to
+put members back at the spawn, reach four blocks past the build.
+
+The lobby is generated once and saved; every later start and every retirement of the
+arena world leaves it as it is, edit-mode changes included. It is generated again only
+when the pad count changes, after `arenas.max-active` does on a reload or a restart, or
+when an admin runs `/narena admin lobby reset`. A build starts only while nobody is in the
+lobby world (members, players in a shop phase, spectators and editors) and nothing can
+bring anyone there: no match is running and no room member is away from the lobby, such as
+one previewing a map. A due build waits, checked every second, until then. A new lobby
+world, and a build the server stopped in the middle, start as the plugin enables, before
+anyone can join.
+
+While a build runs, nobody can enter the lobby: joining or creating a room, play portals
+and `admin lobby edit` are refused with a message, and players who would be put back in
+the lobby, at login after a quit or on leaving a match, spectating or a preview, are told
+and sent home through the restore instead. It is placed over several ticks within
+`stability.placement.budget-ms`, which generated maps and the lobby share: while both
+place, the maps take half and the lobby the rest, so together they stay within it. The
+build keeps its chunks loaded until it is done. **Generating the lobby again replaces
+everything inside the old bounds and the new build, admin edits included.** The swept box
+is saved with the build, so a build the server stops in the middle clears the same box
+when it is placed again on the next start. The world spawn is set to the lobby spawn.
+
+A server whose lobby world has the obsidian lobby of an earlier version keeps it, with its
+spawn, room area and shop area, and logs a notice once on the first start that finds it.
+`/narena admin lobby reset` replaces it with the generated lobby; nothing replaces it
+automatically.
 
 `/narena admin lobby edit` puts an admin in lobby edit mode, taking them to the lobby
 spawn if they are elsewhere. While in edit mode they may break and place blocks and
 change item frames and armour stands there; nobody else can. `/narena admin lobby done`
 saves the lobby world, ends edit mode and returns the admin to where they were. Leaving
-the lobby world or the server also ends it. `/narena admin lobby reset` clears the lobby
-area, places the bundled build again, removing every change made in edit mode, and puts
-everyone in the lobby world at the spawn.
+the lobby world or the server also ends it. `/narena admin lobby reset` generates the
+lobby again, or replaces the obsidian build, removing every change made in edit mode,
+once nobody is in the lobby world and no match is running; an admin still editing holds
+it back. Every admin who asked is told when it starts and when it is done, and a queued
+reset is kept in the lobby world, so a restart runs it too. On a server where a match is
+always running, a rebuild or reset waits until one quiet moment, and there is no way to
+force it; restarting the server starts a due build before anyone can join.
 
 Nothing takes damage in the lobby world. Anyone who falls into its void is put back at
 the lobby spawn; such a fall never kills and never counts as a death in a match, and no
@@ -1083,6 +1275,18 @@ for the next map. The actionbar shows each starting team's points and the number
 living enemies currently in play, including enemies carried over from an earlier round;
 it is not a fixed wave total. Eliminated teammates keep seeing this feedback while
 spectating.
+
+Each team shows in the colour its tools carry: team 1 red, team 2 blue, team 3 green and
+team 4 yellow. From the first preparation until the match ends, players' names take their
+team colour on name tags and in the player list, and so does the outline of a player made
+to glow, by a shuriken mark or a Shadow Stalker, for everyone who sees the match.
+Eliminated players keep their colour, and it stays through the shop phase. Viewers
+watching the match see the colours too, without joining a team. Each match uses a
+scoreboard of its own, so the main scoreboard and its teams are never changed; leaving,
+a disconnect that is not held for a rejoin, the match end and plugin disable give each
+player back the scoreboard they had. Chat names are left alone. Geyser carries the
+colour to Bedrock name tags; Bedrock shows no glow outline. Not yet checked with a
+Bedrock client.
 
 Titles mark preparation, the start of combat and the round result. A quiet cue announces
 each successful enemy spawn to that match, and a level-up sound marks each round end,

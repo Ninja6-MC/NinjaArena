@@ -41,11 +41,11 @@ plugin takes a match player out of the match, and neither world is used as a
 landing for a restore.
 
 The lobby build and every change made in lobby edit mode live in the lobby
-world's own save, which also records that the bundled build was placed.
-Restoring an older backup of that world brings back the lobby as it was then;
-deleting or regenerating it makes NinjaArena place the bundled build again on
-the next start. `/narena admin lobby reset` puts the bundled build back without
-touching the world files. NinjaArena cancels all damage in the lobby world at
+world's own save, which also records which lobby was placed and for how many
+pads. Restoring an older backup of that world brings back the lobby as it was
+then; deleting or regenerating it makes NinjaArena generate the lobby again on
+the next start. `/narena admin lobby reset` generates it again without touching
+the world files, once nobody is in the lobby world. NinjaArena cancels all damage in the lobby world at
 the lowest priority and protects its blocks itself, so a region-protection
 plugin is not needed there.
 
@@ -187,6 +187,34 @@ keep the player's identity consistent while an arena snapshot is pending.
 Verify portal entry, invite and accept, menus, kit controls, dash, death and
 disconnect/rejoin restoration with a Bedrock client on a test backend. See
 [Floodgate setup][floodgate].
+
+### Scoreboard, sidebar and name tag plugins
+
+**Code review only.** For team colours, each match gives its players and viewers a
+scoreboard of its own, with one team per match team, and leaves the main scoreboard
+and its teams alone. A sidebar, below-name or player-list display that another plugin
+puts on the main scoreboard, or on a scoreboard of its own, is hidden during the match
+and back when the player leaves it, quits or the match ends. A plugin that gives a
+player a new scoreboard during a match wins: NinjaArena does not take it back, and
+that player sees no team colours until their next match. Friendly fire stays with
+NinjaArena's own rule, since the match teams allow it. Geyser shows the colour on
+Bedrock name tags; confirm it with a Bedrock client on a test backend.
+
+Team options that another plugin sets on a main-scoreboard team stop applying to
+match players for the length of the match, because the match teams use the vanilla
+defaults. A client works out pushing between players from the scoreboard it is shown,
+so on a server that puts everyone on a no-collision team, match players push each other
+again; a team that hides name tags shows them again. The match teams do not copy these
+options: one match team holds players who can come from different main-scoreboard
+teams, and a rule such as "push other teams" means something else once the teams are
+the match teams. This follows from how the client reads teams and was not tested on a
+server with such a team.
+
+Plugins that send their own team packets for name tags or the player list, such as
+TAB, bypass Bukkit scoreboards. They can replace the match colour or make it flicker
+between theirs and NinjaArena's. This is reasoned from how those plugins work and was
+not tested; turn off their name tag and player-list team handling in the NinjaArena worlds
+where the colours matter.
 
 ### LuckPerms with shared MariaDB
 

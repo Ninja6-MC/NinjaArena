@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.ninja6.ninjaarena.arena.ArenaBounds;
 import com.ninja6.ninjaarena.lobby.LobbyBuild;
-import com.ninja6.ninjaarena.lobby.LobbyLayout;
+import com.ninja6.ninjaarena.lobby.LobbyPieces;
+import com.ninja6.ninjaarena.lobby.MemorySite;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,34 +24,10 @@ import org.junit.jupiter.api.Test;
 class LobbySurvivalTest {
 
     private final List<String> lobbyCalls = new ArrayList<>();
-    private final List<String> siteCalls = new ArrayList<>();
-    /** The marker the lobby world keeps in its own saved data. */
-    private boolean marked;
 
     private final World lobby = world(LobbyWorld.NAME, lobbyCalls);
 
-    private final LobbyBuild.Site site = new LobbyBuild.Site() {
-        @Override
-        public boolean placed() {
-            return marked;
-        }
-
-        @Override
-        public void markPlaced() {
-            marked = true;
-            siteCalls.add("mark");
-        }
-
-        @Override
-        public void clear(ArenaBounds box) {
-            siteCalls.add("clear");
-        }
-
-        @Override
-        public void place(int x, int y, int z) {
-            siteCalls.add("place");
-        }
-    };
+    private final MemorySite site = new MemorySite();
 
     private static World world(String name, List<String> calls) {
         WorldBorder border = (WorldBorder) Proxy.newProxyInstance(WorldBorder.class.getClassLoader(),
@@ -79,16 +55,24 @@ class LobbySurvivalTest {
     }
 
     /** One server start: the lobby world is loaded and the build placed only if it is new. */
-    private boolean start() {
+    private boolean start() throws java.io.IOException {
         new LobbyWorld(lobby);
-        return new LobbyBuild(LobbyLayout.bundled(), site, quiet()).placeIfNew();
+        LobbyBuild build = new LobbyBuild(LobbyPieces.bundled(), site, quiet(), () -> 0, () -> false, () -> { });
+        build.start(4);
+        if (!build.poll()) {
+            return false;
+        }
+        while (!build.tick(Long.MAX_VALUE, System::nanoTime)) {
+            // The whole budget each tick.
+        }
+        return true;
     }
 
     @Test
-    void theLobbyIsPlacedOnceAndSurvivesRestartsAndArenaWorldRetires() {
+    void theLobbyIsPlacedOnceAndSurvivesRestartsAndArenaWorldRetires() throws java.io.IOException {
         assertTrue(start(), "a new lobby world gets the build");
-        assertEquals(List.of("place", "mark"), siteCalls);
-        siteCalls.clear();
+        long writes = site.writes;
+        assertTrue(writes > 0);
 
         List<String> arenaCalls = new ArrayList<>();
         World arena = world(ArenaWorld.NAME, arenaCalls);
@@ -105,7 +89,7 @@ class LobbySurvivalTest {
 
         assertFalse(start(), "a restart keeps the lobby world as it is");
         assertFalse(start());
-        assertEquals(List.of(), siteCalls, "nothing was cleared or placed again");
+        assertEquals(writes, site.writes, "nothing was cleared or placed again");
         assertFalse(lobbyCalls.contains("autosave false"), "the lobby world is never left unsaved");
         assertTrue(lobbyCalls.stream().allMatch("autosave true"::equals), lobbyCalls.toString());
     }

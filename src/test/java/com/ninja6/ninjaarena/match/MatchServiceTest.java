@@ -30,6 +30,10 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.junit.jupiter.api.Test;
 
 class MatchServiceTest extends MatchFixture {
+    private static final String LEFT_MATCH_HOME = "You left the match. /narena leave has nothing more to leave.";
+    private static final String RESTORE_FAILED = "Your belongings could not be returned yet. Rejoin the server,"
+            + " or ask an admin if this keeps happening.";
+
 
     /** Kills both players of the team in one server tick and lets the round settle. */
     private void wipe(UUID first, UUID second, UUID killer) {
@@ -177,7 +181,9 @@ class MatchServiceTest extends MatchFixture {
         ticks(2);
         assertTrue(matches.leave(player(BOB), Exit.COMMAND));
         assertEquals(List.of(BOB), restored);
-        assertTrue(players.get(BOB).messages.contains("You left the match."));
+        // No lobby here, so home.
+        assertEquals(LEFT_MATCH_HOME,
+                players.get(BOB).messages.getLast());
         assertTrue(players.get(ALICE).messages.contains("Bob left the match."));
         assertEquals(Cause.LEFT, events(PlayerEliminatedEvent.class).getFirst().cause());
         assertEquals(BOB, events(PlayerLeaveMatchEvent.class).getFirst().player());
@@ -191,6 +197,24 @@ class MatchServiceTest extends MatchFixture {
         ticks(2);
         assertEquals(List.of(BOB, ALICE), restored);
         assertFalse(arenas.isHeld("dojo"));
+    }
+
+    @Test
+    void aFailedRestoreIsReportedAfterTheLeaveMessageWhichNeverSaysHome() {
+        restoreResult = RestoreResult.FAILED;
+        matches.start("dojo", List.of(List.of(ALICE, CAROL), List.of(BOB, DAVE)));
+        ticks(2);
+        assertTrue(matches.leave(player(BOB), Exit.COMMAND));
+        List<String> bob = players.get(BOB).messages;
+        assertEquals(List.of(LEFT_MATCH_HOME, RESTORE_FAILED), bob.subList(bob.size() - 2, bob.size()));
+
+        Fake alice = players.get(ALICE);
+        listener.onTeleport(new PlayerTeleportEvent(alice.proxy, alice.location.clone(),
+                new Location(overworld, 0, 64, 0)));
+        assertEquals(LEFT_MATCH_HOME, alice.messages.getLast(), "said at once");
+        runNextTick();
+        assertEquals(List.of(LEFT_MATCH_HOME, RESTORE_FAILED),
+                alice.messages.subList(alice.messages.size() - 2, alice.messages.size()));
     }
 
     @Test
