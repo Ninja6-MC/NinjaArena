@@ -1,4 +1,4 @@
-package com.ninja6.ninjaarena.shop;
+package com.ninja6.ninjaarena.dialog;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -13,8 +13,12 @@ import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
-class ShopDialogTest {
+class DialogRelayTest {
     private static final UUID ID = new UUID(0, 1);
+    private final List<Runnable> pending = new ArrayList<>();
+    private final Map<UUID, Player> online = new HashMap<>();
+    private final List<UUID> lookedUp = new ArrayList<>();
+    private final List<Player> pressed = new ArrayList<>();
 
     private Player player() {
         return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
@@ -24,36 +28,35 @@ class ShopDialogTest {
                 });
     }
 
-    @Test void callbackLooksUpThePlayerOnTheServerThreadInsteadOfRetainingTheAudience() {
-        List<Runnable> pending = new ArrayList<>();
-        Map<UUID, Player> online = new HashMap<>();
-        List<Player> pressed = new ArrayList<>();
-        var dialog = new ShopDialog(pending::add, online::get);
+    private void press(Player audience) {
+        DialogRelay.onMain(audience, pending::add, id -> {
+            lookedUp.add(id);
+            return online.get(id);
+        }, pressed::add);
+    }
+
+    @Test void looksUpTheCurrentPlayerOnlyWhenTheServerTaskRuns() {
         Player audience = player();
         Player current = player();
         online.put(ID, audience);
-        var action = new ShopMenus.Action(ShopMenus.Kind.READY);
-        dialog.relay(audience, action, (player, button) -> {
-            assertEquals(action, button);
-            pressed.add(player);
-        });
+        press(audience);
+        assertTrue(lookedUp.isEmpty());
         assertTrue(pressed.isEmpty());
+        assertEquals(1, pending.size());
         online.put(ID, current);
         pending.removeFirst().run();
+        assertEquals(List.of(ID), lookedUp);
         assertEquals(1, pressed.size());
         assertSame(current, pressed.getFirst());
     }
 
-    @Test void callbackDoesNothingIfThePlayerDisconnectsBeforeTheServerTaskRuns() {
-        List<Runnable> pending = new ArrayList<>();
-        Map<UUID, Player> online = new HashMap<>();
-        List<Player> pressed = new ArrayList<>();
-        var dialog = new ShopDialog(pending::add, online::get);
+    @Test void doesNothingIfThePlayerDisconnectsBeforeTheServerTaskRuns() {
         Player audience = player();
         online.put(ID, audience);
-        dialog.relay(audience, new ShopMenus.Action(ShopMenus.Kind.READY), (player, action) -> pressed.add(player));
+        press(audience);
         online.clear();
         pending.removeFirst().run();
+        assertEquals(List.of(ID), lookedUp);
         assertTrue(pressed.isEmpty());
     }
 }

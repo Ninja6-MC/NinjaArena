@@ -1,5 +1,6 @@
 package com.ninja6.ninjaarena.room;
 
+import com.ninja6.ninjaarena.dialog.DialogRelay;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.DialogBase;
@@ -8,20 +9,29 @@ import io.papermc.paper.registry.data.dialog.body.DialogBody;
 import io.papermc.paper.registry.data.dialog.input.DialogInput;
 import io.papermc.paper.registry.data.dialog.input.SingleOptionDialogInput.OptionEntry;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.function.Function;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
 import org.bukkit.entity.Player;
 
 /** Native Paper dialogs. All callbacks return to the server thread, including exit actions. */
 public final class RoomDialog implements RoomScreen.Screens {
+    // Room screens redraw on actions and can be reopened after thirty minutes idle.
+    private static final Duration CALLBACK_LIFETIME = Duration.ofMinutes(30);
+    static final ClickCallback.Options CALLBACK_OPTIONS = ClickCallback.Options.builder()
+            .uses(ClickCallback.UNLIMITED_USES).lifetime(CALLBACK_LIFETIME).build();
     private final Executor main;
+    private final Function<UUID, Player> players;
 
-    public RoomDialog(Executor main) {
+    public RoomDialog(Executor main, Function<UUID, Player> players) {
         this.main = main;
+        this.players = players;
     }
 
     @Override
@@ -54,12 +64,13 @@ public final class RoomDialog implements RoomScreen.Screens {
     private ActionButton button(String label, int index, RoomScreen screen, RoomScreen.Press press) {
         return ActionButton.builder(Component.text(label)).width(200)
                 .action(DialogAction.customClick((response, audience) -> {
-                    if (audience instanceof Player player) {
+                    if (audience instanceof Player) {
                         String value = screen.input() == null ? null : response.getText("value");
                         Map<String, String> values = value == null ? Map.of() : Map.of("value", value);
-                        main.execute(() -> press.run(player, index, values));
+                        DialogRelay.onMain(audience, main, players,
+                                current -> press.run(current, index, values));
                     }
-                }, ClickCallback.Options.builder().uses(ClickCallback.UNLIMITED_USES).build())).build();
+                }, CALLBACK_OPTIONS)).build();
     }
 
     @Override

@@ -667,7 +667,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         String roomMode = com.ninja6.ninjaarena.room.RoomMenuMode.parse(getConfig().get("rooms.menu"),
                 message -> getLogger().warning(message)).label();
         roomMenus = new com.ninja6.ninjaarena.room.RoomMenus(roomList, () -> roomMode,
-                new com.ninja6.ninjaarena.room.RoomDialog(roomMain), roomChest, watching::fromLobby,
+                new com.ninja6.ninjaarena.room.RoomDialog(roomMain, getServer()::getPlayer), roomChest,
+                watching::fromLobby,
                 message -> getLogger().warning(message));
         getServer().getPluginManager().registerEvents(
                 new com.ninja6.ninjaarena.room.RoomMenuListener(roomChest, roomMenus), this);
@@ -940,8 +941,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         com.ninja6.ninjaarena.texture.TextureMenu chestMenu = new com.ninja6.ninjaarena.texture.TextureMenu(
                 textures, new com.ninja6.ninjaarena.texture.TextureMenu.BukkitScreens(), notifier, textureMenuLock);
         com.ninja6.ninjaarena.texture.TextureDialog dialogMenu = new com.ninja6.ninjaarena.texture.TextureDialog(
-                textures, new com.ninja6.ninjaarena.texture.TextureDialog.PaperScreens(main), notifier,
-                textureMenuLock);
+                textures, new com.ninja6.ninjaarena.texture.TextureDialog.PaperScreens(main, getServer()::getPlayer),
+                notifier, textureMenuLock);
         textureMenu = new com.ninja6.ninjaarena.texture.TextureMenus(packSettings.textureMenu(), chestMenu,
                 dialogMenu, message -> getLogger().warning(message));
         getServer().getPluginManager().registerEvents(
