@@ -235,8 +235,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        restores = new RestoreService(snapshots, new PlayerRestorer(getLogger()), getLogger(),
-                new ArenaCombatCleanup(getLogger()));
+        restores = new RestoreService(snapshots, new PlayerRestorer(getLogger()), getLogger());
+        // Every way out of a match leaves the arena world; nothing it held may outlive it.
+        getServer().getPluginManager().registerEvents(new ArenaCombatCleanup(getLogger()), this);
         restores.markPendingOnStartup();
         // Players who quit from the lobby, a room, a match or spectating rejoin in the lobby.
         getServer().getPluginManager().registerEvents(new RestoreListener(this, restores, busy,
