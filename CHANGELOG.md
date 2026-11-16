@@ -13,6 +13,18 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Room co-hosts, the creator's crown and a host grace in the lobby (#217). The host names
+  co-hosts with `/narena room cohost` and `uncohost`, chat buttons or the room screen;
+  co-hosts can start the match, invite and remove plain members, while settings and the map
+  stay with the host. A departing host hands the room to a co-host first, then to the
+  longest-waiting member, both needing `ninjaarena.room.create`. The player who opened the
+  room has a crown in the room list, the room view and the status line whenever they are in
+  it; back after a hand-over they get the crown, not the host role, and the host can hand
+  the room back with `/narena room handback`. A host who disconnects in the lobby stays host
+  for `rooms.host-grace-seconds` (default 60): the room keeps its slot, members are told,
+  starting and removals wait, and a host back in time is in the lobby hosting the room
+  again. Other members and matches are unchanged. The grace ends with a closed lobby, on
+  disable and on restart.
 - Team colours in a match: names on name tags and in the player list, and glow
   outlines, take the team's tool colour (red, blue, green, yellow) from the first
   preparation until the match ends, for players and viewers. Each match uses its own

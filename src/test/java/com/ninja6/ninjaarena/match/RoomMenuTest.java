@@ -152,7 +152,8 @@ class RoomMenuTest extends MatchFixture {
     @Test
     void defaultTitlesAndLabelsFitBothClientsWithLongNamesAndCounts() {
         var body = java.util.Set.of("hint", "create-info", "settings-info", "save-info", "start-info",
-                "summary", "stale", "refused", "cycle");
+                "summary", "stale", "refused", "cycle", "creator", "cohosts-line", "host-away", "cohosts-info",
+                "cohosts-empty");
         for (String key : Messages.defaults().keySet()) {
             if (!key.startsWith("room.screen.")) { continue; }
             String tail = key.substring("room.screen.".length());

@@ -8,7 +8,8 @@ import org.bukkit.entity.Player;
 public interface RoomCommands {
 
     /**
-     * Shows the player's room, with kick buttons for its host; outside a room, the room list
+     * Shows the player's room, with remove and co-host buttons for its host and remove
+     * buttons for its co-hosts; outside a room, the room list
      * with join buttons and the featured map of a running event.
      */
     void show(Player player);
@@ -25,9 +26,18 @@ public interface RoomCommands {
 
     void kick(Player player, String member);
 
+    /** The host makes a member a co-host, who may start the match, invite and remove players. */
+    void cohost(Player player, String member);
+
+    /** The host makes a co-host a plain member again. */
+    void uncohost(Player player, String member);
+
+    /** The host hands the room back to the player who opened it. */
+    void handBack(Player player);
+
     /**
-     * Starts the match of the sender's room, or of the room {@code host} runs when given,
-     * which only an admin may do for someone else's room.
+     * Starts the match of the sender's room, which its host or a co-host may do, or of the
+     * room {@code host} runs when given, which only an admin may do for someone else's room.
      */
     void start(CommandSender sender, String host);
 

@@ -577,6 +577,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void hostGrace(int seconds) {
+                        roomList.setHostGraceSeconds(seconds);
+                    }
+
+                    @Override
                     public void points(PointsSettings settings) {
                         points.setSettings(settings, inMatch.matches());
                     }
@@ -723,6 +728,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 MaxActive.read(getConfig(), getLogger()::warning));
         rooms.setSounds(sounds);
         rooms.setBedrock(bedrock::isBedrock);
+        rooms.setHostGraceSeconds(getConfig().getInt(RoomService.HOST_GRACE_KEY,
+                RoomService.DEFAULT_HOST_GRACE_SECONDS));
         // Reserves arenas.max-active slot cells and clears them before any room can use one.
         rooms.setGeneratedMaps(generatedMaps);
         rooms.setSeedPolicy(new SeedPolicy(seedSettings(), System::currentTimeMillis,
@@ -741,7 +748,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         // /narena spectate works from the lobby, for players in no room.
         watching.setLobbyMembers(id -> members.isMember(id) && !roomList.isMember(id));
         lobbyReturns = new LobbyReturns(id -> members.isMember(id) || roomList.isMember(id) || inMatch.isInMatch(id)
-                || watching.contains(id) || roomList.isPreviewing(id), roomList::enterLobby);
+                || watching.contains(id) || roomList.isPreviewing(id), roomList::rejoin);
         getServer().getPluginManager().registerEvents(lobbyReturns, this);
         roomList.start();
     }

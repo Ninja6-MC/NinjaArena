@@ -89,13 +89,29 @@ import org.bukkit.scheduler.BukkitTask;
  * portals that may take a player to any room prefer rooms on it. A match there earns the
  * event bonus, which the match engine captures when it starts.
  *
+ * <p><b>Hosts.</b> The host may make members co-hosts ({@link #cohost}), who may start the
+ * match, invite and remove plain members; settings and the map stay the host's. The player
+ * who opened the room keeps a crown in the room list, the room view and the status line
+ * whenever they are in it, host or not, and the host can hand the room back to them
+ * ({@link #handBack}).
+ *
  * <p><b>Leaving.</b> A member who leaves the room, by {@code /narena room leave}, by
  * {@code /narena leave}, by being removed, or by leaving the lobby and match world some
- * other way, is out of the room. When the host goes, the longest-waiting member who may
- * create rooms becomes the host; when there is none, the room closes and its players stay in
- * the lobby. A match that is running goes on either way. A member who disconnects while their
- * match holds them for its rejoin grace stays in the room, as host if they were, until they
- * are no longer held; the usual hand-off follows if they have not come back by then.
+ * other way, is out of the room. When the host goes, the longest-waiting co-host who may
+ * create rooms becomes the host, else the longest-waiting member who may; when there is
+ * none, the room closes and its players stay in the lobby. A match that is running goes on
+ * either way. A member who disconnects while their match holds them for its rejoin grace
+ * stays in the room, as host if they were, until they are no longer held; the usual hand-off
+ * follows if they have not come back by then.
+ *
+ * <p><b>Host grace.</b> A host who disconnects while the room is in the lobby stays its host
+ * for {@link #hostGraceSeconds()} ({@code rooms.host-grace-seconds}); other members leave at
+ * once. The room keeps its slot lease, its members are told, and starting, settings and
+ * removals wait. A host who rejoins in time is put back in the lobby and hosts the room
+ * again ({@link #rejoin}); one the lobby cannot take, as while it is built, is out of the
+ * room at once. When the grace runs out the room is handed on as above. Graces are kept in
+ * memory only: disabling the plugin closes every room, grace or not, and after a restart the
+ * host is restored home on joining.
  *
  * <p><b>Worlds.</b> While any room is open the arena world is held open, and room players
  * may be moved between the lobby and arena worlds by the plugin's own teleports without
@@ -116,6 +132,12 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     static final int GENERATED_TEAMS = 2;
     /** What {@code /narena map set} takes to play generated maps. */
     public static final String GENERATED = "generated";
+    /** The config key of the host grace. */
+    public static final String HOST_GRACE_KEY = "rooms.host-grace-seconds";
+    /** {@code rooms.host-grace-seconds} by default. */
+    public static final int DEFAULT_HOST_GRACE_SECONDS = 60;
+    /** The longest {@code rooms.host-grace-seconds}. */
+    public static final int MAX_HOST_GRACE_SECONDS = 600;
 
     private final Plugin plugin;
     private final ArenaRegistry arenas;
@@ -145,6 +167,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     private BukkitTask ticker;
     private BukkitTask barTicker;
     private int configuredMax;
+    private int hostGraceSeconds = DEFAULT_HOST_GRACE_SECONDS;
     private final BuildBars bars;
     private MapPreviews previews;
 
@@ -175,6 +198,19 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     /** The featured map of the scheduled event running now, {@code ArenaEvents#arena}; by default none. */
     public void setFeatured(Supplier<Optional<String>> featured) {
         this.featured = Objects.requireNonNull(featured, "featured");
+    }
+
+    /**
+     * {@code rooms.host-grace-seconds}: how long a host who disconnects in the lobby stays
+     * host, for disconnects from now on; clamped to 0 to {@link #MAX_HOST_GRACE_SECONDS}. 0
+     * hands the room on at once.
+     */
+    public void setHostGraceSeconds(int seconds) {
+        hostGraceSeconds = Math.clamp(seconds, 0, MAX_HOST_GRACE_SECONDS);
+    }
+
+    public int hostGraceSeconds() {
+        return hostGraceSeconds;
     }
 
     /** Identifies recipients whose chat cannot run click events; by default none. */
@@ -466,10 +502,10 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         return name(id);
     }
 
-    /** Online players the host may invite; presses still use {@link #invite} to recheck. */
+    /** Online players the host or a co-host may invite; presses still use {@link #invite} to recheck. */
     public List<Player> inviteCandidates(Player host) {
         Room room = roomOf.get(host.getUniqueId());
-        if (room == null || !room.host().equals(host.getUniqueId())) {
+        if (room == null || !room.isManager(host.getUniqueId())) {
             return List.of();
         }
         return freeInvitePlayers();
@@ -491,20 +527,37 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         }
         player.sendMessage(msg("room.info-header", "host", name(room.host()), "arena", room.arena(),
                 "privacy", privacy(room.settings())));
+        if (room.isHostAway()) {
+            tell(player, "room.info-host-away", "player", name(room.host()), "seconds", room.hostGraceLeft());
+        }
         if (isFeatured(room.arena())) {
             tell(player, "room.info-featured", "arena", room.arena());
         }
         player.sendMessage(msg("room.info-settings", "size", room.size(), "required", room.settings().players(),
                 "teams", room.settings().teams(), "team-size", teamSize(room.settings())));
         player.sendMessage(status(room));
-        boolean host = room.host().equals(player.getUniqueId());
+        UUID viewer = player.getUniqueId();
+        boolean host = room.host().equals(viewer);
         for (UUID member : room.members()) {
-            Component kick = host && !member.equals(room.host())
-                    ? button(player, "room.button-kick", "kick " + name(member)) : Component.empty();
-            player.sendMessage(msg(member.equals(room.host()) ? "room.info-host" : "room.info-member",
-                    "player", name(member), "team", room.teamOf(member), "kick", kick));
+            String key = member.equals(room.host()) ? "room.info-host"
+                    : room.isCohost(member) ? "room.info-cohost" : "room.info-member";
+            Component buttons = Component.empty();
+            if (!member.equals(room.host()) && (host || room.isCohost(viewer) && !room.isCohost(member))) {
+                buttons = button(player, "room.button-kick", "kick " + name(member));
+            }
+            if (host && !member.equals(room.host())) {
+                buttons = buttons.append(Component.space()).append(room.isCohost(member)
+                        ? button(player, "room.button-uncohost", "uncohost " + name(member))
+                        : button(player, "room.button-cohost", "cohost " + name(member)));
+            }
+            player.sendMessage(msg(key, "player", name(member), "crown", crown(room, member),
+                    "team", room.teamOf(member), "kick", buttons));
         }
-        if (host && !room.isPlaying() && room.canStart() && hasLease(room)) {
+        if (host && room.hasCreator() && !room.creator().equals(viewer)) {
+            player.sendMessage(msg("room.handback-offer", "player", name(room.creator()),
+                    "handback", button(player, "room.button-handback", "handback")));
+        }
+        if (room.isManager(viewer) && !room.isHostAway() && !room.isPlaying() && room.canStart() && hasLease(room)) {
             player.sendMessage(msg("room.start-ready", "start", button(player, "room.button-start", "start")));
         }
     }
@@ -670,7 +723,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     @Override
     public void invite(Player player, String invitee) {
-        Room room = hostRoom(player);
+        Room room = managerRoom(player);
         if (room == null) {
             return;
         }
@@ -706,8 +759,13 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return;
         }
         room.invite(targetId);
-        target.sendMessage(msg("room.invited-you", "host", player.getName(), "arena", room.arena(),
-                "accept", button(target, "room.button-accept", "accept " + player.getName())));
+        // The accept names the host, whoever invited: it finds the room by its host.
+        String host = name(room.host());
+        Component accept = button(target, "room.button-accept", "accept " + host);
+        target.sendMessage(room.host().equals(player.getUniqueId())
+                ? msg("room.invited-you", "host", host, "arena", room.arena(), "accept", accept)
+                : msg("room.invited-you-by", "player", player.getName(), "host", host, "arena", room.arena(),
+                        "accept", accept));
         tell(player, "room.invited", "player", target.getName());
     }
 
@@ -803,18 +861,25 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         for (UUID other : room.others(id)) {
             tell(other, "room.player-joined", "player", player.getName(), "team", joined.team(), "count", count(room));
         }
+        if (id.equals(room.creator())) {
+            // Back after a hand-over: the crown, not the host role, which the host can hand back.
+            tell(player, "room.creator-returned");
+            Player current = plugin.getServer().getPlayer(room.host());
+            if (current != null) {
+                current.sendMessage(msg("room.creator-back", "player", player.getName(),
+                        "handback", button(current, "room.button-handback", "handback")));
+            }
+        }
     }
 
     @Override
     public void kick(Player player, String member) {
-        Room room = hostRoom(player);
+        Room room = managerRoom(player);
         if (room == null) {
             return;
         }
-        Player target = plugin.getServer().getPlayerExact(member);
-        UUID targetId = target != null ? target.getUniqueId() : room.members().stream()
-                .filter(id -> name(id).equalsIgnoreCase(member)).findFirst().orElse(null);
-        if (targetId == null || !room.contains(targetId)) {
+        UUID targetId = memberNamed(room, member);
+        if (targetId == null) {
             tell(player, "room.kick-not-member", "player", member);
             return;
         }
@@ -822,15 +887,106 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             tell(player, "room.kick-self");
             return;
         }
+        if (targetId.equals(room.host())) {
+            tell(player, "room.kick-host");
+            return;
+        }
+        if (!room.host().equals(player.getUniqueId()) && room.isCohost(targetId)) {
+            tell(player, "room.kick-manager", "player", name(targetId));
+            return;
+        }
         if (room.isPlaying()) {
             tell(player, "room.kick-playing");
+            return;
+        }
+        if (room.isHostAway()) {
+            tellHostAway(player, room);
             return;
         }
         roomOf.remove(targetId);
         endPreview(targetId);
         notifyMoves(room.kick(targetId).orElse(List.of()));
-        tell(targetId, "room.kicked", "host", player.getName());
+        if (room.host().equals(player.getUniqueId())) {
+            tell(targetId, "room.kicked", "host", player.getName());
+        } else {
+            tell(targetId, "room.kicked-by", "player", player.getName(), "host", name(room.host()));
+        }
         broadcast(room, msg("room.player-kicked", "player", name(targetId)));
+    }
+
+    /** A member of the room by name, online or not; null if there is none. */
+    private UUID memberNamed(Room room, String member) {
+        Player target = plugin.getServer().getPlayerExact(member);
+        UUID targetId = target != null ? target.getUniqueId() : room.members().stream()
+                .filter(id -> name(id).equalsIgnoreCase(member)).findFirst().orElse(null);
+        return targetId != null && room.contains(targetId) ? targetId : null;
+    }
+
+    @Override
+    public void cohost(Player player, String member) {
+        Room room = hostRoom(player);
+        if (room == null) {
+            return;
+        }
+        UUID targetId = memberNamed(room, member);
+        if (targetId == null) {
+            tell(player, "room.kick-not-member", "player", member);
+            return;
+        }
+        if (targetId.equals(player.getUniqueId())) {
+            tell(player, "room.cohost-self");
+            return;
+        }
+        if (!room.addCohost(targetId)) {
+            tell(player, "room.cohost-already", "player", name(targetId));
+            return;
+        }
+        broadcast(room, msg("room.cohost-added", "player", name(targetId)));
+    }
+
+    @Override
+    public void uncohost(Player player, String member) {
+        Room room = hostRoom(player);
+        if (room == null) {
+            return;
+        }
+        UUID targetId = memberNamed(room, member);
+        if (targetId == null) {
+            tell(player, "room.kick-not-member", "player", member);
+            return;
+        }
+        if (!room.removeCohost(targetId)) {
+            tell(player, "room.cohost-not", "player", name(targetId));
+            return;
+        }
+        broadcast(room, msg("room.cohost-removed", "player", name(targetId)));
+    }
+
+    /**
+     * {@code /narena room handback}: the host hands the room back to the player who opened
+     * it, who must be in it and allowed to host; the host before becomes a co-host.
+     */
+    @Override
+    public void handBack(Player player) {
+        Room room = hostRoom(player);
+        if (room == null) {
+            return;
+        }
+        UUID creator = room.creator();
+        if (creator.equals(player.getUniqueId())) {
+            tell(player, "room.handback-self");
+            return;
+        }
+        if (!room.contains(creator)) {
+            tell(player, "room.handback-no-creator", "player", name(creator));
+            return;
+        }
+        if (!canHost(creator)) {
+            tell(player, "room.handback-cannot-host", "player", name(creator));
+            return;
+        }
+        room.handTo(creator);
+        broadcast(room, msg("room.handed-back", "player", player.getName(), "creator", name(creator)));
     }
 
     @Override
@@ -850,13 +1006,18 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 return;
             }
         }
-        boolean host = sender instanceof Player player && room.host().equals(player.getUniqueId());
-        if (!host && !admin) {
+        boolean manager = sender instanceof Player player && room.isManager(player.getUniqueId());
+        boolean inRoom = sender instanceof Player player && room.contains(player.getUniqueId());
+        if (!manager && !admin) {
             sender.sendMessage(msg("room.not-host-or-admin"));
             return;
         }
         if (room.isPlaying()) {
             sender.sendMessage(msg("room.already-playing"));
+            return;
+        }
+        if (room.isHostAway()) {
+            sender.sendMessage(hostAway(room));
             return;
         }
         if (!room.canStart()) {
@@ -902,7 +1063,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 }
             }
             broadcast(room, msg("room.start-failed"));
-            if (!host) {
+            if (!inRoom) {
                 sender.sendMessage(msg("room.start-failed"));
             }
         }
@@ -1061,14 +1222,54 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     /**
      * A member who disconnects leaves the room, unless their match holds them for the rejoin
      * grace; they stay a member, and the host stays the host, until they are no longer held.
+     * A host who disconnects while the room is in the lobby is held for the host grace.
      */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         Room room = roomOf.get(id);
-        if (room != null && !matches.isHeld(id)) {
-            remove(room, id);
+        if (room == null || matches.isHeld(id)) {
+            return;
         }
+        if (room.host().equals(id) && !room.isPlaying() && !matches.isInMatch(id) && hostGraceSeconds > 0) {
+            names.put(id, event.getPlayer().getName());
+            room.holdHost(hostGraceSeconds);
+            for (UUID other : room.others(id)) {
+                tell(other, "room.host-away", "player", name(id), "seconds", hostGraceSeconds);
+            }
+            return;
+        }
+        remove(room, id);
+    }
+
+    /**
+     * A player who quit from the lobby flow joined again and goes back to the lobby, with
+     * their snapshot kept ({@code LobbyReturns}). A host back within their grace hosts their
+     * room again; one the lobby cannot take, as while it is built, is out of the room at once
+     * and goes home.
+     *
+     * @return whether they are in the lobby now
+     */
+    public boolean rejoin(Player player) {
+        UUID id = player.getUniqueId();
+        Room room = roomOf.get(id);
+        boolean away = room != null && room.isHostAway() && room.host().equals(id);
+        boolean entered = enterLobby(player);
+        if (away && rooms.contains(room) && room.contains(id)) {
+            if (entered) {
+                hostBack(room);
+            } else {
+                room.endGrace();
+                tell(player, "room.host-grace-lost");
+                remove(room, id);
+            }
+        }
+        return entered;
+    }
+
+    private void hostBack(Room room) {
+        room.endGrace();
+        broadcast(room, msg("room.host-back", "player", name(room.host())));
     }
 
     /**
@@ -1621,9 +1822,15 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             previews.check();
         }
         for (Room room : List.copyOf(rooms)) {
+            if (room.isHostAway()) {
+                hostGraceTick(room);
+            }
             for (UUID member : room.members()) {
-                if (matches.isHeld(member)) {
+                if (matches.isHeld(member) || room.isHostAway() && member.equals(room.host())) {
                     continue;
+                }
+                if (!rooms.contains(room)) {
+                    break;
                 }
                 Player online = plugin.getServer().getPlayer(member);
                 if (online == null || !online.isOnline()
@@ -1647,7 +1854,29 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         }
     }
 
-    /** Closes every room. Called on plugin disable, before the lobby and the matches close. */
+    /**
+     * One second of an away host's grace: one back in the lobby by any way hosts the room
+     * again; when the grace runs out they are out of the room and it is handed on.
+     */
+    private void hostGraceTick(Room room) {
+        UUID host = room.host();
+        Player online = plugin.getServer().getPlayer(host);
+        if (online != null && online.isOnline() && lobby.isMember(host)) {
+            hostBack(room);
+            return;
+        }
+        if (room.countDownGrace()) {
+            for (UUID other : room.others(host)) {
+                tell(other, "room.host-gone", "player", name(host));
+            }
+            remove(room, host);
+        }
+    }
+
+    /**
+     * Closes every room, ending any host grace: an away host's next join after a restart
+     * restores them home. Called on plugin disable, before the lobby and the matches close.
+     */
     public void close() {
         if (ticker != null) {
             ticker.cancel();
@@ -1822,6 +2051,20 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         return room;
     }
 
+    /** The room the player hosts or co-hosts; tells them why not when it is none. */
+    private Room managerRoom(Player player) {
+        Room room = roomOf.get(player.getUniqueId());
+        if (room == null) {
+            tell(player, "room.not-in-room");
+            return null;
+        }
+        if (!room.isManager(player.getUniqueId())) {
+            tell(player, "room.not-host-or-cohost");
+            return null;
+        }
+        return room;
+    }
+
     private Room roomNamed(String hostName) {
         Player host = plugin.getServer().getPlayerExact(hostName);
         if (host != null) {
@@ -1854,8 +2097,15 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                     : room.isFull() ? msg("room.list-full")
                     : room.admits(id) ? button(player, "room.button-accept", "accept " + host)
                     : msg("room.privacy-invite");
+            if (room.isHostAway()) {
+                state = msg("room.list-host-away").append(Component.space()).append(state);
+            }
+            Component crown = crown(room, room.host());
+            if (room.hasCreator() && !room.creator().equals(room.host())) {
+                crown = msg("room.list-creator", "player", name(room.creator()));
+            }
             player.sendMessage(msg(isFeatured(room.arena()) ? "room.list-line-featured" : "room.list-line",
-                    "host", host, "arena", room.arena(), "count", count(room), "state", state));
+                    "host", host, "crown", crown, "arena", room.arena(), "count", count(room), "state", state));
         }
     }
 
@@ -1867,12 +2117,32 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (room.isPlaying()) {
             return msg("room.status-playing", "arena", room.arena());
         }
+        Component creator = room.hasCreator() ? msg("room.status-creator", "player", name(room.creator()))
+                : Component.empty();
+        if (room.isHostAway()) {
+            return creator.append(msg("room.status-host-away", "count", count(room), "player", name(room.host()),
+                    "seconds", room.hostGraceLeft()));
+        }
         OptionalInt position = slots.position(room);
         if (position.isPresent()) {
-            return msg("room.status-queued", "position", position.getAsInt());
+            return creator.append(msg("room.status-queued", "position", position.getAsInt()));
         }
-        return room.canStart() ? msg("room.status-ready", "count", count(room))
-                : msg("room.status-waiting", "count", count(room));
+        return creator.append(room.canStart() ? msg("room.status-ready", "count", count(room))
+                : msg("room.status-waiting", "count", count(room)));
+    }
+
+    /** The crown after the name of the member who opened the room; nothing after anyone else's. */
+    private static Component crown(Room room, UUID member) {
+        return member.equals(room.creator()) ? msg("room.crown") : Component.empty();
+    }
+
+    /** Why starting and removals wait: the host is away for their grace. */
+    private Component hostAway(Room room) {
+        return msg("room.host-away-wait", "player", name(room.host()), "seconds", room.hostGraceLeft());
+    }
+
+    private void tellHostAway(Player player, Room room) {
+        player.sendMessage(hostAway(room));
     }
 
     private Component queued(Room room) {
