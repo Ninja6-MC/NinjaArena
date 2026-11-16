@@ -1036,7 +1036,8 @@ class ConfigReloadTest {
             assertTrue(report.get(1).contains("messages.yml"), report.toString());
             assertEquals("Go, ninjas!", Messages.text("match.fight"));
             // Keys the server file leaves out keep their default, with one warning each.
-            assertEquals("You left the match.", Messages.text("match.left"));
+            assertEquals("You left the match. You are in the lobby; /narena leave again takes you home.",
+                    Messages.text("match.left"));
             assertEquals(1, warnings.stream()
                     .filter("messages.yml: match.left is missing; using the default."::equals).count());
             assertEquals("Changed: none.", withWarnings.reload().get(1));

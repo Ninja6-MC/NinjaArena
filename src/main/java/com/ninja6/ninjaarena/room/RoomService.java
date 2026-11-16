@@ -975,7 +975,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     @Override
     public void preview(Player player) {
         UUID id = player.getUniqueId();
-        if (previews != null && previews.end(player)) {
+        if (previews != null && previews.leave(player)) {
             return;
         }
         Room room = roomOf.get(id);
@@ -1031,10 +1031,13 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (room == null) {
             return false;
         }
+        boolean inMatch = matches.isInMatch(id);
         remove(room, id);
-        tell(player, "room.left");
-        if (matches.isInMatch(id)) {
-            matches.leave(player, MatchService.Exit.COMMAND);
+        if (inMatch) {
+            // One message for both: the match and the room.
+            matches.leaveWithRoom(player);
+        } else {
+            tell(player, "room.left");
         }
         return true;
     }

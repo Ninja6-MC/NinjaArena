@@ -115,6 +115,8 @@ abstract class MatchFixture {
     protected final List<Runnable> repeating = new ArrayList<>();
     protected int cancellations;
     protected final List<UUID> restored = new ArrayList<>();
+    /** What the restore home returns. */
+    protected RestoreResult restoreResult = RestoreResult.RESTORED;
     protected final List<UUID> readied = new ArrayList<>();
     protected final List<MatchEvent> events = new ArrayList<>();
     protected final MemoryCopies copies = new MemoryCopies();
@@ -156,7 +158,7 @@ abstract class MatchFixture {
         plugin = plugin();
         matches = new MatchService(plugin, arenas, () -> arenaWorld, SETTINGS, player -> {
             restored.add(player.getUniqueId());
-            return RestoreResult.RESTORED;
+            return restoreResult;
         }, events::add, player -> readied.add(player.getUniqueId()));
         deaths = new MatchDeathListener(plugin, matches, arenas);
         listener = new MatchListener(matches, deaths);

@@ -38,7 +38,7 @@ command:
   no-permission: "<red>You do not have permission to use this command."
   players-only: "<red>Only players can use this Arena command."
   leave-players-only: "<red>Only players can leave an arena."
-  not-in-arena: "<red>You are not in an arena."
+  not-in-arena: "<red>There is nothing to leave: you are not in the lobby, a room, a match, a map preview or spectating."
   usage: "<red>Usage: /<label> <usage>"
   unknown: "<red>Unknown command <command>. Available commands:"
   help-header: "<gold>The Arena commands:"
@@ -346,7 +346,8 @@ intro:
 lobby:
   joined: "<green>You are in the lobby."
   join-failed: "<red>You could not join the lobby, so you were sent back."
-  left: "<yellow>You left the lobby."
+  # Said before the restore home, whose failure is reported after it.
+  left: "<yellow>You left the lobby. /narena leave has nothing more to leave."
   edit-started: "<green>Lobby edit mode is on: you can change the lobby. Use /<label> admin lobby done to save and finish."
   edit-already: "<yellow>You are already editing the lobby. Use /<label> admin lobby done to finish."
   edit-busy: "<red>Leave your match, waiting room or the lobby before editing the lobby."
@@ -503,7 +504,7 @@ room:
   playing: "<yellow>The room of <host> is in a match. Try again when it is back in the lobby."
   joined: "<green>You joined the room of <host> on team <team>."
   player-joined: "<gray><player> joined the room on team <team> <count>."
-  left: "<yellow>You left the room."
+  left: "<yellow>You left the room. You are in the lobby; /narena leave again takes you home."
   player-left: "<gray><player> left the room <count>."
   team: "<yellow>You are on team <team>."
   kicked: "<yellow><host> removed you from their room."
@@ -531,6 +532,9 @@ room:
   build-progress: "<gold>Building the room's map: <percent>%"
   preview-started: "<green>Previewing the room's map. Use /narena room preview or /narena leave to return to the room."
   preview-ended: "<green>The map preview has ended; you are back in the lobby."
+  preview-left: "<green>You left the map preview. You are in the lobby, still in your room; /narena leave again leaves the room."
+  # When the lobby cannot take them: said before they are sent home, out of the room.
+  preview-left-home: "<yellow>You left the map preview and your room. /narena leave has nothing more to leave."
   preview-unavailable: "<red>Map previews are not available on this server."
   preview-playing: "<yellow>The map cannot be previewed while the room is playing."
   preview-hand-built: "<yellow>Only a generated map can be previewed."
@@ -567,12 +571,20 @@ spectate:
   send-failed: "<red>You could not be sent to the match."
   mode-failed: "<red>You could not enter spectator mode."
   restore-failed: "<red>Your belongings could not be returned. Rejoin the server to try again."
+  left: "<yellow>You stopped watching. You are in the lobby; /narena leave again takes you home."
+  # When the lobby cannot take them: said before they are sent home.
+  left-home: "<yellow>You stopped watching. /narena leave has nothing more to leave."
 
 # A running match. team-separator joins team numbers.
 match:
   arena-unavailable: "<red>Arena <arena> is not available, so the match could not start."
   arena-not-prepared: "<red>Arena <arena> could not be prepared, so the match could not start."
-  left: "<yellow>You left the match."
+  # left: back in the lobby; left-room: with the match's room, by /narena leave; left-home:
+  # sent home, by teleporting out or because the lobby could not take them, and said before
+  # that restore, whose failure is reported after it.
+  left: "<yellow>You left the match. You are in the lobby; /narena leave again takes you home."
+  left-room: "<yellow>You left the match and its room. You are in the lobby; /narena leave again takes you home."
+  left-home: "<yellow>You left the match. /narena leave has nothing more to leave."
   player-out: "<gray><player> is out for this round."
   player-left: "<gray><player> left the match."
   # Within match.rejoin-grace-seconds a disconnected player is still in the match.
