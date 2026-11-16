@@ -16,14 +16,16 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param activeSeconds       a viewer sees fog only this long after they last moved, looked,
  *                            chatted or used a command
  * @param fogIntervalTicks    ticks between two draws
- * @param perBlock            particles on each ring block in a draw
- * @param maxParticles        most particles one Java viewer gets in a draw
+ * @param fogSize             the dust's size
+ * @param perBlock            particles on each frame block in a draw, sent as one packet per block
+ * @param maxParticles        most particles one Java viewer gets in a draw, counted as the
+ *                            particles its client spawns, not the packets
  * @param bedrockMaxParticles most particles one Bedrock viewer gets in a draw; Geyser sends
  *                            each one as its own packet
  * @param colours             the fog colour of each room state, as {@code 0xRRGGBB}
  */
 public record PadSettings(boolean enabled, int joinSeconds, boolean fog, int fogDistance, int activeSeconds,
-        int fogIntervalTicks, int perBlock, int maxParticles, int bedrockMaxParticles,
+        int fogIntervalTicks, double fogSize, int perBlock, int maxParticles, int bedrockMaxParticles,
         Map<PadState, Integer> colours) {
 
     public static final String SECTION = "lobby.pads";
@@ -32,10 +34,19 @@ public record PadSettings(boolean enabled, int joinSeconds, boolean fog, int fog
     public static final int MAX_JOIN_SECONDS = 30;
     public static final int DEFAULT_DISTANCE = 16;
     public static final int DEFAULT_ACTIVE_SECONDS = 30;
-    public static final int DEFAULT_INTERVAL_TICKS = 10;
-    public static final int DEFAULT_PER_BLOCK = 1;
-    public static final int DEFAULT_MAX_PARTICLES = 48;
-    public static final int DEFAULT_BEDROCK_MAX_PARTICLES = 16;
+    public static final int DEFAULT_INTERVAL_TICKS = 7;
+    public static final double DEFAULT_SIZE = 2.0;
+    public static final double MIN_SIZE = 0.5;
+    public static final double MAX_SIZE = 4.0;
+    public static final int DEFAULT_PER_BLOCK = 6;
+    public static final int MAX_PER_BLOCK = 12;
+    /** Three whole pads of the default fog: 24 frame blocks of 6 particles each. */
+    public static final int DEFAULT_MAX_PARTICLES = 432;
+    public static final int MIN_MAX_PARTICLES = 24;
+    public static final int MAX_MAX_PARTICLES = 1152;
+    /** Two particles on each of one pad's 24 frame blocks. */
+    public static final int DEFAULT_BEDROCK_MAX_PARTICLES = 48;
+    public static final int MAX_BEDROCK_MAX_PARTICLES = 288;
 
     /** The bundled colours. */
     public static final Map<PadState, Integer> DEFAULT_COLOURS = Map.of(
@@ -46,7 +57,7 @@ public record PadSettings(boolean enabled, int joinSeconds, boolean fog, int fog
             PadState.PLAYING, 0x5AA0FF);
 
     public static final PadSettings DEFAULTS = new PadSettings(true, DEFAULT_JOIN_SECONDS, true, DEFAULT_DISTANCE,
-            DEFAULT_ACTIVE_SECONDS, DEFAULT_INTERVAL_TICKS, DEFAULT_PER_BLOCK, DEFAULT_MAX_PARTICLES,
+            DEFAULT_ACTIVE_SECONDS, DEFAULT_INTERVAL_TICKS, DEFAULT_SIZE, DEFAULT_PER_BLOCK, DEFAULT_MAX_PARTICLES,
             DEFAULT_BEDROCK_MAX_PARTICLES, DEFAULT_COLOURS);
 
     public PadSettings {
@@ -84,9 +95,11 @@ public record PadSettings(boolean enabled, int joinSeconds, boolean fog, int fog
                 ranged(fog, "distance", DEFAULT_DISTANCE, 4, 64, warnings),
                 ranged(fog, "active-seconds", DEFAULT_ACTIVE_SECONDS, 5, 600, warnings),
                 ranged(fog, "interval-ticks", DEFAULT_INTERVAL_TICKS, 5, 40, warnings),
-                ranged(fog, "per-block", DEFAULT_PER_BLOCK, 1, 4, warnings),
-                ranged(fog, "max-particles", DEFAULT_MAX_PARTICLES, 8, 128, warnings),
-                ranged(fog, "bedrock-max-particles", DEFAULT_BEDROCK_MAX_PARTICLES, 0, 128, warnings),
+                size(fog, warnings),
+                ranged(fog, "per-block", DEFAULT_PER_BLOCK, 1, MAX_PER_BLOCK, warnings),
+                ranged(fog, "max-particles", DEFAULT_MAX_PARTICLES, MIN_MAX_PARTICLES, MAX_MAX_PARTICLES, warnings),
+                ranged(fog, "bedrock-max-particles", DEFAULT_BEDROCK_MAX_PARTICLES, 0, MAX_BEDROCK_MAX_PARTICLES,
+                        warnings),
                 colours);
     }
 
@@ -112,6 +125,26 @@ public record PadSettings(boolean enabled, int joinSeconds, boolean fog, int fog
             return clamped;
         }
         return number;
+    }
+
+    private static double size(ConfigurationSection fog, Consumer<String> warnings) {
+        if (fog == null || !fog.contains("size")) {
+            return DEFAULT_SIZE;
+        }
+        Object value = fog.get("size");
+        String path = fog.getCurrentPath() + ".size";
+        if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())) {
+            warnings.accept(path + " must be a number from " + MIN_SIZE + " to " + MAX_SIZE + "; using "
+                    + DEFAULT_SIZE + ".");
+            return DEFAULT_SIZE;
+        }
+        double size = number.doubleValue();
+        if (size < MIN_SIZE || size > MAX_SIZE) {
+            double clamped = Math.clamp(size, MIN_SIZE, MAX_SIZE);
+            warnings.accept(path + " must be from " + MIN_SIZE + " to " + MAX_SIZE + "; using " + clamped + ".");
+            return clamped;
+        }
+        return size;
     }
 
     private static Integer colour(String value) {

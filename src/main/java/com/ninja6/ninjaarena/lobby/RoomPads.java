@@ -8,6 +8,7 @@ import com.ninja6.ninjaarena.room.Room;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -27,7 +28,6 @@ import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.random.RandomGenerator;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Color;
@@ -69,9 +69,10 @@ import org.bukkit.persistence.PersistentDataType;
  * down.
  *
  * <p><b>Fog.</b> Each draw, a viewer in the lobby world who moved, looked, chatted or used a
- * command in the last {@link PadSettings#activeSeconds()} gets dust on the ring of each
- * assigned pad within {@link PadSettings#fogDistance()}, nearest first, up to their cap; a
- * ring the cap cuts into is thinned evenly all round.
+ * command in the last {@link PadSettings#activeSeconds()} gets dust on the gold frame round
+ * the plate of each assigned pad within {@link PadSettings#fogDistance()}, nearest first, up
+ * to their cap: one call a frame block, with {@link PadSettings#perBlock()} particles
+ * spread round the block's middle. A ring the cap cuts into is thinned evenly all round.
  * Particles are sent to that viewer only. Holds nothing between draws.
  *
  * <p>Labels are disposable text displays, tagged and not saved with the chunk, like the
@@ -97,7 +98,11 @@ public final class RoomPads implements Listener, AutoCloseable {
     static final NamespacedKey KEY = new NamespacedKey("ninjaarena", "room_pad");
     /** How many blocks above the plate's floor block a player's feet count as on it: a jump. */
     static final int REACH = 3;
-    static final float SIZE = 1.0f;
+    /** How far above the floor block the fog is centred. */
+    static final double HEIGHT = 1.15;
+    /** The spread of the particles round a block's middle, across and up. */
+    static final double SPREAD = 0.25;
+    static final double SPREAD_Y = 0.04;
     private static final Title.Times TIMES = Title.Times.times(Duration.ZERO, Duration.ofMillis(1500),
             Duration.ofMillis(250));
 
@@ -130,7 +135,6 @@ public final class RoomPads implements Listener, AutoCloseable {
     private final Predicate<UUID> bedrock;
     private final PadSettings settings;
     private final LongSupplier clock;
-    private final RandomGenerator random;
     private final Consumer<String> log;
 
     private final Map<Room, Integer> padOf = new IdentityHashMap<>();
@@ -154,7 +158,7 @@ public final class RoomPads implements Listener, AutoCloseable {
      */
     public RoomPads(World world, Supplier<LobbyLayout> layout, BooleanSupplier building, PadRooms rooms,
             BiConsumer<Location, Runnable> load, BoardTickets tickets, Predicate<UUID> bedrock,
-            PadSettings settings, LongSupplier clock, RandomGenerator random, Consumer<String> log) {
+            PadSettings settings, LongSupplier clock, Consumer<String> log) {
         this.world = Objects.requireNonNull(world, "world");
         this.layout = Objects.requireNonNull(layout, "layout");
         this.building = Objects.requireNonNull(building, "building");
@@ -164,7 +168,6 @@ public final class RoomPads implements Listener, AutoCloseable {
         this.bedrock = Objects.requireNonNull(bedrock, "bedrock");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.clock = Objects.requireNonNull(clock, "clock");
-        this.random = Objects.requireNonNull(random, "random");
         this.log = Objects.requireNonNull(log, "log");
     }
 
@@ -418,8 +421,9 @@ public final class RoomPads implements Listener, AutoCloseable {
     }
 
     /**
-     * Sends one draw of fog to the viewer: the rings of assigned pads within reach, nearest
-     * first, at most {@code cap} particles.
+     * Sends one draw of fog to the viewer: the frame rings of assigned pads within reach,
+     * nearest first, at most {@code cap} particles. Each frame block gets one call with its
+     * particle count, which a Java client receives as one packet.
      *
      * @return how many particles were sent
      */
@@ -451,42 +455,44 @@ public final class RoomPads implements Listener, AutoCloseable {
                 break;
             }
             Particle.DustOptions dust = new Particle.DustOptions(
-                    Color.fromRGB(settings.colour(PadState.of(roomAt.get(pad.index())))), SIZE);
+                    Color.fromRGB(settings.colour(PadState.of(roomAt.get(pad.index())))), (float) settings.fogSize());
             List<int[]> ring = pad.ring();
-            for (int[] block : spread(ring, settings.perBlock(), cap - sent, draws)) {
-                viewer.spawnParticle(Particle.DUST, block[0] + random.nextDouble(),
-                        block[1] + 1.05 + random.nextDouble() * 0.25, block[2] + random.nextDouble(),
-                        1, 0, 0, 0, 0, dust);
-                sent++;
+            int[] counts = spread(ring.size(), settings.perBlock(), cap - sent, draws);
+            for (int i = 0; i < counts.length; i++) {
+                if (counts[i] == 0) {
+                    continue;
+                }
+                int[] block = ring.get(i);
+                viewer.spawnParticle(Particle.DUST, block[0] + 0.5, block[1] + HEIGHT, block[2] + 0.5, counts[i],
+                        SPREAD, SPREAD_Y, SPREAD, 0, dust, true);
+                sent += counts[i];
             }
         }
         return sent;
     }
 
     /**
-     * The ring blocks that get a particle in a draw: {@code perBlock} rounds of the ring, or,
-     * when the budget is smaller, as many whole rounds as it covers and the rest spaced evenly
-     * all round, so a capped draw thins the ring instead of cutting it short. The spaced part
-     * starts one block further on each draw, so over a few draws every block gets as much.
+     * How many particles each of a ring's {@code size} blocks gets in a draw: {@code perBlock}
+     * each, or, when the budget is smaller, the same number each and the rest one apiece on
+     * blocks spaced evenly all round, so a capped draw thins the ring instead of cutting it
+     * short and no two blocks differ by more than one particle. The spaced part starts one
+     * block further on each draw, so over a few draws every block gets as much.
      */
-    static List<int[]> spread(List<int[]> ring, int perBlock, int budget, long draw) {
-        int size = ring.size();
+    static int[] spread(int size, int perBlock, int budget, long draw) {
+        int[] counts = new int[size];
+        if (size == 0) {
+            return counts;
+        }
         long total = (long) size * perBlock;
         int count = (int) Math.min(total, Math.max(0, budget));
         int offset = (int) Math.floorMod(draw, (long) size);
-        // Whole rounds first, then the rest spaced evenly over one round from the rotating start,
-        // so no two blocks differ by more than one particle in a draw.
-        int rounds = count / size;
+        Arrays.fill(counts, count / size);
         int rest = count % size;
-        List<int[]> blocks = new ArrayList<>(count);
-        for (int round = 0; round < rounds; round++) {
-            blocks.addAll(ring);
-        }
         for (int k = 0; k < rest; k++) {
             long along = (long) k * size / rest;
-            blocks.add(ring.get((int) ((along + offset) % size)));
+            counts[(int) ((along + offset) % size)]++;
         }
-        return blocks;
+        return counts;
     }
 
     void markActive(UUID player) {

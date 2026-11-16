@@ -24,8 +24,11 @@ Java 25, and does not run on Folia.
   joins a public room, sends a join request to an ask-to-join room or says an invite-only
   room is invite only, through the usual join checks; the countdown is a title. Only lobby
   members in no room use pads. Each pad has a label with the host, player count and state,
-  and dust fog on its ring coloured by the state, sent per viewer for nearby pads to
-  recently active players, with per-viewer caps for Java and Bedrock. Labels are removed
+  and dust fog on the gold frame round its plate coloured by the state, sent per viewer for
+  nearby pads to recently active players: every 0.35 seconds, six size-2.0 particles centred
+  on each frame block in one packet, at the values approved in a live trial. Per-viewer caps
+  count particles: three pads a draw for Java, and two particles a frame block of one pad
+  for Bedrock, whose client gets each particle as its own packet. Labels are removed
   when a room closes, while the lobby is built and on disable. The obsidian lobby has no
   pads, so nothing changes there.
 - Ask-to-join rooms (`privacy: ask`), with expiring requests, a per-player per-room

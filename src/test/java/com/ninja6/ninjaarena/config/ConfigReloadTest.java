@@ -778,6 +778,29 @@ class ConfigReloadTest {
     }
 
     @Test
+    void padFogRangesFitTheTrialValuesAndNeedARestart() throws Exception {
+        write("lobby:\n  pads:\n    fog:\n      size: 4.5\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("lobby.pads.fog.size: must be from 0.5 to 4.0"));
+        write("lobby:\n  pads:\n    fog:\n      per-block: 13\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("lobby.pads.fog.per-block: must be from 1.0 to 12.0"));
+        write("lobby:\n  pads:\n    fog:\n      max-particles: 1153\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("lobby.pads.fog.max-particles: must be from 24.0 to 1152.0"));
+        write("lobby:\n  pads:\n    fog:\n      bedrock-max-particles: 289\n", EMPTY_KIT);
+        assertTrue(assertThrows(ReloadYaml.Invalid.class, this::candidate).getMessage()
+                .contains("lobby.pads.fog.bedrock-max-particles: must be from 0.0 to 288.0"));
+        write("lobby:\n  pads:\n    fog:\n      interval-ticks: 7\n      size: 3\n      per-block: 12\n"
+                + "      max-particles: 1152\n      bedrock-max-particles: 288\n", EMPTY_KIT);
+        var report = String.join("\n", reload.reload());
+        assertTrue(report.contains("lobby.pads.fog.size (restart required)"), report);
+        assertTrue(report.contains("lobby.pads.fog.per-block (restart required)"), report);
+        assertEquals(2.0, target.published.getDouble("lobby.pads.fog.size"));
+        assertEquals(6, target.published.getInt("lobby.pads.fog.per-block"));
+    }
+
+    @Test
     void shadowStalkerSettingsAreValidatedAndNeedARestart() throws Exception {
         write("director:\n  shadow-stalker:\n    blink:\n      distance: 30.0\n", EMPTY_KIT);
         var failure = assertThrows(ReloadYaml.Invalid.class, this::candidate);

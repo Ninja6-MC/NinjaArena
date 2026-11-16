@@ -572,23 +572,30 @@ lobby:
     # only (invited players join). Moving on the plate keeps the countdown; stepping off
     # cancels it. 1..30.
     join-seconds: 5
-    # Dust on the ring of each room's pad, coloured by the room's state. Sent to each viewer
-    # only, for pads within distance blocks (4..64), and only while they moved, looked,
-    # chatted or used a command in the last active-seconds (5..600). A draw every
-    # interval-ticks (5..40) puts per-block particles (1..4) on each of the 16 ring blocks,
-    # nearest pad first, up to max-particles a viewer (8..128). Bedrock viewers, whose client
-    # gets each particle translated by Geyser, get bedrock-max-particles (0..128, 0 for
-    # none). The defaults send a Java viewer at most 96 and a Bedrock viewer at most 32
-    # particles a second: estimated from the packet sizes, about 6 KB a second for Java and
-    # under 4 KB for Bedrock before its batch compression.
+    # Dust on the gold frame round each room's pad, coloured by the room's state. Sent to
+    # each viewer only, for pads within distance blocks (4..64), and only while they moved,
+    # looked, chatted or used a command in the last active-seconds (5..600). A draw every
+    # interval-ticks (5..40) puts per-block particles (1..12) of dust of the given size
+    # (0.5..4.0) round the middle of each of the frame's 24 blocks, a little above the
+    # floor, nearest pad first. A block's particles go in one packet to a Java viewer, but
+    # Geyser sends a Bedrock viewer each particle as its own packet. Caps count particles:
+    # up to max-particles a draw for a Java viewer (24..1152) and bedrock-max-particles for
+    # a Bedrock viewer (0..288, 0 for none); a pad the cap cuts into gets fewer on every
+    # block rather than a cut ring. At the defaults one pad is 144 particles a draw: a Java
+    # viewer gets 24 packets a draw, about 69 a second or 4 KB a second, and up to three
+    # pads; a Bedrock viewer gets 2 particles a block on the nearest pad, 48 packets a draw
+    # or about 137 a second. Estimated from the packet sizes, not measured on a client: at
+    # most about 12 KB a second for Java, and at most about 17 KB for Bedrock before its
+    # batch compression.
     fog:
       enabled: true
       distance: 16
       active-seconds: 30
-      interval-ticks: 10
-      per-block: 1
-      max-particles: 48
-      bedrock-max-particles: 16
+      interval-ticks: 7
+      size: 2.0
+      per-block: 6
+      max-particles: 432
+      bedrock-max-particles: 48
       # "#RRGGBB" for each state.
       colours:
         open: "#55FF55"

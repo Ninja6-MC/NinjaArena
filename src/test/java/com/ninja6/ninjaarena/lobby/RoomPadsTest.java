@@ -18,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SplittableRandom;
 import java.util.UUID;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
@@ -80,14 +79,13 @@ class RoomPadsTest {
             @Override public void trigger(Player player, Room room) {
                 triggered.add(player.getName() + "->" + name(room.host()));
             }
-        }, (at, ready) -> ready.run(), tickets, bedrock::contains, settings, () -> now, new SplittableRandom(1),
-                message -> { });
+        }, (at, ready) -> ready.run(), tickets, bedrock::contains, settings, () -> now, message -> { });
     }
 
     private static PadSettings fog(int distance, int perBlock, int max, int bedrockMax) {
         PadSettings d = PadSettings.DEFAULTS;
         return new PadSettings(true, d.joinSeconds(), true, distance, d.activeSeconds(), d.fogIntervalTicks(),
-                perBlock, max, bedrockMax, d.colours());
+                d.fogSize(), perBlock, max, bedrockMax, d.colours());
     }
 
     private Room room(UUID host, Privacy privacy) {
@@ -158,6 +156,7 @@ class RoomPadsTest {
         final List<String> titles = new ArrayList<>();
         int cleared;
         int particles;
+        final List<Object[]> calls = new ArrayList<>();
         final Player proxy;
 
         FakePlayer(UUID id, String name) {
@@ -174,7 +173,11 @@ class RoomPadsTest {
                             yield null;
                         }
                         case "clearTitle" -> { cleared++; yield null; }
-                        case "spawnParticle" -> { particles++; yield null; }
+                        case "spawnParticle" -> {
+                            calls.add(args.clone());
+                            particles += (Integer) args[4];
+                            yield null;
+                        }
                         default -> throw new UnsupportedOperationException(method.getName());
                     });
         }
@@ -544,89 +547,203 @@ class RoomPadsTest {
         RoomPads pads = pads();
         FakePlayer bob = player(BOB, "Bob");
         FakePlayer dave = player(DAVE, "Dave");
+        stand(bob, 0, 2, 0, 2);
+        stand(dave, 0, 2, 0, 2);
         pads.tick();
         pads.drawFog();
         assertEquals(0, bob.particles, "no activity yet");
         pads.markActive(BOB);
         now = 30_000;
         pads.drawFog();
-        assertEquals(16, bob.particles, "one particle on each of the ring's 16 blocks");
+        assertEquals(144, bob.particles, "six particles on each of the frame's 24 blocks");
+        assertEquals(24, bob.calls.size(), "one call a block");
         assertEquals(0, dave.particles);
         now = 30_001;
         pads.drawFog();
-        assertEquals(16, bob.particles, "idle longer than active-seconds");
+        assertEquals(144, bob.particles, "idle longer than active-seconds");
     }
 
     @Test
-    void fogStopsAtTheDistanceAndTheParticleCaps() {
+    void theDefaultsAreTheTrialValues() {
+        PadSettings d = PadSettings.DEFAULTS;
+        assertEquals(7, d.fogIntervalTicks(), "a draw every 0.35 seconds");
+        assertEquals(2.0, d.fogSize());
+        assertEquals(6, d.perBlock());
+        assertEquals(1.15, RoomPads.HEIGHT);
+        assertEquals(0.25, RoomPads.SPREAD);
+        assertEquals(0.04, RoomPads.SPREAD_Y);
+    }
+
+    /** Checks every call of a draw against the trial: one per frame block, centred, with its count and spread. */
+    private static void assertTrialCalls(FakePlayer viewer, LobbyPad pad, int perBlock, int colour) {
+        List<int[]> ring = pad.ring();
+        assertEquals(ring.size(), viewer.calls.size());
+        Set<String> blocks = new HashSet<>();
+        for (Object[] call : viewer.calls) {
+            assertEquals(org.bukkit.Particle.DUST, call[0]);
+            double x = (Double) call[1];
+            double y = (Double) call[2];
+            double z = (Double) call[3];
+            assertEquals(0.5, x - Math.floor(x), 1e-9, "centred on the block");
+            assertEquals(0.5, z - Math.floor(z), 1e-9, "centred on the block");
+            assertEquals(pad.frame().minY() + 1.15, y, 1e-9, "about 1.15 above the floor");
+            assertEquals(perBlock, call[4]);
+            assertEquals(0.25, call[5]);
+            assertEquals(0.04, call[6]);
+            assertEquals(0.25, call[7]);
+            assertEquals(0.0, call[8], "speed 0");
+            org.bukkit.Particle.DustOptions dust = (org.bukkit.Particle.DustOptions) call[9];
+            assertEquals(2.0f, dust.getSize());
+            assertEquals(colour, dust.getColor().asRGB());
+            assertEquals(Boolean.TRUE, call[10], "forced, as in the trial");
+            int bx = (int) Math.floor(x);
+            int bz = (int) Math.floor(z);
+            assertTrue(pad.frame().contains(bx, pad.frame().minY(), bz), "on the frame");
+            assertFalse(pad.plate().contains(bx, pad.plate().minY(), bz), "not on the plate");
+            assertTrue(blocks.add(bx + "," + bz), "one call a block");
+        }
+        Set<String> expected = new HashSet<>();
+        ring.forEach(b -> expected.add(b[0] + "," + b[2]));
+        assertEquals(expected, blocks, "every block of the frame's ring");
+    }
+
+    @Test
+    void fogLandsOnTheFrameRingOfAGeneratedPadAsOneCallABlock() {
         room(ALICE, Privacy.PUBLIC);
+        RoomPads pads = pads();
+        FakePlayer bob = player(BOB, "Bob");
+        stand(bob, 0, 2, 0, 2);
+        pads.tick();
+        assertEquals(144, pads.drawFor(bob.proxy, pads.cap(BOB)));
+        assertTrialCalls(bob, layout.pads().get(0), 6, PadSettings.DEFAULTS.colour(PadState.OPEN));
+    }
+
+    @Test
+    void fogLandsOnTheFrameRingOfAPadInTheObsidianBuild() {
+        // The bundled obsidian build has no pads; a pad placed in it, with a frame two blocks
+        // wider than its plate all round, still gets its fog on the frame's outer ring.
+        LobbyLayout obsidian = LobbyLayout.bundled();
+        ArenaBounds area = obsidian.roomArea();
+        int y = area.minY() - 1;
+        ArenaBounds frame = new ArenaBounds(area.minX(), y, area.minZ(), area.minX() + 6, y, area.minZ() + 6);
+        ArenaBounds plate = new ArenaBounds(area.minX() + 2, y, area.minZ() + 2, area.minX() + 4, y, area.minZ() + 4);
+        LobbyPad pad = new LobbyPad(0, LobbyPad.Side.NORTH, frame, plate,
+                new com.ninja6.ninjaarena.arena.ArenaPoint(area.minX() + 3.5, y + 3, area.minZ() + 3.5, 0, 0));
+        layout = new LobbyLayout(obsidian.build(), obsidian.bounds(), obsidian.spawn(), obsidian.roomArea(),
+                obsidian.shopArea(), obsidian.boards(), List.of(pad));
+        room(ALICE, Privacy.ASK);
+        RoomPads pads = pads();
+        FakePlayer bob = player(BOB, "Bob");
+        stand(bob, 0, 1, 0, 1);
+        pads.tick();
+        assertEquals(144, pads.drawFor(bob.proxy, pads.cap(BOB)));
+        assertTrialCalls(bob, pad, 6, PadSettings.DEFAULTS.colour(PadState.ASK));
+    }
+
+    @Test
+    void theJavaCapLeavesOnePadWholeAndBoundsACrowdedLobby() {
+        room(ALICE, Privacy.PUBLIC);
+        RoomPads one = pads(fog(64, 6, PadSettings.DEFAULT_MAX_PARTICLES, PadSettings.DEFAULT_BEDROCK_MAX_PARTICLES));
+        FakePlayer viewer = player(new UUID(0, 9), "Viewer");
+        one.tick();
+        assertEquals(144, one.drawFor(viewer.proxy, one.cap(viewer.id)), "a single pad is not thinned");
+        assertTrue(viewer.calls.stream().allMatch(c -> (Integer) c[4] == 6));
         room(CAROL, Privacy.ASK);
         room(DAVE, Privacy.INVITE);
         Room fourth = room(BOB, Privacy.PUBLIC);
         fourth.setPlaying(true);
-        RoomPads pads = pads(fog(64, 2, 48, 16));
-        FakePlayer viewer = player(new UUID(0, 9), "Viewer");
-        pads.tick();
-        assertEquals(48, pads.drawFor(viewer.proxy, pads.cap(viewer.proxy.getUniqueId())));
-        bedrock.add(viewer.id);
-        assertEquals(16, pads.drawFor(viewer.proxy, pads.cap(viewer.id)));
-        RoomPads near = pads(fog(4, 1, 128, 128));
+        RoomPads crowded = pads(fog(64, 6, PadSettings.DEFAULT_MAX_PARTICLES,
+                PadSettings.DEFAULT_BEDROCK_MAX_PARTICLES));
+        crowded.tick();
+        viewer.calls.clear();
+        assertEquals(432, crowded.drawFor(viewer.proxy, crowded.cap(viewer.id)), "three whole pads, then the cap");
+        assertEquals(72, viewer.calls.size(), "72 packets: 24 a pad");
+        assertTrue(viewer.calls.stream().allMatch(c -> (Integer) c[4] == 6));
+        RoomPads near = pads(fog(4, 6, 1152, 288));
         near.tick();
         stand(viewer, 0, 2, 0, 2);
-        assertEquals(16, near.drawFor(viewer.proxy, 128), "only the pad underfoot is within 4 blocks");
+        assertEquals(144, near.drawFor(viewer.proxy, 1152), "only the pad underfoot is within 4 blocks");
         assertEquals(0, near.drawFor(viewer.proxy, 0));
+    }
+
+    @Test
+    void theBedrockCapThinsTheNearestPadEvenly() {
+        room(ALICE, Privacy.PUBLIC);
+        room(CAROL, Privacy.ASK);
+        RoomPads pads = pads(fog(64, 6, PadSettings.DEFAULT_MAX_PARTICLES, PadSettings.DEFAULT_BEDROCK_MAX_PARTICLES));
+        FakePlayer viewer = player(new UUID(0, 9), "Viewer");
+        bedrock.add(viewer.id);
+        stand(viewer, 0, 2, 0, 2);
+        pads.tick();
+        assertEquals(48, pads.cap(viewer.id));
+        assertEquals(48, pads.drawFor(viewer.proxy, pads.cap(viewer.id)));
+        assertTrialCalls(viewer, layout.pads().get(0), 2, PadSettings.DEFAULTS.colour(PadState.OPEN));
+        RoomPads none = pads(fog(64, 6, PadSettings.DEFAULT_MAX_PARTICLES, 0));
+        none.tick();
+        assertEquals(0, none.drawFor(viewer.proxy, none.cap(viewer.id)));
     }
 
     @Test
     void aCappedDrawThinsTheRingOnAllFourSidesAndRotates() {
         LobbyPad pad = layout.pads().get(0);
         List<int[]> ring = pad.ring();
-        ArenaBounds plate = pad.plate();
-        for (int[] budget : new int[][] {{2, 16}, {4, 48}, {1, 8}, {3, 5}}) {
-            List<int[]> blocks = RoomPads.spread(ring, budget[0], budget[1], 0);
-            assertEquals(Math.min(budget[1], ring.size() * budget[0]), blocks.size());
-            assertTrue(blocks.stream().anyMatch(b -> b[2] == plate.minZ()), "north");
-            assertTrue(blocks.stream().anyMatch(b -> b[0] == plate.maxX()), "east");
-            assertTrue(blocks.stream().anyMatch(b -> b[2] == plate.maxZ()), "south");
-            assertTrue(blocks.stream().anyMatch(b -> b[0] == plate.minX()), "west");
+        ArenaBounds frame = pad.frame();
+        for (int[] budget : new int[][] {{6, 48}, {6, 100}, {1, 8}, {3, 5}, {12, 24}}) {
+            int[] counts = RoomPads.spread(ring.size(), budget[0], budget[1], 0);
+            assertEquals(Math.min(budget[1], ring.size() * budget[0]), java.util.Arrays.stream(counts).sum());
+            List<int[]> lit = new ArrayList<>();
+            for (int i = 0; i < counts.length; i++) {
+                if (counts[i] > 0) {
+                    lit.add(ring.get(i));
+                }
+            }
+            assertTrue(lit.stream().anyMatch(b -> b[2] == frame.minZ()), "north");
+            assertTrue(lit.stream().anyMatch(b -> b[0] == frame.maxX()), "east");
+            assertTrue(lit.stream().anyMatch(b -> b[2] == frame.maxZ()), "south");
+            assertTrue(lit.stream().anyMatch(b -> b[0] == frame.minX()), "west");
         }
-        assertEquals(16, RoomPads.spread(ring, 2, 16, 0).stream().map(b -> b[0] + "," + b[2]).distinct().count());
-        Set<String> covered = new HashSet<>();
-        for (int draw = 0; draw < 4; draw++) {
-            RoomPads.spread(ring, 1, 4, draw).forEach(b -> covered.add(b[0] + "," + b[2]));
+        int[] bedrockDraw = RoomPads.spread(ring.size(), 6, 48, 0);
+        assertTrue(java.util.Arrays.stream(bedrockDraw).allMatch(c -> c == 2), "48 is two on every block");
+        Set<Integer> covered = new HashSet<>();
+        for (int draw = 0; draw < 6; draw++) {
+            int[] counts = RoomPads.spread(ring.size(), 6, 4, draw);
+            for (int i = 0; i < counts.length; i++) {
+                if (counts[i] > 0) {
+                    covered.add(i);
+                }
+            }
         }
-        assertEquals(16, covered.size(), "over a few draws the whole ring gets fog");
-        List<int[]> uncapped = RoomPads.spread(ring, 2, 100, 0);
-        assertEquals(32, uncapped.size());
-        for (int[] block : ring) {
-            assertEquals(2, uncapped.stream().filter(b -> b == block).count());
-        }
+        assertEquals(24, covered.size(), "over a few draws the whole ring gets fog");
+        assertTrue(java.util.Arrays.stream(RoomPads.spread(ring.size(), 6, 1000, 0)).allMatch(c -> c == 6));
+        assertEquals(0, java.util.Arrays.stream(RoomPads.spread(ring.size(), 6, 0, 0)).sum());
     }
 
     @Test
     void everyCappedDrawIsEvenAllRound() {
         LobbyPad pad = layout.pads().get(0);
         List<int[]> ring = pad.ring();
-        ArenaBounds plate = pad.plate();
-        for (int perBlock = 1; perBlock <= 4; perBlock++) {
-            for (int budget = 1; budget <= 128; budget++) {
+        ArenaBounds frame = pad.frame();
+        for (int perBlock = 1; perBlock <= PadSettings.MAX_PER_BLOCK; perBlock++) {
+            for (int budget = 1; budget <= ring.size() * perBlock + 4; budget++) {
                 for (int draw = 0; draw < ring.size(); draw++) {
-                    List<int[]> blocks = RoomPads.spread(ring, perBlock, budget, draw);
+                    int[] counts = RoomPads.spread(ring.size(), perBlock, budget, draw);
                     String at = perBlock + "/" + budget + "/" + draw;
-                    assertEquals(Math.min(budget, ring.size() * perBlock), blocks.size(), at);
-                    int[] counts = new int[ring.size()];
-                    for (int[] block : blocks) {
-                        counts[ring.indexOf(block)]++;
-                    }
+                    assertEquals(Math.min(budget, ring.size() * perBlock), java.util.Arrays.stream(counts).sum(), at);
                     int max = java.util.Arrays.stream(counts).max().orElseThrow();
                     int min = java.util.Arrays.stream(counts).min().orElseThrow();
                     assertTrue(max - min <= 1, at);
                     assertTrue(max <= perBlock, at);
                     if (budget >= 4) {
-                        assertTrue(blocks.stream().anyMatch(b -> b[2] == plate.minZ()), "north " + at);
-                        assertTrue(blocks.stream().anyMatch(b -> b[0] == plate.maxX()), "east " + at);
-                        assertTrue(blocks.stream().anyMatch(b -> b[2] == plate.maxZ()), "south " + at);
-                        assertTrue(blocks.stream().anyMatch(b -> b[0] == plate.minX()), "west " + at);
+                        List<int[]> lit = new ArrayList<>();
+                        for (int i = 0; i < counts.length; i++) {
+                            if (counts[i] > 0) {
+                                lit.add(ring.get(i));
+                            }
+                        }
+                        assertTrue(lit.stream().anyMatch(b -> b[2] == frame.minZ()), "north " + at);
+                        assertTrue(lit.stream().anyMatch(b -> b[0] == frame.maxX()), "east " + at);
+                        assertTrue(lit.stream().anyMatch(b -> b[2] == frame.maxZ()), "south " + at);
+                        assertTrue(lit.stream().anyMatch(b -> b[0] == frame.minX()), "west " + at);
                     }
                 }
             }
@@ -639,15 +756,19 @@ class RoomPadsTest {
         assertEquals(PadSettings.DEFAULTS, PadSettings.from(config.getConfigurationSection("lobby.pads"), m -> { }));
         config.set("lobby.pads.join-seconds", 99);
         config.set("lobby.pads.fog.max-particles", 2);
+        config.set("lobby.pads.fog.size", 9.0);
+        config.set("lobby.pads.fog.per-block", 20);
         config.set("lobby.pads.fog.colours.open", "#123456");
         config.set("lobby.pads.fog.colours.full", "red");
         List<String> warnings = new ArrayList<>();
         PadSettings read = PadSettings.from(config.getConfigurationSection("lobby.pads"), warnings::add);
         assertEquals(30, read.joinSeconds());
-        assertEquals(8, read.maxParticles());
+        assertEquals(PadSettings.MIN_MAX_PARTICLES, read.maxParticles());
+        assertEquals(PadSettings.MAX_SIZE, read.fogSize());
+        assertEquals(PadSettings.MAX_PER_BLOCK, read.perBlock());
         assertEquals(0x123456, read.colour(PadState.OPEN));
         assertEquals(0xFF5555, read.colour(PadState.FULL));
-        assertEquals(3, warnings.size());
+        assertEquals(5, warnings.size(), warnings.toString());
     }
 
     @Test

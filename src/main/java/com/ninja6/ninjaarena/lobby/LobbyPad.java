@@ -33,23 +33,37 @@ public record LobbyPad(int index, Side side, ArenaBounds frame, ArenaBounds plat
     }
 
     /**
-     * The plate's outer ring, one block wide, as {x, y, z} floor blocks: clockwise from the
-     * plate's north-west corner. The middle of the plate is not in it.
+     * The frame's outer ring, one block wide, as {x, y, z} floor blocks: clockwise from the
+     * frame's north-west corner. This is the gold border round the plate, where the fog is
+     * drawn; no block of the plate is in it while the frame is wider than the plate.
      */
     public List<int[]> ring() {
+        return ring(frame);
+    }
+
+    /** The outer ring of a box's floor, one block wide, clockwise from its north-west corner. */
+    static List<int[]> ring(ArenaBounds box) {
         List<int[]> ring = new ArrayList<>();
-        int y = plate.minY();
-        for (int x = plate.minX(); x < plate.maxX(); x++) {
-            ring.add(new int[] {x, y, plate.minZ()});
+        int y = box.minY();
+        if (box.minX() == box.maxX() || box.minZ() == box.maxZ()) {
+            for (int x = box.minX(); x <= box.maxX(); x++) {
+                for (int z = box.minZ(); z <= box.maxZ(); z++) {
+                    ring.add(new int[] {x, y, z});
+                }
+            }
+            return ring;
         }
-        for (int z = plate.minZ(); z < plate.maxZ(); z++) {
-            ring.add(new int[] {plate.maxX(), y, z});
+        for (int x = box.minX(); x < box.maxX(); x++) {
+            ring.add(new int[] {x, y, box.minZ()});
         }
-        for (int x = plate.maxX(); x > plate.minX(); x--) {
-            ring.add(new int[] {x, y, plate.maxZ()});
+        for (int z = box.minZ(); z < box.maxZ(); z++) {
+            ring.add(new int[] {box.maxX(), y, z});
         }
-        for (int z = plate.maxZ(); z > plate.minZ(); z--) {
-            ring.add(new int[] {plate.minX(), y, z});
+        for (int x = box.maxX(); x > box.minX(); x--) {
+            ring.add(new int[] {x, y, box.maxZ()});
+        }
+        for (int z = box.maxZ(); z > box.minZ(); z--) {
+            ring.add(new int[] {box.minX(), y, z});
         }
         return ring;
     }
