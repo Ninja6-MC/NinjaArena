@@ -20,9 +20,11 @@ import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 /**
- * Where the bundled lobby build stands in the lobby world and the spots marked in it, read
- * from {@value #SPEC}. Every position here is a lobby-world coordinate: the file's relative
- * coordinates are moved by its {@code origin}.
+ * Where the lobby build stands in the lobby world and the spots marked in it. The generated
+ * lobby makes its own ({@link GeneratedLobby#layout()}); the obsidian build of earlier
+ * versions, which servers keep until {@code lobby reset}, is read from {@value #SPEC}.
+ * Every position here is a lobby-world coordinate: the file's relative coordinates are
+ * moved by its {@code origin}.
  *
  * @param build    the blocks the bundled structure covers
  * @param bounds   where lobby members may be; it holds the build
@@ -30,9 +32,10 @@ import org.bukkit.configuration.file.YamlConfiguration;
  * @param roomArea where rooms are shown
  * @param shopArea where the shop stands
  * @param boards   board positions by name, in file order
+ * @param pads     the room pads, numbered from 0; none in the obsidian build
  */
 public record LobbyLayout(ArenaBounds build, ArenaBounds bounds, ArenaPoint spawn, ArenaBounds roomArea,
-        ArenaBounds shopArea, Map<String, ArenaPoint> boards) {
+        ArenaBounds shopArea, Map<String, ArenaPoint> boards, List<LobbyPad> pads) {
 
     /** The readable spec inside the plugin JAR. */
     public static final String SPEC = "lobby/obsidian-lobby.yml";
@@ -46,6 +49,7 @@ public record LobbyLayout(ArenaBounds build, ArenaBounds bounds, ArenaPoint spaw
         Objects.requireNonNull(roomArea, "roomArea");
         Objects.requireNonNull(shopArea, "shopArea");
         boards = Collections.unmodifiableMap(new LinkedHashMap<>(boards));
+        pads = List.copyOf(pads);
         if (!bounds.contains(build)) {
             throw new IllegalArgumentException("the lobby bounds must hold the whole build");
         }
@@ -57,9 +61,15 @@ public record LobbyLayout(ArenaBounds build, ArenaBounds bounds, ArenaPoint spaw
                 throw new IllegalArgumentException("board " + name + " must be inside the build");
             }
         });
+        for (int i = 0; i < pads.size(); i++) {
+            if (pads.get(i).index() != i || !build.contains(pads.get(i).frame())
+                    || !build.contains(pads.get(i).label())) {
+                throw new IllegalArgumentException("pad " + i + " must be numbered in order and inside the build");
+            }
+        }
     }
 
-    /** The layout of the build bundled in the plugin JAR. */
+    /** The layout of the obsidian build bundled in the plugin JAR. */
     public static LobbyLayout bundled() {
         try (InputStream in = LobbyLayout.class.getClassLoader().getResourceAsStream(SPEC)) {
             if (in == null) {
@@ -98,7 +108,7 @@ public record LobbyLayout(ArenaBounds build, ArenaBounds bounds, ArenaPoint spaw
             boards.put(name, point(section(boardSection, name), origin));
         }
         return new LobbyLayout(build, box(section(spec, "bounds"), origin), point(section(marks, "spawn"), origin),
-                box(section(marks, "room-area"), origin), box(section(marks, "shop-area"), origin), boards);
+                box(section(marks, "room-area"), origin), box(section(marks, "shop-area"), origin), boards, List.of());
     }
 
     /** Whether a location is inside the lobby bounds, in the lobby world. */

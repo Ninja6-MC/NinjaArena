@@ -342,7 +342,8 @@ intro:
   close: "Close"
   lobby-only: "<red>Enter the lobby to view the introduction."
 
-# The lobby world and /ninjaarena admin lobby. <label> is the command as typed.
+# The lobby world and /ninjaarena admin lobby. <label> is the command as typed, <pads> the
+# generated lobby's room pads and <count> the players in the lobby world.
 lobby:
   joined: "<green>You are in the lobby."
   join-failed: "<red>You could not join the lobby, so you were sent back."
@@ -355,7 +356,10 @@ lobby:
   edit-done: "<green>Lobby edit mode is off and the lobby is saved."
   edit-ended: "<yellow>Lobby edit mode ended because you left the lobby world."
   not-editing: "<red>You are not editing the lobby."
-  reset: "<green>The lobby is back to the bundled build. Changes made in edit mode are gone."
+  reset-queued: "<yellow>The lobby is generated again once nobody is in the lobby world; <count> there now."
+  reset-started: "<yellow>Generating the lobby with <pads> room pads."
+  reset: "<green>The lobby is generated with <pads> room pads. Changes made in edit mode are gone."
+  reset-busy: "<yellow>The lobby is being generated already."
   reset-failed: "<red>The lobby could not be reset: <reason>"
 
 # Rooms: /ninjaarena room and its subcommands. <host> and <player> are player names,

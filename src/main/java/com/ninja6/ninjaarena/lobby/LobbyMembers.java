@@ -51,7 +51,7 @@ public final class LobbyMembers {
     }
 
     private final Plugin plugin;
-    private final LobbyLayout layout;
+    private final Supplier<LobbyLayout> layout;
     private final Supplier<World> world;
     private final Predicate<UUID> elsewhere;
     private final Consumer<Player> empty;
@@ -69,6 +69,15 @@ public final class LobbyMembers {
      */
     public LobbyMembers(Plugin plugin, LobbyLayout layout, Supplier<World> world, Predicate<UUID> elsewhere,
             Consumer<Player> empty, Function<Player, RestoreResult> home) {
+        this(plugin, constant(layout), world, elsewhere, empty, home);
+    }
+
+    /**
+     * @param layout the layout in use, asked each time: a generated lobby that is placed
+     *               again changes it ({@link LobbyBuild#layout()})
+     */
+    public LobbyMembers(Plugin plugin, Supplier<LobbyLayout> layout, Supplier<World> world,
+            Predicate<UUID> elsewhere, Consumer<Player> empty, Function<Player, RestoreResult> home) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.layout = Objects.requireNonNull(layout, "layout");
         this.world = Objects.requireNonNull(world, "world");
@@ -83,12 +92,17 @@ public final class LobbyMembers {
     }
 
     public LobbyLayout layout() {
-        return layout;
+        return layout.get();
+    }
+
+    private static Supplier<LobbyLayout> constant(LobbyLayout layout) {
+        Objects.requireNonNull(layout, "layout");
+        return () -> layout;
     }
 
     /** The lobby spawn in the lobby world. */
     public Location spawn() {
-        return layout.spawn(world.get());
+        return layout().spawn(world.get());
     }
 
     /**

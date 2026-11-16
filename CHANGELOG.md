@@ -18,6 +18,14 @@ Java 25, and does not run on Folia.
   preparation until the match ends, for players and viewers. Each match uses its own
   scoreboard and gives every player their previous one back on leaving, a disconnect,
   the match end and plugin disable; the main scoreboard is never changed (#221).
+- A generated lobby sized to `arenas.max-active`: one room pad per arena slot, at most 32
+  in one ring, around a centre that grows with the pads, with corner squares, cushions and
+  a barrier wall with trees, assembled from bundled pieces (#219). It is generated once and
+  saved, and again only when the pad count changes or an admin runs `admin lobby reset`,
+  never while anyone is in the lobby world, placed over ticks within the map placement
+  budget. Regenerating replaces admin edits inside it. Bounds, spawn, shop area and boards
+  come from it. A server with the obsidian lobby keeps it, logs a notice once, and switches
+  with `admin lobby reset`.
 - Bedrock hotbar cooldown mappings for shuriken and smoke bombs in every team colour (#138).
 - A between-round shop screen with balance, categories, prices, remaining purchases
   and Ready, opened by `/narena shop` or the shop-area board. Paper dialogs use plain

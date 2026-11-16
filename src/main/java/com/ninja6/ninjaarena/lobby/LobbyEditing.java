@@ -5,7 +5,6 @@ import static com.ninja6.ninjaarena.message.Messages.msg;
 import com.ninja6.ninjaarena.command.LobbyCommands;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.PluginWorlds;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -13,7 +12,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
@@ -35,7 +33,6 @@ public final class LobbyEditing implements LobbyCommands {
     private final Supplier<Location> spawn;
     private final Predicate<UUID> busy;
     private final Runnable save;
-    private final Runnable afterReset;
     private final Logger logger;
     /** Editors, each with the place {@code done} returns them to, if they came from outside. */
     private final Map<UUID, Optional<Location>> editors = new HashMap<>();
@@ -45,15 +42,13 @@ public final class LobbyEditing implements LobbyCommands {
      * @param busy       whether a player is a lobby member, in a match, a waiting room or the
      *                   hub, or spectating; such a player cannot edit
      * @param save       saves the lobby world
-     * @param afterReset runs once the bundled build is back, to put players at the spawn
      */
     public LobbyEditing(LobbyBuild build, Supplier<Location> spawn, Predicate<UUID> busy, Runnable save,
-            Runnable afterReset, Logger logger) {
+            Logger logger) {
         this.build = Objects.requireNonNull(build, "build");
         this.spawn = Objects.requireNonNull(spawn, "spawn");
         this.busy = Objects.requireNonNull(busy, "busy");
         this.save = Objects.requireNonNull(save, "save");
-        this.afterReset = Objects.requireNonNull(afterReset, "afterReset");
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -101,19 +96,14 @@ public final class LobbyEditing implements LobbyCommands {
         back.ifPresent(location -> OwnTeleports.teleport(player, location, TeleportCause.PLUGIN));
     }
 
-    /** Puts the bundled build back. Editors stay in edit mode. */
+    /**
+     * Generates the lobby again, or replaces the obsidian build of earlier versions, once
+     * nobody is in the lobby world ({@link LobbyBuild#reset}). Editors are in the lobby
+     * world, so it waits for them to finish.
+     */
     @Override
     public void reset(CommandSender sender) {
-        try {
-            build.reset();
-        } catch (IOException | RuntimeException e) {
-            logger.log(Level.SEVERE, "Could not reset the lobby build.", e);
-            sender.sendMessage(msg("lobby.reset-failed", "reason", String.valueOf(e.getMessage())));
-            return;
-        }
-        save.run();
-        afterReset.run();
-        sender.sendMessage(msg("lobby.reset"));
+        build.reset(sender);
     }
 
     /**

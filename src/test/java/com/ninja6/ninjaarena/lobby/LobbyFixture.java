@@ -74,6 +74,15 @@ abstract class LobbyFixture {
         }
     }
 
+    /** The bundled generated-lobby pieces. */
+    static LobbyPieces pieces() {
+        try {
+            return LobbyPieces.bundled();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     LobbyMembers members() {
         return new LobbyMembers(plugin, layout, () -> lobbyWorld, busyElsewhere::contains, player -> {
             emptied.add(player.getUniqueId());

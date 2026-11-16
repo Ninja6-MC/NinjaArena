@@ -21,10 +21,13 @@ through its toolchain support; the wrapper downloads Gradle itself.
 On Windows, use `gradlew.bat build`. The plugin JAR is written to `build/libs/`, and
 `./gradlew test` runs the unit tests on their own.
 
-The bundled lobby structure, `src/main/resources/lobby/obsidian-lobby.nbt`, is generated
-from the readable spec beside it, `obsidian-lobby.yml`, which also marks the lobby's
-spawn, room area, shop area and board positions. After changing the spec, run
-`./gradlew generateLobbyBuild` and commit both files; the tests fail while they differ.
+The generated lobby is assembled from the pieces in `src/main/resources/lobby/pieces/`,
+vanilla structure files written from the readable spec beside them,
+`generated-lobby.yml`. After changing a piece, run `./gradlew generateLobbyPieces` and
+commit the spec and the structures; the tests fail while they differ. The obsidian lobby
+of earlier versions, `obsidian-lobby.nbt`, is generated the same way from
+`obsidian-lobby.yml` with `./gradlew generateLobbyBuild`; its spec also gives the layout of
+servers that still have it.
 
 The seeded terrain generator for generated maps, its determinism rules and how to
 update its golden digests are described in the
@@ -194,7 +197,7 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `director [arena]` | `ninjaarena.admin` | Inspect a running match's enemy director |
 | `event <subcommand>` | `ninjaarena.event.manage` | List, inspect, start or cancel scheduled arena events |
 | `admin reload` | `ninjaarena.admin` | Validate and safely reload configuration, kits and messages |
-| `admin lobby <edit\|done\|reset>` | `ninjaarena.admin.lobby` | Change the lobby in edit mode, or put the bundled lobby back |
+| `admin lobby <edit\|done\|reset>` | `ninjaarena.admin.lobby` | Change the lobby in edit mode, or generate the lobby again |
 | `admin generate <seed> [difficulty] [2\|4]` | `ninjaarena.admin.generate` | [Reproduce a seed's layout](#reproducing-a-layout) in a free slot cell |
 | `admin generate free` | `ninjaarena.admin.generate` | Clear that layout and free its cell |
 
@@ -612,7 +615,7 @@ All purchase details are text, so Bedrock needs no item pictures. `shop.menu: ch
 uses an inventory menu; a failed dialog also falls back to it. Lists page at 36 entries.
 The setting is read when a player opens the shop, including after a config reload.
 Screens open only after a player action and close when their shop phase ends.
-The board is a text display with an interaction target; lobby reset recreates it,
+The board is a text display with an interaction target; a new lobby build recreates it,
 and edit mode cannot destroy it. It is removed on disable and replaced on startup.
 
 With `shop.enabled: true`, the default, a round end that another round follows, an extra
@@ -812,19 +815,53 @@ world it is saved normally and never unloaded. It has the same rules: inventorie
 kept on death, time stays at noon, the weather stays clear, no mobs spawn and fire,
 explosions, fluids and other environmental block changes are blocked at all times.
 
-The first time the plugin finds the lobby world without its build, it places the bundled
-obsidian lobby there: a walled platform around 0, 64, 0 with a spawn, a room area, a
-shop area and spots for boards. The world records that it has the build, so every later
-start and every retirement of the arena world leaves the lobby as it is. The world spawn
-is set to the lobby spawn.
+The first time the plugin finds the lobby world without its build, it generates the lobby
+there, centred on 0, 64, 0, with one room pad per arena slot (`arenas.max-active`, at most
+32 pads in one ring). Rooms beyond the pads wait in the room list. The lobby is put
+together from pieces of a reference build: a green centre with the emblem, pads of
+diamond in gold frames, corner squares with cushions, and a barrier wall 15 blocks high
+with a tree on every post.
+
+| Pads | Where they go | Centre |
+| :--- | :--- | :--- |
+| 1 | North | 13 x 13 |
+| 2 | North and south | 13 x 13 |
+| 3 | North, west and east | 13 x 13 |
+| 4 to 8 | Round-robin north, south, west and east, at most two a side | 13 x 13 |
+| 9 to 32 | The same, the ring widening as a side takes more | 6 x (most pads on one side) + 1 |
+
+The emblem is drawn at a whole-number scale, the centre's size divided by 13 and rounded
+down. The floor is the centre plus 14 blocks square: a 32-pad lobby is 63 x 63. The spawn
+is the middle of the emblem, the shop area is the south-east corner square, and the
+create-room, room-list and shop boards stand in the north-west, north-east and south-east
+corners. Each post's tree is picked from the tree variants with a random seeded by the
+lobby world's seed, so the same pad count gives the same lobby. The lobby bounds, used to
+put members back at the spawn, reach four blocks past the build.
+
+The lobby is generated once and saved; every later start and every retirement of the
+arena world leaves it as it is, edit-mode changes included. It is generated again only
+when the pad count changes, after `arenas.max-active` does on a reload or a restart, or
+when an admin runs `/narena admin lobby reset`, and never while anyone is in the lobby
+world: members, players in a shop phase, spectators and editors. A due build waits,
+checked every second, until the lobby world is empty. It is placed over several ticks
+within `stability.placement.budget-ms`, as generated maps are, floor first. **Generating
+the lobby again replaces everything inside the old and the new build, admin edits
+included.** A build the server stops in the middle is placed again on the next start. The
+world spawn is set to the lobby spawn.
+
+A server whose lobby world has the obsidian lobby of an earlier version keeps it, with its
+spawn, room area and shop area, and logs a notice once on the first start that finds it.
+`/narena admin lobby reset` replaces it with the generated lobby; nothing replaces it
+automatically.
 
 `/narena admin lobby edit` puts an admin in lobby edit mode, taking them to the lobby
 spawn if they are elsewhere. While in edit mode they may break and place blocks and
 change item frames and armour stands there; nobody else can. `/narena admin lobby done`
 saves the lobby world, ends edit mode and returns the admin to where they were. Leaving
-the lobby world or the server also ends it. `/narena admin lobby reset` clears the lobby
-area, places the bundled build again, removing every change made in edit mode, and puts
-everyone in the lobby world at the spawn.
+the lobby world or the server also ends it. `/narena admin lobby reset` generates the
+lobby again, or replaces the obsidian build, removing every change made in edit mode,
+once nobody is in the lobby world; an admin still editing holds it back. It says when it
+starts and when it is done, and puts members at the new spawn.
 
 Nothing takes damage in the lobby world. Anyone who falls into its void is put back at
 the lobby spawn; such a fall never kills and never counts as a death in a match, and no
