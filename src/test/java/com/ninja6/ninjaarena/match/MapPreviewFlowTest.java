@@ -486,6 +486,33 @@ class MapPreviewFlowTest extends MatchFixture {
     }
 
     @Test
+    void aRoomClosedWhileItsMapIsFreedForANewOneKeepsNoSlotOrCell() {
+        Room room = placedRoom();
+        fake(BOB).permissions.remove(RoomService.CREATE);
+        startPreview(ALICE, room);
+        lobbyRefuses = true;
+        // Three teams need another layout: the map is freed, which ends Alice's preview; the
+        // lobby refuses her, so she is home and out of the room, and nobody left may host.
+        rooms.settings(player(ALICE), "teams", "3");
+        lobbyRefuses = false;
+        assertHome(ALICE);
+        assertTrue(rooms.rooms().isEmpty(), "the room closed");
+        assertFalse(rooms.hasLease(room), "and gave up its slot");
+        drain();
+        assertEquals(List.of(), generated.inUse(), "its cell is free");
+
+        rooms.create(player(CAROL));
+        rooms.create(player(DAVE));
+        Room first = rooms.hostedBy(CAROL).orElseThrow();
+        Room second = rooms.hostedBy(DAVE).orElseThrow();
+        rooms.playGenerated(first, 43, 1);
+        rooms.playGenerated(second, 44, 1);
+        assertTrue(rooms.hasLease(first) && rooms.hasLease(second), "both slots are there for new rooms");
+        drain();
+        assertTrue(rooms.canPreview(first) && rooms.canPreview(second));
+    }
+
+    @Test
     void disconnectingWhilePreviewingPutsThePlayerInTheLobbyOnRejoin() {
         Room room = placedRoom();
         startPreview(BOB, room);

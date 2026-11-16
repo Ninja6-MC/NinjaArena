@@ -1111,7 +1111,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             Optional<Arena> replacement = defaultArena(room);
             if (replacement.isEmpty() && generated != null && seeds != null) {
                 playSeedModes(room);
-                broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+                if (rooms.contains(room)) {
+                    broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+                }
                 continue;
             }
             if (replacement.isEmpty()) {
@@ -1119,7 +1121,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 continue;
             }
             setArena(room, replacement.get().name());
-            broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+            if (rooms.contains(room)) {
+                broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+            }
         }
     }
 
@@ -1182,6 +1186,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             }
             String old = room.arena();
             playSeedModes(room);
+            if (!rooms.contains(room)) {
+                return;
+            }
             broadcast(room, msg("room.map-changed-generated", "old", old, "player", player.getName()));
             return;
         }
@@ -1201,6 +1208,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return;
         }
         playGenerated(room, seed, level);
+        if (!rooms.contains(room)) {
+            return;
+        }
         broadcast(room, msg("room.map-changed-seed", "seed", seed, "difficulty", level, "player", player.getName()));
     }
 
@@ -1289,6 +1299,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         }
         String old = room.arena();
         setArena(room, target.name());
+        if (!rooms.contains(room)) {
+            return;
+        }
         broadcast(room, msg("room.map-changed", "old", old, "arena", room.arena(), "player", player.getName()));
         if (position(room).isPresent()) {
             broadcast(room, queued(room));
@@ -1311,7 +1324,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return;
         }
         Arena target = arenas.get(arena).orElseThrow(() -> new IllegalArgumentException("unknown arena " + arena));
-        leaveGenerated(room);
+        if (!leaveGenerated(room)) {
+            return;
+        }
         room.setArena(target.name());
         int teams = Math.min(room.settings().teams(), teamCount(target));
         if (teams != room.settings().teams()) {
@@ -1351,7 +1366,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (room.isPlaying()) {
             throw new IllegalStateException("the room is playing");
         }
-        leaveGenerated(room);
+        if (!leaveGenerated(room)) {
+            return;
+        }
         room.setGenerated(choice);
         room.setArena(generated.newName());
         granted(slots.release(room));
@@ -1377,7 +1394,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             throw new IllegalStateException("the room is playing");
         }
         SeedPolicy.Request asked = room.requested();
-        leaveGenerated(room);
+        if (!leaveGenerated(room)) {
+            return;
+        }
         room.setSeedModes();
         room.request(asked);
         room.setArena(generated.newName());
@@ -1394,20 +1413,34 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     /** Frees the room's generated map and asks for a slot again, to generate it anew. */
     private void regenerate(Room room) {
         freeMap(room.arena());
+        if (!rooms.contains(room)) {
+            // Closed while its map was freed (see leaveGenerated): close() gave up its slot and map.
+            return;
+        }
         granted(slots.release(room));
         if (!request(room)) {
             broadcast(room, queued(room));
         }
     }
 
-    /** A room on generated maps frees its map and plays hand-built arenas again. */
-    private void leaveGenerated(Room room) {
+    /**
+     * A room on generated maps frees its map and plays hand-built arenas again.
+     *
+     * <p>Freeing the map ends its previews, and a previewer the lobby cannot take back is
+     * sent home and out of the room at once ({@link #sentHome}), which can close it. The
+     * room's slot and map are then given up already, so callers stop on false and change
+     * nothing more; {@link #regenerate} checks the same.
+     *
+     * @return whether the room is still open
+     */
+    private boolean leaveGenerated(Room room) {
         if (room.playsGenerated()) {
             if (generated != null) {
                 freeMap(room.arena());
             }
             room.setGenerated(null);
         }
+        return rooms.contains(room);
     }
 
     /** Frees a generated map's cell, and its next round's map, and forgets their seeds. */
