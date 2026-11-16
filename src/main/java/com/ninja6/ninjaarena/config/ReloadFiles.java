@@ -15,6 +15,7 @@ import com.ninja6.ninjaarena.reward.RewardSettings;
 import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
 import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
 import com.ninja6.ninjaarena.room.MaxActive;
+import com.ninja6.ninjaarena.room.RoomService;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -274,6 +275,7 @@ public final class ReloadFiles {
             case "match.spectate-radius"
                     -> new double[] {MatchSettings.MIN_SPECTATE_RADIUS, MatchSettings.MAX_SPECTATE_RADIUS};
             case "match.rejoin-grace-seconds" -> new double[] {0, MatchService.MAX_REJOIN_GRACE_SECONDS};
+            case RoomService.HOST_GRACE_KEY -> new double[] {0, RoomService.MAX_HOST_GRACE_SECONDS};
             case "shop.max-seconds", "shop.quick-start-seconds" -> new double[] {1, 3600};
             case "shop.map-wait-limit-seconds" -> new double[] {0, 3600};
             case "points.player-kill", "points.enemy-kill-per-cost", "points.round-survive", "points.round-win"

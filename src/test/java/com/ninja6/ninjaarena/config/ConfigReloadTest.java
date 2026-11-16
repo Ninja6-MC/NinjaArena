@@ -83,6 +83,8 @@ class ConfigReloadTest {
         @Override public void spectateRadius(int radius) { calls.add("spectateRadius"); spectateRadius = radius; }
         Integer rejoinGrace;
         @Override public void rejoinGrace(int seconds) { calls.add("rejoinGrace"); rejoinGrace = seconds; }
+        Integer hostGrace;
+        @Override public void hostGrace(int seconds) { calls.add("hostGrace"); hostGrace = seconds; }
         com.ninja6.ninjaarena.match.ShopSettings shopPhase;
         @Override public void shopPhase(com.ninja6.ninjaarena.match.ShopSettings settings) {
             calls.add("shopPhase");
@@ -335,6 +337,25 @@ class ConfigReloadTest {
         write("match: {rejoin-grace-seconds: 0}\n", EMPTY_KIT);
         reload.reload();
         assertEquals(0, target.rejoinGrace, "0 turns rejoining off");
+    }
+
+    @Test
+    void theRoomHostGraceAppliesAtOnceAndBadValuesAreRejected() throws Exception {
+        write("rooms: {host-grace-seconds: 20}\n", EMPTY_KIT);
+        var messages = reload.reload();
+        assertTrue(messages.getFirst().contains("complete"), messages.toString());
+        assertEquals(20, target.hostGrace);
+        assertTrue(messages.get(1).contains("rooms.host-grace-seconds"), messages.toString());
+        assertEquals(List.of("hostGrace"), target.calls.stream().filter(call -> call.equals("hostGrace")).toList());
+
+        target.calls.clear();
+        for (String bad : List.of("rooms: {host-grace-seconds: -1}", "rooms: {host-grace-seconds: 601}",
+                "rooms: {host-grace-seconds: 1.5}")) {
+            write(bad + "\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("rejected"), bad);
+        }
+        assertFalse(target.calls.contains("hostGrace"));
+        assertEquals(20, target.hostGrace);
     }
 
     @Test

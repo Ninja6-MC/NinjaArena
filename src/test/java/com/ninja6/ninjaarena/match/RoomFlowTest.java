@@ -387,7 +387,7 @@ class RoomFlowTest extends MatchFixture {
         assertTrue(matches.matches().isEmpty(), "nothing counts down");
 
         rooms.start(player(BOB), null);
-        assertEquals("Only the host or an admin can start the match of this room.", lastMessage(BOB));
+        assertEquals("Only the host, a co-host or an admin can start the match of this room.", lastMessage(BOB));
         assertTrue(matches.matches().isEmpty());
 
         rooms.start(player(ALICE), null);
@@ -442,7 +442,7 @@ class RoomFlowTest extends MatchFixture {
         assertEquals("Every arena slot is in use. Your room is number 1 in the queue.", lastMessage(EVE));
         assertTrue(matches.match("temple").isEmpty());
         rooms.tick();
-        assertEquals("Waiting for an arena: number 1 in the queue", players.get(FRANK).actionBars.getLast());
+        assertEquals("♛ Eve | Waiting for an arena: number 1 in the queue", players.get(FRANK).actionBars.getLast());
 
         // The lease lasts through the start, every round and the end of the match.
         rooms.start(player(ALICE), null);
@@ -715,7 +715,8 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
-    void quittingTakesThePlayerOutOfTheRoomAndHandsItOn() {
+    void withNoHostGraceQuittingTakesTheHostOutOfTheRoomAndHandsItOn() {
+        rooms.setHostGraceSeconds(0);
         Room room = openWith(ALICE, BOB, CAROL);
         players.get(BOB).permissions.remove(RoomService.CREATE);
         rooms.onQuit(new PlayerQuitEvent(player(ALICE), Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED));
@@ -869,7 +870,15 @@ class RoomFlowTest extends MatchFixture {
         rooms.show(player(ALICE));
         Component bobLine = players.get(ALICE).messageComponents.stream()
                 .filter(line -> plain(line).startsWith("- Bob")).findFirst().orElseThrow();
-        assertChatAction(bobLine, bedrock, "- Bob (team 2) ", "[Remove]", "kick Bob", "remove");
+        if (bedrock) {
+            assertEquals("- Bob (team 2) Type /ninjaarena room kick Bob to remove. Type /ninjaarena room cohost Bob"
+                    + " to make co-host.", plain(bobLine));
+            assertNull(clickIn(bobLine));
+        } else {
+            assertEquals("- Bob (team 2) [Remove] [Co-host]", plain(bobLine));
+            assertEquals(List.of(ClickEvent.runCommand("/ninjaarena room kick Bob"),
+                    ClickEvent.runCommand("/ninjaarena room cohost Bob")), clicksIn(bobLine));
+        }
         assertChatAction(players.get(ALICE).messageComponents.getLast(), bedrock,
                 "Enough players are here. ", "[Start]", "start", "start");
 
@@ -881,7 +890,7 @@ class RoomFlowTest extends MatchFixture {
 
         rooms.show(player(EVE));
         assertChatAction(players.get(EVE).messageComponents.getLast(), !bedrock,
-                "- Alice on dojo (2/2) ", "[Join]", "accept Alice", "join");
+                "- Alice ♛ on dojo (2/2) ", "[Join]", "accept Alice", "join");
     }
 
     private static void assertChatAction(Component message, boolean bedrock, String prefix,
@@ -900,7 +909,7 @@ class RoomFlowTest extends MatchFixture {
     void kickRemovesAPlayerToTheLobbyAndKeepsThemOutOfAPublicRoom() {
         Room room = openWith(ALICE, BOB);
         rooms.kick(player(BOB), "Alice");
-        assertEquals("Only the host of the room can do that.", lastMessage(BOB));
+        assertEquals("Only the host or a co-host of the room can do that.", lastMessage(BOB));
         rooms.kick(player(ALICE), "Bob");
         assertFalse(room.contains(BOB));
         assertTrue(lobby.contains(BOB));
@@ -953,6 +962,17 @@ class RoomFlowTest extends MatchFixture {
             }
         }
         return null;
+    }
+
+    private static List<ClickEvent> clicksIn(Component component) {
+        List<ClickEvent> found = new ArrayList<>();
+        if (component.clickEvent() != null) {
+            found.add(component.clickEvent());
+        }
+        for (Component child : component.children()) {
+            found.addAll(clicksIn(child));
+        }
+        return found;
     }
 
     private static String plain(Component component) {
@@ -1085,7 +1105,7 @@ class RoomFlowTest extends MatchFixture {
         players.get(EVE).messages.clear();
         rooms.show(player(EVE));
         assertEquals("Open rooms:", players.get(EVE).messages.get(1));
-        assertEquals("- Alice on temple (featured) (2/2) [Join]", players.get(EVE).messages.get(2));
+        assertEquals("- Alice ♛ on temple (featured) (2/2) [Join]", players.get(EVE).messages.get(2));
         rooms.show(player(ALICE));
         assertTrue(players.get(ALICE).messages.contains("Arena temple is the featured map of the event running"
                 + " now: its matches earn the event bonus."));
@@ -1093,7 +1113,7 @@ class RoomFlowTest extends MatchFixture {
         rooms.setFeatured(Optional::empty);
         players.get(EVE).messages.clear();
         rooms.show(player(EVE));
-        assertEquals("- Alice on temple (2/2) [Join]", players.get(EVE).messages.get(1));
+        assertEquals("- Alice ♛ on temple (2/2) [Join]", players.get(EVE).messages.get(1));
     }
 
     @Test

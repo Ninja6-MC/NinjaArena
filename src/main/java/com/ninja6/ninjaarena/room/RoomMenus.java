@@ -84,14 +84,29 @@ public final class RoomMenus {
             return;
         }
         List<RoomScreen.Option> options = new ArrayList<>();
-        boolean previewing = rooms.isPreviewing(player.getUniqueId());
-        if (room.host().equals(player.getUniqueId())) {
+        UUID id = player.getUniqueId();
+        boolean previewing = rooms.isPreviewing(id);
+        boolean host = room.host().equals(id);
+        if (host) {
             options.add(action("settings", Material.COMPARATOR, this::settings));
+        }
+        if (room.isManager(id)) {
             options.add(action("invite", Material.PLAYER_HEAD, this::invite));
             options.add(action("kick", Material.BARRIER, this::kick));
-            // While the map is built, Start only says so, as the command does.
+        }
+        if (host) {
+            options.add(action("cohosts", Material.GOLDEN_HELMET, this::cohosts));
+            if (room.hasCreator() && !room.creator().equals(id)) {
+                options.add(new RoomScreen.Option(text("room.screen.handback", "player",
+                        shortName(rooms.playerName(room.creator()))), Material.GOLDEN_HELMET,
+                        (p, values) -> rooms.handBack(p)));
+            }
+        }
+        if (room.isManager(id)) {
+            // While the map is built or the host is away, Start only says so, as the command does.
             options.add(rooms.building(room).isPresent()
                     ? action("start-building", Material.GRAY_DYE, p -> rooms.start(p, null))
+                    : room.isHostAway() ? action("start-host-away", Material.GRAY_DYE, p -> rooms.start(p, null))
                     : action("start", Material.LIME_WOOL, this::start));
         }
         if (previewing) {
@@ -101,9 +116,49 @@ public final class RoomMenus {
         }
         options.add(action("leave", Material.OAK_DOOR, rooms::leave));
         options.add(action("back", Material.ARROW, this::open));
-        show(player, "yours", List.of(text("room.screen.summary", "host", rooms.playerName(room.host()),
-                "arena", room.arena(), "size", room.size(), "players", room.settings().players())),
-                options, null, "close");
+        List<String> lines = new ArrayList<>();
+        lines.add(text("room.screen.summary", "host", rooms.playerName(room.host()),
+                "arena", room.arena(), "size", room.size(), "players", room.settings().players()));
+        if (room.hasCreator()) {
+            lines.add(text("room.screen.creator", "player", rooms.playerName(room.creator())));
+        }
+        List<UUID> cohosts = room.cohosts();
+        if (!cohosts.isEmpty()) {
+            lines.add(text("room.screen.cohosts-line", "players",
+                    String.join(", ", cohosts.stream().map(rooms::playerName).toList())));
+        }
+        if (room.isHostAway()) {
+            lines.add(text("room.screen.host-away", "player", rooms.playerName(room.host()),
+                    "seconds", room.hostGraceLeft()));
+        }
+        show(player, "yours", lines, options, null, "close");
+    }
+
+    /** The host makes members co-hosts, or plain members again, one press each. */
+    private void cohosts(Player player) {
+        List<RoomScreen.Option> options = new ArrayList<>();
+        rooms.roomOf(player.getUniqueId()).ifPresent(room -> {
+            for (UUID member : room.members()) {
+                if (member.equals(room.host())) {
+                    continue;
+                }
+                String name = rooms.playerName(member);
+                boolean cohost = room.isCohost(member);
+                options.add(new RoomScreen.Option(text(cohost ? "room.screen.uncohost-player"
+                        : "room.screen.cohost-player", "player", shortName(name)),
+                        cohost ? Material.GOLDEN_HELMET : Material.LEATHER_HELMET,
+                        (p, values) -> {
+                            if (cohost) {
+                                rooms.uncohost(p, name);
+                            } else {
+                                rooms.cohost(p, name);
+                            }
+                        }));
+            }
+        });
+        options.add(action("back", Material.ARROW, this::own));
+        show(player, "cohosts", List.of(text(options.size() == 1 ? "room.screen.cohosts-empty"
+                : "room.screen.cohosts-info")), options, null, "close");
     }
 
     private void settings(Player player) {
@@ -183,9 +238,12 @@ public final class RoomMenus {
 
     private void kick(Player player) {
         List<RoomScreen.Option> options = new ArrayList<>();
-        rooms.roomOf(player.getUniqueId()).ifPresent(room -> {
+        UUID id = player.getUniqueId();
+        rooms.roomOf(id).ifPresent(room -> {
+            boolean host = room.host().equals(id);
             for (UUID member : room.members()) {
-                if (!member.equals(room.host())) {
+                // A co-host removes plain members only.
+                if (!member.equals(room.host()) && !member.equals(id) && (host || !room.isCohost(member))) {
                     options.add(new RoomScreen.Option(text("room.screen.kick-player", "player",
                             shortName(rooms.playerName(member))), Material.BARRIER,
                             (p, values) -> rooms.kick(p, rooms.playerName(member))));

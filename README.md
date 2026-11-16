@@ -175,13 +175,16 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `leaderboard <stat> [all_time\|season]` | `ninjaarena.leaderboard` | Show the [top ten for a stat](docs/leaderboards.md) |
 | `spectate <arena>` | `ninjaarena.spectate` | Watch a live match from the lobby, while in no room |
 | `accept <host>` | `ninjaarena.play` | Join a host's room; the same as `room accept` |
-| `room` | `ninjaarena.play` | Show your room, with remove buttons for its host; outside a room, list the open rooms and an event's featured map |
+| `room` | `ninjaarena.play` | Show your room, with remove and co-host buttons for its host and remove buttons for its co-hosts; outside a room, list the open rooms and an event's featured map |
 | `room create` | `ninjaarena.room.create` | Open a room in the lobby and become its host |
 | `room settings [players\|teams\|team-size\|privacy <value>]` | Host | Show or change the room's settings |
-| `room invite [player]` | Host | Invite a player with a join button, or list lobby players with invite buttons |
+| `room invite [player]` | Host or co-host | Invite a player with a join button, or list lobby players with invite buttons |
 | `room accept <host>` | `ninjaarena.play` | Join a host's room: a public one, or one that invited you |
-| `room kick <player>` | Host | Remove a player from the room to the lobby |
-| `room start [host]` | Host, or `ninjaarena.admin` for any room | Start the room's match; refused while its generated map is still being built |
+| `room kick <player>` | Host, or co-host for plain members | Remove a player from the room to the lobby |
+| `room cohost <player>` | Host | Make a member a [co-host](#co-hosts-and-the-creator) |
+| `room uncohost <player>` | Host | Make a co-host a plain member again |
+| `room handback` | Host | Hand the room back to the player who opened it, when they are in it |
+| `room start [host]` | Host or co-host, or `ninjaarena.admin` for any room | Start the room's match; refused while its generated map is still being built or its host is away |
 | `room preview` | `ninjaarena.play` | Look over the room's placed generated map in spectator mode; again to return to the room |
 | `room leave` | `ninjaarena.play` | Leave the room and stay in the lobby |
 | `map list` | `ninjaarena.play` | List pickable maps, and generated maps when they are on |
@@ -236,8 +239,9 @@ ready and no other room holds it, else the first by name that is ready and that 
 room holds. When no hand-built arena is ready, the room plays [generated
 maps](#seed-modes) from the seed modes instead, for two teams, so a server with no
 hand-built arena at all works out of the box. Nothing in a room counts down, and no
-match starts any other way. The host, or an admin, presses start with `/narena room
-start` once the room has its required player count; below it the start is refused.
+match starts any other way. The host, a co-host or an admin presses start with
+`/narena room start` once the room has its required player count; below it the start is
+refused.
 
 Hosts with `ninjaarena.map.change` (default op, inherited from `ninjaarena.admin`) can
 use `/narena map set <arena>` while their room is in the lobby. Admins mark a hand-built
@@ -269,15 +273,51 @@ player of each other. Settings and removals wait until the room is back in the l
 A player who comes through a play portal also joins an open room, as described under
 [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms).
 
-When the host leaves, the room passes to the player who has waited in it longest and has
-`ninjaarena.room.create`. When nobody left has it, the room closes and its players stay in
-the lobby. A running match goes on either way.
+When the host leaves, the room passes to the co-host who has waited in it longest and has
+`ninjaarena.room.create`, else to the player who has waited longest and has it. When
+nobody left has it, the room closes and its players stay in the lobby. A running match goes
+on either way.
+
+### Co-hosts and the creator
+
+The host can make any other member a co-host with `/narena room cohost <player>`, the
+**[Co-host]** button in `/narena room`, or **Your room → Co-hosts**, and a plain member
+again with `uncohost`. Co-hosts can start the match, invite players and remove plain
+members; settings, the map, naming co-hosts and removing the host or a co-host stay with
+the host. A co-host who leaves the room comes back as a plain member.
+
+The player who opened the room is its creator for as long as it is open. While they are in
+it, a crown (♛) follows their name in the room list and the room view, and starts every
+member's status line. A creator who leaves and comes back after the room was handed on
+gets the crown back, not the host role; the host is told, with a **[Hand back]** button.
+`/narena room handback` (or **Your room → Hand back to …**) makes the creator host again,
+if they have `ninjaarena.room.create`, and the host before becomes a co-host.
+
+### Host grace
+
+A host who disconnects while the room waits in the lobby stays its host for
+`rooms.host-grace-seconds` (default 60, 0 to 600). The members are told, the status line
+counts down, and the room list shows it. Meanwhile the room keeps its arena slot lease and
+its members, others can still join and be invited, and starting (by a co-host or an admin
+too) and removals wait. A host who rejoins in time is put back in the lobby and hosts the
+room again; one who comes back by a play portal does too. When the grace runs out, the room
+is handed on as above, or closes. Only the host gets this grace: other members leave the
+room when they disconnect, and a host who disconnects from a match keeps
+`match.rejoin-grace-seconds` instead, as [below](#rejoining-a-match).
+
+A lobby build waits while any room member is away, so it does not start during a grace. If
+the lobby still cannot take a returning host (it is closed or refuses them), the grace ends
+at once: they are out of the room, which is handed on, and they are restored home. The grace
+is kept in memory only: disabling the plugin closes every room, grace or not, and after a
+restart the host is restored home on joining. `rooms.host-grace-seconds: 0` hands the room
+on at once, as before, and a reload applies to disconnects from then on.
 
 ### Room screens
 
 Open `/narena room` to create or browse rooms, join or spectate, and manage your room.
 Hosts can edit privacy, player and team counts, choose a map when permitted, invite or
-remove players, and start a match. Each settings screen saves one value; Cancel discards
+remove players, name co-hosts, hand the room back to its creator, and start a match.
+Co-hosts get Invite, Remove and Start. Each settings screen saves one value; Cancel discards
 that edit. Finished actions close the screen on both Java and Bedrock. Open it again to
 see current state. The existing room subcommands and clickable chat invites remain available.
 
@@ -493,6 +533,7 @@ settings are validated on reload but apply after a restart. See
 | A map preview | `/narena room preview` or `/narena leave`, the room's match starting, leaving the room or the room closing, or the map being cleared | The lobby, still in the room unless they left it |
 | Anywhere in the plugin's worlds | A teleport out of them | Home, restoring the snapshot |
 | A match | Quit, then rejoin within `match.rejoin-grace-seconds` | Back in the match (see below) |
+| A room's host in the lobby or a map preview | Quit, then rejoin within `rooms.host-grace-seconds` | The lobby, still hosting the room (see [Host grace](#host-grace)) |
 | A room, a match, the lobby, spectating or a map preview | Quit, then rejoin | The lobby, with the snapshot kept |
 
 Each `/narena leave` message says where the player now is and what the next

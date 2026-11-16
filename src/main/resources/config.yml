@@ -533,8 +533,15 @@ sounds:
     volume: 0.4
     pitch: 0.8
 
-# Room screens opened by /narena room. Independent of resource-pack.texture-menu.
-# dialog: native Java dialogs / Bedrock forms; chest: inventory menus for every screen.
-# A dialog that cannot be sent falls back to a chest menu. Restart to apply.
 rooms:
+  # Room screens opened by /narena room. Independent of resource-pack.texture-menu.
+  # dialog: native Java dialogs / Bedrock forms; chest: inventory menus for every screen.
+  # A dialog that cannot be sent falls back to a chest menu. Restart to apply.
   menu: dialog
+  # How long a host who disconnects while their room is in the lobby stays its host. The
+  # room keeps its arena slot meanwhile, so keep it short; its members are told, and
+  # starting and removing players wait. Back in time, the host is in the lobby and hosts
+  # the room again; otherwise the room is handed on as when a host leaves. Other members
+  # leave at once, and a match keeps match.rejoin-grace-seconds. 0 hands the room on at
+  # once (0 to 600). Applies on reload, to disconnects from then on. A restart ends it.
+  host-grace-seconds: 60

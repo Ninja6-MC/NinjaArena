@@ -35,10 +35,10 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String LEAVE = "leave";
     /** Rooms: open, set up, invite, start and leave. */
     public static final String ROOM = "room";
-    private static final String ROOM_USAGE = "room [create|settings|invite|accept|kick|start|preview|leave]";
+    private static final String ROOM_USAGE = "room [create|settings|invite|accept|kick|cohost|uncohost|handback|start|preview|leave]";
     private static final String ROOM_SETTINGS_USAGE = "room settings [players|teams|team-size|privacy <value>]";
     private static final List<String> ROOM_ACTIONS = List.of("create", "settings", "invite", "accept", "kick",
-            "start", "preview", "leave");
+            "cohost", "uncohost", "handback", "start", "preview", "leave");
     private static final List<String> ROOM_SETTINGS = List.of("players", "teams", "team-size", "privacy");
     private static final List<String> DIFFICULTIES = List.of("1", "2", "3", "4", "5");
     /** The shop phase between rounds: {@code shop ready}. */
@@ -443,13 +443,15 @@ public final class NinjaArenaCommand implements TabExecutor {
                     roomScreen.accept(player);
                 }
             }
-            case "create", "leave", "preview" -> {
+            case "create", "leave", "preview", "handback" -> {
                 if (args.length != 2) {
                     usage(sender, label, "room " + action);
                 } else if (action.equals("create")) {
                     rooms.create(player);
                 } else if (action.equals("preview")) {
                     rooms.preview(player);
+                } else if (action.equals("handback")) {
+                    rooms.handBack(player);
                 } else {
                     rooms.leave(player);
                 }
@@ -470,13 +472,16 @@ public final class NinjaArenaCommand implements TabExecutor {
                     rooms.invite(player, args.length == 3 ? args[2] : null);
                 }
             }
-            case "accept", "kick" -> {
+            case "accept", "kick", "cohost", "uncohost" -> {
                 if (args.length != 3) {
                     usage(sender, label, "room " + action + (action.equals("accept") ? " <host>" : " <player>"));
-                } else if (action.equals("accept")) {
-                    rooms.accept(player, args[2]);
                 } else {
-                    rooms.kick(player, args[2]);
+                    switch (action) {
+                        case "accept" -> rooms.accept(player, args[2]);
+                        case "kick" -> rooms.kick(player, args[2]);
+                        case "cohost" -> rooms.cohost(player, args[2]);
+                        default -> rooms.uncohost(player, args[2]);
+                    }
                 }
             }
             default -> throw new IllegalStateException(action);
@@ -654,8 +659,8 @@ public final class NinjaArenaCommand implements TabExecutor {
                     : args.length == 4 && args[1].equalsIgnoreCase("settings") && args[2].equalsIgnoreCase("privacy")
                             ? List.of("public", "invite") : null;
             if (options == null) {
-                // Bukkit offers online player names for invite, accept, kick and start.
-                return args.length == 3 && List.of("invite", "accept", "kick", "start")
+                // Bukkit offers online player names for invite, accept, kick, the co-host ones and start.
+                return args.length == 3 && List.of("invite", "accept", "kick", "cohost", "uncohost", "start")
                         .contains(args[1].toLowerCase(Locale.ROOT)) ? null : List.of();
             }
             return options.stream().filter(option -> option.startsWith(last)).toList();

@@ -140,7 +140,7 @@ class MapPreviewFlowTest extends MatchFixture {
         previews = new MapPreviews(plugin, () -> arenaWorld, snapshots::hasPending, player -> restores.restore(player));
         rooms.setPreviews(previews);
         returns = new LobbyReturns(id -> lobby.contains(id) || rooms.isMember(id) || matches.isInMatch(id)
-                || rooms.isPreviewing(id), rooms::enterLobby);
+                || rooms.isPreviewing(id), rooms::rejoin);
         MatchListener crossing = new MatchListener(matches, deaths, transfers);
         teleportEvents = event -> {
             previews.onTeleport(event);
@@ -542,6 +542,45 @@ class MapPreviewFlowTest extends MatchFixture {
         assertTrue(rooms.roomOf(BOB).isEmpty());
         rooms.accept(player(BOB), "Alice");
         assertEquals(room, rooms.roomOf(BOB).orElseThrow(), "and can join the room again");
+    }
+
+    private void rejoin(UUID id) {
+        fake(id).online = true;
+        new JoinRestore(restores, (ticks, task) -> nextTick.add(task), plugin.getServer()::getPlayer,
+                player -> lobby.contains(player) || rooms.isPreviewing(player), returns).onJoin(id);
+        runNextTick();
+    }
+
+    @Test
+    void aHostWhoDisconnectsWhilePreviewingIsBackInTheLobbyAndHostsTheRoomOnRejoin() {
+        Room room = placedRoom();
+        startPreview(ALICE, room);
+        quit(ALICE);
+        assertFalse(rooms.isPreviewing(ALICE));
+        assertTrue(room.isHostAway(), "held for the host grace");
+        rooms.tick();
+        assertTrue(room.contains(ALICE));
+        assertTrue(rooms.hasLease(room));
+        assertTrue(rooms.canPreview(room), "the map stays placed");
+
+        rejoin(ALICE);
+        assertBackInRoom(ALICE, room);
+        assertEquals(ALICE, room.host());
+        assertFalse(room.isHostAway());
+        assertEquals("Alice is back and hosts the room again.", last(BOB));
+    }
+
+    @Test
+    void aPreviewingHostTheClosedLobbyTurnsAwayOnRejoinGoesHomeAndTheRoomIsHandedOn() {
+        Room room = placedRoom();
+        startPreview(ALICE, room);
+        quit(ALICE);
+        lobbyRefuses = true;
+        rejoin(ALICE);
+        assertHome(ALICE);
+        assertFalse(room.contains(ALICE));
+        assertEquals(BOB, room.host());
+        assertTrue(rooms.hasLease(room));
     }
 
     @Test
