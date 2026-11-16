@@ -426,6 +426,12 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- A retired arena world no longer stays in memory through players who were last hurt by
+  one of its enemies (#247). Players returned to the lobby after a match kept their last
+  damage, and with it the enemy and its whole world, until they were hurt again. Damage
+  and entity references from the arena world are now dropped whenever a player leaves it,
+  by any path, or disconnects inside it. A server version where one of these references
+  cannot be reached logs a warning naming it, once.
 - Texture and room dialog buttons stop working after 10 and 30 minutes instead of 12
   hours, so the server no longer keeps old dialog callbacks for players who opened them
   often or quit with one open. Reopen the screen to use it again.
