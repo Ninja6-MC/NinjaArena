@@ -229,25 +229,31 @@ public final class Spectators implements Listener {
         if (viewers.remove(player.getUniqueId()) == null) {
             return false;
         }
-        if (toLobby(player)) {
+        // Said once the lobby has taken or refused them; any restore result follows it.
+        if (placeInLobby(player)) {
             tell(player, "spectate.left");
+        } else {
+            tell(player, "spectate.left-home");
+            restore(player);
         }
         return true;
     }
 
-    /** To the lobby, or home when the lobby cannot take the player; true if the lobby took them. */
-    private boolean toLobby(Player player) {
-        boolean placed;
-        try {
-            placed = lobby.test(player);
-        } catch (RuntimeException e) {
-            plugin.getLogger().log(Level.SEVERE, "Could not send " + player.getName() + " to the lobby.", e);
-            placed = false;
-        }
-        if (!placed) {
+    /** To the lobby, or home when the lobby cannot take the player. */
+    private void toLobby(Player player) {
+        if (!placeInLobby(player)) {
             restore(player);
         }
-        return placed;
+    }
+
+    /** Whether the lobby took the player; nothing else happens when it did not. */
+    private boolean placeInLobby(Player player) {
+        try {
+            return lobby.test(player);
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(Level.SEVERE, "Could not send " + player.getName() + " to the lobby.", e);
+            return false;
+        }
     }
 
     private void restore(Player player) {

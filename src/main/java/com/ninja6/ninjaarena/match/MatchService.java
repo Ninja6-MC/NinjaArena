@@ -557,8 +557,13 @@ public final class MatchService {
                 // The restore listener marks the snapshot; it is restored on the next join.
             }
             case COMMAND -> {
-                // Said once they are placed, so it can say where: the lobby, or home.
-                player.sendMessage(msg(sendBack(player) ? leftKey : "match.left-home"));
+                // Said once the lobby has taken or refused them; any restore result follows it.
+                if (toLobby(player)) {
+                    player.sendMessage(msg(leftKey));
+                } else {
+                    player.sendMessage(msg("match.left-home"));
+                    sendHome(player);
+                }
             }
             case TELEPORTED -> {
                 player.sendMessage(msg("match.left-home"));
@@ -1058,19 +1063,20 @@ public final class MatchService {
     }
 
     /** To the lobby, or home when the lobby cannot take the player. */
-    /** To the lobby, or home when the lobby cannot take the player; true if the lobby took them. */
-    private boolean sendBack(Player player) {
-        boolean placed;
-        try {
-            placed = lobby.test(player);
-        } catch (RuntimeException e) {
-            plugin.getLogger().log(Level.SEVERE, "Could not send " + player.getName() + " to the lobby.", e);
-            placed = false;
-        }
-        if (!placed) {
+    private void sendBack(Player player) {
+        if (!toLobby(player)) {
             sendHome(player);
         }
-        return placed;
+    }
+
+    /** Whether the lobby took the player; nothing else happens when it did not. */
+    private boolean toLobby(Player player) {
+        try {
+            return lobby.test(player);
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(Level.SEVERE, "Could not send " + player.getName() + " to the lobby.", e);
+            return false;
+        }
     }
 
     private void sendHome(Player player) {

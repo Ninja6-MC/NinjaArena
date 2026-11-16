@@ -347,11 +347,13 @@ Java 25, and does not run on Folia.
 - Each Java connection gets one Detailed overlay request through `ResourcePacks`;
   `overlay(UUID)` reports its state.
 
-- Every `/narena leave` outcome now says where the player is and what the next leave
-  does: `room.left`, `lobby.left`, `match.left` and `command.not-in-arena` are reworded,
-  and `match.left-room`, `match.left-home`, `room.preview-left` and `spectate.left` are
-  new. Leaving a match also leaves its room with one message instead of two, and a
-  leave that ends in the lobby or at home says which (#216).
+- Every `/narena leave` outcome now says what the next leave does, and where the player
+  is when they stay in the lobby: `room.left`, `lobby.left`, `match.left` and
+  `command.not-in-arena` are reworded, and `match.left-room`, `match.left-home`,
+  `room.preview-left`, `room.preview-left-home`, `spectate.left` and `spectate.left-home`
+  are new. Leaving a match also leaves its room with one message instead of two. A leave
+  that sends the player home is said before the restore, whose failure is reported after
+  it, so the message never claims they are home (#216).
 
 ### Deprecated
 - `/narena portal lobby` still sets a portal's choice, which now only picks which open

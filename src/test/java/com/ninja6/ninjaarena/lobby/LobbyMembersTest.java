@@ -15,6 +15,10 @@ import org.bukkit.event.player.PlayerDropItemEvent;
 import org.junit.jupiter.api.Test;
 
 class LobbyMembersTest extends LobbyFixture {
+    private static final String LEFT_LOBBY = "You left the lobby. /narena leave has nothing more to leave.";
+    private static final String RESTORE_FAILED = "Your belongings could not be returned yet. Rejoin the server,"
+            + " or ask an admin if this keeps happening.";
+
 
     private final LobbyMembers members = members();
 
@@ -75,11 +79,29 @@ class LobbyMembersTest extends LobbyFixture {
         members.enter(alice);
 
         assertTrue(members.leave(alice, LobbyMembers.Exit.COMMAND));
-        assertEquals("You left the lobby. You are back home; /narena leave has nothing more to leave.",
+        assertEquals(LEFT_LOBBY,
                 players.get(ALICE).messages.getLast());
         assertFalse(members.isMember(ALICE));
         assertEquals(List.of(ALICE), sentHome);
         assertFalse(members.leave(alice, LobbyMembers.Exit.COMMAND));
+    }
+
+    @Test
+    void aFailedRestoreHomeIsReportedAfterTheLeaveMessageWhichNeverSaysHome() {
+        LobbyMembers failing = new LobbyMembers(plugin, layout, () -> lobbyWorld, id -> false, player -> { },
+                player -> com.ninja6.ninjaarena.restore.RestoreService.RestoreResult.FAILED);
+        Player alice = add(ALICE, "Alice", new Location(overworld, 5, 70, 5));
+        Player bob = add(BOB, "Bob", new Location(overworld, 5, 70, 5));
+        failing.enter(alice);
+        failing.enter(bob);
+
+        assertTrue(failing.leave(alice, LobbyMembers.Exit.COMMAND));
+        assertEquals(List.of("You are in the lobby.", LEFT_LOBBY, RESTORE_FAILED), players.get(ALICE).messages);
+
+        assertTrue(failing.leave(bob, LobbyMembers.Exit.TELEPORTED));
+        assertEquals(List.of("You are in the lobby.", LEFT_LOBBY), players.get(BOB).messages);
+        runNextTick();
+        assertEquals(List.of("You are in the lobby.", LEFT_LOBBY, RESTORE_FAILED), players.get(BOB).messages);
     }
 
     @Test
@@ -90,7 +112,7 @@ class LobbyMembersTest extends LobbyFixture {
         members.enter(bob);
 
         members.leave(alice, LobbyMembers.Exit.TELEPORTED);
-        assertEquals("You left the lobby. You are back home; /narena leave has nothing more to leave.",
+        assertEquals(LEFT_LOBBY,
                 players.get(ALICE).messages.getLast());
         assertEquals(List.of(), sentHome, "not inside the teleport event");
         runNextTick();

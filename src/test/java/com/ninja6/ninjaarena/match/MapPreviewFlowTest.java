@@ -64,6 +64,9 @@ import org.junit.jupiter.params.provider.ValueSource;
  * the player back in the lobby or home, and never leaves them in spectator mode.
  */
 class MapPreviewFlowTest extends MatchFixture {
+    private static final String PREVIEW_LEFT_HOME =
+            "You left the map preview and your room. /narena leave has nothing more to leave.";
+
 
     private static final String HOME = "world";
 
@@ -470,7 +473,7 @@ class MapPreviewFlowTest extends MatchFixture {
         lobbyRefuses = true;
         switch (way) {
             case "preview" -> rooms.preview(player(CAROL));
-            case "leave" -> assertTrue(previews.end(player(CAROL)));
+            case "leave" -> assertTrue(previews.leave(player(CAROL)));
             case "check" -> {
                 room.setPlaying(true);
                 rooms.tick();
@@ -482,6 +485,9 @@ class MapPreviewFlowTest extends MatchFixture {
         lobbyRefuses = false;
         assertHome(CAROL);
         assertFalse(rooms.isMember(CAROL), "out of the room as soon as they are home");
+        if (way.equals("preview") || way.equals("leave")) {
+            assertEquals(PREVIEW_LEFT_HOME, last(CAROL));
+        }
 
         rooms.start(player(ALICE), null);
         assertTrue(room.isPlaying());
@@ -577,8 +583,9 @@ class MapPreviewFlowTest extends MatchFixture {
         assertFalse(rooms.isPreviewing(BOB));
         assertEquals(GameMode.ADVENTURE, fake(BOB).gameMode);
         assertTrue(snapshots.hasPending(BOB), "kept for their next join");
-        assertEquals("Your belongings could not be returned yet. Rejoin the server, or ask an admin if this keeps"
-                + " happening.", last(BOB));
+        List<String> bob = fake(BOB).messages;
+        assertEquals(List.of(PREVIEW_LEFT_HOME, "Your belongings could not be returned yet. Rejoin the server, or"
+                + " ask an admin if this keeps happening."), bob.subList(bob.size() - 2, bob.size()));
 
         startPreview(ALICE, room);
         rooms.close();

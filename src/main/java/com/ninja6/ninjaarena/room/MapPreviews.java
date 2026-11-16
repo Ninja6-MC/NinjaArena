@@ -154,7 +154,7 @@ public final class MapPreviews implements Listener {
      * @return false if they were not previewing
      */
     public boolean end(Player player) {
-        return end(player, "room.preview-ended");
+        return end(player, "room.preview-ended", null);
     }
 
     /**
@@ -164,10 +164,11 @@ public final class MapPreviews implements Listener {
      * @return false if they were not previewing
      */
     public boolean leave(Player player) {
-        return end(player, "room.preview-left");
+        return end(player, "room.preview-left", "room.preview-left-home");
     }
 
-    private boolean end(Player player, String endedKey) {
+    /** {@code homeKey}, when not null, is said before a player the lobby cannot take is sent home. */
+    private boolean end(Player player, String endedKey, String homeKey) {
         if (previews.remove(player.getUniqueId()) == null) {
             return false;
         }
@@ -182,6 +183,9 @@ public final class MapPreviews implements Listener {
         if (placed) {
             player.sendMessage(msg(endedKey));
             return true;
+        }
+        if (homeKey != null) {
+            player.sendMessage(msg(homeKey));
         }
         sendHome(player);
         if (rooms != null) {

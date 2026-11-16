@@ -43,6 +43,8 @@ import org.junit.jupiter.api.Test;
  * starting, the slot leases, and every way out of a room or its match.
  */
 class RoomFlowTest extends MatchFixture {
+    private static final String LEFT_MATCH_HOME = "You left the match. /narena leave has nothing more to leave.";
+
 
     private static final UUID EVE = new UUID(0, 5);
     private static final UUID FRANK = new UUID(0, 6);
@@ -608,7 +610,7 @@ class RoomFlowTest extends MatchFixture {
 
         assertTrue(rooms.leaveRoom(player(CAROL)));
         assertTrue(restored.contains(CAROL));
-        assertEquals("You left the match. You are back home; /narena leave has nothing more to leave.",
+        assertEquals(LEFT_MATCH_HOME,
                 lastMessage(CAROL));
     }
 
@@ -642,7 +644,7 @@ class RoomFlowTest extends MatchFixture {
 
         player(CAROL).teleport(new Location(overworld, 5, 70, 5), PlayerTeleportEvent.TeleportCause.COMMAND);
         assertFalse(matches.isInMatch(CAROL));
-        assertEquals("You left the match. You are back home; /narena leave has nothing more to leave.",
+        assertEquals(LEFT_MATCH_HOME,
                 lastMessage(CAROL));
         runNextTick();
         assertTrue(restored.contains(CAROL));
