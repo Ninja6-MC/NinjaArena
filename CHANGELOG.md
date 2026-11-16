@@ -20,6 +20,11 @@ Java 25, and does not run on Folia.
   ask rooms, including for invited players; invited players can still enter invite-only
   rooms through portals. Decisions and changes in room or requester eligibility end
   requests; stale forms cannot decide a replacement request.
+- Lobby Create room and live Open rooms boards (#146), placed at the layout marks, with
+  Java and Bedrock click targets. The list shows host, players/needed, privacy, map and
+  state, with an overflow count. Spots come from the active layout, missing entities are
+  replaced and duplicates removed after startup, chunk loads and lobby reset; chunk tickets are
+  shared with the shop board. Text and restart-only board settings are configurable.
 - Room co-hosts, the creator's crown and a host grace in the lobby (#217). The host names
   co-hosts with `/narena room cohost` and `uncohost`, chat buttons or the room screen;
   co-hosts can start the match, invite and remove plain members, while settings and the map

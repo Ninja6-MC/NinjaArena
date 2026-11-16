@@ -55,7 +55,8 @@ public final class RoomMenus {
                 List.of(action("create", Material.CRAFTING_TABLE, rooms::create)), null, "cancel");
     }
 
-    private void list(Player player) {
+    /** Opens the same list page from a lobby board or the main room screen. */
+    public void list(Player player) {
         List<RoomScreen.Option> options = new ArrayList<>();
         for (Room room : rooms.rooms()) {
             UUID host = room.host();

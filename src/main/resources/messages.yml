@@ -345,6 +345,17 @@ intro:
 # The lobby world and /ninjaarena admin lobby. <label> is the command as typed, <pads> the
 # generated lobby's room pads and <count> the players in the lobby world.
 lobby:
+  boards:
+    create: "<gold>Create room</gold>\n<gray>Click to create a room</gray>"
+    list-title: '<gold>Open rooms</gold>'
+    empty: '<gray>No rooms are open.</gray>'
+    room: "<yellow><host></yellow> <players>/<needed> <privacy>\n<gray><map> · <state></gray>"
+    waiting: 'Waiting'
+    building: 'Building'
+    playing: 'In match'
+    more: '<gray>+<count> more rooms</gray>'
+    list-click: '<gray>Click to browse rooms</gray>'
+
   joined: "<green>You are in the lobby."
   join-failed: "<red>You could not join the lobby, so you were sent back."
   # Said before the restore home, whose failure is reported after it.

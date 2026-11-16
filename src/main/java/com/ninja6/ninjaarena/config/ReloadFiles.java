@@ -260,6 +260,8 @@ public final class ReloadFiles {
 
     private static double[] range(String path) {
         return switch (path) {
+            case "lobby.boards.update-seconds" -> new double[] {1, 60};
+            case "lobby.boards.max-rooms" -> new double[] {1, 10};
             case "resource-pack.timeout-seconds" -> new double[] {1, 600};
             case "arena-world.border-size" -> new double[] {16, 2048};
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};

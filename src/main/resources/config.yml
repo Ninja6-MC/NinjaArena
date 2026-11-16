@@ -549,3 +549,15 @@ rooms:
   request-lifetime-seconds: 60
   # Per player per room, 0-600 seconds; 0 disables the cooldown. Live for new requests.
   request-cooldown-seconds: 30
+
+# In-world lobby boards. Changes apply on plugin restart; text reloads with messages.yml.
+lobby:
+  boards:
+    create-room:
+      enabled: true
+    room-list:
+      enabled: true
+    # Refresh text and replace missing entities every 1..60 seconds.
+    update-seconds: 1
+    # Rooms shown before the overflow count, 1..10. Both clients use explicit lines.
+    max-rooms: 5
