@@ -8,7 +8,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.GameMode;
@@ -38,7 +37,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
  * last damage source, and through it the mob and its whole world, until the player is hurt
  * again.
  */
-public final class ArenaCombatCleanup implements Consumer<Player>, Listener {
+public final class ArenaCombatCleanup implements Listener {
     @FunctionalInterface
     interface InternalCleanup {
         void clear(Player player);
@@ -77,8 +76,8 @@ public final class ArenaCombatCleanup implements Consumer<Player>, Listener {
         }
     }
 
-    @Override
-    public void accept(Player player) {
+    /** Drops the player's arena references; each part that fails is logged once and skipped. */
+    void accept(Player player) {
         try {
             clearDamageEvent(player);
         } catch (RuntimeException failure) {
