@@ -290,8 +290,8 @@ under `lobby.boards`; these settings take effect after a plugin restart.
 
 Both boards use text displays with explicit line breaks and reachable interaction
 entities. Both attack and use work on Java and Bedrock; no item pictures are needed.
-Text comes from `messages.yml`. Layout definitions, including spot and facing, are
-saved to `lobby-boards.yml` and refreshed from the active layout on startup and reset.
+Text comes from `messages.yml`. Board spots and facing come from the active lobby
+layout on startup and reset.
 Lost entities are replaced, tagged duplicates removed, and board chunk tickets shared
 with the shop board until their last user releases them. The lobby world stays loaded
 when arena worlds retire. A layout missing a mark skips that board with one warning.

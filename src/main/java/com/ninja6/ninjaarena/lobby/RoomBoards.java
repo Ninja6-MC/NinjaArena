@@ -5,8 +5,6 @@ import static com.ninja6.ninjaarena.message.Messages.msg;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.command.NinjaArenaCommand;
 import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -16,10 +14,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
@@ -36,7 +34,7 @@ import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.persistence.PersistentDataType;
 
-/** Saved layout definitions and disposable entities for the lobby's two room boards. Main thread only. */
+/** Disposable entities rebuilt from the active lobby layout's board spots. Main thread only. */
 public final class RoomBoards implements Listener, AutoCloseable {
     static final NamespacedKey KEY = new NamespacedKey("ninjaarena", "room_board");
     private static final List<String> IDS = List.of("create-room", "room-list");
@@ -47,35 +45,32 @@ public final class RoomBoards implements Listener, AutoCloseable {
     private final BiConsumer<String, Player> open;
     private final BiConsumer<Location, Runnable> load;
     private final BoardTickets tickets;
-    private final Path file;
     private final Consumer<String> log;
     private final Set<String> enabled;
     private final Map<String, Board> boards = new HashMap<>();
     private final Set<String> warned = new HashSet<>();
-    private final Map<String, ArenaPoint> wanted = new HashMap<>();
     private int generation;
     private boolean closed;
 
     public RoomBoards(World world, Supplier<LobbyLayout> layout, Supplier<Component> list,
             BiConsumer<String, Player> open, BiConsumer<Location, Runnable> load,
-            BoardTickets tickets, Path file, Set<String> enabled, Consumer<String> log) {
+            BoardTickets tickets, Set<String> enabled, Consumer<String> log) {
         this.world = world;
         this.layout = layout;
         this.list = list;
         this.open = open;
         this.load = load;
         this.tickets = tickets;
-        this.file = file;
         this.enabled = Set.copyOf(enabled);
         this.log = log;
     }
 
-    /** The layout is authoritative, so a reset moves saved definitions with the new build. */
+    /** A reset takes the spots and facing from the active layout, just like startup. */
     public void place() {
         if (closed) { return; }
         int epoch = ++generation;
         removeBoards();
-        wanted.clear();
+        Map<String, ArenaPoint> wanted = new HashMap<>();
         for (String id : IDS) {
             if (!enabled.contains(id)) { continue; }
             ArenaPoint point = layout.get().boards().get(id);
@@ -85,7 +80,6 @@ public final class RoomBoards implements Listener, AutoCloseable {
                 wanted.put(id, point);
             }
         }
-        save();
         for (var entry : Map.copyOf(wanted).entrySet()) {
             String id = entry.getKey();
             ArenaPoint point = entry.getValue();
@@ -97,39 +91,40 @@ public final class RoomBoards implements Listener, AutoCloseable {
         }
     }
 
-    private void save() {
-        YamlConfiguration saved = new YamlConfiguration();
-        wanted.forEach((id, point) -> {
-            saved.set("boards." + id + ".spot", List.of(point.x(), point.y(), point.z()));
-            saved.set("boards." + id + ".facing", point.yaw());
-        });
-        try {
-            saved.save(file.toFile());
-        } catch (IOException failure) {
-            log.accept("Could not save lobby board definitions: " + failure.getMessage());
-        }
-    }
-
     private Location location(ArenaPoint point) {
         return new Location(world, point.x(), point.y(), point.z(), point.yaw(), point.pitch());
     }
 
     private void spawn(String id, ArenaPoint point) {
         Location at = location(point);
+        Component content = id.equals("create-room") ? msg("lobby.boards.create") : list.get();
         tickets.acquire(at.getBlockX() >> 4, at.getBlockZ() >> 4);
         TextDisplay text = world.spawn(at, TextDisplay.class, display -> {
             mark(display, id);
-            display.text(id.equals("create-room") ? msg("lobby.boards.create") : list.get());
+            display.text(content);
             display.setBillboard(Display.Billboard.FIXED);
             display.setLineWidth(500);
         });
         Interaction target = world.spawn(at.clone().subtract(0, 1, 0), Interaction.class, entity -> {
             mark(entity, id);
             entity.setInteractionWidth(3);
-            entity.setInteractionHeight(2);
+            entity.setInteractionHeight(targetHeight(content));
             entity.setResponsive(true);
         });
         boards.put(id, new Board(point, text, target));
+    }
+
+    private static float targetHeight(Component content) {
+        long lines = PlainTextComponentSerializer.plainText().serialize(content).chars()
+                .filter(character -> character == '\n').count() + 1;
+        // Default display text grows upward by at most 0.25 blocks per line. The target
+        // starts one block below the spot; leave another line of padding above the text.
+        return Math.max(2, 1.0f + (lines + 1) * 0.25f);
+    }
+
+    private static void refresh(Board board, Component content) {
+        board.text().text(content);
+        board.target().setInteractionHeight(targetHeight(content));
     }
 
     private static void mark(Entity entity, String id) {
@@ -156,9 +151,9 @@ public final class RoomBoards implements Listener, AutoCloseable {
         }
         for (Entity entity : world.getEntities()) { removeDuplicate(entity); }
         Board create = boards.get("create-room");
-        if (create != null) { create.text().text(msg("lobby.boards.create")); }
+        if (create != null) { refresh(create, msg("lobby.boards.create")); }
         Board roomList = boards.get("room-list");
-        if (roomList != null) { roomList.text().text(list.get()); }
+        if (roomList != null) { refresh(roomList, list.get()); }
     }
 
     private void removeDuplicate(Entity entity) {

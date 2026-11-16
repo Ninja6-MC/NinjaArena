@@ -353,7 +353,7 @@ lobby:
     waiting: 'Waiting'
     building: 'Building'
     playing: 'In match'
-    more: '<gray>+<count> more rooms queued</gray>'
+    more: '<gray>+<count> more rooms</gray>'
     list-click: '<gray>Click to browse rooms</gray>'
 
   joined: "<green>You are in the lobby."

@@ -1127,8 +1127,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 },
                 (at, ready) -> world.getChunkAtAsync(at).thenAccept(chunk ->
                         getServer().getScheduler().runTask(this, ready)),
-                boardTickets, getDataFolder().toPath().resolve("lobby-boards.yml"), enabled,
-                getLogger()::warning);
+                boardTickets, enabled, getLogger()::warning);
         getServer().getPluginManager().registerEvents(roomBoards, this);
         roomBoards.place();
         long interval = Math.clamp(getConfig().getLong("lobby.boards.update-seconds", 1), 1, 60) * 20;

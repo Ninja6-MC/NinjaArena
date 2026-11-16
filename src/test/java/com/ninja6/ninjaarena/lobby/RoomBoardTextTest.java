@@ -30,7 +30,8 @@ class RoomBoardTextTest {
         assertTrue(many.contains("Building"));
         assertTrue(many.contains("In match"));
         assertTrue(many.contains("Invite only"), many);
-        assertTrue(many.contains("+6 more rooms queued"));
+        assertTrue(many.contains("+6 more rooms\n"));
+        assertFalse(many.contains("queued"));
         assertFalse(many.contains("Host3"));
         assertFalse(many.contains("much-too-long"));
     }

@@ -14,6 +14,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
+import com.ninja6.ninjaarena.arena.ArenaPoint;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -43,7 +46,7 @@ class RoomBoardsTest {
         return new RoomBoards(world, LobbyLayout::bundled, () -> Component.text("Rooms"),
                 (id, player) -> { routes.add(id); opened.add(player); }, (at, ready) -> ready.run(),
                 new BoardTickets((x, z) -> added.add(x + "," + z),
-                        (x, z) -> released.add(x + "," + z)), directory.resolve("boards.yml"),
+                        (x, z) -> released.add(x + "," + z)),
                 Set.of("create-room", "room-list"), message -> { });
     }
 
@@ -97,13 +100,12 @@ class RoomBoardsTest {
                 });
     }
 
-    @Test void resetAndLostEntityRecoveryRemoveDuplicatesAndBalanceSharedTickets() throws Exception {
+    @Test void resetAndLostEntityRecoveryRemoveDuplicatesAndBalanceSharedTickets() {
         RoomBoards board = board();
         FakeEntity decoration = new FakeEntity(new Location(world, 0, 0, 0), TextDisplay.class);
         spawned.add(decoration);
         board.place();
         assertEquals(5, world.getEntities().size());
-        assertTrue(java.nio.file.Files.readString(directory.resolve("boards.yml")).contains("facing:"));
         assertEquals(1, added.size()); // The obsidian layout's room boards share a chunk.
         FakeEntity lost = spawned.get(1);
         lost.removed = true;
@@ -150,7 +152,7 @@ class RoomBoardsTest {
         RoomBoards board = new RoomBoards(world, LobbyLayout::bundled, () -> Component.empty(),
                 (id, player) -> { }, (at, ready) -> pending.add(ready),
                 new BoardTickets((x, z) -> added.add("add"), (x, z) -> released.add("remove")),
-                directory.resolve("boards.yml"), Set.of("create-room"), message -> { });
+                Set.of("create-room"), message -> { });
         board.place();
         board.close();
         pending.forEach(Runnable::run);
@@ -186,12 +188,76 @@ class RoomBoardsTest {
         RoomBoards board = new RoomBoards(world, () -> empty, () -> Component.empty(),
                 (id, player) -> { }, (at, ready) -> ready.run(),
                 new BoardTickets((x, z) -> added.add("add"), (x, z) -> released.add("remove")),
-                directory.resolve("boards.yml"), Set.of("create-room", "room-list"), warnings::add);
+                Set.of("create-room", "room-list"), warnings::add);
         board.place();
         board.place();
         assertEquals(2, warnings.size());
         assertTrue(spawned.isEmpty());
         assertTrue(added.isEmpty());
+    }
+
+
+    @Test void restartAndResetRebuildFromActiveLayoutSpotsAndFacing() {
+        AtomicReference<LobbyLayout> active = new AtomicReference<>(LobbyLayout.bundled());
+        RoomBoards original = board();
+        original.place();
+        original.close();
+        RoomBoards restarted = new RoomBoards(world, active::get, () -> Component.text("Rooms"),
+                (id, player) -> { }, (at, ready) -> ready.run(),
+                new BoardTickets((x, z) -> { }, (x, z) -> { }),
+                Set.of("create-room", "room-list"), message -> { });
+        restarted.place();
+        assertBoardSpots(active.get());
+        LobbyLayout base = active.get();
+        ArenaPoint create = base.boards().get("room-list");
+        ArenaPoint list = base.boards().get("create-room");
+        active.set(new LobbyLayout(base.build(), base.bounds(), base.spawn(), base.roomArea(),
+                base.shopArea(), Map.of("create-room", create, "room-list", list), base.pads()));
+        restarted.place();
+        assertBoardSpots(active.get());
+        restarted.close();
+    }
+
+    private void assertBoardSpots(LobbyLayout layout) {
+        List<FakeEntity> displays = spawned.stream()
+                .filter(fake -> !fake.removed && fake.type == TextDisplay.class).toList();
+        assertEquals(2, displays.size());
+        for (FakeEntity display : displays) {
+            ArenaPoint point = layout.boards().get(display.data.get(RoomBoards.KEY));
+            assertEquals(point.x(), display.at.getX());
+            assertEquals(point.y(), display.at.getY());
+            assertEquals(point.z(), display.at.getZ());
+            assertEquals(point.yaw(), display.at.getYaw());
+        }
+    }
+
+    @Test void roomListTargetCoversTextOnSpawnAndResizesWithoutReplacingEntities() {
+        List<RoomBoardText.Row> rooms = IntStream.range(0, 6)
+                .mapToObj(i -> new RoomBoardText.Row("Host" + i, 1, 4, false, "dojo", "waiting"))
+                .toList();
+        Component longList = RoomBoardText.render(rooms, 5); // 13 explicit lines including overflow.
+        AtomicReference<Component> content = new AtomicReference<>(longList);
+        RoomBoards board = new RoomBoards(world, LobbyLayout::bundled, content::get,
+                (id, player) -> { }, (at, ready) -> ready.run(),
+                new BoardTickets((x, z) -> { }, (x, z) -> { }), Set.of("room-list"), message -> { });
+        board.place();
+        FakeEntity target = spawned.stream().filter(fake -> fake.type == Interaction.class)
+                .findFirst().orElseThrow();
+        double textY = LobbyLayout.bundled().boards().get("room-list").y();
+        float initialHeight = (Float) target.properties.get("setInteractionHeight");
+        assertTrue(target.at.getY() <= textY);
+        assertTrue(target.at.getY() + initialHeight >= textY + 13 * 0.25);
+        content.set(RoomBoardText.render(List.of(), 5));
+        board.update();
+        float shortHeight = (Float) target.properties.get("setInteractionHeight");
+        assertTrue(shortHeight < initialHeight);
+        assertTrue(target.at.getY() + shortHeight >= textY + 3 * 0.25);
+        content.set(longList);
+        board.update();
+        assertEquals(initialHeight, target.properties.get("setInteractionHeight"));
+        assertFalse(target.removed);
+        assertEquals(2, spawned.size());
+        board.close();
     }
 
     @Test void reloadedMessagesRefreshExistingCreateDisplayWithoutReplacingEntities() throws Exception {
