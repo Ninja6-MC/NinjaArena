@@ -200,6 +200,22 @@ that player sees no team colours until their next match. Friendly fire stays wit
 NinjaArena's own rule, since the match teams allow it. Geyser shows the colour on
 Bedrock name tags; confirm it with a Bedrock client on a test backend.
 
+Team options that another plugin sets on a main-scoreboard team stop applying to
+match players for the length of the match, because the match teams use the vanilla
+defaults. A client works out pushing between players from the scoreboard it is shown,
+so on a server that puts everyone on a no-collision team, match players push each other
+again; a team that hides name tags shows them again. The match teams do not copy these
+options: one match team holds players who can come from different main-scoreboard
+teams, and a rule such as "push other teams" means something else once the teams are
+the match teams. This follows from how the client reads teams and was not tested on a
+server with such a team.
+
+Plugins that send their own team packets for name tags or the player list, such as
+TAB, bypass Bukkit scoreboards. They can replace the match colour or make it flicker
+between theirs and NinjaArena's. This is reasoned from how those plugins work and was
+not tested; turn off their name tag and player-list team handling in the NinjaArena worlds
+where the colours matter.
+
 ### LuckPerms with shared MariaDB
 
 **Published configuration and recorded live.** Shared storage makes global

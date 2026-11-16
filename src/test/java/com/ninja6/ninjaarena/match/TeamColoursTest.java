@@ -11,6 +11,9 @@ import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.MatchPhaseChangeEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
 import com.ninja6.ninjaarena.match.event.PlayerRejoinMatchEvent;
+import com.ninja6.ninjaarena.arena.ArenaBounds;
+import com.ninja6.ninjaarena.arena.ArenaPoint;
+import com.ninja6.ninjaarena.arena.GridCell;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.tool.ToolVisuals;
 import java.lang.reflect.Proxy;
@@ -28,6 +31,8 @@ import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Team colours from the match start to every way out: leaving, a disconnect with and
@@ -36,6 +41,13 @@ import org.junit.jupiter.api.Test;
 class TeamColoursTest extends MatchFixture {
 
     private static final UUID ERIN = new UUID(0, 5);
+    private static final UUID FRANK = new UUID(0, 6);
+    private static final UUID GINA = new UUID(0, 7);
+    private static final UUID HUGO = new UUID(0, 8);
+    private static final UUID IVY = new UUID(0, 9);
+    private static final UUID JUDE = new UUID(0, 10);
+    /** A second arena, sorted before dojo, so each tick refreshes its match first. */
+    private static final String AIKI = "aiki";
 
     /** A scoreboard's state, behind a proxy. */
     private static final class Board {
@@ -65,6 +77,7 @@ class TeamColoursTest extends MatchFixture {
     private final Board main = board("main");
     private final List<Board> created = new ArrayList<>();
     private final Set<UUID> watching = new HashSet<>();
+    private final Set<UUID> watchingAiki = new HashSet<>();
     private TeamColours colours;
 
     @BeforeEach
@@ -89,7 +102,7 @@ class TeamColoursTest extends MatchFixture {
             created.add(board);
             return board.proxy;
         }, () -> main.proxy);
-        colours.setSpectators(arena -> List.copyOf(watching));
+        colours.setSpectators(arena -> List.copyOf(arena.equals(AIKI) ? watchingAiki : watching));
     }
 
     private Board board(String label) {
@@ -386,6 +399,162 @@ class TeamColoursTest extends MatchFixture {
         assertNotSame(created.getFirst().proxy, boardOf(ALICE));
         assertSame(created.getLast().proxy, boardOf(ALICE));
         assertNull(created.getFirst().teams.get("team1"));
+        assertMainUntouched();
+    }
+
+    private void openAiki() throws Exception {
+        add(FRANK, "Frank");
+        add(GINA, "Gina");
+        add(HUGO, "Hugo");
+        add(IVY, "Ivy");
+        add(JUDE, "Jude");
+        for (UUID id : List.of(FRANK, GINA, HUGO, IVY, JUDE)) {
+            players.get(id).scoreboard = main.proxy;
+        }
+        arenas.create(AIKI, new GridCell(1, 0));
+        arenas.update(AIKI, a -> a.withBounds(new ArenaBounds(266, 60, 10, 346, 100, 90))
+                .withWaitingRoom(new ArenaPoint(306.5, 64, 50.5, 0, 0))
+                .withTeamSpawn(1, new ArenaPoint(276.5, 64, 20.5, 90, 0))
+                .withTeamSpawn(2, new ArenaPoint(336.5, 64, 80.5, -90, 0))
+                .withEnemySpawn(new ArenaPoint(306.5, 64, 20.5, 0, 0)));
+        arenas.finishEdit(AIKI);
+    }
+
+    private void startAiki() {
+        matches.start(AIKI, List.of(List.of(FRANK, HUGO), List.of(GINA, IVY)));
+    }
+
+    private Board boardFor(String arena) {
+        MatchView match = matches.match(arena).orElseThrow();
+        UUID someone = match.players().getFirst();
+        return created.stream().filter(board -> board.proxy == boardOf(someone)).findFirst().orElseThrow();
+    }
+
+    private void assertOn(Board board, UUID... ids) {
+        for (UUID id : ids) {
+            assertSame(board.proxy, boardOf(id), players.get(id).name + " sees " + board.label);
+        }
+    }
+
+    /** The first team leaves, and the match runs on to its end. */
+    private void end(String arena, UUID first, UUID second) {
+        matches.leave(player(first), MatchService.Exit.COMMAND);
+        matches.leave(player(second), MatchService.Exit.COMMAND);
+        runNextTick();
+        for (int i = 0; i < 5 && matches.match(arena).orElseThrow().phase() != MatchPhase.MATCH_END; i++) {
+            matches.tick();
+            colours.tick();
+        }
+        assertEquals(MatchPhase.MATCH_END, matches.match(arena).orElseThrow().phase());
+    }
+
+    @Test
+    void aViewerShownAnotherMatchIsHandedOverAndGetsTheirOwnScoreboardBack() throws Exception {
+        openAiki();
+        Board sidebar = board("sidebar");
+        players.get(ERIN).scoreboard = sidebar.proxy;
+        startTwoOnTwo();
+        startAiki();
+        Board dojo = boardFor("dojo");
+        Board aiki = boardFor(AIKI);
+        assertNotSame(dojo, aiki);
+
+        watching.add(ERIN);
+        colours.tick();
+        assertOn(dojo, ERIN);
+
+        // aiki is refreshed first, so the viewer goes straight from one match board to the other.
+        watching.remove(ERIN);
+        watchingAiki.add(ERIN);
+        colours.tick();
+        assertOn(aiki, ERIN);
+        assertOn(dojo, ALICE, BOB, CAROL, DAVE);
+        assertOn(aiki, FRANK, GINA, HUGO, IVY);
+
+        // And back the other way, where dojo's refresh comes second.
+        watchingAiki.remove(ERIN);
+        watching.add(ERIN);
+        colours.tick();
+        assertOn(dojo, ERIN);
+
+        watching.remove(ERIN);
+        colours.tick();
+        assertSame(sidebar.proxy, boardOf(ERIN), "the scoreboard from before any match comes back, not a match board");
+        for (Board board : List.of(dojo, aiki)) {
+            board.teams.values().forEach(team -> assertFalse(team.entries.contains("Erin")));
+        }
+        assertMainUntouched();
+    }
+
+    @Test
+    void aMatchBoardIsNeverRememberedAsTheScoreboardToGiveBack() {
+        matches.setRejoinGraceSeconds(20);
+        startTwoOnTwo();
+        Board board = only();
+        matches.disconnect(player(BOB));
+        colours.onQuit(new PlayerQuitEvent(player(BOB), (net.kyori.adventure.text.Component) null,
+                PlayerQuitEvent.QuitReason.DISCONNECTED));
+        players.get(BOB).online = false;
+        colours.tick();
+
+        // Still on the match board when they come back, which the server would normally reset.
+        assertSame(board.proxy, boardOf(BOB));
+        players.get(BOB).online = true;
+        assertTrue(matches.rejoin(player(BOB)));
+        runNextTick();
+        assertColoured(BOB);
+        matches.leave(player(BOB), MatchService.Exit.COMMAND);
+        assertUncoloured(BOB);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void twoMatchesAtOnceEndInEitherOrderWithNobodyLeftOnAStaleBoard(boolean dojoFirst) throws Exception {
+        openAiki();
+        startTwoOnTwo();
+        startAiki();
+        watching.add(ERIN);
+        watchingAiki.add(JUDE);
+        colours.tick();
+        Board dojo = boardFor("dojo");
+        Board aiki = boardFor(AIKI);
+        assertEquals(2, created.size());
+        assertOn(dojo, ALICE, BOB, CAROL, DAVE, ERIN);
+        assertOn(aiki, FRANK, GINA, HUGO, IVY, JUDE);
+        assertEquals(Set.of("Alice", "Carol"), entries(dojo, 1));
+        assertEquals(Set.of("Frank", "Hugo"), entries(aiki, 1));
+        assertEquals(Set.of("Gina", "Ivy"), entries(aiki, 2));
+
+        List<UUID> dojoSide = List.of(ALICE, BOB, CAROL, DAVE, ERIN);
+        List<UUID> aikiSide = List.of(FRANK, GINA, HUGO, IVY, JUDE);
+        if (dojoFirst) {
+            end("dojo", BOB, DAVE);
+            watching.clear();
+            assertUncoloured(dojoSide.toArray(UUID[]::new));
+            assertOn(aiki, aikiSide.toArray(UUID[]::new));
+            assertTrue(dojo.teams.isEmpty());
+            end(AIKI, GINA, IVY);
+            watchingAiki.clear();
+        } else {
+            end(AIKI, GINA, IVY);
+            watchingAiki.clear();
+            assertUncoloured(aikiSide.toArray(UUID[]::new));
+            assertOn(dojo, dojoSide.toArray(UUID[]::new));
+            assertTrue(aiki.teams.isEmpty());
+            end("dojo", BOB, DAVE);
+            watching.clear();
+        }
+        for (int i = 0; i < 5; i++) {
+            matches.tick();
+            runNextTick();
+            colours.tick();
+        }
+        assertTrue(matches.matches().isEmpty());
+        assertUncoloured(dojoSide.toArray(UUID[]::new));
+        assertUncoloured(aikiSide.toArray(UUID[]::new));
+        assertTrue(dojo.teams.isEmpty());
+        assertTrue(aiki.teams.isEmpty());
+        assertEquals(2, created.size(), "no board was made again after its match ended");
         assertMainUntouched();
     }
 }
