@@ -482,7 +482,7 @@ section of `config.yml` says which seed and difficulty each slot cell's next map
 | `maps.default.seeds` | `[]` | The seeds for `rotation`, in order, each once. `rotation` without any is refused. |
 | `maps.default.rotate-every` | `0` | How long a rotation stays on one seed, as a duration such as `30m`, `2h` or `1h30m` (units `d`, `h`, `m`, `s`; at most `365d`). `0` moves on at every generation (under `shared`, see below). |
 | `maps.default.reroll-every` | `0` | How long a random seed is kept before a new one is picked; `0` picks again at every generation (under `shared`, see below). |
-| `maps.default.difficulty` | `2` | How hard the map is to cross, 1 to 5. |
+| `maps.default.difficulty` | `2` | How hard the map is to cross, 1 to 5. At 4 every route to the centre jumps a lava chasm, at 5 two. |
 | `maps.default.regenerate` | `match` | `match`: a new map before each match. `round`: also in each shop break. |
 | `maps.slots.<n>` | none | Any of the keys above, for slot cell `n` (1 to 100) only. |
 | `maps.seed-sharing` | `distinct` | `distinct`: no two active slots play the same seed at once. `shared`: every slot follows `maps.default` and one seed at once. |

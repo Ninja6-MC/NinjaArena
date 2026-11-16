@@ -360,6 +360,11 @@ Java 25, and does not run on Folia.
   rejecting `config.yml` or `kits.yml` stay in English.
 
 ### Changed
+- Generated maps at difficulty 4 force a jump on every route from a spawn to the centre,
+  and at difficulty 5 two (#166): each side gets one or two lava chasms, 2 blocks wide,
+  across its whole width, and the map check now needs that many forced jumps. A seed at
+  difficulty 4 or 5 now generates a different map than before; difficulties 1 to 3 are
+  unchanged. Searches still need about 1.6 attempts per map at these difficulties.
 - Arena waiting-room points are optional: a ready arena only needs bounds, two to four
   team spawns and an enemy spawn. `setwaitingroom` still sets where `arena tp` lands.
 - No match starts by itself: waiting rooms, their countdown and the shared hub are

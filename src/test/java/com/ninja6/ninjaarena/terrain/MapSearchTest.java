@@ -56,6 +56,12 @@ class MapSearchTest {
                         100.0 * firstTry / SEEDS, 100.0 * accepted / SEEDS, (double) attempts / SEEDS));
                 assertTrue(firstTry * 2 > SEEDS, "most seeds should pass at difficulty " + difficulty);
                 assertTrue(accepted >= SEEDS * 99 / 100, "the search should almost never fail");
+                if (difficulty >= 4) {
+                    // Measured over 1,000 seeds with the chasms: no failed search, and 1.6 to 1.7
+                    // attempts per search, as many as before the jump minimums.
+                    assertEquals(SEEDS, accepted, "no search should fail at difficulty " + difficulty);
+                    assertTrue(attempts <= 2 * SEEDS, "attempts per search at difficulty " + difficulty);
+                }
             }
         }
         rates.forEach(System.out::println);
@@ -130,6 +136,48 @@ class MapSearchTest {
         ArenaPoint waitingRoom = map.points().waitingRoom().toArenaPoint(originX, originY, originZ);
         Arena arena = new Arena("generated", new GridCell(0, 0), bounds, waitingRoom, teams, enemies);
         assertEquals(List.of(), ArenaValidator.problems(arena, GRID));
+    }
+
+    @Test
+    void difficultiesFourAndFiveForceTheirJumps() {
+        assertEquals(1, ChallengeMinimums.forDifficulty(4).forcedJumps());
+        assertEquals(2, ChallengeMinimums.forDifficulty(5).forcedJumps());
+        for (int difficulty = 4; difficulty <= 5; difficulty++) {
+            int crossable = 0;
+            for (long seed = 0; seed < 60; seed++) {
+                CrossingReport report = MovementSolver.solve(TerrainGenerator.generate(seed, difficulty),
+                        MovementModel.DEFAULT).report();
+                if (report.crossable()) {
+                    crossable++;
+                    // The chasms force their jumps on every crossable side, not only accepted ones.
+                    assertTrue(report.forcedJumps() >= TerrainGenerator.chasmCount(difficulty),
+                            "seed " + seed + " difficulty " + difficulty + ": " + report);
+                    assertFalse(report.problems(ChallengeMinimums.forDifficulty(difficulty))
+                            .contains(CrossingReport.Problem.TOO_FEW_JUMPS));
+                }
+            }
+            assertTrue(crossable * 2 > 60, "most sides stay crossable at difficulty " + difficulty + ": " + crossable);
+        }
+    }
+
+    /** Which attempt each search for seeds 0 to 39 accepted at difficulties 1 to 3, before the chasms. */
+    private static final String ACCEPTED_ATTEMPTS_1_TO_3 =
+            "0000000000000000000000000000000000000000/"
+            + "0000000000000001000000000000000000000100/"
+            + "1000100000011001000000000100000000000100/";
+
+    @Test
+    void difficultiesOneToThreeAcceptTheSameMaps() {
+        StringBuilder accepted = new StringBuilder();
+        for (int difficulty = 1; difficulty <= 3; difficulty++) {
+            for (long seed = 0; seed < 40; seed++) {
+                MapSearch.Accepted map = assertInstanceOf(MapSearch.Accepted.class,
+                        MapSearch.search(seed, difficulty, 2));
+                accepted.append(map.attempt());
+            }
+            accepted.append('/');
+        }
+        assertEquals(ACCEPTED_ATTEMPTS_1_TO_3, accepted.toString());
     }
 
     @Test

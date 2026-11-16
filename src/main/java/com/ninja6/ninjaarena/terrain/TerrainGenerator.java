@@ -63,6 +63,16 @@ public final class TerrainGenerator {
     private static final long STREAM_HANGING = 9;
     private static final long STREAM_GAPS = 10;
     private static final long STREAM_CRUMBLE = 11;
+    private static final long STREAM_CHASMS = 12;
+
+    /** Chasms cut at difficulty 4 and 5; see {@link #chasmCount}. */
+    static final int CHASM_DIFFICULTY = 4;
+
+    /** Rows a chasm spans from edge to edge: a gap the default movement clears rising or level. */
+    static final int CHASM_WIDTH = 2;
+
+    /** Most rows a chasm's near edge strays from its base row as it runs across the side. */
+    static final int CHASM_WANDER = 2;
 
     private static final byte AIR = (byte) BlockKind.AIR.ordinal();
     private static final byte ROCK = (byte) BlockKind.ROCK.ordinal();
@@ -81,6 +91,44 @@ public final class TerrainGenerator {
             throw new IllegalArgumentException("difficulty must be " + MIN_DIFFICULTY + " to " + MAX_DIFFICULTY);
         }
         return new Build(seed, difficulty, dimensions).run();
+    }
+
+    /** Chasms every route must jump on a side of this difficulty: 0 below 4, 1 at 4, 2 at 5. */
+    public static int chasmCount(int difficulty) {
+        return Math.max(0, difficulty - CHASM_DIFFICULTY + 1);
+    }
+
+    /**
+     * Where a side's chasms run: for each chasm, the near edge row at every {@code x}. Empty
+     * below difficulty 4, or when the hazard rows are too few to hold the chasms.
+     */
+    static int[][] chasmRows(long seed, int difficulty, SideDimensions dimensions) {
+        int count = chasmCount(difficulty);
+        int first = dimensions.spawnDepth() + dimensions.blendDepth();
+        int end = dimensions.length() - dimensions.centreDepth() - dimensions.blendDepth();
+        int share = count == 0 ? 0 : (end - first) / count;
+        // The edge rows of a share stay clear, so a chasm never meets a blend row or the
+        // other chasm, and players land on ground between them. Small sides wander less.
+        int reach = Math.clamp((share - CHASM_WIDTH - 2) / 2, 0, CHASM_WANDER);
+        int room = share - CHASM_WIDTH - 2 * reach - 2;
+        if (count == 0 || room < 0) {
+            return new int[0][];
+        }
+        SplitMix64 random = new SplitMix64(SplitMix64.derive(seed, STREAM_CHASMS));
+        int[][] rows = new int[count][dimensions.width()];
+        for (int band = 0; band < count; band++) {
+            int baseRow = first + band * share + 1 + reach + random.nextInt(room + 1);
+            int wander = random.nextInt(2 * reach + 1) - reach;
+            for (int x = 0; x < dimensions.width(); x++) {
+                // One draw per column, the first column's included, so the stream stays aligned.
+                int step = random.nextInt(3) - 1;
+                if (x > 0) {
+                    wander = Math.clamp(wander + step, -reach, reach);
+                }
+                rows[band][x] = baseRow + wander;
+            }
+        }
+        return rows;
     }
 
     /** The theme a seed draws; the same for every difficulty and size. */
@@ -307,6 +355,7 @@ public final class TerrainGenerator {
         private void placeHazards() {
             byte[] terrain = cells.clone();
             cutGaps();
+            cutChasms();
             placeRivers(terrain);
             placeCeilingLava(terrain);
             placeCrumble(terrain);
@@ -341,6 +390,29 @@ public final class TerrainGenerator {
                             bottom--;
                         }
                         cells[column + bottom] = (byte) BlockKind.SURFACE.ordinal();
+                    }
+                }
+            }
+        }
+
+        /**
+         * Bands across the whole width that no route can walk round or through: every cell
+         * from the lava above the floor to the model top is cleared, so a band holds no
+         * standing cell and no ceiling, and the only way over is a jump of
+         * {@link #CHASM_WIDTH} rows. The near edge wanders by at most one row per column,
+         * less than the width, so no walk along {@code x} slips past a band's end. Each band
+         * keeps to its own share of the hazard rows, clear of the other band.
+         */
+        private void cutChasms() {
+            byte lava = (byte) BlockKind.LAVA.ordinal();
+            for (int[] nearEdge : chasmRows(seed, difficulty, dimensions)) {
+                for (int x = 0; x < width; x++) {
+                    for (int z = nearEdge[x]; z < nearEdge[x] + CHASM_WIDTH; z++) {
+                        int column = column(x, z);
+                        cells[column + FLOOR + 1] = lava;
+                        for (int y = FLOOR + 2; y < height; y++) {
+                            cells[column + y] = AIR;
+                        }
                     }
                 }
             }
