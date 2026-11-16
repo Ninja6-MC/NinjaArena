@@ -538,6 +538,15 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void createRoomRefusedByClosedLobbyLeavesNoRoomOrWorldHold() {
+        lobbyRefuses.add(ALICE);
+        rooms.create(player(ALICE));
+        assertTrue(rooms.rooms().isEmpty());
+        assertFalse(lobby.contains(ALICE));
+        assertTrue(lastMessage(ALICE).contains("The lobby is closed."));
+    }
+
+    @Test
     void withoutTheNodeAPlayerCannotOpenARoom() {
         players.get(ALICE).permissions.remove(RoomService.CREATE);
         rooms.create(player(ALICE));
