@@ -194,4 +194,26 @@ class RoomBoardsTest {
         assertTrue(added.isEmpty());
     }
 
+    @Test void reloadedMessagesRefreshExistingCreateDisplayWithoutReplacingEntities() throws Exception {
+        RoomBoards board = board();
+        board.place();
+        FakeEntity create = spawned.stream().filter(fake -> fake.type == TextDisplay.class
+                && "create-room".equals(fake.data.get(RoomBoards.KEY))).findFirst().orElseThrow();
+        Object previous = create.properties.get("text");
+        Path messages = directory.resolve("messages.yml");
+        java.nio.file.Files.writeString(messages, "lobby:\n  boards:\n    create: 'Open a new room'\n");
+        try {
+            com.ninja6.ninjaarena.message.Messages.use(com.ninja6.ninjaarena.message.Messages.read(
+                    messages, warning -> { }));
+            board.update();
+            assertEquals(Component.text("Open a new room"), create.properties.get("text"));
+            assertFalse(previous.equals(create.properties.get("text")));
+            assertFalse(create.removed);
+            assertEquals(4, spawned.size());
+        } finally {
+            com.ninja6.ninjaarena.message.Messages.use(com.ninja6.ninjaarena.message.Messages.bundled());
+            board.close();
+        }
+    }
+
 }

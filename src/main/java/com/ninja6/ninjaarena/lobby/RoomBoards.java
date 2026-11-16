@@ -155,6 +155,8 @@ public final class RoomBoards implements Listener, AutoCloseable {
             }
         }
         for (Entity entity : world.getEntities()) { removeDuplicate(entity); }
+        Board create = boards.get("create-room");
+        if (create != null) { create.text().text(msg("lobby.boards.create")); }
         Board roomList = boards.get("room-list");
         if (roomList != null) { roomList.text().text(list.get()); }
     }
