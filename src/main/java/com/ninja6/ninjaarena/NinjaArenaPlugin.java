@@ -1123,7 +1123,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 () -> com.ninja6.ninjaarena.lobby.RoomBoardText.render(roomList.rooms().stream()
                         .map(room -> new com.ninja6.ninjaarena.lobby.RoomBoardText.Row(
                                 roomList.playerName(room.host()), room.size(), room.settings().players(),
-                                room.settings().inviteOnly(), room.arena(), room.isPlaying() ? "playing"
+                                room.settings().privacy(), room.arena(), room.isPlaying() ? "playing"
                                         : roomList.building(room).isPresent() ? "building" : "waiting"))
                         .toList(), limit),
                 (id, player) -> {

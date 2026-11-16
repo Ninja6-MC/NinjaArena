@@ -3,6 +3,7 @@ package com.ninja6.ninjaarena.lobby;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import com.ninja6.ninjaarena.room.RoomSettings.Privacy;
 import java.util.List;
 import java.util.stream.IntStream;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -15,14 +16,14 @@ class RoomBoardTextTest {
 
     @Test void emptyAndSingleRoomHaveReadableExplicitLines() {
         assertTrue(render(List.of(), 5).contains("No rooms"));
-        String one = render(List.of(new RoomBoardText.Row("Alex", 1, 4, false, "dojo", "waiting")), 5);
+        String one = render(List.of(new RoomBoardText.Row("Alex", 1, 4, Privacy.PUBLIC, "dojo", "waiting")), 5);
         assertTrue(one.contains("Alex 1/4 Public\ndojo · Waiting"), one);
         assertFalse(one.contains("more rooms"));
     }
 
     @Test void statesPrivacyAndOverflowAreShownAndLongNamesAreBounded() {
         List<RoomBoardText.Row> rows = IntStream.range(0, 9)
-                .mapToObj(i -> new RoomBoardText.Row("Host" + i, 2, 4, i == 1,
+                .mapToObj(i -> new RoomBoardText.Row("Host" + i, 2, 4, i == 1 ? Privacy.INVITE : Privacy.PUBLIC,
                         "map-name-that-is-much-too-long", List.of("waiting", "building", "playing").get(i % 3)))
                 .toList();
         String many = render(rows, 3);
@@ -34,5 +35,15 @@ class RoomBoardTextTest {
         assertFalse(many.contains("queued"));
         assertFalse(many.contains("Host3"));
         assertFalse(many.contains("much-too-long"));
+    }
+
+    @Test void everyPrivacyHasItsOwnLabel() {
+        String rows = render(List.of(
+                new RoomBoardText.Row("Pub", 1, 4, Privacy.PUBLIC, "dojo", "waiting"),
+                new RoomBoardText.Row("Ask", 1, 4, Privacy.ASK, "dojo", "waiting"),
+                new RoomBoardText.Row("Inv", 1, 4, Privacy.INVITE, "dojo", "waiting")), 5);
+        assertTrue(rows.contains("Pub 1/4 Public\n"), rows);
+        assertTrue(rows.contains("Ask 1/4 Ask to join\n"), rows);
+        assertTrue(rows.contains("Inv 1/4 Invite only\n"), rows);
     }
 }
