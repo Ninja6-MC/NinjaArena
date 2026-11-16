@@ -887,7 +887,11 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             tell(player, "room.kick-self");
             return;
         }
-        if (!room.host().equals(player.getUniqueId()) && room.isManager(targetId)) {
+        if (targetId.equals(room.host())) {
+            tell(player, "room.kick-host");
+            return;
+        }
+        if (!room.host().equals(player.getUniqueId()) && room.isCohost(targetId)) {
             tell(player, "room.kick-manager", "player", name(targetId));
             return;
         }

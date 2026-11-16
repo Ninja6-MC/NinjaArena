@@ -220,7 +220,8 @@ class RoomHostsTest extends MatchFixture {
         rooms.mapSet(player(BOB), "garden");
         assertEquals("Only the host of the room can do that.", last(BOB));
         rooms.kick(player(BOB), "Alice");
-        assertEquals("Only the host can remove Alice.", last(BOB));
+        assertEquals("You cannot remove the host.", last(BOB));
+        assertTrue(room.contains(ALICE));
         rooms.kick(player(BOB), "Dave");
         assertEquals("Only the host can remove Dave.", last(BOB));
         assertTrue(room.contains(DAVE));

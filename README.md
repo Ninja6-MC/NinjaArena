@@ -718,6 +718,7 @@ match players or restarts a match.
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | `match.spectate-radius` | Applies immediately to eliminated players in running matches. |
 | `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
+| `rooms.host-grace-seconds` | Applies immediately to hosts who disconnect from then on. A host already away keeps the grace they were given; 0 hands the room on at the next host disconnect. |
 | Shop screen | `shop.menu` applies to the next screen opened. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |
 | Seed modes | Every `maps` key applies at each slot's next generation, including the spare cell for `regenerate: round`. A map already placed, a running match and a shop break under way keep theirs. A rotation keeps its place while its `seeds` list is the same; a change of `seed-sharing` starts every rotation and random seed again. Warnings about the new settings go to the log. |

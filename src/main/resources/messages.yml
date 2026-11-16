@@ -544,6 +544,8 @@ room:
   team: "<yellow>You are on team <team>."
   kicked: "<yellow><host> removed you from their room."
   kicked-by: "<yellow><player> removed you from the room of <host>."
+  kick-host: "<yellow>You cannot remove the host."
+  # A co-host trying to remove another co-host.
   kick-manager: "<yellow>Only the host can remove <player>."
   player-kicked: "<gray><player> was removed from the room."
   kick-not-member: "<yellow><player> is not in your room."
