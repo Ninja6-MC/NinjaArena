@@ -355,6 +355,22 @@ lobby:
     playing: 'In match'
     more: '<gray>+<count> more rooms</gray>'
     list-click: '<gray>Click to browse rooms</gray>'
+  # Room pads of the generated lobby. label stands over a room's pad: <host>, <players> of
+  # the <needed> to start, and <state>, one of the state texts, so the state is never told by
+  # the fog colour alone. countdown is the title while a player stands on a pad, <seconds>
+  # left; the subtitle says what the pad does then: join, ask (a join request) or invite.
+  pads:
+    label: "<gold><host>\n<white><players>/<needed> <gray>·</gray> <state>"
+    state:
+      open: '<green>Open'
+      ask: '<yellow>Ask to join'
+      invite: '<light_purple>Invite only'
+      full: '<red>Full'
+      playing: '<aqua>In match'
+    countdown: "<gold><seconds>"
+    countdown-join: "<yellow>Stay on the pad to join the room of <host>"
+    countdown-ask: "<yellow>Stay on the pad to ask to join the room of <host>"
+    countdown-invite: "<yellow>The room of <host> is invite only"
 
   joined: "<green>You are in the lobby."
   join-failed: "<red>You could not join the lobby, so you were sent back."

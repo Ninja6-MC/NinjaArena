@@ -13,6 +13,16 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Joining a room by standing on its pad in the generated lobby (#220). Each open room takes
+  the lowest-numbered free pad until it closes; rooms beyond the pad count stay in the room
+  list. Standing anywhere on the plate for `lobby.pads.join-seconds` (default 5, 1 to 30)
+  joins a public room, sends a join request to an ask-to-join room or says an invite-only
+  room is invite only, through the usual join checks; the countdown is a title. Only lobby
+  members in no room use pads. Each pad has a label with the host, player count and state,
+  and dust fog on its ring coloured by the state, sent per viewer for nearby pads to
+  recently active players, with per-viewer caps for Java and Bedrock. Labels are removed
+  when a room closes, while the lobby is built and on disable. The obsidian lobby has no
+  pads, so nothing changes there.
 - Ask-to-join rooms (`privacy: ask`), with expiring requests, a per-player per-room
   cooldown and host or co-host approval through chat, native Java dialogs, Bedrock forms
   or chest menus (#218). New commands: `room requests`, `room accept-request` and

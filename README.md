@@ -318,6 +318,54 @@ Lost entities are replaced, tagged duplicates removed, and board chunk tickets s
 with the shop board until their last user releases them. The lobby world stays loaded
 when arena worlds retire. A layout missing a mark skips that board with one warning.
 
+### Room pads
+
+In the generated lobby ([The lobby world](#the-lobby-world)) each open room has a pad while
+one is free. A room takes the lowest-numbered free pad when it opens, rooms taken oldest
+first, and keeps it until it closes; the freed pad goes to the oldest room without one.
+Rooms beyond the pad count have no pad and are only in the room list. A free pad shows
+nothing, and standing on it does nothing. The obsidian lobby of earlier versions has no
+pads, so none of this happens there. Assignments are kept in memory, like the rooms, so a
+restart starts with no rooms and no pads in use.
+
+Standing anywhere on a room's 5 x 5 plate for `lobby.pads.join-seconds` (default 5, 1 to
+30) acts on the room:
+
+| Room | Standing on its pad |
+| :--- | :--- |
+| Public | Joins it |
+| Ask to join | Sends a join request, as `/narena room accept <host>` does, with its cooldown and messages |
+| Invite only | Says the room is invite only; a player who was invited joins |
+
+Moving, turning, jumping and chatting on the plate keep the countdown going. Stepping off
+cancels it, and stepping back on starts it again from the full time. After the pad acts it
+does nothing more for that player until they step off. The countdown is a title, since the
+room status line uses the action bar. Only lobby members in no room use pads: players in
+a shop phase and spectators in the lobby world do not. Joining takes the same path as an
+invitation's accept, with its checks: a full room, a room in a match, a lobby closed while
+it is built and a player already in a room are refused with the usual messages. A pad
+whose room is in a match does not count down.
+
+Each assigned pad has a label over its plate with the host, the players and the needed
+count, and the room's state in words: open, ask to join, invite only, full or in match.
+Low dust fog on the plate's outer ring has the state's colour, set under
+`lobby.pads.fog.colours`. Labels are text displays that are not saved with the world:
+they are removed when a room closes, while the lobby is built and on plugin disable, and
+put back at the new pad spots after a build. A lobby generated again with fewer pads frees
+the pads that are gone; their rooms wait in the room list for a free pad.
+
+Fog is sent to each viewer on their own: only for pads within `fog.distance` blocks
+(default 16) of them, and only while they moved, looked, chatted or used a command in the
+last `fog.active-seconds` (default 30). A draw every `fog.interval-ticks` (default 10) puts
+`fog.per-block` particles (default 1) on each of a pad's 16 ring blocks, nearest pad first,
+up to `fog.max-particles` a viewer (default 48, three pads). Bedrock viewers, whose client
+gets each particle translated by Geyser, have their own cap, `fog.bedrock-max-particles`
+(default 16, one pad; 0 sends them none). At the defaults a Java viewer gets at most 96 and
+a Bedrock viewer at most 32 particles a second. Estimated from the packet sizes, not
+measured on a client, that is about 6 KB a second for a Java viewer and under 4 KB for a
+Bedrock viewer before Bedrock's batch compression; an idle or distant player costs nothing.
+`lobby.pads` takes effect after a plugin restart.
+
 ### Co-hosts and the creator
 
 The host can make any other member a co-host with `/narena room cohost <player>`, the
@@ -901,7 +949,8 @@ explosions, fluids and other environmental block changes are blocked at all time
 
 The first time the plugin finds the lobby world without its build, it generates the lobby
 there, centred on 0, 64, 0, with one room pad per arena slot (`arenas.max-active`, at most
-32 pads in one ring). Rooms beyond the pads wait in the room list. The lobby is put
+32 pads in one ring). Each open room takes a pad, and players join it by standing on it
+([Room pads](#room-pads)); rooms beyond the pads wait in the room list. The lobby is put
 together from pieces of a reference build: a green centre with the emblem, pads of
 diamond in gold frames, corner squares with cushions, and a barrier wall 15 blocks high
 with a tree on every post.

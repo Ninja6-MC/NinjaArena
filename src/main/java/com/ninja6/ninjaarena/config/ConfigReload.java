@@ -187,7 +187,7 @@ public final class ConfigReload {
                     || path.startsWith(SeedSettings.SECTION + ".")) {
                 continue;
             }
-            if (path.startsWith("lobby.boards.") || path.equals("rooms.menu") || path.startsWith("director.") || path.startsWith("stability.")
+            if (path.startsWith("lobby.boards.") || path.startsWith("lobby.pads.") || path.equals("rooms.menu") || path.startsWith("director.") || path.startsWith("stability.")
                     || path.startsWith("resource-pack.") && !path.equals("resource-pack.thrown-visuals")
                     || path.startsWith("stats.") && !path.equals("stats.season")) {
                 refused.add(text("reload.restart-required", "path", path));

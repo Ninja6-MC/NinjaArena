@@ -154,6 +154,8 @@ public final class ReloadFiles {
                     problem = text.isBlank() || text.length() > 1000 ? "expected 1 to 1000 characters" : null;
                 } else if (path.startsWith("events.")) {
                     problem = null; // EventSettings validates the time zone and HTTPS endpoint.
+                } else if (path.startsWith("lobby.pads.fog.colours.")) {
+                    problem = text.matches("#?[0-9A-Fa-f]{6}") ? null : "expected a colour like \"#55FF55\"";
                 } else {
                     problem = StatsSettings.problem(path, text);
                 }
@@ -262,6 +264,13 @@ public final class ReloadFiles {
         return switch (path) {
             case "lobby.boards.update-seconds" -> new double[] {1, 60};
             case "lobby.boards.max-rooms" -> new double[] {1, 10};
+            case "lobby.pads.join-seconds" -> new double[] {1, 30};
+            case "lobby.pads.fog.distance" -> new double[] {4, 64};
+            case "lobby.pads.fog.active-seconds" -> new double[] {5, 600};
+            case "lobby.pads.fog.interval-ticks" -> new double[] {5, 40};
+            case "lobby.pads.fog.per-block" -> new double[] {1, 4};
+            case "lobby.pads.fog.max-particles" -> new double[] {8, 128};
+            case "lobby.pads.fog.bedrock-max-particles" -> new double[] {0, 128};
             case "resource-pack.timeout-seconds" -> new double[] {1, 600};
             case "arena-world.border-size" -> new double[] {16, 2048};
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};

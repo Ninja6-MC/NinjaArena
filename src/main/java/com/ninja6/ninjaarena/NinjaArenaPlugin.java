@@ -163,6 +163,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private com.ninja6.ninjaarena.lobby.BoardTickets boardTickets;
     private com.ninja6.ninjaarena.lobby.RoomBoards roomBoards;
     private org.bukkit.scheduler.BukkitTask roomBoardsTask;
+    private com.ninja6.ninjaarena.lobby.RoomPads roomPads;
+    private final java.util.List<org.bukkit.scheduler.BukkitTask> roomPadTasks = new java.util.ArrayList<>();
     private com.ninja6.ninjaarena.lobby.LobbyIntro lobbyIntro;
     private LobbyEditing lobbyEditing;
     /** In a match or the lobby, or spectating. */
@@ -704,6 +706,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         rooms.setRequestScreen(roomMenus::requests);
         command.setRoomScreen(roomMenus::open);
         startRoomBoards(roomList);
+        startRoomPads(roomList);
         command.setAdminMaps(new AdminMaps(generatedMaps, roomList::hasSpareCell,
                 () -> roomList.seedPolicy().map(policy -> policy.settings().defaults().difficulty())
                         .orElse(SeedSettings.DEFAULT_DIFFICULTY), getLogger()));
@@ -1142,6 +1145,52 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         roomBoardsTask = getServer().getScheduler().runTaskTimer(this, roomBoards::update, interval, interval);
     }
 
+    /**
+     * Room pads of the generated lobby: a pad for each open room while there is one free, a
+     * label and fog on it, and joining by standing on it. Nothing happens in the obsidian lobby,
+     * which has no pads. Reads {@code lobby.pads} once; a restart applies changes.
+     */
+    private void startRoomPads(com.ninja6.ninjaarena.room.RoomService roomList) {
+        World world = lobbyWorld.world();
+        com.ninja6.ninjaarena.lobby.PadSettings settings = com.ninja6.ninjaarena.lobby.PadSettings.from(
+                getConfig().getConfigurationSection(com.ninja6.ninjaarena.lobby.PadSettings.SECTION),
+                getLogger()::warning);
+        MatchService inMatch = matches;
+        Spectators watching = spectators;
+        LobbyMembers members = lobbyMembers;
+        LobbyBuild build = lobbyBuild;
+        roomPads = new com.ninja6.ninjaarena.lobby.RoomPads(world, build::layout, build::building,
+                new com.ninja6.ninjaarena.lobby.RoomPads.PadRooms() {
+                    @Override public java.util.List<com.ninja6.ninjaarena.room.Room> rooms() {
+                        return roomList.rooms();
+                    }
+
+                    @Override public String name(java.util.UUID player) {
+                        return roomList.playerName(player);
+                    }
+
+                    @Override public boolean eligible(java.util.UUID player) {
+                        return com.ninja6.ninjaarena.lobby.RoomPads.eligible(player, members::isMember,
+                                roomList::isMember, inMatch::isInMatch, watching::contains);
+                    }
+
+                    @Override public void trigger(Player player, com.ninja6.ninjaarena.room.Room room) {
+                        roomList.fromPad(player, room);
+                    }
+                },
+                (at, ready) -> world.getChunkAtAsync(at).thenAccept(chunk ->
+                        getServer().getScheduler().runTask(this, ready)),
+                boardTickets, bedrock::isBedrock, settings, System::currentTimeMillis,
+                new SplittableRandom(), getLogger()::warning);
+        getServer().getPluginManager().registerEvents(roomPads, this);
+        com.ninja6.ninjaarena.lobby.RoomPads pads = roomPads;
+        var scheduler = getServer().getScheduler();
+        roomPadTasks.add(scheduler.runTaskTimer(this, pads::tick, 1, 2));
+        roomPadTasks.add(scheduler.runTaskTimer(this, pads::update, 20, 20));
+        roomPadTasks.add(scheduler.runTaskTimer(this, pads::drawFog, settings.fogIntervalTicks(),
+                settings.fogIntervalTicks()));
+    }
+
     /** Players in the lobby world, and members wherever they are. */
     private int lobbyOccupants() {
         java.util.Set<java.util.UUID> inside = new java.util.HashSet<>();
@@ -1217,6 +1266,12 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (roomBoards != null) {
             roomBoards.close();
             roomBoards = null;
+        }
+        roomPadTasks.forEach(org.bukkit.scheduler.BukkitTask::cancel);
+        roomPadTasks.clear();
+        if (roomPads != null) {
+            roomPads.close();
+            roomPads = null;
         }
         if (shopBoard != null) {
             shopBoard.close();
