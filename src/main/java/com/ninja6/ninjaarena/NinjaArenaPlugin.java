@@ -69,6 +69,7 @@ import com.ninja6.ninjaarena.match.PlayerPoints;
 import com.ninja6.ninjaarena.match.PointsSettings;
 import com.ninja6.ninjaarena.match.ScoringSettings;
 import com.ninja6.ninjaarena.match.ShopSettings;
+import com.ninja6.ninjaarena.match.TeamColours;
 import com.ninja6.ninjaarena.match.TeamScores;
 import com.ninja6.ninjaarena.match.TeamScoringListener;
 import com.ninja6.ninjaarena.portal.ArenaAdmission;
@@ -187,6 +188,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private com.ninja6.ninjaarena.shop.ShopMenus shopMenus;
     private com.ninja6.ninjaarena.shop.ShopBoard shopBoard;
     private MatchHud hud;
+    private TeamColours teamColours;
     private DirectorService directors;
     private EnemyLifecycle enemyLifecycle;
     private KitItems kitItems;
@@ -475,6 +477,12 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         hud.setSounds(sounds);
         hud.setCooldownCheck(tools::checkCooldowns);
         hud.start(this);
+        teamColours = new TeamColours(inMatch::matches, getServer()::getPlayer,
+                () -> getServer().getScoreboardManager().getNewScoreboard(),
+                () -> getServer().getScoreboardManager().getMainScoreboard());
+        teamColours.setSpectators(name -> spectators == null ? List.of() : spectators.players(name));
+        getServer().getPluginManager().registerEvents(teamColours, this);
+        teamColours.start(this);
         directors.setGate(hud.withSpawnCues(new StabilityGate(stability,
                 match -> enemyDirectors.director(match).map(StabilityGate::alive).orElse(0), inMatch::matches,
                 Bukkit::getCurrentTick, tickTime)));
@@ -1104,6 +1112,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         if (hud != null) {
             hud.close();
             hud = null;
+        }
+        if (teamColours != null) {
+            teamColours.close();
+            teamColours = null;
         }
         if (enemyLifecycle != null) {
             enemyLifecycle.close();

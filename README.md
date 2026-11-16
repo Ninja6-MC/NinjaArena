@@ -566,7 +566,8 @@ the named match is open to spectators. Play portals lead to the lobby.
 
 Viewers can fly within the arena's three-dimensional bounds. Entity cameras, arena
 interactions, and teleports outside the bounds are blocked. Viewers are outside the
-team rosters, countdown minimum, scoring, and enemy director. Use `/narena leave` to go
+team rosters, countdown minimum, scoring, and enemy director, but see each team's
+[colour](#round-feedback). Use `/narena leave` to go
 to the lobby, or wait for the match to end, which takes you there too. Disconnecting frees
 the spectator slot immediately and puts you in the lobby on your next join.
 
@@ -1082,6 +1083,18 @@ for the next map. The actionbar shows each starting team's points and the number
 living enemies currently in play, including enemies carried over from an earlier round;
 it is not a fixed wave total. Eliminated teammates keep seeing this feedback while
 spectating.
+
+Each team shows in the colour its tools carry: team 1 red, team 2 blue, team 3 green and
+team 4 yellow. From the first preparation until the match ends, players' names take their
+team colour on name tags and in the player list, and so does the outline of a player made
+to glow, by a shuriken mark or a Shadow Stalker, for everyone who sees the match.
+Eliminated players keep their colour, and it stays through the shop phase. Viewers
+watching the match see the colours too, without joining a team. Each match uses a
+scoreboard of its own, so the main scoreboard and its teams are never changed; leaving,
+a disconnect that is not held for a rejoin, the match end and plugin disable give each
+player back the scoreboard they had. Chat names are left alone. Geyser carries the
+colour to Bedrock name tags; Bedrock shows no glow outline. Not yet checked with a
+Bedrock client.
 
 Titles mark preparation, the start of combat and the round result. A quiet cue announces
 each successful enemy spawn to that match, and a level-up sound marks each round end,
