@@ -604,6 +604,36 @@ class RoomPadsTest {
     }
 
     @Test
+    void everyCappedDrawIsEvenAllRound() {
+        LobbyPad pad = layout.pads().get(0);
+        List<int[]> ring = pad.ring();
+        ArenaBounds plate = pad.plate();
+        for (int perBlock = 1; perBlock <= 4; perBlock++) {
+            for (int budget = 1; budget <= 128; budget++) {
+                for (int draw = 0; draw < ring.size(); draw++) {
+                    List<int[]> blocks = RoomPads.spread(ring, perBlock, budget, draw);
+                    String at = perBlock + "/" + budget + "/" + draw;
+                    assertEquals(Math.min(budget, ring.size() * perBlock), blocks.size(), at);
+                    int[] counts = new int[ring.size()];
+                    for (int[] block : blocks) {
+                        counts[ring.indexOf(block)]++;
+                    }
+                    int max = java.util.Arrays.stream(counts).max().orElseThrow();
+                    int min = java.util.Arrays.stream(counts).min().orElseThrow();
+                    assertTrue(max - min <= 1, at);
+                    assertTrue(max <= perBlock, at);
+                    if (budget >= 4) {
+                        assertTrue(blocks.stream().anyMatch(b -> b[2] == plate.minZ()), "north " + at);
+                        assertTrue(blocks.stream().anyMatch(b -> b[0] == plate.maxX()), "east " + at);
+                        assertTrue(blocks.stream().anyMatch(b -> b[2] == plate.maxZ()), "south " + at);
+                        assertTrue(blocks.stream().anyMatch(b -> b[0] == plate.minX()), "west " + at);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     void settingsReadDefaultsAndClampOutOfRangeValues() {
         org.bukkit.configuration.file.YamlConfiguration config = new org.bukkit.configuration.file.YamlConfiguration();
         assertEquals(PadSettings.DEFAULTS, PadSettings.from(config.getConfigurationSection("lobby.pads"), m -> { }));

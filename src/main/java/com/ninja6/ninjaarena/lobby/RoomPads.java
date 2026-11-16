@@ -465,20 +465,25 @@ public final class RoomPads implements Listener, AutoCloseable {
 
     /**
      * The ring blocks that get a particle in a draw: {@code perBlock} rounds of the ring, or,
-     * when the budget is smaller, that many blocks spaced evenly all round it, so a capped
-     * draw thins the ring instead of cutting it short. The start moves one block each draw,
-     * so over a few draws every block gets fog.
+     * when the budget is smaller, as many whole rounds as it covers and the rest spaced evenly
+     * all round, so a capped draw thins the ring instead of cutting it short. The spaced part
+     * starts one block further on each draw, so over a few draws every block gets as much.
      */
     static List<int[]> spread(List<int[]> ring, int perBlock, int budget, long draw) {
         int size = ring.size();
         long total = (long) size * perBlock;
         int count = (int) Math.min(total, Math.max(0, budget));
         int offset = (int) Math.floorMod(draw, (long) size);
-        // Spaced over one round when the budget does not cover it, else over every round.
-        long span = count <= size ? size : total;
+        // Whole rounds first, then the rest spaced evenly over one round from the rotating start,
+        // so no two blocks differ by more than one particle in a draw.
+        int rounds = count / size;
+        int rest = count % size;
         List<int[]> blocks = new ArrayList<>(count);
-        for (int k = 0; k < count; k++) {
-            long along = k * span / count;
+        for (int round = 0; round < rounds; round++) {
+            blocks.addAll(ring);
+        }
+        for (int k = 0; k < rest; k++) {
+            long along = (long) k * size / rest;
             blocks.add(ring.get((int) ((along + offset) % size)));
         }
         return blocks;
