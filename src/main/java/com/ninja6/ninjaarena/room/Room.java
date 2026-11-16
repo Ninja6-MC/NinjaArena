@@ -302,10 +302,15 @@ public final class Room {
 
     /**
      * Whether the player may join: a public room takes anyone it has not removed, an
-     * invite-only room only those invited.
+     * ask and invite-only rooms take invited players directly; other ask joins need approval.
      */
     public boolean admits(UUID player) {
-        return invited.contains(player) || !settings.inviteOnly() && !kicked.contains(player);
+        return invited.contains(player) || settings.privacy() == RoomSettings.Privacy.PUBLIC && !kicked.contains(player);
+    }
+
+    /** A removed player still needs an invitation before requesting entry. */
+    public boolean canRequest(UUID player) {
+        return settings.asksToJoin() && !kicked.contains(player);
     }
 
     /**

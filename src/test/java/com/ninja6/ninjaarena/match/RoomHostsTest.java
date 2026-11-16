@@ -298,7 +298,7 @@ class RoomHostsTest extends MatchFixture {
         h.press(bob, "Your room");
         if (dialog) {
             List<String> labels = h.forms.get(BOB).content().options().stream().map(o -> o.label()).toList();
-            assertEquals(List.of("Invite players", "Remove players", "Start match", "Leave room", "Back"), labels);
+            assertEquals(List.of("Invite players", "Join requests", "Remove players", "Start match", "Leave room", "Back"), labels);
             assertTrue(h.forms.get(BOB).content().lines().contains("Co-hosts: Bob"));
             assertTrue(h.forms.get(BOB).content().lines().contains("♛ Opened by Alice"));
         }

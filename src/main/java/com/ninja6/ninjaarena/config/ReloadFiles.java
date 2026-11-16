@@ -275,6 +275,8 @@ public final class ReloadFiles {
             case "match.spectate-radius"
                     -> new double[] {MatchSettings.MIN_SPECTATE_RADIUS, MatchSettings.MAX_SPECTATE_RADIUS};
             case "match.rejoin-grace-seconds" -> new double[] {0, MatchService.MAX_REJOIN_GRACE_SECONDS};
+            case RoomService.REQUEST_LIFETIME_KEY -> new double[] {1, 600};
+            case RoomService.REQUEST_COOLDOWN_KEY -> new double[] {0, 600};
             case RoomService.HOST_GRACE_KEY -> new double[] {0, RoomService.MAX_HOST_GRACE_SECONDS};
             case "shop.max-seconds", "shop.quick-start-seconds" -> new double[] {1, 3600};
             case "shop.map-wait-limit-seconds" -> new double[] {0, 3600};

@@ -545,3 +545,7 @@ rooms:
   # leave at once, and a match keeps match.rejoin-grace-seconds. 0 hands the room on at
   # once (0 to 600). Applies on reload, to disconnects from then on. A restart ends it.
   host-grace-seconds: 60
+  # Ask-to-join requests last 1-600 seconds. Existing requests keep their deadline on reload.
+  request-lifetime-seconds: 60
+  # Per player per room, 0-600 seconds; 0 disables the cooldown. Live for new requests.
+  request-cooldown-seconds: 30

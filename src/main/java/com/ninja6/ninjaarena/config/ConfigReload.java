@@ -59,6 +59,9 @@ public final class ConfigReload {
         /** A new {@code rooms.host-grace-seconds}, for host disconnects from now on. */
         default void hostGrace(int seconds) {
         }
+        /** New request deadlines apply to requests sent from now on. */
+        default void roomRequests(int lifetime, int cooldown) {
+        }
         /** A new tether radius, including for players already spectating a match. */
         default void spectateRadius(int radius) {
         }
@@ -270,6 +273,11 @@ public final class ConfigReload {
         }
         if (!same(effective.get(HOST_GRACE), next.get(HOST_GRACE))) {
             target.hostGrace(next.getInt(HOST_GRACE, RoomService.DEFAULT_HOST_GRACE_SECONDS));
+        }
+        if (!same(effective.get(RoomService.REQUEST_LIFETIME_KEY), next.get(RoomService.REQUEST_LIFETIME_KEY))
+                || !same(effective.get(RoomService.REQUEST_COOLDOWN_KEY), next.get(RoomService.REQUEST_COOLDOWN_KEY))) {
+            target.roomRequests(next.getInt(RoomService.REQUEST_LIFETIME_KEY, RoomService.DEFAULT_REQUEST_LIFETIME),
+                    next.getInt(RoomService.REQUEST_COOLDOWN_KEY, RoomService.DEFAULT_REQUEST_COOLDOWN));
         }
         if (differs("points.", next)) {
             target.points(PointsSettings.from(next.getConfigurationSection("points")));

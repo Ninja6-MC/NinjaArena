@@ -83,6 +83,10 @@ class ConfigReloadTest {
         @Override public void spectateRadius(int radius) { calls.add("spectateRadius"); spectateRadius = radius; }
         Integer rejoinGrace;
         @Override public void rejoinGrace(int seconds) { calls.add("rejoinGrace"); rejoinGrace = seconds; }
+        List<Integer> requestTimes;
+        @Override public void roomRequests(int lifetime, int cooldown) {
+            calls.add("roomRequests"); requestTimes = List.of(lifetime, cooldown);
+        }
         Integer hostGrace;
         @Override public void hostGrace(int seconds) { calls.add("hostGrace"); hostGrace = seconds; }
         com.ninja6.ninjaarena.match.ShopSettings shopPhase;
@@ -337,6 +341,21 @@ class ConfigReloadTest {
         write("match: {rejoin-grace-seconds: 0}\n", EMPTY_KIT);
         reload.reload();
         assertEquals(0, target.rejoinGrace, "0 turns rejoining off");
+    }
+
+    @Test
+    void roomRequestTimersReloadLiveAndInvalidValuesKeepThePreviousSettings() throws Exception {
+        write("rooms: {request-lifetime-seconds: 15, request-cooldown-seconds: 0}\n", EMPTY_KIT);
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertEquals(List.of(15, 0), target.requestTimes);
+        target.calls.clear();
+        for (String bad : List.of("request-lifetime-seconds: 0", "request-lifetime-seconds: 601",
+                "request-cooldown-seconds: -1", "request-cooldown-seconds: 601", "request-lifetime-seconds: 1.5")) {
+            write("rooms: {" + bad + "}\n", EMPTY_KIT);
+            assertTrue(reload.reload().getFirst().contains("rejected"), bad);
+        }
+        assertFalse(target.calls.contains("roomRequests"));
+        assertEquals(List.of(15, 0), target.requestTimes);
     }
 
     @Test

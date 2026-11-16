@@ -577,6 +577,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void roomRequests(int lifetime, int cooldown) {
+                        rooms.setRequestTimes(lifetime, cooldown);
+                    }
+
+                    @Override
                     public void hostGrace(int seconds) {
                         roomList.setHostGraceSeconds(seconds);
                     }
@@ -693,6 +698,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 message -> getLogger().warning(message));
         getServer().getPluginManager().registerEvents(
                 new com.ninja6.ninjaarena.room.RoomMenuListener(roomChest, roomMenus), this);
+        rooms.setRequestScreen(roomMenus::requests);
         command.setRoomScreen(roomMenus::open);
         command.setAdminMaps(new AdminMaps(generatedMaps, roomList::hasSpareCell,
                 () -> roomList.seedPolicy().map(policy -> policy.settings().defaults().difficulty())
@@ -726,6 +732,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 });
         rooms = new RoomService(this, arenas, inMatch, lobbyEntry, () -> roomDefaults, transfers, arenaWorld::hold,
                 MaxActive.read(getConfig(), getLogger()::warning));
+        rooms.setRequestTimes(getConfig().getInt(RoomService.REQUEST_LIFETIME_KEY, RoomService.DEFAULT_REQUEST_LIFETIME),
+                getConfig().getInt(RoomService.REQUEST_COOLDOWN_KEY, RoomService.DEFAULT_REQUEST_COOLDOWN));
         rooms.setSounds(sounds);
         rooms.setBedrock(bedrock::isBedrock);
         rooms.setHostGraceSeconds(getConfig().getInt(RoomService.HOST_GRACE_KEY,
