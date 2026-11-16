@@ -17,8 +17,9 @@ Java 25, and does not run on Folia.
   cooldown and host or co-host approval through chat, native Java dialogs, Bedrock forms
   or chest menus (#218). New commands: `room requests`, `room accept-request` and
   `room decline-request`. Request timers reload for new requests; play portals skip
-  ask rooms. Decisions and changes in room or requester eligibility end requests;
-  stale forms cannot decide a replacement request.
+  ask rooms, including for invited players; invited players can still enter invite-only
+  rooms through portals. Decisions and changes in room or requester eligibility end
+  requests; stale forms cannot decide a replacement request.
 - Room co-hosts, the creator's crown and a host grace in the lobby (#217). The host names
   co-hosts with `/narena room cohost` and `uncohost`, chat buttons or the room screen;
   co-hosts can start the match, invite and remove plain members, while settings and the map

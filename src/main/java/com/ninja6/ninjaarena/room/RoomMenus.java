@@ -60,7 +60,7 @@ public final class RoomMenus {
         for (Room room : rooms.rooms()) {
             UUID host = room.host();
             String label = text(room.isPlaying() ? "room.screen.watch"
-                    : room.settings().asksToJoin() ? "room.screen.request-join" : "room.screen.join",
+                    : room.settings().asksToJoin() && !room.isInvited(player.getUniqueId()) ? "room.screen.request-join" : "room.screen.join",
                     "host", shortName(rooms.playerName(host)), "size", room.size());
             options.add(new RoomScreen.Option(label, room.isPlaying() ? Material.SPYGLASS : Material.OAK_DOOR,
                     (p, values) -> {
@@ -252,6 +252,10 @@ public final class RoomMenus {
     }
 
     private void request(Player player, RoomService.JoinRequest request) {
+        if (rooms.pendingRequests(player).stream().noneMatch(pending -> pending == request)) {
+            player.sendMessage(msg("room.request-missing"));
+            return;
+        }
         show(player, "requests", List.of(text("room.screen.request-info", "player",
                 rooms.playerName(request.player()))), List.of(
                 action("accept-request", Material.LIME_WOOL, p -> rooms.decideRequest(p, request, true)),

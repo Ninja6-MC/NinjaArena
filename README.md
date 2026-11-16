@@ -127,11 +127,11 @@ nether portal, but from crying obsidian:
    empty inventory as an admin portal.
 
 A player-built portal belongs to no arena: it puts the player in an open room with space
-that admits them (a public room, or an invite-only one that invited them), one on an
-event's featured map first, then the one with the most players. With none, it leaves
-them in the lobby to create or be invited to one. Vanilla does nothing with crying
-obsidian, so these portals never clash with nether portals; obsidian cannot be chosen as
-the frame block.
+that admits them (a public room, or an invite-only one that invited them; ask rooms are
+skipped), one on an event's featured map first, then the one with the most players. With
+none, it leaves them in the lobby to create or be invited to one. Vanilla does nothing
+with crying obsidian, so these portals never clash with nether portals; obsidian cannot
+be chosen as the frame block.
 
 Breaking, burning, blowing up or pushing any block of the frame removes the portal; the
 corners, the opening and blocks around the frame do not count, so ordinary block updates
@@ -289,7 +289,8 @@ request the same room once per `rooms.request-cooldown-seconds` (default 30, 0 t
 player per room is allowed. Requests end on a decision or expiry, leaving the lobby,
 joining or creating a room, disconnecting, room closure, match start, privacy change or
 plugin disable. They are kept in memory only. Reload applies both timers to new requests;
-existing deadlines stay fixed. Play portals skip `ask` and `invite` rooms.
+existing deadlines stay fixed. Play portals skip `ask` rooms, including for invited
+players. Invited players can still enter `invite` rooms through a play portal.
 
 A player who comes through a play portal also joins an open room, as described under
 [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms).

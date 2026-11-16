@@ -223,6 +223,7 @@ class RoomRequestsTest extends MatchFixture {
         lobby.remove(BOB);
         rooms.acceptRequest(player(ALICE), "Bob");
         assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
+        assertEquals("Your request to join the room of Alice ended because you left the lobby.", lastMessage(BOB));
         advance(30);
         request(BOB);
         rooms.create(player(CAROL));
@@ -243,7 +244,8 @@ class RoomRequestsTest extends MatchFixture {
         request(BOB);
         rooms.settings(player(ALICE), "privacy", "invite");
         assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
-        assertTrue(lastMessage(BOB).contains("ended because entry is no longer available"));
+        assertEquals("Your request to join the room of Alice ended because the room is now invite only.",
+                lastMessage(BOB));
         rooms.settings(player(ALICE), "privacy", "ask");
         advance(30);
         request(BOB);
@@ -253,6 +255,7 @@ class RoomRequestsTest extends MatchFixture {
         assertTrue(room.isPlaying());
         assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
         assertFalse(room.contains(BOB));
+        assertEquals("Your request to join the room of Alice ended because its match started.", lastMessage(BOB));
     }
 
     @Test
@@ -261,12 +264,12 @@ class RoomRequestsTest extends MatchFixture {
         request(BOB);
         rooms.leave(player(ALICE));
         assertTrue(rooms.rooms().isEmpty());
-        assertTrue(lastMessage(BOB).contains("ended because entry is no longer available"));
+        assertEquals("Your request to join the room of Alice ended because the room closed.", lastMessage(BOB));
         askRoom();
         request(BOB);
         rooms.close();
         assertTrue(rooms.rooms().isEmpty());
-        assertTrue(lastMessage(BOB).contains("ended because entry is no longer available"));
+        assertEquals("Your request to join the room of Alice ended because the room closed.", lastMessage(BOB));
     }
 
     @Test
@@ -302,7 +305,7 @@ class RoomRequestsTest extends MatchFixture {
     }
 
     @Test
-    void portalsSkipAskAndInviteRoomsEvenWithAnInvitation() {
+    void portalsSkipAskRoomsButAdmitInvitedPlayersToInviteRooms() {
         Room ask = askRoom();
         rooms.create(player(CAROL));
         Room publicRoom = rooms.hostedBy(CAROL).orElseThrow();
@@ -316,7 +319,7 @@ class RoomRequestsTest extends MatchFixture {
         rooms.settings(player(CAROL), "privacy", "invite");
         rooms.invite(player(CAROL), "Eve");
         rooms.fromPortal(player(EVE), Optional.empty());
-        assertFalse(publicRoom.contains(EVE));
+        assertTrue(publicRoom.contains(EVE));
     }
 
     @Test
@@ -438,7 +441,11 @@ class RoomRequestsTest extends MatchFixture {
         rooms.settings(player(ALICE), "privacy", "ask");
         request(BOB);
         onLobbyJoin = () -> rooms.uncohost(player(ALICE), "Carol");
+        int before = players.get(BOB).messages.size();
         rooms.acceptRequest(player(CAROL), "Bob");
+        assertTrue(players.get(CAROL).messages.contains("You can no longer approve requests for this room."));
+        assertEquals(List.of("Your request to join the room of Alice ended."),
+                players.get(BOB).messages.subList(before, players.get(BOB).messages.size()));
         assertFalse(room.contains(BOB));
         assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
     }
@@ -473,6 +480,87 @@ class RoomRequestsTest extends MatchFixture {
         assertFalse(room.contains(BOB));
         assertEquals(1, rooms.pendingRequests(alice).size());
         assertEquals(shows, h.shows, "no stale form is reopened");
+    }
+
+    @Test
+    void publicPrivacyCancellationSaysThePlayerCanJoinNow() {
+        Room room = askRoom();
+        request(BOB);
+        rooms.settings(player(ALICE), "privacy", "public");
+        assertEquals("Your request to join the room of Alice ended because the room is now public. You can join it now.",
+                lastMessage(BOB));
+        assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
+        rooms.accept(player(BOB), "Alice");
+        assertTrue(room.contains(BOB));
+    }
+
+    private List<String> requestNoticesSince(UUID player, int before) {
+        List<String> messages = players.get(player).messages;
+        return messages.subList(before, messages.size()).stream()
+                .filter(message -> message.startsWith("Your request to join")).toList();
+    }
+
+    @Test
+    void creatingJoiningAndAcceptanceElsewhereCancelOtherRequestsSilently() {
+        askRoom();
+        request(BOB);
+        int before = players.get(BOB).messages.size();
+        rooms.create(player(BOB));
+        assertEquals(List.of(), requestNoticesSince(BOB, before));
+        assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
+
+        request(DAVE);
+        before = players.get(DAVE).messages.size();
+        rooms.accept(player(DAVE), "Bob");
+        assertEquals(List.of(), requestNoticesSince(DAVE, before));
+        assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
+
+        rooms.settings(player(BOB), "privacy", "ask");
+        request(EVE);
+        rooms.accept(player(EVE), "Bob");
+        before = players.get(EVE).messages.size();
+        rooms.acceptRequest(player(BOB), "Eve");
+        assertEquals(List.of("Your request to join the room of Bob was accepted."), requestNoticesSince(EVE, before));
+        assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void invitedAskRoomPlayersSeeJoinInChatAndScreens(boolean dialog) {
+        Room room = askRoom();
+        rooms.invite(player(ALICE), "Dave");
+        rooms.show(player(DAVE));
+        assertEquals("- Alice ♛ on dojo (1/2) [Join]", lastMessage(DAVE));
+        var h = new RoomScreenHarness(rooms, dialog);
+        Player dave = h.wrap(player(DAVE));
+        h.menus.open(dave);
+        h.press(dave, "Room list");
+        h.press(dave, "Join Alice (1)");
+        assertTrue(room.contains(DAVE));
+        assertTrue(rooms.pendingRequests(player(ALICE)).isEmpty());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void staleRequestListEntriesNeverOpenADecisionScreen(boolean dialog) {
+        askRoom();
+        var h = new RoomScreenHarness(rooms, dialog);
+        Player alice = h.wrap(player(ALICE));
+        request(BOB);
+        rooms.requests(alice);
+        advance(60);
+        int shows = h.shows;
+        h.press(alice, "Request from Bob");
+        assertEquals(shows, h.shows, "expiry must not open a stale form");
+        assertEquals("That request is no longer pending.", lastMessage(ALICE));
+
+        request(BOB);
+        rooms.requests(alice);
+        rooms.declineRequest(player(ALICE), "Bob");
+        shows = h.shows;
+        h.press(alice, "Request from Bob");
+        assertEquals(shows, h.shows, "a decided request must not open a stale form");
+        assertEquals("That request is no longer pending.", lastMessage(ALICE));
     }
 
 }

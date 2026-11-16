@@ -675,7 +675,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             room.setSeedModes();
         }
         rooms.add(room);
-        cancelRequests(id);
+        cancelRequests(id, null);
         roomOf.put(id, room);
         names.put(id, player.getName());
         tell(player, "room.created", "arena", room.arena());
@@ -746,7 +746,8 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         List<List<UUID>> before = room.teams();
         room.setSettings(next);
         if (current.privacy() != next.privacy()) {
-            cancelRequests(room);
+            cancelRequests(room, next.privacy() == RoomSettings.Privacy.PUBLIC
+                    ? "room.request-public" : "room.request-invite");
         }
         broadcast(room, msg("room.settings-changed", "player", player.getName(), "setting", key,
                 "value", key.equals("privacy") ? privacy(next) : key.equals("team-size") ? teamSize(next)
@@ -861,11 +862,16 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             tell(player, "room.request-unavailable", "host", host);
             return false;
         }
-        if (approval != null && (!validApproval(approval)
-                || roomOf.get(manager.getUniqueId()) != room || !room.isManager(manager.getUniqueId())
-                || !manager.hasPermission(NinjaArenaCommand.PLAY))) {
-            tell(player, "room.request-missing");
-            return false;
+        if (approval != null) {
+            if (roomOf.get(manager.getUniqueId()) != room || !room.isManager(manager.getUniqueId())
+                    || !manager.hasPermission(NinjaArenaCommand.PLAY)) {
+                tell(manager, "room.request-approver-changed");
+                return false;
+            }
+            if (!validApproval(approval)) {
+                tell(manager, "room.request-missing");
+                return false;
+            }
         }
         if (asking && room.canRequest(id) && !room.isInvited(id)) {
             sendRequest(player, room);
@@ -1005,30 +1011,38 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         long now = clock.getAsLong();
         for (JoinRequest request : List.copyOf(joinRequests.values())) {
             if (!validApproval(request)) {
-                endRequest(request, now >= request.expiresAt() ? "room.request-expired" : "room.request-cancelled");
+                String reason = now >= request.expiresAt() ? "room.request-expired"
+                        : !rooms.contains(request.room()) ? "room.request-closed"
+                        : request.room().isPlaying() ? "room.request-started"
+                        : request.room().settings().privacy() == RoomSettings.Privacy.PUBLIC ? "room.request-public"
+                        : request.room().settings().inviteOnly() ? "room.request-invite"
+                        : roomOf.containsKey(request.player()) ? null
+                        : !lobby.isMember(request.player()) ? "room.request-left-lobby" : "room.request-cancelled";
+                endRequest(request, reason);
             }
         }
         requestCooldowns.entrySet().removeIf(entry -> entry.getValue() <= now || !rooms.contains(entry.getKey().room()));
     }
 
     private void endRequest(JoinRequest request, String message) {
-        if (joinRequests.remove(new RequestKey(request.room(), request.player()), request)) {
+        if (joinRequests.remove(new RequestKey(request.room(), request.player()), request) && message != null) {
             tell(request.player(), message, "host", name(request.room().host()));
         }
     }
 
-    private void cancelRequests(UUID player) {
+    /** A null reason ends silently when the requester changes rooms or disconnects. */
+    private void cancelRequests(UUID player, String reason) {
         for (JoinRequest request : List.copyOf(joinRequests.values())) {
             if (request.player().equals(player)) {
-                endRequest(request, "room.request-cancelled");
+                endRequest(request, reason);
             }
         }
     }
 
-    private void cancelRequests(Room room) {
+    private void cancelRequests(Room room, String reason) {
         for (JoinRequest request : List.copyOf(joinRequests.values())) {
             if (request.room() == room) {
-                endRequest(request, "room.request-cancelled");
+                endRequest(request, reason);
             }
         }
     }
@@ -1053,7 +1067,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         }
         Optional<String> wanted = arena.map(Arena::normalizeName);
         Optional<Room> open = rooms.stream()
-                .filter(room -> room.settings().privacy() == RoomSettings.Privacy.PUBLIC)
+                .filter(room -> !room.settings().asksToJoin())
                 .filter(room -> !room.isPlaying() && !room.isFull() && room.admits(id))
                 .filter(room -> wanted.isEmpty() || wanted.get().equals(room.arena()))
                 .sorted(Comparator.comparing((Room room) -> wanted.isEmpty() && isFeatured(room.arena()) ? 0 : 1)
@@ -1074,7 +1088,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         UUID id = player.getUniqueId();
         String host = name(room.host());
         WaitingRoom.Joined joined = room.join(id);
-        cancelRequests(id);
+        cancelRequests(id, null);
         roomOf.put(id, room);
         names.put(id, player.getName());
         if (sounds != null) {
@@ -1268,7 +1282,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             }
             return;
         }
-        cancelRequests(room);
+        cancelRequests(room, "room.request-started");
         room.setPlaying(true);
         playing.put(arena, room);
         broadcast(room, msg("room.starting", "arena", arena));
@@ -1448,7 +1462,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     @EventHandler(priority = EventPriority.MONITOR)
     public void onWorldChanged(PlayerChangedWorldEvent event) {
         if (PluginWorlds.isLobby(event.getFrom())) {
-            cancelRequests(event.getPlayer().getUniqueId());
+            cancelRequests(event.getPlayer().getUniqueId(), "room.request-left-lobby");
         }
     }
 
@@ -1460,7 +1474,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
-        cancelRequests(id);
+        cancelRequests(id, null);
         Room room = roomOf.get(id);
         if (room == null || matches.isHeld(id)) {
             return;
@@ -2121,7 +2135,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             barTicker.cancel();
             barTicker = null;
         }
-        List.copyOf(joinRequests.values()).forEach(request -> endRequest(request, "room.request-cancelled"));
+        List.copyOf(joinRequests.values()).forEach(request -> endRequest(request, "room.request-closed"));
         requestCooldowns.clear();
         bars.close();
         if (previews != null) {
@@ -2176,7 +2190,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (!rooms.remove(room)) {
             return;
         }
-        cancelRequests(room);
+        cancelRequests(room, "room.request-closed");
         requestCooldowns.keySet().removeIf(key -> key.room() == room);
         bars.remove(room);
         if (previews != null) {
@@ -2334,7 +2348,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             String host = name(room.host());
             Component state = room.isPlaying() ? msg("room.list-playing")
                     : room.isFull() ? msg("room.list-full")
-                    : room.canRequest(id) ? msg("room.privacy-ask").append(Component.space())
+                    : room.canRequest(id) && !room.isInvited(id) ? msg("room.privacy-ask").append(Component.space())
                             .append(button(player, "room.button-request", "accept " + host))
                     : room.admits(id) ? button(player, "room.button-accept", "accept " + host)
                     : msg("room.privacy-invite");
