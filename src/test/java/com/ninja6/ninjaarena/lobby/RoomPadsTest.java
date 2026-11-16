@@ -662,4 +662,26 @@ class RoomPadsTest {
                 warnings::add));
         assertTrue(warnings.isEmpty());
     }
+
+    @Test
+    void aServerConfigWithoutTheSectionReadsTheBundledDefaultsWithoutWarnings() throws Exception {
+        org.bukkit.configuration.file.YamlConfiguration bundled = new org.bukkit.configuration.file.YamlConfiguration();
+        try (var in = new java.io.InputStreamReader(RoomPadsTest.class.getClassLoader().getResourceAsStream("config.yml"),
+                java.nio.charset.StandardCharsets.UTF_8)) {
+            bundled.load(in);
+        }
+        org.bukkit.configuration.file.YamlConfiguration server = new org.bukkit.configuration.file.YamlConfiguration();
+        server.set("arenas.max-active", 4);
+        server.setDefaults(bundled);
+        List<String> warnings = new ArrayList<>();
+        assertEquals(PadSettings.DEFAULTS, PadSettings.from(server.getConfigurationSection(PadSettings.SECTION),
+                warnings::add));
+        assertTrue(warnings.isEmpty(), warnings.toString());
+        server.set("lobby.pads.fog.colours.ask", "nope");
+        warnings.clear();
+        PadSettings read = PadSettings.from(server.getConfigurationSection(PadSettings.SECTION), warnings::add);
+        assertEquals(PadSettings.DEFAULTS.colour(PadState.ASK), read.colour(PadState.ASK));
+        assertEquals(List.of("lobby.pads.fog.colours.ask must be a colour like \"#55FF55\"; using the default."),
+                warnings);
+    }
 }
