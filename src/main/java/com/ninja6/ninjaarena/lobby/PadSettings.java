@@ -64,10 +64,11 @@ public record PadSettings(boolean enabled, int joinSeconds, boolean fog, int fog
         if (colourSection != null) {
             for (PadState state : PadState.values()) {
                 String key = state.key();
-                if (!colourSection.contains(key)) {
+                // getString(key) also reads the bundled defaults; getString(key, "") would not.
+                String value = colourSection.getString(key);
+                if (value == null) {
                     continue;
                 }
-                String value = colourSection.getString(key, "");
                 Integer parsed = colour(value);
                 if (parsed == null) {
                     warnings.accept(SECTION + ".fog.colours." + key + " must be a colour like \"#55FF55\"; using the"
