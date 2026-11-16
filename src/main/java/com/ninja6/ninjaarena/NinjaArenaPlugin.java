@@ -1181,8 +1181,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 },
                 (at, ready) -> world.getChunkAtAsync(at).thenAccept(chunk ->
                         getServer().getScheduler().runTask(this, ready)),
-                boardTickets, bedrock::isBedrock, settings, System::currentTimeMillis,
-                new SplittableRandom(), getLogger()::warning);
+                boardTickets, bedrock::isBedrock, settings, System::currentTimeMillis, getLogger()::warning);
         getServer().getPluginManager().registerEvents(roomPads, this);
         com.ninja6.ninjaarena.lobby.RoomPads pads = roomPads;
         var scheduler = getServer().getScheduler();

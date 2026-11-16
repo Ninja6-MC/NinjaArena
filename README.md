@@ -349,7 +349,7 @@ invited player included; it counts from the full time once there is space.
 
 Each assigned pad has a label over its plate with the host, the players and the needed
 count, and the room's state in words: open, ask to join, invite only, full or in match.
-Low dust fog on the plate's outer ring has the state's colour, set under
+Low dust fog on the gold frame round the plate has the state's colour, set under
 `lobby.pads.fog.colours`. Labels are text displays that are not saved with the world:
 they are removed when a room closes, while the lobby is built and on plugin disable, and
 put back at the new pad spots after a build. A lobby generated again with fewer pads frees
@@ -357,15 +357,25 @@ the pads that are gone; their rooms wait in the room list for a free pad.
 
 Fog is sent to each viewer on their own: only for pads within `fog.distance` blocks
 (default 16) of them, and only while they moved, looked, chatted or used a command in the
-last `fog.active-seconds` (default 30). A draw every `fog.interval-ticks` (default 10) puts
-`fog.per-block` particles (default 1) on each of a pad's 16 ring blocks, nearest pad first,
-up to `fog.max-particles` a viewer (default 48, three pads). A ring the cap cuts into is
-thinned evenly all round, starting one block further on each draw, rather than cut short.
-Bedrock viewers, whose client
-gets each particle translated by Geyser, have their own cap, `fog.bedrock-max-particles`
-(default 16, one pad; 0 sends them none). At the defaults a Java viewer gets at most 96 and
-a Bedrock viewer at most 32 particles a second. Estimated from the packet sizes, not
-measured on a client, that is about 6 KB a second for a Java viewer and under 4 KB for a
+last `fog.active-seconds` (default 30). A draw every `fog.interval-ticks` (default 7, 0.35
+seconds) puts `fog.per-block` particles (default 6, 1 to 12) of dust of `fog.size`
+(default 2.0, 0.5 to 4.0) on each of the 24 blocks of a pad's frame ring, centred on the
+block about 1.15 blocks above the floor and spread 0.25 across and 0.04 up, nearest pad
+first. A block's particles are one call, which a Java client receives as one packet;
+Geyser sends a Bedrock client each particle as its own packet.
+
+The caps count particles a draw. `fog.max-particles` (default 432, 24 to 1152) is three
+whole pads for a Java viewer, so a single pad is never thinned and a crowded lobby is
+bounded. `fog.bedrock-max-particles` (default 48, 0 to 288; 0 sends none) is two particles
+on each frame block of the nearest pad. A pad the cap cuts into gets the same number on
+every block, give or take one, with the extra ones spaced evenly all round and starting one
+block further on each draw, rather than a ring cut short.
+
+At the defaults one pad costs a Java viewer 24 packets a draw, about 69 a second (411
+particles), and three pads about 206 packets a second. Uncapped, one pad would cost a
+Bedrock viewer 144 packets a draw, about 411 a second; the cap holds it to 48 a draw, about
+137 a second. Estimated from the packet sizes, not measured on a client, that is about 4 KB
+a second a pad and at most about 12 KB for a Java viewer, and at most about 17 KB for a
 Bedrock viewer before Bedrock's batch compression; an idle or distant player costs nothing.
 `lobby.pads` takes effect after a plugin restart.
 

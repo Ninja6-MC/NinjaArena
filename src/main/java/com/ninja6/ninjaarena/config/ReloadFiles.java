@@ -4,6 +4,7 @@ import com.ninja6.ninjaarena.event.EventSettings;
 import com.ninja6.ninjaarena.hazard.HazardSettings;
 import com.ninja6.ninjaarena.kit.KitDefinition;
 import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.lobby.PadSettings;
 import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.match.MatchService;
 import com.ninja6.ninjaarena.match.MatchSettings;
@@ -268,9 +269,11 @@ public final class ReloadFiles {
             case "lobby.pads.fog.distance" -> new double[] {4, 64};
             case "lobby.pads.fog.active-seconds" -> new double[] {5, 600};
             case "lobby.pads.fog.interval-ticks" -> new double[] {5, 40};
-            case "lobby.pads.fog.per-block" -> new double[] {1, 4};
-            case "lobby.pads.fog.max-particles" -> new double[] {8, 128};
-            case "lobby.pads.fog.bedrock-max-particles" -> new double[] {0, 128};
+            case "lobby.pads.fog.size" -> new double[] {PadSettings.MIN_SIZE, PadSettings.MAX_SIZE};
+            case "lobby.pads.fog.per-block" -> new double[] {1, PadSettings.MAX_PER_BLOCK};
+            case "lobby.pads.fog.max-particles"
+                    -> new double[] {PadSettings.MIN_MAX_PARTICLES, PadSettings.MAX_MAX_PARTICLES};
+            case "lobby.pads.fog.bedrock-max-particles" -> new double[] {0, PadSettings.MAX_BEDROCK_MAX_PARTICLES};
             case "resource-pack.timeout-seconds" -> new double[] {1, 600};
             case "arena-world.border-size" -> new double[] {16, 2048};
             case "arena-world.view-distance", "arena-world.simulation-distance" -> new double[] {2, 32};

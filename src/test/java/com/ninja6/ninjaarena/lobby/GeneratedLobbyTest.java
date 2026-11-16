@@ -73,7 +73,11 @@ class GeneratedLobbyTest {
             assertTrue(floor.contains(pad.frame()), "pad " + pad.index());
             assertEquals(5, pad.plate().maxX() - pad.plate().minX() + 1);
             assertEquals(5, pad.plate().maxZ() - pad.plate().minZ() + 1);
-            assertEquals(16, pad.ring().size());
+            assertEquals(24, pad.ring().size(), "the fog goes on the frame's ring");
+            for (int[] block : pad.ring()) {
+                assertTrue(pad.frame().contains(block[0], block[1], block[2]), "pad " + pad.index());
+                assertFalse(pad.plate().contains(block[0], block[1], block[2]), "pad " + pad.index());
+            }
             for (ArenaBounds other : taken) {
                 assertFalse(overlaps(pad.frame(), other), "pad " + pad.index() + " overlaps " + other.describe());
             }
