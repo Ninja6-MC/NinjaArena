@@ -21,6 +21,14 @@ Java 25, and does not run on Folia.
   and is recreated after lobby reset without duplicating on restart.
 - Room screens for creating, joining, spectating, settings, invites and starting, with
   native dialogs and an independent `rooms.menu: chest` fallback.
+- A boss bar shows a room's members how far its generated map has been built, and Start
+  is refused, on the room screen and by `/narena room start`, until the map is placed.
+  `/narena room preview` and the room screen's Preview map put a member in spectator
+  mode over the placed map, inside its bounds; they return to the lobby, still in the
+  room, when they preview again or use `/narena leave`, when the match starts, and when
+  they leave the room, it closes or the map is cleared. A preview takes no snapshot of its
+  own, so a quit puts them back in the lobby on rejoin and a restart restores them home,
+  never in spectator mode. Only generated maps can be previewed.
 - Hazards that grow during a round in generated maps. As the enemy director's intensity
   rises in COMBAT, more of the map's lava held in ceilings is released and whole floating
   platforms collapse, one on every side at a time and taking turns, until all of them

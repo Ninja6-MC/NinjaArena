@@ -84,11 +84,20 @@ public final class RoomMenus {
             return;
         }
         List<RoomScreen.Option> options = new ArrayList<>();
+        boolean previewing = rooms.isPreviewing(player.getUniqueId());
         if (room.host().equals(player.getUniqueId())) {
             options.add(action("settings", Material.COMPARATOR, this::settings));
             options.add(action("invite", Material.PLAYER_HEAD, this::invite));
             options.add(action("kick", Material.BARRIER, this::kick));
-            options.add(action("start", Material.LIME_WOOL, this::start));
+            // While the map is built, Start only says so, as the command does.
+            options.add(rooms.building(room).isPresent()
+                    ? action("start-building", Material.GRAY_DYE, p -> rooms.start(p, null))
+                    : action("start", Material.LIME_WOOL, this::start));
+        }
+        if (previewing) {
+            options.add(action("preview-end", Material.ENDER_EYE, rooms::preview));
+        } else if (rooms.canPreview(room)) {
+            options.add(action("preview", Material.SPYGLASS, rooms::preview));
         }
         options.add(action("leave", Material.OAK_DOOR, rooms::leave));
         options.add(action("back", Material.ARROW, this::open));

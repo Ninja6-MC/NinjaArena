@@ -110,6 +110,7 @@ import com.ninja6.ninjaarena.resourcepack.BedrockSelections;
 import com.ninja6.ninjaarena.resourcepack.BedrockSupport;
 import com.ninja6.ninjaarena.lobby.LobbyEntry;
 import com.ninja6.ninjaarena.lobby.LobbyReturns;
+import com.ninja6.ninjaarena.room.MapPreviews;
 import com.ninja6.ninjaarena.restore.JoinRestore;
 import com.ninja6.ninjaarena.room.MaxActive;
 import com.ninja6.ninjaarena.room.AdminMaps;
@@ -155,7 +156,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private com.ninja6.ninjaarena.lobby.LobbyIntro lobbyIntro;
     private LobbyEditing lobbyEditing;
     /** In a match or the lobby, or spectating. */
-    private final ArenaBusy busy = new ArenaBusy(() -> this.matches, () -> this.spectators, () -> this.lobbyMembers);
+    private final ArenaBusy busy = new ArenaBusy(() -> this.matches, () -> this.spectators, () -> this.lobbyMembers,
+            () -> this.rooms == null ? null : this.rooms::isPreviewing);
     private final com.ninja6.ninjaarena.texture.TextureMenuLock textureMenuLock =
             new com.ninja6.ninjaarena.texture.TextureMenuLock(() -> this.matches, () -> this.spectators);
     private final CrossWorldTransfers transfers = new CrossWorldTransfers();
@@ -200,6 +202,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private volatile WaitingRoomSettings roomDefaults = WaitingRoomSettings.DEFAULTS;
     private RoomService rooms;
     private com.ninja6.ninjaarena.room.RoomMenus roomMenus;
+    private MapPreviews mapPreviews;
     private LobbyReturns lobbyReturns;
     private StatsStore stats;
     private Rewards rewards;
@@ -488,6 +491,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots);
         startRooms();
         RoomService roomList = rooms;
+        MapPreviews previewing = mapPreviews;
         roomList.setFeatured(arenaEvents::arena);
         PortalListener portalListener = new PortalListener(this, portals, entry, arenaWorld::world, admission,
                 portalCommand::forget, arenaWorld::acquire, watching::arrived);
@@ -650,8 +654,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 task -> getServer().getScheduler().runTask(this, task));
         NinjaArenaCommand command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
-                // Spectating, a room or a match leads to the lobby; the lobby itself leads home.
-                player -> watching.leave(player) || roomList.leaveRoom(player)
+                // A map preview leads back to the room; spectating, a room or a match to the
+                // lobby; the lobby itself leads home.
+                player -> previewing.end(player) || watching.leave(player) || roomList.leaveRoom(player)
                         || matches.leave(player, MatchService.Exit.COMMAND)
                         || inLobby.leave(player, LobbyMembers.Exit.COMMAND),
                 roomList, reloader::execute, watching::fromLobby, new LeaderboardCommand(this, this::stats),
@@ -693,7 +698,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         Spectators watching = spectators;
         LobbyMembers members = lobbyMembers;
         SnapshotService saved = snapshots;
-        LobbyEntry lobbyEntry = new LobbyEntry(members, id -> inMatch.isInMatch(id) || watching.contains(id),
+        LobbyEntry lobbyEntry = new LobbyEntry(members, id -> inMatch.isInMatch(id) || watching.contains(id)
+                || rooms != null && rooms.isPreviewing(id),
                 saved::captureAndPersist, id -> {
                     try {
                         saved.delete(id);
@@ -711,6 +717,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         rooms.setSeedPolicy(new SeedPolicy(seedSettings(), System::currentTimeMillis,
                 new SplittableRandom()::nextLong, getLogger()::info));
         RoomService roomList = rooms;
+        // A preview never takes a snapshot: the one that brought the player into the lobby
+        // brings them back, on every way out including a quit or a restart.
+        mapPreviews = new MapPreviews(this, arenaWorld::world, saved::hasPending, restores::restore);
+        roomList.setPreviews(mapPreviews);
+        getServer().getPluginManager().registerEvents(mapPreviews, this);
         // The next round's map, generated in the shop break, holds the shop open until placed.
         inMatch.setMapReady(roomList::mapReady);
         getServer().getPluginManager().registerEvents(roomList, this);
@@ -719,7 +730,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         // /narena spectate works from the lobby, for players in no room.
         watching.setLobbyMembers(id -> members.isMember(id) && !roomList.isMember(id));
         lobbyReturns = new LobbyReturns(id -> members.isMember(id) || roomList.isMember(id) || inMatch.isInMatch(id)
-                || watching.contains(id), roomList::enterLobby);
+                || watching.contains(id) || roomList.isPreviewing(id), roomList::enterLobby);
         getServer().getPluginManager().registerEvents(lobbyReturns, this);
         roomList.start();
     }
@@ -977,7 +988,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         build.placeIfNew();
         world.setSpawnLocation(layout.spawn(world));
         lobbyMembers = new LobbyMembers(this, layout, lobbyWorld::world,
-                id -> matches != null && matches.isInMatch(id) || spectators != null && spectators.contains(id),
+                id -> matches != null && matches.isInMatch(id) || spectators != null && spectators.contains(id)
+                        || rooms != null && rooms.isPreviewing(id),
                 KitInventory::emptyForWaiting, player -> restores.restore(player));
         LobbyMembers members = lobbyMembers;
         lobbyIntro = new com.ninja6.ninjaarena.lobby.LobbyIntro(() -> activePackSettings.textureMenu(),
@@ -1075,9 +1087,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             roomMenus = null;
         }
         if (rooms != null) {
+            // Previewers go home first, out of spectator mode.
             rooms.close();
             rooms = null;
         }
+        mapPreviews = null;
         lobbyReturns = null;
         if (lobbyMembers != null) {
             lobbyMembers.close();

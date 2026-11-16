@@ -35,10 +35,10 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String LEAVE = "leave";
     /** Rooms: open, set up, invite, start and leave. */
     public static final String ROOM = "room";
-    private static final String ROOM_USAGE = "room [create|settings|invite|accept|kick|start|leave]";
+    private static final String ROOM_USAGE = "room [create|settings|invite|accept|kick|start|preview|leave]";
     private static final String ROOM_SETTINGS_USAGE = "room settings [players|teams|team-size|privacy <value>]";
     private static final List<String> ROOM_ACTIONS = List.of("create", "settings", "invite", "accept", "kick",
-            "start", "leave");
+            "start", "preview", "leave");
     private static final List<String> ROOM_SETTINGS = List.of("players", "teams", "team-size", "privacy");
     private static final List<String> DIFFICULTIES = List.of("1", "2", "3", "4", "5");
     /** The shop phase between rounds: {@code shop ready}. */
@@ -443,11 +443,13 @@ public final class NinjaArenaCommand implements TabExecutor {
                     roomScreen.accept(player);
                 }
             }
-            case "create", "leave" -> {
+            case "create", "leave", "preview" -> {
                 if (args.length != 2) {
                     usage(sender, label, "room " + action);
                 } else if (action.equals("create")) {
                     rooms.create(player);
+                } else if (action.equals("preview")) {
+                    rooms.preview(player);
                 } else {
                     rooms.leave(player);
                 }

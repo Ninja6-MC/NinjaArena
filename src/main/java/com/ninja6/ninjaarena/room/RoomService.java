@@ -109,6 +109,8 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     public static final String CREATE = "ninjaarena.room.create";
 
     private static final long TICKS_PER_SECOND = 20;
+    /** How often the build progress bars are brought up to date. */
+    private static final long BAR_TICKS = 5;
     private static final String ROOT = "/ninjaarena room ";
     /** The teams of a new room on generated maps; its host can set 2 to 4. */
     static final int GENERATED_TEAMS = 2;
@@ -141,7 +143,10 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     private final Map<String, SeedChoice> nextMaps = new HashMap<>();
 
     private BukkitTask ticker;
+    private BukkitTask barTicker;
     private int configuredMax;
+    private final BuildBars bars;
+    private MapPreviews previews;
 
     /**
      * @param defaults  the waiting-room settings a new room starts from: its required player
@@ -162,6 +167,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         this.slots = new SlotLeases<>(effectiveMax(maxActive));
         slots.setArenaTaken(this::taken);
         this.crossing = transfers.allow(roomOf::containsKey);
+        this.bars = new BuildBars(id -> plugin.getServer().getPlayer(id));
         matches.onClose(this::matchClosed);
         arenas.onEditOrDelete(this::arenaChanged);
     }
@@ -238,11 +244,33 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         return spare ? max + 1 : max;
     }
 
-    /** Starts the once-a-second queue check and room status line. */
+    /**
+     * Map previews for room members ({@link #preview}), after {@link #setGeneratedMaps}: a
+     * preview of a map ends when its cell starts being cleared. Until set, previews are
+     * refused.
+     */
+    public void setPreviews(MapPreviews previews) {
+        this.previews = Objects.requireNonNull(previews, "previews");
+        previews.attach(this);
+        if (generated != null) {
+            generated.onClearing(previews::clearing);
+        }
+    }
+
+    /** Whether the player is previewing their room's map. */
+    public boolean isPreviewing(UUID player) {
+        return previews != null && previews.contains(player);
+    }
+
+    /** Starts the once-a-second queue check and room status line, and the build progress bars. */
     public void start() {
         if (ticker == null) {
             ticker = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, TICKS_PER_SECOND,
                     TICKS_PER_SECOND);
+        }
+        if (barTicker == null) {
+            barTicker = plugin.getServer().getScheduler().runTaskTimer(plugin, this::showProgress, BAR_TICKS,
+                    BAR_TICKS);
         }
     }
 
@@ -799,6 +827,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return;
         }
         roomOf.remove(targetId);
+        endPreview(targetId);
         notifyMoves(room.kick(targetId).orElse(List.of()));
         tell(targetId, "room.kicked", "host", player.getName());
         broadcast(room, msg("room.player-kicked", "player", name(targetId)));
@@ -838,9 +867,20 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             sender.sendMessage(queued(room));
             return;
         }
+        Optional<GeneratedMaps.Progress> building = building(room);
+        if (building.isPresent()) {
+            sender.sendMessage(msg("room.start-building", "percent", BuildBars.percent(building.get())));
+            return;
+        }
         String arena = room.arena();
         if (!available(arena) || matches.match(arena).isPresent()) {
             sender.sendMessage(msg("room.not-ready", "arena", arena));
+            return;
+        }
+        if (!returnPreviewers(room)) {
+            if (rooms.contains(room)) {
+                sender.sendMessage(msg("room.start-failed"));
+            }
             return;
         }
         room.setPlaying(true);
@@ -866,6 +906,110 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 sender.sendMessage(msg("room.start-failed"));
             }
         }
+    }
+
+    /**
+     * Brings the room's previewers back to the lobby before its match starts, so that only
+     * players in the lobby are taken into it. One the lobby could not take was sent home and
+     * is out of the room.
+     *
+     * @return whether the room is still open with enough players to start
+     */
+    private boolean returnPreviewers(Room room) {
+        if (previews == null || !previews.anyIn(room)) {
+            return true;
+        }
+        // One the lobby could not take is out of the room by now (sentHome).
+        previews.endRoom(room);
+        return rooms.contains(room) && room.canStart();
+    }
+
+    /**
+     * A preview ended with the player restored home because the lobby could not take them:
+     * they have left the plugin's worlds, so they leave the room now rather than at the
+     * next tick, and no match can take them from home.
+     */
+    void sentHome(Player player) {
+        UUID id = player.getUniqueId();
+        Room room = roomOf.get(id);
+        if (room != null && rooms.contains(room) && !lobby.isMember(id) && !matches.isInMatch(id)) {
+            remove(room, id);
+        }
+    }
+
+    // ---- Map previews ----
+
+    /**
+     * How far the room's generated map has got while it is being built for the room's next
+     * match; empty when it is not being built, because it is placed, it failed, the room is
+     * queued or playing, or plays a hand-built arena.
+     */
+    public Optional<GeneratedMaps.Progress> building(Room room) {
+        if (generated == null || !room.playsGenerated() || room.isPlaying()) {
+            return Optional.empty();
+        }
+        return generated.progress(room.arena()).filter(progress -> !progress.isComplete());
+    }
+
+    /** Whether the room's generated map can be previewed now: placed and not playing. */
+    public boolean canPreview(Room room) {
+        return previews != null && generated != null && rooms.contains(room) && !room.isPlaying()
+                && room.playsGenerated() && generated.isAvailable(room.arena());
+    }
+
+    /** Whether the player's preview of the map may go on. */
+    boolean previewable(UUID player, Room room, String map) {
+        return roomOf.get(player) == room && room.arena().equals(map) && canPreview(room);
+    }
+
+    /** Brings the build progress bars up to date. Runs every few ticks once started. */
+    public void showProgress() {
+        bars.update(rooms, this::building);
+    }
+
+    /** Whether the room's members are shown its build progress bar. */
+    public boolean showsProgress(Room room) {
+        return bars.isShown(room);
+    }
+
+    @Override
+    public void preview(Player player) {
+        UUID id = player.getUniqueId();
+        if (previews != null && previews.end(player)) {
+            return;
+        }
+        Room room = roomOf.get(id);
+        if (room == null) {
+            tell(player, "room.not-in-room");
+            return;
+        }
+        if (previews == null || generated == null) {
+            tell(player, "room.preview-unavailable");
+            return;
+        }
+        if (room.isPlaying()) {
+            tell(player, "room.preview-playing");
+            return;
+        }
+        if (!room.playsGenerated()) {
+            tell(player, "room.preview-hand-built");
+            return;
+        }
+        Optional<GeneratedMaps.Progress> building = building(room);
+        if (building.isPresent()) {
+            tell(player, "room.preview-building", "percent", BuildBars.percent(building.get()));
+            return;
+        }
+        Optional<Arena> map = canPreview(room) ? generated.get(room.arena()) : Optional.empty();
+        if (map.isEmpty()) {
+            tell(player, "room.preview-not-ready");
+            return;
+        }
+        if (!lobby.isMember(id)) {
+            tell(player, "room.preview-not-in-lobby");
+            return;
+        }
+        previews.begin(player, room, map.get());
     }
 
     @Override
@@ -974,7 +1118,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             Optional<Arena> replacement = defaultArena(room);
             if (replacement.isEmpty() && generated != null && seeds != null) {
                 playSeedModes(room);
-                broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+                if (rooms.contains(room)) {
+                    broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+                }
                 continue;
             }
             if (replacement.isEmpty()) {
@@ -982,7 +1128,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 continue;
             }
             setArena(room, replacement.get().name());
-            broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+            if (rooms.contains(room)) {
+                broadcast(room, msg("room.arena-changed", "old", name, "arena", room.arena()));
+            }
         }
     }
 
@@ -1045,6 +1193,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             }
             String old = room.arena();
             playSeedModes(room);
+            if (!rooms.contains(room)) {
+                return;
+            }
             broadcast(room, msg("room.map-changed-generated", "old", old, "player", player.getName()));
             return;
         }
@@ -1064,6 +1215,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return;
         }
         playGenerated(room, seed, level);
+        if (!rooms.contains(room)) {
+            return;
+        }
         broadcast(room, msg("room.map-changed-seed", "seed", seed, "difficulty", level, "player", player.getName()));
     }
 
@@ -1152,6 +1306,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         }
         String old = room.arena();
         setArena(room, target.name());
+        if (!rooms.contains(room)) {
+            return;
+        }
         broadcast(room, msg("room.map-changed", "old", old, "arena", room.arena(), "player", player.getName()));
         if (position(room).isPresent()) {
             broadcast(room, queued(room));
@@ -1174,7 +1331,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return;
         }
         Arena target = arenas.get(arena).orElseThrow(() -> new IllegalArgumentException("unknown arena " + arena));
-        leaveGenerated(room);
+        if (!leaveGenerated(room)) {
+            return;
+        }
         room.setArena(target.name());
         int teams = Math.min(room.settings().teams(), teamCount(target));
         if (teams != room.settings().teams()) {
@@ -1214,7 +1373,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (room.isPlaying()) {
             throw new IllegalStateException("the room is playing");
         }
-        leaveGenerated(room);
+        if (!leaveGenerated(room)) {
+            return;
+        }
         room.setGenerated(choice);
         room.setArena(generated.newName());
         granted(slots.release(room));
@@ -1240,7 +1401,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             throw new IllegalStateException("the room is playing");
         }
         SeedPolicy.Request asked = room.requested();
-        leaveGenerated(room);
+        if (!leaveGenerated(room)) {
+            return;
+        }
         room.setSeedModes();
         room.request(asked);
         room.setArena(generated.newName());
@@ -1257,20 +1420,34 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     /** Frees the room's generated map and asks for a slot again, to generate it anew. */
     private void regenerate(Room room) {
         freeMap(room.arena());
+        if (!rooms.contains(room)) {
+            // Closed while its map was freed (see leaveGenerated): close() gave up its slot and map.
+            return;
+        }
         granted(slots.release(room));
         if (!request(room)) {
             broadcast(room, queued(room));
         }
     }
 
-    /** A room on generated maps frees its map and plays hand-built arenas again. */
-    private void leaveGenerated(Room room) {
+    /**
+     * A room on generated maps frees its map and plays hand-built arenas again.
+     *
+     * <p>Freeing the map ends its previews, and a previewer the lobby cannot take back is
+     * sent home and out of the room at once ({@link #sentHome}), which can close it. The
+     * room's slot and map are then given up already, so callers stop on false and change
+     * nothing more; {@link #regenerate} checks the same.
+     *
+     * @return whether the room is still open
+     */
+    private boolean leaveGenerated(Room room) {
         if (room.playsGenerated()) {
             if (generated != null) {
                 freeMap(room.arena());
             }
             room.setGenerated(null);
         }
+        return rooms.contains(room);
     }
 
     /** Frees a generated map's cell, and its next round's map, and forgets their seeds. */
@@ -1437,13 +1614,17 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     /** Checks the queue, drops members who are gone and shows each room its status. */
     public void tick() {
+        if (previews != null) {
+            previews.check();
+        }
         for (Room room : List.copyOf(rooms)) {
             for (UUID member : room.members()) {
                 if (matches.isHeld(member)) {
                     continue;
                 }
                 Player online = plugin.getServer().getPlayer(member);
-                if (online == null || !online.isOnline() || !lobby.isMember(member) && !matches.isInMatch(member)) {
+                if (online == null || !online.isOnline()
+                        || !lobby.isMember(member) && !matches.isInMatch(member) && !isPreviewing(member)) {
                     remove(room, member);
                 }
             }
@@ -1469,6 +1650,15 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             ticker.cancel();
             ticker = null;
         }
+        if (barTicker != null) {
+            barTicker.cancel();
+            barTicker = null;
+        }
+        bars.close();
+        if (previews != null) {
+            // Home before the lobby closes, and never left in spectator mode.
+            previews.close();
+        }
         for (Room room : List.copyOf(rooms)) {
             rooms.remove(room);
             slots.release(room);
@@ -1486,6 +1676,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         String leaving = name(id);
         UUID host = room.host();
         roomOf.remove(id);
+        endPreview(id);
         List<WaitingRoom.Move> moves = room.leave(id, this::canHost).orElse(List.of());
         if (room.size() == 0 || room.isOrphaned()) {
             close(room, "room.closed");
@@ -1498,6 +1689,14 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         }
     }
 
+    /** Back to the lobby from a preview, for a player who is no longer in the room. */
+    private void endPreview(UUID id) {
+        Player player = plugin.getServer().getPlayer(id);
+        if (previews != null && player != null && player.isOnline()) {
+            previews.end(player);
+        }
+    }
+
     private boolean canHost(UUID id) {
         Player player = plugin.getServer().getPlayer(id);
         return player != null && player.isOnline() && player.hasPermission(CREATE);
@@ -1507,6 +1706,10 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     private void close(Room room, String reason) {
         if (!rooms.remove(room)) {
             return;
+        }
+        bars.remove(room);
+        if (previews != null) {
+            previews.endRoom(room);
         }
         for (UUID member : room.members()) {
             roomOf.remove(member);
