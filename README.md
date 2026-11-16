@@ -432,6 +432,12 @@ their place in the queue. A hand-built arena holds one match at a time, so a roo
 arena is in use queues for that arena; rooms behind it that want a free arena go first.
 A room that closes while its match runs keeps the lease until the match ends.
 
+The recommended ceiling is the default, 4. The
+[generated-map soak](docs/stability-soak.md#generated-map-soak) ran four matches at once
+on generated maps, with per-round regeneration and lava, on a server limited to two
+processors, and the tick-time guard never left its normal state. Higher values were not
+measured; raise it only after a soak on your own hardware.
+
 `arenas.max-active` was called `stability.max-concurrent-matches`. The old name is still
 read, with a warning at startup and on reload, when the new one is not set; set beside
 it, the old name is ignored. It applies on reload, and a lower value never ends a lease

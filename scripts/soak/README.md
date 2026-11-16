@@ -102,6 +102,68 @@ block encodings, blocks, block entities, and entities are counted separately. Fa
 successful soak. Raw evidence belongs in the ignored run directory; any published
 report must identify workload limits and measured results without private paths.
 
+## Generated-map workload
+
+`--generated` selects a separate workload on generated maps instead of the four
+hand-built arenas; without it the runner behaves as before. `--matches` (1 to 4,
+default 4) sets both the number of rooms and `arenas.max-active`. `--heap-mib 1024` is
+accepted for this workload only.
+
+```sh
+python scripts/soak/run.py <the same local dependency arguments> \
+  --plugin /path/to/candidate-production.jar --generated --matches 4 \
+  --heap-mib 1024 --seconds 600 --port 25591 --name generated-soak1
+```
+
+The setup boot creates the worlds only: the arena registry must be empty, so every
+room plays generated maps. The run then starts two real clients per room. Each host
+runs `/narena room create` and its guest `/narena room accept <host>`, so the slot
+lease, seed choice, generation, placement and match start all go through the
+production room, map and match services. Hosts run `/narena room start` once their
+map is placed. First starts are spaced by one round cycle (prep, round, overrun limit,
+round end and shop) divided by the number of rooms, so the rooms' shop breaks do not
+all fall together; after the first, a room starts its next
+match as soon as its next map is placed. No new match starts once `--seconds` have
+passed since the rooms opened; the run waits for the matches in progress to end.
+
+The bundled configuration is changed only where the workload needs it, and the run
+fails if any of these lines is missing or repeated: `maps.default.regenerate: round`,
+`arenas.max-active`, the threat base of 200 used by the hand-built soak, and shorter
+match timings (10 s prep, 45 s round, 45 s overrun limit, three rounds, no extra
+rounds) so that more shop breaks, and so more per-round regenerations, fall in the
+measured time. The shop phase, seed modes (random, difficulty 2), hazards and every
+stability setting keep their bundled values. Stationary clients receive resistance V
+and saturation at every prep, so rounds end at the overrun limit as draws.
+
+After the last match the clients leave their rooms. The arena world must retire while
+idle and, from 45 seconds after the rooms close, its weak reference must clear after
+at most four collection requests on separate ticks. A world that stays reachable is
+recorded with the number of clients whose last damage came from one of its entities,
+and the run goes on so the reopen is still measured; acceptance then fails. The rooms
+are then opened again, which reopens the world and sweeps the slot cells before the
+new maps are placed; all maps must be placed within five minutes. The clients leave
+again, the world must retire and be collected again, and the clients leave the lobby
+so no snapshot stays pending. No generated (non-air) block may reach the arena save:
+releasing the world without saving can still write cleared, all-air chunks, so raw
+save hashes are reported but may differ from setup.
+
+The probe writes `ticks.csv` (every tick, with its stage and the maps being built),
+`generated-seconds.csv` (guard state, average tick time, TPS, arena chunks and holders,
+lava sources, allowed lava flows, falling collapse blocks, enemies, health, heap),
+`generated-matches.csv` (each match each second), `generation.csv` (time and blocks per
+map placement), `shops.csv` (each shop break and its replacement map) and
+`phases.csv`. Tick statistics cover the play and drain stages; the reopen stage is
+reported separately. The run passes only if every match ran at once, every room
+finished a match, the tick-time guard stayed `NORMAL` with the average below its pause
+threshold, at least one map was replaced between rounds, lava flowed, every room had
+live enemies within both caps, both releases and the reopen passed and no generated
+block reached the save. `summary.json` lists each failed condition.
+
+The workload does not model player combat, movement, shop purchases, deaths or network
+latency: clients stand still on the loopback interface. Only one replacement can be
+built at a time, because one spare cell is reserved for between-round regeneration; a
+shop break that finds no free cell keeps the current map, and the report counts both.
+
 ## Verification and current result
 
 ```sh

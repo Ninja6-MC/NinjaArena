@@ -13,6 +13,11 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- A generated-map workload for the local stability soak (`--generated`): rooms opened
+  with the room commands play back-to-back matches on generated maps with
+  `regenerate: round`, lava and late hazards, then leave so the arena world retires,
+  reopens and retires again. Its results are in `docs/stability-soak.md`, and the README
+  recommends keeping `arenas.max-active` at its default of 4 (#166).
 - Joining a room by standing on its pad in the generated lobby (#220). Each open room takes
   the lowest-numbered free pad until it closes; rooms beyond the pad count stay in the room
   list. Standing anywhere on the plate for `lobby.pads.join-seconds` (default 5, 1 to 30)

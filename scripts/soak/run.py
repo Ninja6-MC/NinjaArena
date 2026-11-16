@@ -17,6 +17,8 @@ import subprocess
 import time
 import zipfile
 
+from generated import (generated_acceptance, generated_config, generated_measurements, saved_blocks,
+                       stagger_seconds, workload_settings)
 from regions import Nbt, chunks, differences, inspect
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,12 +41,75 @@ def saved_entity_counts(directory):
     return counts
 
 
-def arena_save(server):
+def arena_save(server, required=True):
     candidates = [p.parent for p in server.rglob("region")
                   if p.is_dir() and p.parent.name == "ninjaarena_arenas"]
     if len(candidates) != 1:
+        if not required and not candidates:
+            return None
         raise RuntimeError("Could not locate the arena dimension save")
     return candidates[0]
+
+
+def generated(args, server, results, launch, wait_for, owned, flags, candidate, config, track_clients):
+    """Rooms on generated maps: per-round regeneration, lava, idle release and reopen."""
+    setup, log = launch("setup")
+    setup.wait(timeout=240)
+    log.close()
+    if setup.returncode or not (results / "setup-complete").exists():
+        raise RuntimeError("Generated setup failed; see setup-console.log")
+    world = arena_save(server, required=False)
+    baseline = hashes(world) if world else {}
+    (results / "baseline-hashes.json").write_text(json.dumps(baseline, indent=2), encoding="utf-8")
+    start_time = time.monotonic()
+    run, log = launch("run")
+    wait_for(results / "ready", run, 240)
+    botlog = open(server / "clients.log", "w", encoding="utf-8")
+    bots = subprocess.Popen([args.node, "--max-old-space-size=384", str(ROOT / "scripts/soak/clients.cjs"),
+                             str(args.modules.resolve()), str(args.port), str(args.seconds + 2520),
+                             str(args.matches * 2)], cwd=server,
+                            stdout=botlog, stderr=subprocess.STDOUT, creationflags=flags)
+    track_clients(bots)
+    owned.append(bots)
+    (results / "start").touch()
+    # The probe bounds every stage itself; this outer deadline only stops a stuck server.
+    wait_for(results / "complete", run, args.seconds + 2400)
+    run.wait(timeout=90)
+    shutdown_seconds = round(time.time() - int((results / "shutdown-requested").read_text()) / 1000, 3)
+    log.close()
+    bots.terminate()
+    bots.wait(timeout=30)
+    botlog.close()
+    if run.returncode != 0:
+        raise RuntimeError(f"Run process exited {run.returncode}")
+    world = arena_save(server, required=False)
+    after = hashes(world) if world else {}
+    # Releasing the world without saving can still write cleared, all-air chunks; what must
+    # never be saved is a generated map's blocks.
+    saved = saved_blocks(world)
+    result = json.loads((results / "generated-result.json").read_text(encoding="utf-8"))
+    summary = {"workload": "generated", "environment": environment(args, candidate),
+               "duration_seconds": args.seconds, "wall_seconds": round(time.monotonic() - start_time, 2),
+               "heap_mib": args.heap_mib, "rooms": args.matches, "max_active": args.matches,
+               "workload_settings": workload_settings(config),
+               "probe": result, "baseline_hashes": baseline, "shutdown_hashes": after,
+               "arena_save_raw_hashes_unchanged": baseline == after,
+               "arena_save_non_air_palette_entries": saved, "shutdown_seconds": shutdown_seconds}
+    summary.update(generated_measurements(results))
+    summary["failures"] = generated_acceptance(summary, result, args.matches, saved)
+    (results / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print(json.dumps(summary, indent=2))
+    if summary["failures"]:
+        raise RuntimeError("Generated soak did not meet acceptance: " + "; ".join(summary["failures"]))
+
+
+def environment(args, candidate):
+    return {"os": platform.platform(), "cpu": platform.processor(),
+            "logical_processors": os.cpu_count(), "server_active_processors": 2,
+            "paper_sha256": hashlib.sha256(args.paper.read_bytes()).hexdigest(),
+            "via_sha256": hashlib.sha256(args.via.read_bytes()).hexdigest(),
+            "backwards_sha256": hashlib.sha256(args.backwards.read_bytes()).hexdigest(),
+            "plugin_sha256": hashlib.sha256(candidate.read_bytes()).hexdigest()}
 
 
 def saved_world_uid(directory):
@@ -258,7 +323,9 @@ def main():
     parser.add_argument("--dirty-reopen", action="store_true", help="With --lifecycle, force a dirty save after clean recycle and independently prove dirty-disk reopen")
     parser.add_argument("--lifecycle", action="store_true", help="Separate dirty-disk reset/recycle fixture, not the clean stability soak")
     parser.add_argument("--large", action="store_true", help="Lifecycle bounds 128x65x128 instead of 32x13x32")
-    parser.add_argument("--heap-mib", type=int, choices=(768, 1536, 2048), default=768)
+    parser.add_argument("--generated", action="store_true", help="Rooms on generated maps with per-round regeneration, lava, idle release and reopen")
+    parser.add_argument("--matches", type=int, default=4, help="With --generated, rooms and arenas.max-active (1 to 4)")
+    parser.add_argument("--heap-mib", type=int, choices=(768, 1024, 1536, 2048), default=768)
     parser.add_argument("--heap-dump-on-failure", action="store_true", help="Local live heap on a later tick after failure, before shutdown")
     parser.add_argument("--via", type=Path, required=True)
     parser.add_argument("--backwards", type=Path, required=True)
@@ -277,6 +344,12 @@ def main():
         parser.error("--dirty-reopen requires --lifecycle")
     if args.large and (not args.lifecycle or args.heap_mib < 1536):
         parser.error("--large requires --lifecycle and --heap-mib 1536 or 2048")
+    if args.generated and args.lifecycle:
+        parser.error("--generated and --lifecycle are separate workloads")
+    if not 1 <= args.matches <= 4 or (args.matches != 4 and not args.generated):
+        parser.error("--matches must be 1 to 4 and requires --generated")
+    if args.heap_mib == 1024 and not args.generated:
+        parser.error("--heap-mib 1024 requires --generated")
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", args.port))
     server = ROOT / "run" / args.name
@@ -311,7 +384,11 @@ def main():
     plugin.mkdir()
     config = plugin_config(args.plugin)
     # Raised budget saturates the normal production caps; no director/gate is replaced.
-    if not args.lifecycle:
+    stagger = 0
+    if args.generated:
+        config = generated_config(config, args.matches)
+        stagger = stagger_seconds(config, args.matches)
+    elif not args.lifecycle:
         config = config.replace("base: 20.0", "base: 200.0")
     (plugin / "config.yml").write_text(config, encoding="utf-8")
     results = server / "soak-results"
@@ -325,6 +402,8 @@ def main():
                    f"-Dsoak.large={str(args.large).lower()}",
                    f"-Dsoak.dirtyReopen={str(args.dirty_reopen).lower()}",
                    f"-Dsoak.heapDumpOnFailure={str(args.heap_dump_on_failure).lower()}",
+                   f"-Dsoak.mode={'generated' if args.generated else 'hand-built'}",
+                   f"-Dsoak.matches={args.matches}", f"-Dsoak.stagger={stagger}",
                    f"-Dsoak.stage={stage}", f"-Dsoak.seconds={args.seconds}", "-jar", "paper.jar", "--nogui"]
         process = subprocess.Popen(command, cwd=server, stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
         owned.append(process)
@@ -344,9 +423,16 @@ def main():
                 raise TimeoutError(file.name)
             time.sleep(1)
 
+    def track_clients(process):
+        nonlocal clients_process
+        clients_process = process
+
     try:
         if args.lifecycle:
             lifecycle(args, server, results, launch, wait_for, owned, flags, candidate)
+            return
+        if args.generated:
+            generated(args, server, results, launch, wait_for, owned, flags, candidate, config, track_clients)
             return
         setup, log = launch("setup")
         setup.wait(timeout=240)
