@@ -545,3 +545,15 @@ rooms:
   # leave at once, and a match keeps match.rejoin-grace-seconds. 0 hands the room on at
   # once (0 to 600). Applies on reload, to disconnects from then on. A restart ends it.
   host-grace-seconds: 60
+
+# In-world lobby boards. Changes apply on plugin restart; text reloads with messages.yml.
+lobby:
+  boards:
+    create-room:
+      enabled: true
+    room-list:
+      enabled: true
+    # Refresh text and replace missing entities every 1..60 seconds.
+    update-seconds: 1
+    # Rooms shown before the overflow count, 1..10. Both clients use explicit lines.
+    max-rooms: 5

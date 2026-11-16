@@ -160,6 +160,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private org.bukkit.scheduler.BukkitTask placementTask;
     /** The chunk the shop board's ticket is on, so only that ticket is ever removed. */
     private int[] shopBoardChunk;
+    private com.ninja6.ninjaarena.lobby.BoardTickets boardTickets;
+    private com.ninja6.ninjaarena.lobby.RoomBoards roomBoards;
+    private org.bukkit.scheduler.BukkitTask roomBoardsTask;
     private com.ninja6.ninjaarena.lobby.LobbyIntro lobbyIntro;
     private LobbyEditing lobbyEditing;
     /** In a match or the lobby, or spectating. */
@@ -694,6 +697,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new com.ninja6.ninjaarena.room.RoomMenuListener(roomChest, roomMenus), this);
         command.setRoomScreen(roomMenus::open);
+        startRoomBoards(roomList);
         command.setAdminMaps(new AdminMaps(generatedMaps, roomList::hasSpareCell,
                 () -> roomList.seedPolicy().map(policy -> policy.settings().defaults().difficulty())
                         .orElse(SeedSettings.DEFAULT_DIFFICULTY), getLogger()));
@@ -1029,6 +1033,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
      */
     private void startLobby() {
         World world = lobbyWorld.world();
+        boardTickets = new com.ninja6.ninjaarena.lobby.BoardTickets(
+                (x, z) -> world.addPluginChunkTicket(x, z, this),
+                (x, z) -> world.removePluginChunkTicket(x, z, this));
         LobbyPieces pieces;
         try {
             pieces = LobbyPieces.bundled();
@@ -1087,12 +1094,44 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 return;
             }
             if (shopBoardChunk != null) {
-                world.removePluginChunkTicket(shopBoardChunk[0], shopBoardChunk[1], this);
+                boardTickets.release(shopBoardChunk[0], shopBoardChunk[1]);
             }
-            chunk.addPluginChunkTicket(this);
+            boardTickets.acquire(chunk.getX(), chunk.getZ());
             shopBoardChunk = new int[] {chunk.getX(), chunk.getZ()};
             board.place();
         }));
+    }
+
+    private void startRoomBoards(com.ninja6.ninjaarena.room.RoomService roomList) {
+        World world = lobbyWorld.world();
+        java.util.Set<String> enabled = new java.util.HashSet<>();
+        for (String id : java.util.List.of("create-room", "room-list")) {
+            if (getConfig().getBoolean("lobby.boards." + id + ".enabled", true)) {
+                enabled.add(id);
+            }
+        }
+        int limit = Math.clamp(getConfig().getInt("lobby.boards.max-rooms", 5), 1, 10);
+        roomBoards = new com.ninja6.ninjaarena.lobby.RoomBoards(world, lobbyBuild::layout,
+                () -> com.ninja6.ninjaarena.lobby.RoomBoardText.render(roomList.rooms().stream()
+                        .map(room -> new com.ninja6.ninjaarena.lobby.RoomBoardText.Row(
+                                roomList.playerName(room.host()), room.size(), room.settings().players(),
+                                room.settings().inviteOnly(), room.arena(), room.isPlaying() ? "playing"
+                                        : roomList.building(room).isPresent() ? "building" : "waiting"))
+                        .toList(), limit),
+                (id, player) -> {
+                    if (id.equals("create-room")) {
+                        roomList.create(player);
+                    } else {
+                        roomMenus.list(player);
+                    }
+                },
+                (at, ready) -> world.getChunkAtAsync(at).thenAccept(chunk ->
+                        getServer().getScheduler().runTask(this, ready)),
+                boardTickets, enabled, getLogger()::warning);
+        getServer().getPluginManager().registerEvents(roomBoards, this);
+        roomBoards.place();
+        long interval = Math.clamp(getConfig().getLong("lobby.boards.update-seconds", 1), 1, 60) * 20;
+        roomBoardsTask = getServer().getScheduler().runTaskTimer(this, roomBoards::update, interval, interval);
     }
 
     /** Players in the lobby world, and members wherever they are. */
@@ -1114,6 +1153,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         world.setSpawnLocation(lobbyBuild.layout().spawn(world));
         if (shopBoard != null) {
             placeShopBoard(shopBoard);
+        }
+        if (roomBoards != null) {
+            roomBoards.place();
         }
         if (lobbyMembers != null) {
             for (Player player : world.getPlayers()) {
@@ -1160,10 +1202,18 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             shopMenus.closeAll(getServer()::getPlayer);
             shopMenus = null;
         }
+        if (roomBoardsTask != null) {
+            roomBoardsTask.cancel();
+            roomBoardsTask = null;
+        }
+        if (roomBoards != null) {
+            roomBoards.close();
+            roomBoards = null;
+        }
         if (shopBoard != null) {
             shopBoard.close();
             if (shopBoardChunk != null) {
-                lobbyWorld.world().removePluginChunkTicket(shopBoardChunk[0], shopBoardChunk[1], this);
+                boardTickets.release(shopBoardChunk[0], shopBoardChunk[1]);
                 shopBoardChunk = null;
             }
             shopBoard = null;

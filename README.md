@@ -278,6 +278,24 @@ When the host leaves, the room passes to the co-host who has waited in it longes
 nobody left has it, the room closes and its players stay in the lobby. A running match goes
 on either way.
 
+### Lobby room boards
+
+The lobby's marked `create-room` and `room-list` spots automatically show text boards.
+Click or attack **Create room** to run the same action as `/narena room create`, with
+its permissions and lobby-entry checks. Click **Open rooms** to browse the room list
+screen. The list shows host, players/needed, privacy, map and waiting, building or
+in-match state, with an overflow count after `lobby.boards.max-rooms` (default 5).
+It refreshes every `lobby.boards.update-seconds` (default 1). Each board can be disabled
+under `lobby.boards`; these settings take effect after a plugin restart.
+
+Both boards use text displays with explicit line breaks and reachable interaction
+entities. Both attack and use work on Java and Bedrock; no item pictures are needed.
+Text comes from `messages.yml`. Board spots and facing come from the active lobby
+layout on startup and reset.
+Lost entities are replaced, tagged duplicates removed, and board chunk tickets shared
+with the shop board until their last user releases them. The lobby world stays loaded
+when arena worlds retire. A layout missing a mark skips that board with one warning.
+
 ### Co-hosts and the creator
 
 The host can make any other member a co-host with `/narena room cohost <player>`, the
