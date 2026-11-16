@@ -57,6 +57,8 @@ public final class SoakProbe extends JavaPlugin implements Listener {
     private boolean finished;
     private final int duration = Integer.getInteger("soak.seconds", 600);
     private final String stage = System.getProperty("soak.stage", "run");
+    private final boolean generatedMode = "generated".equals(System.getProperty("soak.mode", "hand-built"));
+    private GeneratedSoak generatedSoak;
 
     @Override
     public void onEnable() {
@@ -80,6 +82,32 @@ public final class SoakProbe extends JavaPlugin implements Listener {
             if (stage.startsWith("lifecycle-")) {
                 releaseInitialLease();
                 new LifecycleProbe(this, plugin, stage, output).start();
+                return;
+            }
+            if (generatedMode && stage.equals("setup")) {
+                // Generated maps need no hand-built arenas; this boot only creates the worlds.
+                if (!arenas.all().isEmpty()) {
+                    throw new IllegalStateException("The generated workload needs an empty arena registry");
+                }
+                mark("setup-complete");
+                getServer().getScheduler().runTaskLater(this, Bukkit::shutdown, 100);
+                return;
+            }
+            if (generatedMode && stage.equals("run")) {
+                int rooms = Integer.getInteger("soak.matches", MATCHES);
+                if (rooms < 1 || rooms > MATCHES) {
+                    throw new IllegalArgumentException("soak.matches must be 1 to " + MATCHES);
+                }
+                generatedSoak = new GeneratedSoak(this, plugin, output, rooms, duration,
+                        Integer.getInteger("soak.stagger", 0), this::releaseInitialLease);
+                generatedSoak.start();
+                getServer().getScheduler().runTaskLater(this, () -> {
+                    try {
+                        mark("ready");
+                    } catch (Exception error) {
+                        fail(error);
+                    }
+                }, 100);
                 return;
             }
             if (stage.equals("setup")) {
@@ -290,14 +318,18 @@ public final class SoakProbe extends JavaPlugin implements Listener {
         return holders(world());
     }
 
-    private int holders(World current) throws ReflectiveOperationException {
+    ArenaRegistry arenaRegistry() {
+        return arenas;
+    }
+
+    static int holders(World current) throws ReflectiveOperationException {
         Object level = current.getClass().getMethod("getHandle").invoke(current);
         Object scheduler = level.getClass().getMethod("moonrise$getChunkTaskScheduler").invoke(level);
         Object manager = scheduler.getClass().getField("chunkHolderManager").get(scheduler);
         return (Integer) manager.getClass().getMethod("size").invoke(manager);
     }
 
-    private static long heapUsed() {
+    static long heapUsed() {
         return Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
     }
 
@@ -347,12 +379,12 @@ public final class SoakProbe extends JavaPlugin implements Listener {
         }
     }
 
-    private void mark(String name) throws Exception {
+    void mark(String name) throws Exception {
         Files.writeString(output.resolve(name), Integer.toString(seconds));
         getLogger().info("Soak checkpoint: " + name);
     }
 
-    private void fail(Exception error) {
+    void fail(Exception error) {
         finished = true;
         getLogger().log(java.util.logging.Level.SEVERE, "Soak failed", error);
         try {
@@ -376,6 +408,9 @@ public final class SoakProbe extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         releaseInitialLease();
+        if (generatedSoak != null) {
+            generatedSoak.close();
+        }
         if (ticks != null) {
             ticks.close();
         }

@@ -13,6 +13,11 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- A generated-map workload for the local stability soak (`--generated`): rooms opened
+  with the room commands play back-to-back matches on generated maps with
+  `regenerate: round`, lava and late hazards, then leave so the arena world retires,
+  reopens and retires again. Its results are in `docs/stability-soak.md`, and the README
+  recommends keeping `arenas.max-active` at its default of 4 (#166).
 - Bedrock hotbar cooldown mappings for shuriken and smoke bombs in every team colour (#138).
 - A between-round shop screen with balance, categories, prices, remaining purchases
   and Ready, opened by `/narena shop` or the shop-area board. Paper dialogs use plain
