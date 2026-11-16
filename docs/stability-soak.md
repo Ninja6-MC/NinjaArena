@@ -331,9 +331,10 @@ path: the server's player list holds each `ServerPlayer`, whose `lastDamageSourc
 the zombie that last hit them, whose `level` is the retired world. Nothing clears that
 field when the player leaves the arena world, so a player who fought there and then
 waits in the lobby keeps the whole retired world in memory until they take other damage
-or leave. Cycle 2 had no fighting, so nothing held
-it. This is a real retain in the plugin's lifecycle, recorded here and not fixed by this
-harness change; the run fails acceptance on it.
+or leave. Cycle 2 had no fighting, so nothing held it. This is a real retain in the
+plugin's lifecycle, tracked in
+[#247](https://github.com/Ninja6-MC/NinjaArena/issues/247) and not fixed by this harness
+change; the run fails acceptance on it.
 
 ### Recommendation and limits
 

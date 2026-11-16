@@ -143,8 +143,9 @@ and the run goes on so the reopen is still measured; acceptance then fails. The 
 are then opened again, which reopens the world and sweeps the slot cells before the
 new maps are placed; all maps must be placed within five minutes. The clients leave
 again, the world must retire and be collected again, and the clients leave the lobby
-so no snapshot stays pending. The arena save must be unchanged from setup to
-shutdown, since generated maps are never saved.
+so no snapshot stays pending. No generated (non-air) block may reach the arena save:
+releasing the world without saving can still write cleared, all-air chunks, so raw
+save hashes are reported but may differ from setup.
 
 The probe writes `ticks.csv` (every tick, with its stage and the maps being built),
 `generated-seconds.csv` (guard state, average tick time, TPS, arena chunks and holders,
@@ -155,8 +156,8 @@ map placement), `shops.csv` (each shop break and its replacement map) and
 reported separately. The run passes only if every match ran at once, every room
 finished a match, the tick-time guard stayed `NORMAL` with the average below its pause
 threshold, at least one map was replaced between rounds, lava flowed, every room had
-live enemies within both caps, both releases and the reopen passed and the save was
-unchanged. `summary.json` lists each failed condition.
+live enemies within both caps, both releases and the reopen passed and no generated
+block reached the save. `summary.json` lists each failed condition.
 
 The workload does not model player combat, movement, shop purchases, deaths or network
 latency: clients stand still on the loopback interface. Only one replacement can be
