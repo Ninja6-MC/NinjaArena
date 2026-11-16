@@ -60,7 +60,8 @@ public final class RoomMenus {
         List<RoomScreen.Option> options = new ArrayList<>();
         for (Room room : rooms.rooms()) {
             UUID host = room.host();
-            String label = text(room.isPlaying() ? "room.screen.watch" : "room.screen.join",
+            String label = text(room.isPlaying() ? "room.screen.watch"
+                    : room.settings().asksToJoin() && !room.isInvited(player.getUniqueId()) ? "room.screen.request-join" : "room.screen.join",
                     "host", shortName(rooms.playerName(host)), "size", room.size());
             options.add(new RoomScreen.Option(label, room.isPlaying() ? Material.SPYGLASS : Material.OAK_DOOR,
                     (p, values) -> {
@@ -93,6 +94,7 @@ public final class RoomMenus {
         }
         if (room.isManager(id)) {
             options.add(action("invite", Material.PLAYER_HEAD, this::invite));
+            options.add(action("requests", Material.PAPER, rooms::requests));
             options.add(action("kick", Material.BARRIER, this::kick));
         }
         if (host) {
@@ -120,6 +122,7 @@ public final class RoomMenus {
         List<String> lines = new ArrayList<>();
         lines.add(text("room.screen.summary", "host", rooms.playerName(room.host()),
                 "arena", room.arena(), "size", room.size(), "players", room.settings().players()));
+        lines.add(text("room.screen.privacy-line", "privacy", text(RoomService.privacyKey(room.settings()))));
         if (room.hasCreator()) {
             lines.add(text("room.screen.creator", "player", rooms.playerName(room.creator())));
         }
@@ -185,9 +188,9 @@ public final class RoomMenus {
         List<String> labels = new ArrayList<>();
         String current;
         if (key.equals("privacy")) {
-            values.addAll(List.of("public", "invite"));
-            labels.addAll(List.of(text("room.screen.public"), text("room.screen.private")));
-            current = settings.inviteOnly() ? "invite" : "public";
+            values.addAll(List.of("public", "ask", "invite"));
+            labels.addAll(List.of(text("room.screen.public"), text("room.screen.ask"), text("room.screen.private")));
+            current = settings.privacy().name().toLowerCase(java.util.Locale.ROOT);
         } else {
             int min = key.equals("team-size") ? 0 : 1;
             int max = key.equals("teams") ? Arena.MAX_TEAMS
@@ -235,6 +238,30 @@ public final class RoomMenus {
         options.add(action("back", Material.ARROW, this::own));
         show(player, "invite", options.size() == 1 ? List.of(text("room.invite-list-empty")) : List.of(),
                 options, null, "close");
+    }
+
+    public void requests(Player player) {
+        List<RoomScreen.Option> options = new ArrayList<>();
+        for (RoomService.JoinRequest request : rooms.pendingRequests(player)) {
+            options.add(new RoomScreen.Option(text("room.screen.request-player", "player",
+                    shortName(rooms.playerName(request.player()))), Material.PLAYER_HEAD,
+                    (p, values) -> request(p, request)));
+        }
+        options.add(action("back", Material.ARROW, this::own));
+        show(player, "requests", List.of(text(options.size() == 1 ? "room.requests-empty"
+                : "room.requests-header")), options, null, "close");
+    }
+
+    private void request(Player player, RoomService.JoinRequest request) {
+        if (rooms.pendingRequests(player).stream().noneMatch(pending -> pending == request)) {
+            player.sendMessage(msg("room.request-missing"));
+            return;
+        }
+        show(player, "requests", List.of(text("room.screen.request-info", "player",
+                rooms.playerName(request.player()))), List.of(
+                action("accept-request", Material.LIME_WOOL, p -> rooms.decideRequest(p, request, true)),
+                action("decline-request", Material.RED_WOOL, p -> rooms.decideRequest(p, request, false))),
+                null, "close");
     }
 
     private void kick(Player player) {

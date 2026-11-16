@@ -127,11 +127,11 @@ nether portal, but from crying obsidian:
    empty inventory as an admin portal.
 
 A player-built portal belongs to no arena: it puts the player in an open room with space
-that admits them (a public room, or an invite-only one that invited them), one on an
-event's featured map first, then the one with the most players. With none, it leaves
-them in the lobby to create or be invited to one. Vanilla does nothing with crying
-obsidian, so these portals never clash with nether portals; obsidian cannot be chosen as
-the frame block.
+that admits them (a public room, or an invite-only one that invited them; ask rooms are
+skipped), one on an event's featured map first, then the one with the most players. With
+none, it leaves them in the lobby to create or be invited to one. Vanilla does nothing
+with crying obsidian, so these portals never clash with nether portals; obsidian cannot
+be chosen as the frame block.
 
 Breaking, burning, blowing up or pushing any block of the frame removes the portal; the
 corners, the opening and blocks around the frame do not count, so ordinary block updates
@@ -178,8 +178,10 @@ Existing `arena`, `portal` and `director` paths stay under the root.
 | `room` | `ninjaarena.play` | Show your room, with remove and co-host buttons for its host and remove buttons for its co-hosts; outside a room, list the open rooms and an event's featured map |
 | `room create` | `ninjaarena.room.create` | Open a room in the lobby and become its host |
 | `room settings [players\|teams\|team-size\|privacy <value>]` | Host | Show or change the room's settings |
+| `room requests` | Host or co-host | List pending join requests and open their screen |
+| `room accept-request <player>`, `room decline-request <player>` | Host or co-host | Decide a pending request; acceptance rechecks admission |
 | `room invite [player]` | Host or co-host | Invite a player with a join button, or list lobby players with invite buttons |
-| `room accept <host>` | `ninjaarena.play` | Join a host's room: a public one, or one that invited you |
+| `room accept <host>` | `ninjaarena.play` | Join a public or invited room, or request entry to an ask room |
 | `room kick <player>` | Host, or co-host for plain members | Remove a player from the room to the lobby |
 | `room cohost <player>` | Host | Make a member a [co-host](#co-hosts-and-the-creator) |
 | `room uncohost <player>` | Host | Make a co-host a plain member again |
@@ -260,7 +262,8 @@ The host sets the room up with `/narena room settings`:
 - `teams`: how many teams (1 to the arena's team spawns; by default all of them).
 - `team-size`: the most players on one team (0 for no limit; by default
   `waiting-room.team-size`). The room is full at the team size times the team count.
-- `privacy`: `public`, which anyone may join, or `invite`, which only invited players may.
+- `privacy`: `public`, which anyone may join; `ask`, which requires a host or co-host's
+  approval; or `invite`, which only invited players may join.
 
 `/narena room invite Bob` sends Bob a **[Join]** button; `/narena room invite` on its own
 lists the lobby players in no room, each with an **[Invite]** button. A player joins with
@@ -269,6 +272,25 @@ the button or `/narena room accept <host>`; a public room needs no invitation. I
 `/narena room kick <player>`. A removed player goes back to the lobby and cannot rejoin a
 public room unless invited again. Players are put on the smallest team and kept within one
 player of each other. Settings and removals wait until the room is back in the lobby.
+
+In an `ask` room, a join command, room-list click or screen button sends a request instead
+of joining. An explicit invitation still allows direct entry; a removed player needs an
+invitation before requesting again. The requester enters the lobby and hears whether the
+request was sent, accepted, declined, expired or cancelled. Hosts and co-hosts get
+**[Accept]**, **[Decline]** and **[Requests]** chat buttons; Bedrock receives the commands
+to type. `/narena room requests` lists pending requests and opens the decision screen.
+`/narena room accept-request <player>` and `decline-request <player>` work in chat too.
+Acceptance uses the usual join checks, including capacity, lobby entry and membership in
+another room. Failed acceptance ends the request and grants no invitation.
+
+Requests last `rooms.request-lifetime-seconds` (default 60, 1 to 600). Each player may
+request the same room once per `rooms.request-cooldown-seconds` (default 30, 0 to 600;
+0 disables the cooldown). A refusal gives the seconds left. One pending request per
+player per room is allowed. Requests end on a decision or expiry, leaving the lobby,
+joining or creating a room, disconnecting, room closure, match start, privacy change or
+plugin disable. They are kept in memory only. Reload applies both timers to new requests;
+existing deadlines stay fixed. Play portals skip `ask` rooms, including for invited
+players. Invited players can still enter `invite` rooms through a play portal.
 
 A player who comes through a play portal also joins an open room, as described under
 [Moving from waiting rooms to rooms](#moving-from-waiting-rooms-to-rooms).
@@ -335,7 +357,8 @@ on at once, as before, and a reload applies to disconnects from then on.
 Open `/narena room` to create or browse rooms, join or spectate, and manage your room.
 Hosts can edit privacy, player and team counts, choose a map when permitted, invite or
 remove players, name co-hosts, hand the room back to its creator, and start a match.
-Co-hosts get Invite, Remove and Start. Each settings screen saves one value; Cancel discards
+Hosts and co-hosts get Join requests, Invite, Remove and Start. Join requests opens a
+list, then one Accept/Decline screen; deciding closes it without opening another copy. Each settings screen saves one value; Cancel discards
 that edit. Finished actions close the screen on both Java and Bedrock. Open it again to
 see current state. The existing room subcommands and clickable chat invites remain available.
 
@@ -736,6 +759,7 @@ match players or restarts a match.
 | Match timers, rounds, extra rounds, friendly fire, team scoring and player points | Apply to the next match. Running matches retain all their values, even if no damage or point award has occurred yet. |
 | `match.spectate-radius` | Applies immediately to eliminated players in running matches. |
 | `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
+| `rooms.request-lifetime-seconds`, `rooms.request-cooldown-seconds` | Applies immediately to new requests and cooldowns. Existing deadlines stay fixed. |
 | `rooms.host-grace-seconds` | Applies immediately to hosts who disconnect from then on. A host already away keeps the grace they were given; 0 hands the room on at the next host disconnect. |
 | Shop screen | `shop.menu` applies to the next screen opened. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |

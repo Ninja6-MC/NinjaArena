@@ -24,6 +24,12 @@ public interface RoomCommands {
 
     void accept(Player player, String host);
 
+    void requests(Player player);
+
+    void acceptRequest(Player player, String requester);
+
+    void declineRequest(Player player, String requester);
+
     void kick(Player player, String member);
 
     /** The host makes a member a co-host, who may start the match, invite and remove players. */

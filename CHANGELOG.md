@@ -13,6 +13,13 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- Ask-to-join rooms (`privacy: ask`), with expiring requests, a per-player per-room
+  cooldown and host or co-host approval through chat, native Java dialogs, Bedrock forms
+  or chest menus (#218). New commands: `room requests`, `room accept-request` and
+  `room decline-request`. Request timers reload for new requests; play portals skip
+  ask rooms, including for invited players; invited players can still enter invite-only
+  rooms through portals. Decisions and changes in room or requester eligibility end
+  requests; stale forms cannot decide a replacement request.
 - Lobby Create room and live Open rooms boards (#146), placed at the layout marks, with
   Java and Bedrock click targets. The list shows host, players/needed, privacy, map and
   state, with an overflow count. Spots come from the active layout, missing entities are

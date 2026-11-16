@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.ninja6.ninjaarena.room.RoomSettings.Privacy;
 import java.nio.file.Path;
 import java.util.Set;
 import org.junit.jupiter.api.io.TempDir;
@@ -233,7 +234,7 @@ class RoomBoardsTest {
 
     @Test void roomListTargetCoversTextOnSpawnAndResizesWithoutReplacingEntities() {
         List<RoomBoardText.Row> rooms = IntStream.range(0, 6)
-                .mapToObj(i -> new RoomBoardText.Row("Host" + i, 1, 4, false, "dojo", "waiting"))
+                .mapToObj(i -> new RoomBoardText.Row("Host" + i, 1, 4, Privacy.PUBLIC, "dojo", "waiting"))
                 .toList();
         Component longList = RoomBoardText.render(rooms, 5); // 13 explicit lines including overflow.
         AtomicReference<Component> content = new AtomicReference<>(longList);

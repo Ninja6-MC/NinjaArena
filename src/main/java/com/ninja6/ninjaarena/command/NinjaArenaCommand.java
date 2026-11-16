@@ -35,10 +35,10 @@ public final class NinjaArenaCommand implements TabExecutor {
     public static final String LEAVE = "leave";
     /** Rooms: open, set up, invite, start and leave. */
     public static final String ROOM = "room";
-    private static final String ROOM_USAGE = "room [create|settings|invite|accept|kick|cohost|uncohost|handback|start|preview|leave]";
+    private static final String ROOM_USAGE = "room [create|settings|invite|accept|requests|accept-request|decline-request|kick|cohost|uncohost|handback|start|preview|leave]";
     private static final String ROOM_SETTINGS_USAGE = "room settings [players|teams|team-size|privacy <value>]";
     private static final List<String> ROOM_ACTIONS = List.of("create", "settings", "invite", "accept", "kick",
-            "cohost", "uncohost", "handback", "start", "preview", "leave");
+            "cohost", "uncohost", "handback", "start", "preview", "leave", "requests", "accept-request", "decline-request");
     private static final List<String> ROOM_SETTINGS = List.of("players", "teams", "team-size", "privacy");
     private static final List<String> DIFFICULTIES = List.of("1", "2", "3", "4", "5");
     /** The shop phase between rounds: {@code shop ready}. */
@@ -443,13 +443,15 @@ public final class NinjaArenaCommand implements TabExecutor {
                     roomScreen.accept(player);
                 }
             }
-            case "create", "leave", "preview", "handback" -> {
+            case "create", "leave", "preview", "handback", "requests" -> {
                 if (args.length != 2) {
                     usage(sender, label, "room " + action);
                 } else if (action.equals("create")) {
                     rooms.create(player);
                 } else if (action.equals("preview")) {
                     rooms.preview(player);
+                } else if (action.equals("requests")) {
+                    rooms.requests(player);
                 } else if (action.equals("handback")) {
                     rooms.handBack(player);
                 } else {
@@ -472,12 +474,14 @@ public final class NinjaArenaCommand implements TabExecutor {
                     rooms.invite(player, args.length == 3 ? args[2] : null);
                 }
             }
-            case "accept", "kick", "cohost", "uncohost" -> {
+            case "accept", "kick", "cohost", "uncohost", "accept-request", "decline-request" -> {
                 if (args.length != 3) {
                     usage(sender, label, "room " + action + (action.equals("accept") ? " <host>" : " <player>"));
                 } else {
                     switch (action) {
                         case "accept" -> rooms.accept(player, args[2]);
+                        case "accept-request" -> rooms.acceptRequest(player, args[2]);
+                        case "decline-request" -> rooms.declineRequest(player, args[2]);
                         case "kick" -> rooms.kick(player, args[2]);
                         case "cohost" -> rooms.cohost(player, args[2]);
                         default -> rooms.uncohost(player, args[2]);
@@ -657,10 +661,10 @@ public final class NinjaArenaCommand implements TabExecutor {
             List<String> options = args.length == 2 ? ROOM_ACTIONS
                     : args.length == 3 && args[1].equalsIgnoreCase("settings") ? ROOM_SETTINGS
                     : args.length == 4 && args[1].equalsIgnoreCase("settings") && args[2].equalsIgnoreCase("privacy")
-                            ? List.of("public", "invite") : null;
+                            ? List.of("public", "ask", "invite") : null;
             if (options == null) {
                 // Bukkit offers online player names for invite, accept, kick, the co-host ones and start.
-                return args.length == 3 && List.of("invite", "accept", "kick", "cohost", "uncohost", "start")
+                return args.length == 3 && List.of("invite", "accept", "kick", "cohost", "uncohost", "start", "accept-request", "decline-request")
                         .contains(args[1].toLowerCase(Locale.ROOT)) ? null : List.of();
             }
             return options.stream().filter(option -> option.startsWith(last)).toList();

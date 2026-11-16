@@ -580,6 +580,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void roomRequests(int lifetime, int cooldown) {
+                        rooms.setRequestTimes(lifetime, cooldown);
+                    }
+
+                    @Override
                     public void hostGrace(int seconds) {
                         roomList.setHostGraceSeconds(seconds);
                     }
@@ -696,6 +701,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 message -> getLogger().warning(message));
         getServer().getPluginManager().registerEvents(
                 new com.ninja6.ninjaarena.room.RoomMenuListener(roomChest, roomMenus), this);
+        rooms.setRequestScreen(roomMenus::requests);
         command.setRoomScreen(roomMenus::open);
         startRoomBoards(roomList);
         command.setAdminMaps(new AdminMaps(generatedMaps, roomList::hasSpareCell,
@@ -730,6 +736,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 });
         rooms = new RoomService(this, arenas, inMatch, lobbyEntry, () -> roomDefaults, transfers, arenaWorld::hold,
                 MaxActive.read(getConfig(), getLogger()::warning));
+        rooms.setRequestTimes(getConfig().getInt(RoomService.REQUEST_LIFETIME_KEY, RoomService.DEFAULT_REQUEST_LIFETIME),
+                getConfig().getInt(RoomService.REQUEST_COOLDOWN_KEY, RoomService.DEFAULT_REQUEST_COOLDOWN));
         rooms.setSounds(sounds);
         rooms.setBedrock(bedrock::isBedrock);
         rooms.setHostGraceSeconds(getConfig().getInt(RoomService.HOST_GRACE_KEY,
@@ -1115,7 +1123,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 () -> com.ninja6.ninjaarena.lobby.RoomBoardText.render(roomList.rooms().stream()
                         .map(room -> new com.ninja6.ninjaarena.lobby.RoomBoardText.Row(
                                 roomList.playerName(room.host()), room.size(), room.settings().players(),
-                                room.settings().inviteOnly(), room.arena(), room.isPlaying() ? "playing"
+                                room.settings().privacy(), room.arena(), room.isPlaying() ? "playing"
                                         : roomList.building(room).isPresent() ? "building" : "waiting"))
                         .toList(), limit),
                 (id, player) -> {

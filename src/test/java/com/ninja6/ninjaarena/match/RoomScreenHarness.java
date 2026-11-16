@@ -82,6 +82,7 @@ final class RoomScreenHarness {
                 closes++;
             }
         }, chest, (player, arena) -> watched.add(arena), warnings::add);
+        if (rooms != null) { rooms.setRequestScreen(menus::requests); }
     }
 
     Player wrap(Player original) {
