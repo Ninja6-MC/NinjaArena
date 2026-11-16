@@ -872,7 +872,9 @@ the lobby world or the server also ends it. `/narena admin lobby reset` generate
 lobby again, or replaces the obsidian build, removing every change made in edit mode,
 once nobody is in the lobby world and no match is running; an admin still editing holds
 it back. Every admin who asked is told when it starts and when it is done, and a queued
-reset is kept in the lobby world, so a restart runs it too.
+reset is kept in the lobby world, so a restart runs it too. On a server where a match is
+always running, a rebuild or reset waits until one quiet moment, and there is no way to
+force it; restarting the server starts a due build before anyone can join.
 
 Nothing takes damage in the lobby world. Anyone who falls into its void is put back at
 the lobby spawn; such a fall never kills and never counts as a death in a match, and no

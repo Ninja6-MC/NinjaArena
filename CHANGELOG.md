@@ -25,9 +25,9 @@ Java 25, and does not run on Folia.
   never while anyone is in the lobby world or a match is running, and placed over ticks
   within the placement budget it shares with generated maps. Nobody can enter or edit the
   lobby while it is built; players it would take in go home instead. A build stopped by a
-  restart is finished on the next start. Regenerating replaces admin edits inside it. Bounds, spawn, shop area and boards
-  come from it. A server with the obsidian lobby keeps it, logs a notice once, and switches
-  with `admin lobby reset`.
+  restart is finished on the next start. Regenerating replaces admin edits inside it.
+  Bounds, spawn, shop area and boards come from it. A server with the obsidian lobby keeps
+  it, logs a notice once, and switches with `admin lobby reset`.
 - Bedrock hotbar cooldown mappings for shuriken and smoke bombs in every team colour (#138).
 - A between-round shop screen with balance, categories, prices, remaining purchases
   and Ready, opened by `/narena shop` or the shop-area board. Paper dialogs use plain

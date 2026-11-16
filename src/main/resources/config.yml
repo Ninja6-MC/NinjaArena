@@ -183,8 +183,8 @@ arenas:
   # ends a lease already granted. This was stability.max-concurrent-matches, which is
   # still read, with a warning, when this is not set. The generated lobby has one room pad
   # per slot, at most 32; a new pad count generates it again once nobody is in the lobby
-  # world and no match is running, replacing admin edits inside it. A lobby from before the generated lobby stays
-  # until /narena admin lobby reset.
+  # world and no match is running, replacing admin edits inside it. A lobby from before
+  # the generated lobby stays until /narena admin lobby reset.
   max-active: 4
 
 maps:
