@@ -65,11 +65,13 @@ import org.bukkit.persistence.PersistentDataType;
  * it, so moving, turning, jumping and chatting there keep it going; stepping off cancels
  * it, and stepping back on starts it again from the full time. After it acts the pad does
  * nothing more for that player until they step off. It shows as a title, since the room
- * status line uses the action bar. A pad whose room is in a match does not count down.
+ * status line uses the action bar. A pad whose room is in a match or full does not count
+ * down.
  *
  * <p><b>Fog.</b> Each draw, a viewer in the lobby world who moved, looked, chatted or used a
  * command in the last {@link PadSettings#activeSeconds()} gets dust on the ring of each
- * assigned pad within {@link PadSettings#fogDistance()}, nearest first, up to their cap.
+ * assigned pad within {@link PadSettings#fogDistance()}, nearest first, up to their cap; a
+ * ring the cap cuts into is thinned evenly all round.
  * Particles are sent to that viewer only. Holds nothing between draws.
  *
  * <p>Labels are disposable text displays, tagged and not saved with the chunk, like the
@@ -140,6 +142,8 @@ public final class RoomPads implements Listener, AutoCloseable {
     private LobbyLayout current;
     private boolean wasBuilding;
     private int generation;
+    /** Fog draws so far; where a thinned ring starts. */
+    private long draws;
     private boolean closed;
 
     /**
@@ -300,7 +304,10 @@ public final class RoomPads implements Listener, AutoCloseable {
                 on.started = now;
                 on.done = false;
             }
-            boolean counting = room != null && !on.done && !room.isPlaying() && rooms.eligible(id);
+            // A full room takes nobody, invited players included, so its pad does not count
+            // down either; the join path still checks every room when the countdown ends.
+            boolean counting = room != null && !on.done && !room.isPlaying() && !room.isFull()
+                    && rooms.eligible(id);
             if (!counting) {
                 // The full time counts from when the pad can act for them.
                 hideTitle(player, on);
@@ -391,6 +398,7 @@ public final class RoomPads implements Listener, AutoCloseable {
             return;
         }
         long now = clock.getAsLong();
+        draws++;
         for (Player viewer : world.getPlayers()) {
             if (isActive(viewer.getUniqueId(), now)) {
                 drawFor(viewer, cap(viewer.getUniqueId()));
@@ -439,21 +447,41 @@ public final class RoomPads implements Listener, AutoCloseable {
         order.sort(Comparator.comparingDouble(near::get));
         int sent = 0;
         for (LobbyPad pad : order) {
+            if (sent >= cap) {
+                break;
+            }
             Particle.DustOptions dust = new Particle.DustOptions(
                     Color.fromRGB(settings.colour(PadState.of(roomAt.get(pad.index())))), SIZE);
-            for (int[] block : pad.ring()) {
-                for (int i = 0; i < settings.perBlock(); i++) {
-                    if (sent >= cap) {
-                        return sent;
-                    }
-                    viewer.spawnParticle(Particle.DUST, block[0] + random.nextDouble(),
-                            block[1] + 1.05 + random.nextDouble() * 0.25, block[2] + random.nextDouble(),
-                            1, 0, 0, 0, 0, dust);
-                    sent++;
-                }
+            List<int[]> ring = pad.ring();
+            for (int[] block : spread(ring, settings.perBlock(), cap - sent, draws)) {
+                viewer.spawnParticle(Particle.DUST, block[0] + random.nextDouble(),
+                        block[1] + 1.05 + random.nextDouble() * 0.25, block[2] + random.nextDouble(),
+                        1, 0, 0, 0, 0, dust);
+                sent++;
             }
         }
         return sent;
+    }
+
+    /**
+     * The ring blocks that get a particle in a draw: {@code perBlock} rounds of the ring, or,
+     * when the budget is smaller, that many blocks spaced evenly all round it, so a capped
+     * draw thins the ring instead of cutting it short. The start moves one block each draw,
+     * so over a few draws every block gets fog.
+     */
+    static List<int[]> spread(List<int[]> ring, int perBlock, int budget, long draw) {
+        int size = ring.size();
+        long total = (long) size * perBlock;
+        int count = (int) Math.min(total, Math.max(0, budget));
+        int offset = (int) Math.floorMod(draw, (long) size);
+        // Spaced over one round when the budget does not cover it, else over every round.
+        long span = count <= size ? size : total;
+        List<int[]> blocks = new ArrayList<>(count);
+        for (int k = 0; k < count; k++) {
+            long along = k * span / count;
+            blocks.add(ring.get((int) ((along + offset) % size)));
+        }
+        return blocks;
     }
 
     void markActive(UUID player) {

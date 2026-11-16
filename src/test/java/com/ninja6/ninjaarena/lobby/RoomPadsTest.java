@@ -363,6 +363,28 @@ class RoomPadsTest {
         assertEquals(List.of("Bob->Alice"), triggered);
     }
 
+    @Test
+    void fullRoomsDoNotCountDownUntilThereIsSpace() {
+        Room alice = new Room(ALICE, "garden", new RoomSettings(Privacy.PUBLIC, 2, 2, 1));
+        open.add(alice);
+        alice.invite(CAROL);
+        alice.join(CAROL);
+        assertTrue(alice.isFull());
+        alice.invite(BOB);
+        RoomPads pads = pads();
+        FakePlayer bob = player(BOB, "Bob");
+        stand(bob, 0, 0, 0, 0);
+        at(pads, 0);
+        at(pads, 10_000);
+        assertTrue(bob.titles.isEmpty(), "a full room takes nobody, an invited player included");
+        assertTrue(triggered.isEmpty());
+        alice.leave(CAROL, id -> true);
+        at(pads, 11_000);
+        assertEquals("5|Stay on the pad to join the room of Alice", bob.titles.getLast());
+        at(pads, 16_000);
+        assertEquals(List.of("Bob->Alice"), triggered, "the join path makes the final check");
+    }
+
     // ---- Assignment ----
 
     @Test
@@ -553,6 +575,32 @@ class RoomPadsTest {
         stand(viewer, 0, 2, 0, 2);
         assertEquals(16, near.drawFor(viewer.proxy, 128), "only the pad underfoot is within 4 blocks");
         assertEquals(0, near.drawFor(viewer.proxy, 0));
+    }
+
+    @Test
+    void aCappedDrawThinsTheRingOnAllFourSidesAndRotates() {
+        LobbyPad pad = layout.pads().get(0);
+        List<int[]> ring = pad.ring();
+        ArenaBounds plate = pad.plate();
+        for (int[] budget : new int[][] {{2, 16}, {4, 48}, {1, 8}, {3, 5}}) {
+            List<int[]> blocks = RoomPads.spread(ring, budget[0], budget[1], 0);
+            assertEquals(Math.min(budget[1], ring.size() * budget[0]), blocks.size());
+            assertTrue(blocks.stream().anyMatch(b -> b[2] == plate.minZ()), "north");
+            assertTrue(blocks.stream().anyMatch(b -> b[0] == plate.maxX()), "east");
+            assertTrue(blocks.stream().anyMatch(b -> b[2] == plate.maxZ()), "south");
+            assertTrue(blocks.stream().anyMatch(b -> b[0] == plate.minX()), "west");
+        }
+        assertEquals(16, RoomPads.spread(ring, 2, 16, 0).stream().map(b -> b[0] + "," + b[2]).distinct().count());
+        Set<String> covered = new HashSet<>();
+        for (int draw = 0; draw < 4; draw++) {
+            RoomPads.spread(ring, 1, 4, draw).forEach(b -> covered.add(b[0] + "," + b[2]));
+        }
+        assertEquals(16, covered.size(), "over a few draws the whole ring gets fog");
+        List<int[]> uncapped = RoomPads.spread(ring, 2, 100, 0);
+        assertEquals(32, uncapped.size());
+        for (int[] block : ring) {
+            assertEquals(2, uncapped.stream().filter(b -> b == block).count());
+        }
     }
 
     @Test

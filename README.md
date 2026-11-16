@@ -344,7 +344,8 @@ room status line uses the action bar. Only lobby members in no room use pads: pl
 a shop phase and spectators in the lobby world do not. Joining takes the same path as an
 invitation's accept, with its checks: a full room, a room in a match, a lobby closed while
 it is built and a player already in a room are refused with the usual messages. A pad
-whose room is in a match does not count down.
+whose room is in a match or full does not count down, since a full room takes nobody, an
+invited player included; it counts from the full time once there is space.
 
 Each assigned pad has a label over its plate with the host, the players and the needed
 count, and the room's state in words: open, ask to join, invite only, full or in match.
@@ -358,7 +359,9 @@ Fog is sent to each viewer on their own: only for pads within `fog.distance` blo
 (default 16) of them, and only while they moved, looked, chatted or used a command in the
 last `fog.active-seconds` (default 30). A draw every `fog.interval-ticks` (default 10) puts
 `fog.per-block` particles (default 1) on each of a pad's 16 ring blocks, nearest pad first,
-up to `fog.max-particles` a viewer (default 48, three pads). Bedrock viewers, whose client
+up to `fog.max-particles` a viewer (default 48, three pads). A ring the cap cuts into is
+thinned evenly all round, starting one block further on each draw, rather than cut short.
+Bedrock viewers, whose client
 gets each particle translated by Geyser, have their own cap, `fog.bedrock-max-particles`
 (default 16, one pad; 0 sends them none). At the defaults a Java viewer gets at most 96 and
 a Bedrock viewer at most 32 particles a second. Estimated from the packet sizes, not
