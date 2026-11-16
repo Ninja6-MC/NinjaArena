@@ -68,6 +68,10 @@ public final class LobbyEditing implements LobbyCommands {
             player.sendMessage(msg("lobby.edit-busy"));
             return;
         }
+        if (build.building()) {
+            player.sendMessage(msg("lobby.edit-building"));
+            return;
+        }
         Optional<Location> back = Optional.empty();
         if (!PluginWorlds.isLobby(player.getLocation())) {
             Location from = player.getLocation().clone();

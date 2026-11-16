@@ -55,6 +55,7 @@ import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.map.BudgetedCellWriter;
 import com.ninja6.ninjaarena.map.PlacementBudget;
 import com.ninja6.ninjaarena.map.PlacementSettings;
+import com.ninja6.ninjaarena.map.PlacementShare;
 import com.ninja6.ninjaarena.match.MatchDeathListener;
 import com.ninja6.ninjaarena.message.MessageMigration;
 import com.ninja6.ninjaarena.message.Messages;
@@ -156,7 +157,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
     private LobbyMembers lobbyMembers;
     private LobbyBuild lobbyBuild;
     private org.bukkit.scheduler.BukkitTask lobbyBuildTask;
-    private PlacementBudget lobbyBudget;
+    private org.bukkit.scheduler.BukkitTask placementTask;
+    /** The chunk the shop board's ticket is on, so only that ticket is ever removed. */
+    private int[] shopBoardChunk;
     private com.ninja6.ninjaarena.lobby.LobbyIntro lobbyIntro;
     private LobbyEditing lobbyEditing;
     /** In a match or the lobby, or spectating. */
@@ -426,14 +429,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 new com.ninja6.ninjaarena.shop.ShopListener(shopMenus, getServer()::getPlayer), this);
         shopBoard = new com.ninja6.ninjaarena.shop.ShopBoard(lobbyWorld.world(), lobbyBuild::layout, shopMenus::open);
         getServer().getPluginManager().registerEvents(shopBoard, this);
-        var board = shopBoard;
-        var boardAt = board.location();
-        lobbyWorld.world().getChunkAtAsync(boardAt).thenAccept(chunk -> shopMain.execute(() -> {
-            if (shopBoard == board) {
-                chunk.addPluginChunkTicket(this);
-                board.place();
-            }
-        }));
+        placeShopBoard(shopBoard);
         roundKits.setAfterKit(shop::apply);
         getServer().getPluginManager().registerEvents(shop, this);
         roundKits.warnToolAmounts(ToolSettings.from(getConfig().getConfigurationSection("tools")));
@@ -774,6 +770,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         PlacementSettings placement = PlacementSettings.from(
                 getConfig().getConfigurationSection("stability.placement"));
         // A time budget per tick that drops while the tick-time guard holds spawning back.
+        long[] mapShare = {0};
         BudgetedCellWriter writer = new BudgetedCellWriter(new BlockAccess() {
             @Override
             public Material get(int x, int y, int z) {
@@ -784,8 +781,34 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             public void set(int x, int y, int z, Material material) {
                 world.world().getBlockAt(x, y, z).setType(material, false);
             }
-        }, new PlacementBudget(placement, tickTime::read, Bukkit::getCurrentTick), System::nanoTime);
-        writer.start(this);
+        }, () -> mapShare[0], System::nanoTime);
+        // One budget a tick for generated maps and the lobby build together.
+        PlacementShare share = new PlacementShare(
+                new PlacementBudget(placement, tickTime::read, Bukkit::getCurrentTick), System::nanoTime);
+        PlacementShare.Writer mapWork = new PlacementShare.Writer() {
+            @Override
+            public boolean busy() {
+                return writer.pending() > 0;
+            }
+
+            @Override
+            public void work(long budgetNanos) {
+                mapShare[0] = budgetNanos;
+                writer.tick();
+            }
+        };
+        PlacementShare.Writer lobbyWork = new PlacementShare.Writer() {
+            @Override
+            public boolean busy() {
+                return lobbyBuild != null && lobbyBuild.building();
+            }
+
+            @Override
+            public void work(long budgetNanos) {
+                lobbyBuild.tick(budgetNanos, System::nanoTime);
+            }
+        };
+        placementTask = getServer().getScheduler().runTaskTimer(this, () -> share.tick(mapWork, lobbyWork), 1, 1);
         ChunkTickets tickets = new ChunkTickets() {
             @Override
             public void add(int chunkX, int chunkZ) {
@@ -1006,8 +1029,8 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             getLogger().log(java.util.logging.Level.SEVERE, "Could not read the generated lobby pieces.", e);
             pieces = null;
         }
-        lobbyBuild = new LobbyBuild(pieces, LobbyBuild.site(world), getLogger(), this::lobbyOccupants,
-                this::lobbyBuilt);
+        lobbyBuild = new LobbyBuild(pieces, LobbyBuild.site(world, this), getLogger(), this::lobbyOccupants,
+                this::lobbyHeld, this::lobbyBuilt);
         // Warnings about the old setting name come from the arena slots, read later.
         lobbyBuild.start(MaxActive.read(getConfig(), ignored -> { }));
         LobbyBuild build = lobbyBuild;
@@ -1017,21 +1040,52 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                         || rooms != null && rooms.isPreviewing(id),
                 KitInventory::emptyForWaiting, player -> restores.restore(player));
         LobbyMembers members = lobbyMembers;
+        // Nobody enters while the lobby is built; returns and rejoins go home instead.
+        members.setClosed(build::building);
         lobbyIntro = new com.ninja6.ninjaarena.lobby.LobbyIntro(() -> activePackSettings.textureMenu(),
                 com.ninja6.ninjaarena.lobby.LobbyIntro::showDialog, player -> members.isMember(player.getUniqueId()));
         members.setArrival(lobbyIntro::arrived);
         lobbyEditing = new LobbyEditing(build, members::spawn, busy, world::save, getLogger());
         getServer().getPluginManager().registerEvents(new LobbyListener(members, lobbyEditing), this);
-        // A build due starts once the lobby world is empty, checked every second; a build
-        // in progress places within the generated maps' time budget each tick.
-        int[] ticks = {0};
-        lobbyBuildTask = getServer().getScheduler().runTaskTimer(this, () -> {
-            if (build.building()) {
-                build.tick(lobbyBudget().getAsLong(), System::nanoTime);
-            } else if (++ticks[0] % 20 == 0) {
-                build.poll();
+        // No player can be in the lobby world before enable ends, unless a reload left them
+        // there, so a new lobby or an unfinished build starts now, before anyone joins. A
+        // build due later starts once the lobby world is empty and no match is running,
+        // checked every second; it places in the shared placement budget (startGeneratedMaps).
+        build.poll();
+        lobbyBuildTask = getServer().getScheduler().runTaskTimer(this, build::poll, 20, 20);
+    }
+
+    /** Whether anything could bring players to the lobby world: a running match, or a room member away. */
+    private boolean lobbyHeld() {
+        if (matches != null && !matches.matches().isEmpty()) {
+            return true;
+        }
+        if (rooms != null && lobbyMembers != null) {
+            for (var room : rooms.rooms()) {
+                for (java.util.UUID id : room.members()) {
+                    if (!lobbyMembers.isMember(id)) {
+                        return true;
+                    }
+                }
             }
-        }, 1, 1);
+        }
+        return false;
+    }
+
+    /** Places the shop board once its chunk is loaded, moving its chunk ticket with it. */
+    private void placeShopBoard(com.ninja6.ninjaarena.shop.ShopBoard board) {
+        World world = lobbyWorld.world();
+        world.getChunkAtAsync(board.location()).thenAccept(chunk -> getServer().getScheduler().runTask(this, () -> {
+            if (shopBoard != board) {
+                return;
+            }
+            if (shopBoardChunk != null) {
+                world.removePluginChunkTicket(shopBoardChunk[0], shopBoardChunk[1], this);
+            }
+            chunk.addPluginChunkTicket(this);
+            shopBoardChunk = new int[] {chunk.getX(), chunk.getZ()};
+            board.place();
+        }));
     }
 
     /** Players in the lobby world, and members wherever they are. */
@@ -1046,31 +1100,13 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         return inside.size();
     }
 
-    private PlacementBudget lobbyBudget() {
-        if (lobbyBudget == null) {
-            PlacementSettings placement = PlacementSettings.from(
-                    getConfig().getConfigurationSection("stability.placement"));
-            lobbyBudget = new PlacementBudget(placement,
-                    () -> tickTime == null ? com.ninja6.ninjaarena.director.StabilityGate.Guard.NORMAL : tickTime.read(),
-                    Bukkit::getCurrentTick);
-        }
-        return lobbyBudget;
-    }
-
     /** A generated lobby is placed: save it, move the spawn and the shop board, and gather members. */
     private void lobbyBuilt() {
         World world = lobbyWorld.world();
         world.save();
         world.setSpawnLocation(lobbyBuild.layout().spawn(world));
         if (shopBoard != null) {
-            var board = shopBoard;
-            world.removePluginChunkTickets(this);
-            world.getChunkAtAsync(board.location()).thenAccept(chunk -> getServer().getScheduler().runTask(this, () -> {
-                if (shopBoard == board) {
-                    chunk.addPluginChunkTicket(this);
-                    board.place();
-                }
-            }));
+            placeShopBoard(shopBoard);
         }
         if (lobbyMembers != null) {
             for (Player player : world.getPlayers()) {
@@ -1119,8 +1155,10 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         }
         if (shopBoard != null) {
             shopBoard.close();
-            var boardAt = shopBoard.location();
-            boardAt.getWorld().removePluginChunkTicket(boardAt.getBlockX() >> 4, boardAt.getBlockZ() >> 4, this);
+            if (shopBoardChunk != null) {
+                lobbyWorld.world().removePluginChunkTicket(shopBoardChunk[0], shopBoardChunk[1], this);
+                shopBoardChunk = null;
+            }
             shopBoard = null;
         }
         if (textureMenu != null) {
@@ -1182,8 +1220,14 @@ public final class NinjaArenaPlugin extends JavaPlugin {
             lobbyBuildTask.cancel();
             lobbyBuildTask = null;
         }
-        lobbyBuild = null;
-        lobbyBudget = null;
+        if (placementTask != null) {
+            placementTask.cancel();
+            placementTask = null;
+        }
+        if (lobbyBuild != null) {
+            lobbyBuild.close();
+            lobbyBuild = null;
+        }
         if (hud != null) {
             hud.close();
             hud = null;

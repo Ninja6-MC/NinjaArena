@@ -56,6 +56,7 @@ public final class LobbyMembers {
     private final Predicate<UUID> elsewhere;
     private final Consumer<Player> empty;
     private Consumer<Player> arrival = player -> { };
+    private java.util.function.BooleanSupplier closed = () -> false;
     private final Function<Player, RestoreResult> home;
     private final Set<UUID> members = new LinkedHashSet<>();
     private final Set<UUID> homeBound = new HashSet<>();
@@ -91,6 +92,19 @@ public final class LobbyMembers {
         this.arrival = Objects.requireNonNull(arrival, "arrival");
     }
 
+    /**
+     * While this says so, as while the lobby is being built, nobody may enter: {@link #enter}
+     * tells the player and refuses, so the plugin sends them home instead.
+     */
+    public void setClosed(java.util.function.BooleanSupplier closed) {
+        this.closed = Objects.requireNonNull(closed, "closed");
+    }
+
+    /** Whether the lobby refuses entry now. */
+    public boolean closed() {
+        return closed.getAsBoolean();
+    }
+
     public LobbyLayout layout() {
         return layout.get();
     }
@@ -115,6 +129,10 @@ public final class LobbyMembers {
     public boolean enter(Player player) {
         UUID id = player.getUniqueId();
         if (members.contains(id) || elsewhere.test(id)) {
+            return false;
+        }
+        if (closed()) {
+            player.sendMessage(msg("lobby.building"));
             return false;
         }
         if (!OwnTeleports.teleport(player, spawn(), TeleportCause.PLUGIN)) {

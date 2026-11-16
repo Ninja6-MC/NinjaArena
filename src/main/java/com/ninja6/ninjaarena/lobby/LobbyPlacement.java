@@ -37,6 +37,12 @@ public final class LobbyPlacement {
         void removeEntities(ArenaBounds box);
 
         void spawn(LobbyPiece.Cushion cushion);
+
+        /** Keeps the box's chunks loaded until {@link #release}, so no slice loads one. */
+        void hold(ArenaBounds box);
+
+        /** Lets go of the chunks {@link #hold} kept loaded, and only those. */
+        void release(ArenaBounds box);
     }
 
     private final Blocks blocks;

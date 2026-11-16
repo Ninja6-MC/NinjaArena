@@ -40,6 +40,12 @@ class LobbyPlacementTest {
             now += 20_000;
             site.spawn(cushion);
         }
+
+        @Override
+        public void hold(ArenaBounds box) { }
+
+        @Override
+        public void release(ArenaBounds box) { }
     }
 
     @Test

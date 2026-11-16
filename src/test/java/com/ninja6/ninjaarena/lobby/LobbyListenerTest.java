@@ -35,7 +35,7 @@ class LobbyListenerTest extends LobbyFixture {
     private final LobbyMembers members = members();
     private final List<String> saves = new ArrayList<>();
     private final LobbyEditing editing = new LobbyEditing(
-            new LobbyBuild(pieces(), new MemorySite(), quiet(), () -> 0, () -> { }), this::spawn,
+            new LobbyBuild(pieces(), new MemorySite(), quiet(), () -> 0, () -> false, () -> { }), this::spawn,
             id -> members.isMember(id), () -> saves.add("save"), quiet());
     private final LobbyListener listener = new LobbyListener(members, editing);
 

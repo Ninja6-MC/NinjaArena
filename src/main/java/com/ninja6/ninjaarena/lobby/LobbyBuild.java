@@ -4,10 +4,13 @@ import static com.ninja6.ninjaarena.message.Messages.msg;
 
 import com.ninja6.ninjaarena.arena.ArenaBounds;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
 import java.util.logging.Level;
@@ -25,6 +28,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.util.BoundingBox;
 
 /**
@@ -34,20 +38,25 @@ import org.bukkit.util.BoundingBox;
  * <p><b>Generated once.</b> A new lobby world gets the generated lobby for
  * {@code arenas.max-active} pads, and the world records it. Every later start keeps it, with
  * whatever admins changed in edit mode. It is generated again only when the pad count
- * changes, after {@code arenas.max-active} does, or when an admin runs {@code lobby reset},
- * and then only once nobody is in the lobby world: no members, no shop phase, no
- * spectators and no editors. Regenerating clears the old build and everything admins added
- * inside it.
+ * changes, after {@code arenas.max-active} does, or when an admin runs {@code lobby reset}.
+ *
+ * <p><b>When.</b> A build starts only while nobody is in the lobby world (members, shop
+ * phases, spectators, editors) and nothing can bring anyone there: no match is running
+ * and no room has a player away from the lobby, such as one previewing a map. At enable no
+ * player can be there yet, so a new lobby or a build the server stopped in the middle starts
+ * before anyone joins. While a build runs, nobody may enter the lobby or edit it
+ * ({@link #building()}); players the plugin would send there go home instead. A queued
+ * {@code lobby reset} is kept in the world, so a restart runs it too.
  *
  * <p><b>Earlier servers.</b> A lobby world that has the obsidian build of earlier versions
  * keeps it, with its layout ({@link LobbyLayout#bundled()}), and the first start that finds
  * it logs a notice once. {@code lobby reset} replaces it with the generated lobby; nothing
  * else does.
  *
- * <p><b>Placement.</b> A build runs over ticks within a time budget ({@link LobbyPlacement}).
- * While it runs, the layout is already the new one, nobody can enter the lobby, and the
- * floor is laid first. A build the server stops in the middle is placed again on the next
- * start. Server thread only.
+ * <p><b>Placement.</b> A build runs over ticks within the placement budget
+ * ({@link LobbyPlacement}), sweeping the old bounds and the new build. The swept box is
+ * recorded with the build, so a build the server stops in the middle sweeps the same box
+ * when it is placed again. Server thread only.
  */
 public final class LobbyBuild {
 
@@ -70,6 +79,11 @@ public final class LobbyBuild {
 
         void markNoticed();
 
+        /** Whether an admin's {@code lobby reset} waits to run. */
+        boolean resetQueued();
+
+        void queueReset(boolean queued);
+
         /** The seed the trees are picked with. */
         long seed();
 
@@ -79,20 +93,30 @@ public final class LobbyBuild {
     /**
      * The generated lobby recorded in the world.
      *
-     * @param done false while it is being placed; a start that finds it so places it again
+     * @param done  false while it is being placed; a start that finds it so places it again
+     * @param sweep the box a build in progress clears; null once done
      */
-    public record Saved(int pads, long seed, boolean done) {
+    public record Saved(int pads, long seed, boolean done, ArenaBounds sweep) {
 
-        private static final String FORMAT = "1";
+        private static final String FORMAT = "2";
+
+        public Saved(int pads, long seed, boolean done) {
+            this(pads, seed, done, null);
+        }
 
         public String encode() {
-            return FORMAT + ":" + pads + ":" + seed + ":" + (done ? "done" : "building");
+            String text = FORMAT + ":" + pads + ":" + seed + ":" + (done ? "done" : "building");
+            if (sweep != null) {
+                text += ":" + sweep.minX() + "," + sweep.minY() + "," + sweep.minZ() + "," + sweep.maxX() + ","
+                        + sweep.maxY() + "," + sweep.maxZ();
+            }
+            return text;
         }
 
         /** Empty for a value this version cannot read. */
         public static Optional<Saved> decode(String value) {
             String[] parts = value.split(":");
-            if (parts.length != 4 || !parts[0].equals(FORMAT)) {
+            if (parts.length < 4 || parts.length > 5 || !parts[0].equals(FORMAT)) {
                 return Optional.empty();
             }
             try {
@@ -100,7 +124,19 @@ public final class LobbyBuild {
                 if (pads < 1 || pads > GeneratedLobby.MAX_PADS) {
                     return Optional.empty();
                 }
-                return Optional.of(new Saved(pads, Long.parseLong(parts[2]), parts[3].equals("done")));
+                ArenaBounds sweep = null;
+                if (parts.length == 5) {
+                    String[] box = parts[4].split(",");
+                    if (box.length != 6) {
+                        return Optional.empty();
+                    }
+                    int[] at = new int[6];
+                    for (int i = 0; i < 6; i++) {
+                        at[i] = Integer.parseInt(box[i]);
+                    }
+                    sweep = new ArenaBounds(at[0], at[1], at[2], at[3], at[4], at[5]);
+                }
+                return Optional.of(new Saved(pads, Long.parseLong(parts[2]), parts[3].equals("done"), sweep));
             } catch (NumberFormatException e) {
                 return Optional.empty();
             }
@@ -120,34 +156,44 @@ public final class LobbyBuild {
     private final Site site;
     private final Logger logger;
     private final IntSupplier occupants;
+    private final BooleanSupplier held;
     private final Runnable afterBuild;
     private LobbyLayout layout;
     private boolean generated;
     private int pads;
     private int wanted;
     private Request request = Request.NONE;
-    private CommandSender requester;
+    /** The admins waiting for a queued reset, told when it starts and when it is done. */
+    private final List<CommandSender> requesters = new ArrayList<>();
+    /** The box an unfinished build was clearing before the server stopped. */
+    private ArenaBounds resumeSweep;
     private LobbyPlacement placement;
-    private CommandSender building;
+    private ArenaBounds sweeping;
+    private List<CommandSender> building = List.of();
 
     /**
      * @param pieces     the bundled pieces; null when they could not be read, so nothing is
      *                   generated
      * @param occupants  how many players are in the lobby world: members, shop phases,
      *                   spectators and editors
+     * @param held       whether anything could bring players to the lobby world meanwhile:
+     *                   a running match, or a room member away from the lobby
      * @param afterBuild runs once a build is placed: saves the world and puts the boards back
      */
-    public LobbyBuild(LobbyPieces pieces, Site site, Logger logger, IntSupplier occupants, Runnable afterBuild) {
+    public LobbyBuild(LobbyPieces pieces, Site site, Logger logger, IntSupplier occupants, BooleanSupplier held,
+            Runnable afterBuild) {
         this.pieces = pieces;
         this.site = Objects.requireNonNull(site, "site");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.occupants = Objects.requireNonNull(occupants, "occupants");
+        this.held = Objects.requireNonNull(held, "held");
         this.afterBuild = Objects.requireNonNull(afterBuild, "afterBuild");
     }
 
     /**
      * Reads what the world has and picks the layout. Nothing is placed yet: {@link #poll()}
-     * starts a build that is due once the lobby world is empty.
+     * starts a build that is due. Call it once at enable, before any player can join, so a
+     * new lobby or an unfinished build starts at once.
      *
      * @param maxActive {@code arenas.max-active}
      */
@@ -159,16 +205,15 @@ public final class LobbyBuild {
             useGenerated(lobby.pads(), lobby.seed());
             if (!lobby.done()) {
                 logger.warning("The generated lobby was not finished when the server stopped; it is placed again"
-                        + " once nobody is in the lobby world.");
+                        + " before anyone can enter the lobby.");
+                resumeSweep = lobby.sweep();
                 request = Request.CONFIG;
             } else if (lobby.pads() != wanted) {
                 logger.info("arenas.max-active asks for " + wanted + " lobby pads and the lobby has " + lobby.pads()
-                        + "; it is generated again once nobody is in the lobby world.");
+                        + "; it is generated again once nobody is in the lobby world and no match is running.");
                 request = Request.CONFIG;
             }
-            return;
-        }
-        if (site.legacy() || pieces == null) {
+        } else if (site.legacy() || pieces == null) {
             layout = LobbyLayout.bundled();
             generated = false;
             if (pieces == null) {
@@ -177,10 +222,15 @@ public final class LobbyBuild {
                 logger.warning(LEGACY_NOTICE);
                 site.markNoticed();
             }
-            return;
+        } else {
+            useGenerated(wanted, site.seed());
+            request = Request.CONFIG;
         }
-        useGenerated(wanted, site.seed());
-        request = Request.CONFIG;
+        if (site.resetQueued() && pieces != null) {
+            logger.info("A lobby reset queued before the restart runs once nobody is in the lobby world and no match"
+                    + " is running.");
+            request = Request.ADMIN;
+        }
     }
 
     private void useGenerated(int count, long seed) {
@@ -202,12 +252,12 @@ public final class LobbyBuild {
         return generated;
     }
 
-    /** Whether a build is being placed; nobody may enter the lobby meanwhile. */
+    /** Whether a build is being placed; nobody may enter or edit the lobby meanwhile. */
     public boolean building() {
         return placement != null;
     }
 
-    /** Whether a build waits for the lobby world to empty. */
+    /** Whether a build waits to start. */
     public boolean pending() {
         return request != Request.NONE;
     }
@@ -225,13 +275,14 @@ public final class LobbyBuild {
         if (generated && next != pads && request == Request.NONE) {
             request = Request.CONFIG;
             logger.info("arenas.max-active now asks for " + next + " lobby pads; the lobby is generated again once"
-                    + " nobody is in the lobby world.");
+                    + " nobody is in the lobby world and no match is running.");
         }
     }
 
     /**
      * {@code lobby reset}: generates the lobby again, or replaces the obsidian build, once
-     * the lobby world is empty. The sender is told when it starts and when it is done.
+     * the lobby world is empty and no match is running. Every admin who asked is told when
+     * it starts and when it is done. A queued reset is kept across a restart.
      */
     public void reset(CommandSender sender) {
         if (pieces == null) {
@@ -243,55 +294,70 @@ public final class LobbyBuild {
             return;
         }
         request = Request.ADMIN;
-        requester = sender;
+        // Told once each; a sender is compared by identity, as a player object is one per login.
+        if (requesters.stream().noneMatch(queued -> queued == sender)) {
+            requesters.add(sender);
+        }
+        site.queueReset(true);
         if (!poll()) {
             sender.sendMessage(msg("lobby.reset-queued", "count", String.valueOf(occupants.getAsInt())));
         }
     }
 
     /**
-     * Starts the build that is due, if the lobby world is empty. Called every second.
+     * Starts the build that is due, if the lobby world is empty and nothing can bring players
+     * there. Called at enable and then every second.
      *
      * @return whether a build started
      */
     public boolean poll() {
-        if (request == Request.NONE || building() || occupants.getAsInt() > 0) {
+        if (request == Request.NONE || building() || occupants.getAsInt() > 0 || held.getAsBoolean()) {
             return false;
         }
-        CommandSender sender = request == Request.ADMIN ? requester : null;
+        List<CommandSender> told = List.copyOf(requesters);
         request = Request.NONE;
-        requester = null;
-        begin(sender);
+        requesters.clear();
+        site.queueReset(false);
+        begin(told);
         return true;
     }
 
-    private void begin(CommandSender sender) {
+    private void begin(List<CommandSender> told) {
         long seed = site.seed();
         GeneratedLobby next = GeneratedLobby.plan(wanted, seed, pieces.trees().size());
-        ArenaBounds build = next.layout().build();
-        // The old build and everything admins added in its bounds go, with the new build's box.
-        ArenaBounds before = layout.bounds();
-        ArenaBounds sweep = new ArenaBounds(Math.min(before.minX(), build.minX()),
-                Math.min(before.minY(), build.minY()), Math.min(before.minZ(), build.minZ()),
-                Math.max(before.maxX(), build.maxX()), Math.max(before.maxY(), build.maxY()),
-                Math.max(before.maxZ(), build.maxZ()));
-        site.save(new Saved(wanted, seed, false).encode());
+        // The old build and everything admins added in its bounds go, with the new build's
+        // box and whatever an unfinished build was clearing.
+        ArenaBounds sweep = hull(layout.bounds(), next.layout().build());
+        if (resumeSweep != null) {
+            sweep = hull(sweep, resumeSweep);
+            resumeSweep = null;
+        }
+        site.save(new Saved(wanted, seed, false, sweep).encode());
         if (site.legacy()) {
             site.dropLegacy();
         }
-        placement = new LobbyPlacement(site.blocks(), next.blueprint(pieces), next.floor(), sweep);
-        building = sender;
+        LobbyPlacement.Blocks blocks = site.blocks();
+        blocks.hold(sweep);
+        placement = new LobbyPlacement(blocks, next.blueprint(pieces), next.floor(), sweep);
+        sweeping = sweep;
+        building = told;
         layout = next.layout();
         pads = wanted;
         generated = true;
         logger.info("Generating the lobby for " + wanted + " pads; clearing " + sweep.describe() + " first.");
-        if (sender != null) {
+        for (CommandSender sender : told) {
             sender.sendMessage(msg("lobby.reset-started", "pads", String.valueOf(wanted)));
         }
     }
 
+    private static ArenaBounds hull(ArenaBounds a, ArenaBounds b) {
+        return new ArenaBounds(Math.min(a.minX(), b.minX()), Math.min(a.minY(), b.minY()),
+                Math.min(a.minZ(), b.minZ()), Math.max(a.maxX(), b.maxX()), Math.max(a.maxY(), b.maxY()),
+                Math.max(a.maxZ(), b.maxZ()));
+    }
+
     /**
-     * Works the build in progress for up to this tick's budget.
+     * Works the build in progress for up to this tick's share of the placement budget.
      *
      * @param budgetNanos nanoseconds this tick may use
      * @param clock       nanoseconds, for measuring
@@ -305,24 +371,26 @@ public final class LobbyBuild {
             placement.tick(budgetNanos, clock);
         } catch (RuntimeException e) {
             logger.log(Level.SEVERE, "Could not place the generated lobby; the next start places it again.", e);
-            if (building != null) {
-                building.sendMessage(msg("lobby.reset-failed", "reason", String.valueOf(e.getMessage())));
+            for (CommandSender sender : building) {
+                sender.sendMessage(msg("lobby.reset-failed", "reason", String.valueOf(e.getMessage())));
             }
+            site.blocks().release(sweeping);
             placement = null;
-            building = null;
+            building = List.of();
             return false;
         }
         if (!placement.finished()) {
             return false;
         }
         site.save(new Saved(pads, site.seed(), true).encode());
+        site.blocks().release(sweeping);
         logger.info("Placed the generated lobby for " + pads + " pads at " + layout.build().describe() + ".");
-        CommandSender told = building;
+        List<CommandSender> told = building;
         placement = null;
-        building = null;
+        building = List.of();
         afterBuild.run();
-        if (told != null) {
-            told.sendMessage(msg("lobby.reset", "pads", String.valueOf(pads)));
+        for (CommandSender sender : told) {
+            sender.sendMessage(msg("lobby.reset", "pads", String.valueOf(pads)));
         }
         if (wanted != pads && request == Request.NONE) {
             request = Request.CONFIG;
@@ -330,17 +398,53 @@ public final class LobbyBuild {
         return true;
     }
 
-    /** The lobby world itself, which keeps its records in its own data. */
-    public static Site site(World world) {
+    /** Logs a queued reset or an unfinished build on disable; both run on the next start. */
+    public void close() {
+        if (building()) {
+            logger.info("The generated lobby is not finished; the next start places it again.");
+        } else if (request == Request.ADMIN) {
+            logger.info("A lobby reset is still queued; the next start runs it once the lobby world is empty.");
+        }
+    }
+
+    /**
+     * The lobby world itself, which keeps its records in its own data.
+     *
+     * @param plugin holds the chunk tickets of a build in progress
+     */
+    public static Site site(World world, Plugin plugin) {
         Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(plugin, "plugin");
         PersistentDataContainer data = world.getPersistentDataContainer();
         // Set by earlier versions once the obsidian build was placed.
         NamespacedKey legacy = new NamespacedKey("ninjaarena", "lobby_build");
         NamespacedKey generated = new NamespacedKey("ninjaarena", "lobby_generated");
         NamespacedKey noticed = new NamespacedKey("ninjaarena", "lobby_obsidian_notice");
+        NamespacedKey queued = new NamespacedKey("ninjaarena", "lobby_reset_queued");
+        // Chunks the build added a ticket to, so tickets held for anything else stay.
+        java.util.List<long[]> tickets = new java.util.ArrayList<>();
         Map<String, BlockData> states = new HashMap<>();
         Map<String, Material> materials = new HashMap<>();
         LobbyPlacement.Blocks blocks = new LobbyPlacement.Blocks() {
+            @Override
+            public void hold(ArenaBounds box) {
+                for (int x = box.minChunkX(); x <= box.maxChunkX(); x++) {
+                    for (int z = box.minChunkZ(); z <= box.maxChunkZ(); z++) {
+                        if (world.addPluginChunkTicket(x, z, plugin)) {
+                            tickets.add(new long[] {x, z});
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void release(ArenaBounds box) {
+                for (long[] chunk : tickets) {
+                    world.removePluginChunkTicket((int) chunk[0], (int) chunk[1], plugin);
+                }
+                tickets.clear();
+            }
+
             @Override
             public boolean is(int x, int y, int z, String state) {
                 Material type = world.getType(x, y, z);
@@ -414,6 +518,20 @@ public final class LobbyBuild {
             @Override
             public void markNoticed() {
                 data.set(noticed, PersistentDataType.BYTE, (byte) 1);
+            }
+
+            @Override
+            public boolean resetQueued() {
+                return data.has(queued, PersistentDataType.BYTE);
+            }
+
+            @Override
+            public void queueReset(boolean value) {
+                if (value) {
+                    data.set(queued, PersistentDataType.BYTE, (byte) 1);
+                } else {
+                    data.remove(queued);
+                }
             }
 
             @Override

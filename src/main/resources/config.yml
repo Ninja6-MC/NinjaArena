@@ -183,7 +183,7 @@ arenas:
   # ends a lease already granted. This was stability.max-concurrent-matches, which is
   # still read, with a warning, when this is not set. The generated lobby has one room pad
   # per slot, at most 32; a new pad count generates it again once nobody is in the lobby
-  # world, replacing admin edits inside it. A lobby from before the generated lobby stays
+  # world and no match is running, replacing admin edits inside it. A lobby from before the generated lobby stays
   # until /narena admin lobby reset.
   max-active: 4
 
@@ -246,7 +246,8 @@ stability:
   # Placing and clearing generated maps in the slot cells, spread over server ticks.
   placement:
     # Server time per tick, in milliseconds, spent placing and clearing maps, shared fairly
-    # between every slot cell generating at once (0.1 to 50).
+    # between every slot cell generating at once and the lobby while it is generated
+    # (0.1 to 50).
     budget-ms: 10.0
     # The time per tick while the tick-time guard above holds enemy spawning back (0 to 50,
     # at most budget-ms; 0 pauses placement). Once the average tick time is back below

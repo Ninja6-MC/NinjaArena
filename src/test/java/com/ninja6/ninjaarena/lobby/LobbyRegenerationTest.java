@@ -22,6 +22,7 @@ class LobbyRegenerationTest {
     private final List<String> log = new ArrayList<>();
     private final List<String> built = new ArrayList<>();
     private int occupants;
+    private boolean held;
 
     private LobbyBuild start(int maxActive) {
         Logger logger = Logger.getAnonymousLogger();
@@ -38,7 +39,7 @@ class LobbyRegenerationTest {
             @Override
             public void close() { }
         });
-        LobbyBuild build = new LobbyBuild(LobbyFixture.pieces(), site, logger, () -> occupants,
+        LobbyBuild build = new LobbyBuild(LobbyFixture.pieces(), site, logger, () -> occupants, () -> held,
                 () -> built.add("built"));
         build.start(maxActive);
         return build;
@@ -62,7 +63,9 @@ class LobbyRegenerationTest {
 
         occupants = 0;
         assertTrue(build.poll());
-        assertEquals(new LobbyBuild.Saved(4, site.seed, false), LobbyBuild.Saved.decode(site.saved).orElseThrow());
+        LobbyBuild.Saved building = LobbyBuild.Saved.decode(site.saved).orElseThrow();
+        assertFalse(building.done());
+        assertEquals(build.layout().bounds(), building.sweep(), "the swept box is recorded with the build");
         finish(build);
         assertEquals(List.of("built"), built);
         assertEquals(new LobbyBuild.Saved(4, site.seed, true), LobbyBuild.Saved.decode(site.saved).orElseThrow());
@@ -167,11 +170,115 @@ class LobbyRegenerationTest {
         List<String> told = new ArrayList<>();
         build.reset(sender(told));
         assertFalse(build.building());
-        assertEquals(List.of("The lobby is generated again once nobody is in the lobby world; 2 there now."), told);
+        assertEquals(List.of(LobbyEditingTest.QUEUED), told);
         occupants = 0;
         assertTrue(build.poll());
         finish(build);
         assertEquals(3, told.size());
+    }
+
+    /** Every block in the world is inside the box. */
+    private void onlyInside(com.ninja6.ninjaarena.arena.ArenaBounds box) {
+        long outside = site.world.keySet().stream().filter(key -> {
+            int x = (int) (key >> 38) << 6 >> 6;
+            int z = (int) ((key >> 12) & 0x3FFFFFF) << 6 >> 6;
+            int y = (int) (key & 0xFFF) << 20 >> 20;
+            return !box.contains(x, y, z);
+        }).count();
+        assertEquals(0, outside, "blocks left outside " + box.describe());
+    }
+
+    @Test
+    void aBuildStoppedHalfwayAfterLoweringThePadsStillClearsTheOldLobbyWhenResumed() {
+        LobbyBuild build = start(32);
+        build.poll();
+        finish(build);
+        build.maxActive(4);
+        assertTrue(build.poll());
+        site.failAfter = site.writes + 5_000;
+        build.tick(Long.MAX_VALUE, System::nanoTime);
+        assertFalse(build.building(), "the server stopped mid-way");
+        site.failAfter = Long.MAX_VALUE;
+
+        LobbyBuild resumed = start(4);
+        assertTrue(resumed.pending());
+        assertTrue(resumed.poll());
+        finish(resumed);
+        onlyInside(resumed.layout().build());
+        assertEquals(GeneratedLobby.plan(4, site.seed, LobbyFixture.pieces().trees().size())
+                .blueprint(LobbyFixture.pieces()).blocks(), site.world);
+    }
+
+    @Test
+    void anObsidianReplacementStoppedHalfwayStillClearsTheObsidianBoundsWhenResumed() {
+        site.legacy = true;
+        site.set(-24, 70, 20, "minecraft:glass");
+        site.set(24, 56, -20, "minecraft:obsidian");
+        site.set(-20, 64, -16, "minecraft:obsidian");
+        LobbyBuild build = start(4);
+        build.reset(sender(new ArrayList<>()));
+        site.failAfter = site.writes + 300;
+        build.tick(Long.MAX_VALUE, System::nanoTime);
+        assertFalse(build.building());
+        site.failAfter = Long.MAX_VALUE;
+        assertFalse(site.legacy);
+
+        LobbyBuild resumed = start(4);
+        assertTrue(resumed.poll());
+        finish(resumed);
+        assertNull(site.at(-24, 70, 20));
+        assertNull(site.at(24, 56, -20));
+        onlyInside(resumed.layout().build());
+    }
+
+    @Test
+    void aRunningMatchOrARoomMemberAwayHoldsTheBuildBack() {
+        LobbyBuild build = start(4);
+        held = true;
+        assertFalse(build.poll());
+        assertTrue(build.pending());
+        held = false;
+        assertTrue(build.poll());
+        assertTrue(site.held.size() == 1, "the swept chunks are held while it runs");
+        finish(build);
+        assertTrue(site.held.isEmpty(), "and let go after");
+    }
+
+    @Test
+    void everyAdminWhoQueuedAResetIsToldAndAQueuedResetSurvivesARestart() {
+        LobbyBuild build = start(4);
+        build.poll();
+        finish(build);
+        occupants = 1;
+        List<String> first = new ArrayList<>();
+        List<String> second = new ArrayList<>();
+        build.reset(sender(first));
+        build.reset(sender(second));
+        assertTrue(site.resetQueued);
+
+        // A restart keeps it queued.
+        LobbyBuild restarted = start(4);
+        assertTrue(restarted.pending());
+        assertTrue(log.stream().anyMatch(line -> line.contains("queued before the restart")), log.toString());
+        assertFalse(restarted.poll());
+
+        occupants = 0;
+        assertTrue(build.poll());
+        finish(build);
+        assertEquals(3, first.size());
+        assertEquals(first, second);
+        assertFalse(site.resetQueued);
+    }
+
+    @Test
+    void aNewWorldStartsAtEnableBeforeAnyoneJoinsAndRefusesEntryUntilDone() {
+        LobbyBuild build = start(4);
+        assertTrue(build.poll(), "nobody can be there yet");
+        assertTrue(build.building());
+        // Players logging in now cannot be put there; occupancy does not stop a build in progress.
+        occupants = 3;
+        finish(build);
+        assertFalse(build.building());
     }
 
     private static CommandSender sender(List<String> told) {

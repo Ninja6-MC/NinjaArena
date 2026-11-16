@@ -13,6 +13,9 @@ public final class MemorySite implements LobbyBuild.Site, LobbyPlacement.Blocks 
     public String saved;
     public boolean legacy;
     public boolean noticed;
+    public boolean resetQueued;
+    /** Boxes held and not yet released. */
+    public final List<String> held = new ArrayList<>();
     public long seed = 7;
     public final Map<Long, String> world = new HashMap<>();
     public final List<LobbyPiece.Cushion> cushions = new ArrayList<>();
@@ -21,6 +24,8 @@ public final class MemorySite implements LobbyBuild.Site, LobbyPlacement.Blocks 
     public long writes;
     /** When set, every block write fails with this message. */
     public String failing;
+    /** Block writes after which every write fails, as when the server stops mid-way. */
+    public long failAfter = Long.MAX_VALUE;
 
     @Override
     public Optional<String> saved() {
@@ -53,6 +58,26 @@ public final class MemorySite implements LobbyBuild.Site, LobbyPlacement.Blocks 
     }
 
     @Override
+    public boolean resetQueued() {
+        return resetQueued;
+    }
+
+    @Override
+    public void queueReset(boolean queued) {
+        resetQueued = queued;
+    }
+
+    @Override
+    public void hold(ArenaBounds box) {
+        held.add(box.describe());
+    }
+
+    @Override
+    public void release(ArenaBounds box) {
+        held.remove(box.describe());
+    }
+
+    @Override
     public long seed() {
         return seed;
     }
@@ -71,6 +96,9 @@ public final class MemorySite implements LobbyBuild.Site, LobbyPlacement.Blocks 
     public void set(int x, int y, int z, String state) {
         if (failing != null) {
             throw new IllegalStateException(failing);
+        }
+        if (writes >= failAfter) {
+            throw new IllegalStateException("stopped");
         }
         writes++;
         if (state == null) {

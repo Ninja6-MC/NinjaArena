@@ -94,4 +94,22 @@ class LobbyEntryTest extends LobbyFixture {
         assertTrue(entry.isMember(ALICE));
         assertTrue(entry.enter(alice), "already a member");
     }
+
+    @Test
+    void whileTheLobbyIsBuiltEveryWayInIsRefusedSoPlayersGoHomeInstead() {
+        members.setClosed(() -> true);
+        Player alice = add(ALICE, "Alice", new Location(overworld, 5, 70, 5));
+        // Rooms, play portals and the room commands join through here.
+        assertEquals(Optional.of("The lobby is being built. Try again in a moment."), entry.join(alice));
+        assertEquals(List.of(), captured, "no snapshot is taken");
+        // Rejoin at login and returns from a match, spectating or a preview enter through here;
+        // false sends them home through the restore.
+        assertFalse(entry.enter(alice));
+        assertFalse(members.isMember(ALICE));
+        assertEquals("The lobby is being built. Try again in a moment.", players.get(ALICE).messages.getLast());
+        assertEquals(new Location(overworld, 5, 70, 5), players.get(ALICE).location);
+
+        members.setClosed(() -> false);
+        assertTrue(entry.enter(alice));
+    }
 }

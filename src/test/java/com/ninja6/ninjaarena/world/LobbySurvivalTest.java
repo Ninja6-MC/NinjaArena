@@ -57,7 +57,7 @@ class LobbySurvivalTest {
     /** One server start: the lobby world is loaded and the build placed only if it is new. */
     private boolean start() throws java.io.IOException {
         new LobbyWorld(lobby);
-        LobbyBuild build = new LobbyBuild(LobbyPieces.bundled(), site, quiet(), () -> 0, () -> { });
+        LobbyBuild build = new LobbyBuild(LobbyPieces.bundled(), site, quiet(), () -> 0, () -> false, () -> { });
         build.start(4);
         if (!build.poll()) {
             return false;

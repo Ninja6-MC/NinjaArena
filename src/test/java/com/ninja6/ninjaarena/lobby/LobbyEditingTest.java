@@ -16,16 +16,20 @@ import org.junit.jupiter.api.Test;
 class LobbyEditingTest extends LobbyFixture {
 
     private final LobbyMembers members = members();
+    static final String QUEUED = "The lobby is generated again once nobody is in the lobby world and no match is"
+            + " running; 2 in the lobby world now. A restart keeps the reset queued.";
     private final MemorySite site = new MemorySite();
     private final List<String> calls = new ArrayList<>();
     private int occupants;
+    private boolean held;
     private final LobbyBuild build = build();
     private final LobbyEditing editing = new LobbyEditing(build, this::spawn,
             id -> members.isMember(id) || busyElsewhere.contains(id), () -> calls.add("save"), quiet());
 
     private LobbyBuild build() {
         site.saved = new LobbyBuild.Saved(4, site.seed, true).encode();
-        LobbyBuild lobby = new LobbyBuild(pieces(), site, quiet(), () -> occupants, () -> calls.add("built"));
+        LobbyBuild lobby = new LobbyBuild(pieces(), site, quiet(), () -> occupants, () -> held,
+                () -> calls.add("built"));
         lobby.start(4);
         return lobby;
     }
@@ -92,7 +96,7 @@ class LobbyEditingTest extends LobbyFixture {
         List<String> told = new ArrayList<>();
         occupants = 2;
         editing.reset(sender(told));
-        assertEquals(List.of("The lobby is generated again once nobody is in the lobby world; 2 there now."), told);
+        assertEquals(List.of(QUEUED), told);
         assertFalse(build.building());
 
         occupants = 0;
@@ -102,10 +106,21 @@ class LobbyEditingTest extends LobbyFixture {
         while (!build.tick(Long.MAX_VALUE, System::nanoTime)) {
             // The whole budget each tick.
         }
-        assertEquals(List.of("The lobby is generated again once nobody is in the lobby world; 2 there now.",
+        assertEquals(List.of(QUEUED,
                 "Generating the lobby with 4 room pads.", "The lobby is being generated already.",
                 "The lobby is generated with 4 room pads. Changes made in edit mode are gone."), told);
         assertEquals(List.of("built"), calls);
+    }
+
+    @Test
+    void editModeIsRefusedWhileTheLobbyIsBuilt() {
+        editing.reset(sender(new ArrayList<>()));
+        assertTrue(build.building());
+        Player alice = add(ALICE, "Alice", new Location(overworld, 0, 70, 0));
+        editing.edit(alice, "narena");
+        assertFalse(editing.isEditing(ALICE));
+        assertEquals("The lobby is being built. Edit it once it is done.", players.get(ALICE).messages.getLast());
+        assertEquals(List.of(), players.get(ALICE).ownTeleports);
     }
 
     @Test

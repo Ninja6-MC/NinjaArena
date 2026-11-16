@@ -841,13 +841,23 @@ put members back at the spawn, reach four blocks past the build.
 The lobby is generated once and saved; every later start and every retirement of the
 arena world leaves it as it is, edit-mode changes included. It is generated again only
 when the pad count changes, after `arenas.max-active` does on a reload or a restart, or
-when an admin runs `/narena admin lobby reset`, and never while anyone is in the lobby
-world: members, players in a shop phase, spectators and editors. A due build waits,
-checked every second, until the lobby world is empty. It is placed over several ticks
-within `stability.placement.budget-ms`, as generated maps are, floor first. **Generating
-the lobby again replaces everything inside the old and the new build, admin edits
-included.** A build the server stops in the middle is placed again on the next start. The
-world spawn is set to the lobby spawn.
+when an admin runs `/narena admin lobby reset`. A build starts only while nobody is in the
+lobby world (members, players in a shop phase, spectators and editors) and nothing can
+bring anyone there: no match is running and no room member is away from the lobby, such as
+one previewing a map. A due build waits, checked every second, until then. A new lobby
+world, and a build the server stopped in the middle, start as the plugin enables, before
+anyone can join.
+
+While a build runs, nobody can enter the lobby: joining or creating a room, play portals
+and `admin lobby edit` are refused with a message, and players who would be put back in
+the lobby, at login after a quit or on leaving a match, spectating or a preview, are told
+and sent home through the restore instead. It is placed over several ticks within
+`stability.placement.budget-ms`, which generated maps and the lobby share: while both
+place, the maps take half and the lobby the rest, so together they stay within it. The
+build keeps its chunks loaded until it is done. **Generating the lobby again replaces
+everything inside the old bounds and the new build, admin edits included.** The swept box
+is saved with the build, so a build the server stops in the middle clears the same box
+when it is placed again on the next start. The world spawn is set to the lobby spawn.
 
 A server whose lobby world has the obsidian lobby of an earlier version keeps it, with its
 spawn, room area and shop area, and logs a notice once on the first start that finds it.
@@ -860,8 +870,9 @@ change item frames and armour stands there; nobody else can. `/narena admin lobb
 saves the lobby world, ends edit mode and returns the admin to where they were. Leaving
 the lobby world or the server also ends it. `/narena admin lobby reset` generates the
 lobby again, or replaces the obsidian build, removing every change made in edit mode,
-once nobody is in the lobby world; an admin still editing holds it back. It says when it
-starts and when it is done, and puts members at the new spawn.
+once nobody is in the lobby world and no match is running; an admin still editing holds
+it back. Every admin who asked is told when it starts and when it is done, and a queued
+reset is kept in the lobby world, so a restart runs it too.
 
 Nothing takes damage in the lobby world. Anyone who falls into its void is put back at
 the lobby spawn; such a fall never kills and never counts as a death in a match, and no
