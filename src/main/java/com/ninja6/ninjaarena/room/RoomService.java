@@ -86,7 +86,8 @@ import org.bukkit.scheduler.BukkitTask;
  * <p><b>Ways in.</b> Besides {@code /narena room create} and an invitation, a player who
  * walks through a play portal comes into the lobby and joins an open room there
  * ({@link #fromPortal}), and {@code /narena host <arena>} opens an invite-only room on the
- * named arena. None of these starts a match.
+ * named arena. In the generated lobby a player can also stand on a room's pad
+ * ({@link #fromPad}). None of these starts a match.
  *
  * <p><b>Events.</b> While a scheduled event runs, its arena is the featured map
  * ({@link #setFeatured}): new rooms play on it when it is free, the room list shows it, and
@@ -818,6 +819,17 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             tell(player, "room.no-room", "host", hostName);
             return;
         }
+        tryJoin(player, room, null, null);
+    }
+
+    /**
+     * A player stood on the room's lobby pad for its full time ({@code RoomPads}): a public
+     * room is joined, an ask-to-join room gets a join request, with its cooldown, and an
+     * invite-only room tells them it is invite only unless they were invited, who join. It
+     * takes the same path, and the same checks, as {@link #accept}: a full room, a room in a
+     * match or closed, a lobby that is closed while it is built, a player already in a room.
+     */
+    public void fromPad(Player player, Room room) {
         tryJoin(player, room, null, null);
     }
 

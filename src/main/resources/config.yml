@@ -561,3 +561,38 @@ lobby:
     update-seconds: 1
     # Rooms shown before the overflow count, 1..10. Both clients use explicit lines.
     max-rooms: 5
+  # Room pads of the generated lobby; the obsidian lobby has none. Each open room gets the
+  # lowest-numbered free pad, oldest room first, until it closes; rooms beyond the pad count
+  # are only in the room list. A label over the pad shows the host, the player count and the
+  # room's state. Values out of range are clamped, with a warning.
+  pads:
+    enabled: true
+    # Seconds a lobby member in no room stands anywhere on a room's plate before it joins a
+    # public room, sends a join request to an ask-to-join room, or says the room is invite
+    # only (invited players join). Moving on the plate keeps the countdown; stepping off
+    # cancels it. 1..30.
+    join-seconds: 5
+    # Dust on the ring of each room's pad, coloured by the room's state. Sent to each viewer
+    # only, for pads within distance blocks (4..64), and only while they moved, looked,
+    # chatted or used a command in the last active-seconds (5..600). A draw every
+    # interval-ticks (5..40) puts per-block particles (1..4) on each of the 16 ring blocks,
+    # nearest pad first, up to max-particles a viewer (8..128). Bedrock viewers, whose client
+    # gets each particle translated by Geyser, get bedrock-max-particles (0..128, 0 for
+    # none). The defaults send a Java viewer at most 96 and a Bedrock viewer at most 32
+    # particles a second: estimated from the packet sizes, about 6 KB a second for Java and
+    # under 4 KB for Bedrock before its batch compression.
+    fog:
+      enabled: true
+      distance: 16
+      active-seconds: 30
+      interval-ticks: 10
+      per-block: 1
+      max-particles: 48
+      bedrock-max-particles: 16
+      # "#RRGGBB" for each state.
+      colours:
+        open: "#55FF55"
+        ask: "#FFC83D"
+        invite: "#B86BFF"
+        full: "#FF5555"
+        playing: "#5AA0FF"
