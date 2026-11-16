@@ -59,6 +59,9 @@ public final class LobbyEntry implements RoomLobby {
         if (elsewhere.test(id)) {
             return Optional.of(text("room.busy"));
         }
+        if (members.closed()) {
+            return Optional.of(text("lobby.building"));
+        }
         if (ArenaAdmission.holdsLooseItems(player)) {
             return Optional.of(text("entry.loose-items"));
         }

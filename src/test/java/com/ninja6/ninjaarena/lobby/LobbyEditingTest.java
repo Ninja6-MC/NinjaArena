@@ -16,11 +16,23 @@ import org.junit.jupiter.api.Test;
 class LobbyEditingTest extends LobbyFixture {
 
     private final LobbyMembers members = members();
-    private final LobbyBuildTest.RecordingSite site = new LobbyBuildTest.RecordingSite();
+    static final String QUEUED = "The lobby is generated again once nobody is in the lobby world and no match is"
+            + " running; 2 in the lobby world now. A restart keeps the reset queued.";
+    private final MemorySite site = new MemorySite();
     private final List<String> calls = new ArrayList<>();
-    private final LobbyEditing editing = new LobbyEditing(new LobbyBuild(layout, site, quiet()), this::spawn,
-            id -> members.isMember(id) || busyElsewhere.contains(id), () -> calls.add("save"),
-            () -> calls.add("players to spawn"), quiet());
+    private int occupants;
+    private boolean held;
+    private final LobbyBuild build = build();
+    private final LobbyEditing editing = new LobbyEditing(build, this::spawn,
+            id -> members.isMember(id) || busyElsewhere.contains(id), () -> calls.add("save"), quiet());
+
+    private LobbyBuild build() {
+        site.saved = new LobbyBuild.Saved(4, site.seed, true).encode();
+        LobbyBuild lobby = new LobbyBuild(pieces(), site, quiet(), () -> occupants, () -> held,
+                () -> calls.add("built"));
+        lobby.start(4);
+        return lobby;
+    }
 
     @Test
     void editTakesAnAdminFromElsewhereToTheSpawnAndDoneSavesAndReturnsThem() {
@@ -80,21 +92,47 @@ class LobbyEditingTest extends LobbyFixture {
     }
 
     @Test
-    void resetPutsTheBundledBuildBackSavesAndReturnsPlayersToTheSpawn() {
+    void resetWaitsForAnEmptyLobbyWorldThenGeneratesTheLobbyAgainAndSaysSo() {
         List<String> told = new ArrayList<>();
+        occupants = 2;
         editing.reset(sender(told));
-        assertEquals(List.of("clear " + layout.bounds().describe(), "place -20 64 -16", "mark"), site.calls);
-        assertEquals(List.of("save", "players to spawn"), calls);
-        assertEquals(List.of("The lobby is back to the bundled build. Changes made in edit mode are gone."), told);
+        assertEquals(List.of(QUEUED), told);
+        assertFalse(build.building());
+
+        occupants = 0;
+        assertTrue(build.poll());
+        assertTrue(build.building());
+        editing.reset(sender(told));
+        while (!build.tick(Long.MAX_VALUE, System::nanoTime)) {
+            // The whole budget each tick.
+        }
+        assertEquals(List.of(QUEUED,
+                "Generating the lobby with 4 room pads.", "The lobby is being generated already.",
+                "The lobby is generated with 4 room pads. Changes made in edit mode are gone."), told);
+        assertEquals(List.of("built"), calls);
     }
 
     @Test
-    void aFailedResetSaysWhyAndChangesNothingElse() {
-        site.failing = true;
+    void editModeIsRefusedWhileTheLobbyIsBuilt() {
+        editing.reset(sender(new ArrayList<>()));
+        assertTrue(build.building());
+        Player alice = add(ALICE, "Alice", new Location(overworld, 0, 70, 0));
+        editing.edit(alice, "narena");
+        assertFalse(editing.isEditing(ALICE));
+        assertEquals("The lobby is being built. Edit it once it is done.", players.get(ALICE).messages.getLast());
+        assertEquals(List.of(), players.get(ALICE).ownTeleports);
+    }
+
+    @Test
+    void aFailedResetSaysWhyAndIsPlacedAgainOnTheNextStart() {
+        site.failing = "no blocks";
         List<String> told = new ArrayList<>();
         editing.reset(sender(told));
+        build.tick(Long.MAX_VALUE, System::nanoTime);
+        assertEquals(List.of("Generating the lobby with 4 room pads.", "The lobby could not be reset: no blocks"),
+                told);
         assertEquals(List.of(), calls);
-        assertEquals(List.of("The lobby could not be reset: no structure"), told);
+        assertFalse(LobbyBuild.Saved.decode(site.saved).orElseThrow().done());
     }
 
     @Test

@@ -15,7 +15,6 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -138,83 +137,10 @@ class LobbyBuildTest {
                 () -> LobbyBuildGenerator.generate(new StringReader(spec.formatted("\"minecraft:obsidian\"", 4))));
     }
 
-    @Test
-    void aNewWorldGetsTheBuildOnceAndKeepsItOnEveryLaterStart() {
-        RecordingSite site = new RecordingSite();
-        LobbyLayout layout = LobbyLayout.bundled();
-
-        assertTrue(new LobbyBuild(layout, site, quiet()).placeIfNew());
-        assertEquals(List.of("place -20 64 -16", "mark"), site.calls);
-
-        // Restarts: the world remembers it has the build, so admin changes stay.
-        site.calls.clear();
-        assertFalse(new LobbyBuild(layout, site, quiet()).placeIfNew());
-        assertFalse(new LobbyBuild(layout, site, quiet()).placeIfNew());
-        assertEquals(List.of(), site.calls);
-    }
-
-    @Test
-    void aFailedPlacementIsNotRecordedSoTheNextStartTriesAgain() {
-        RecordingSite site = new RecordingSite();
-        site.failing = true;
-        LobbyLayout layout = LobbyLayout.bundled();
-
-        assertFalse(new LobbyBuild(layout, site, quiet()).placeIfNew());
-        assertFalse(site.placed());
-
-        site.failing = false;
-        assertTrue(new LobbyBuild(layout, site, quiet()).placeIfNew());
-        assertTrue(site.placed());
-    }
-
-    @Test
-    void resetClearsTheWholeBoundsAndPlacesTheBundledBuildAgain() throws IOException {
-        RecordingSite site = new RecordingSite();
-        LobbyLayout layout = LobbyLayout.bundled();
-        LobbyBuild build = new LobbyBuild(layout, site, quiet());
-        build.placeIfNew();
-        site.calls.clear();
-
-        build.reset();
-
-        assertEquals(List.of("clear " + layout.bounds().describe(), "place -20 64 -16", "mark"), site.calls);
-    }
-
     static Logger quiet() {
         Logger logger = Logger.getAnonymousLogger();
         logger.setLevel(Level.OFF);
         return logger;
-    }
-
-    /** A world that remembers its marker across restarts, as the lobby world's own data does. */
-    static final class RecordingSite implements LobbyBuild.Site {
-        final List<String> calls = new ArrayList<>();
-        boolean marked;
-        boolean failing;
-
-        @Override
-        public boolean placed() {
-            return marked;
-        }
-
-        @Override
-        public void markPlaced() {
-            marked = true;
-            calls.add("mark");
-        }
-
-        @Override
-        public void clear(ArenaBounds box) {
-            calls.add("clear " + box.describe());
-        }
-
-        @Override
-        public void place(int x, int y, int z) throws IOException {
-            if (failing) {
-                throw new IOException("no structure");
-            }
-            calls.add("place " + x + " " + y + " " + z);
-        }
     }
 
     /** Whether the uncompressed structure holds a block at the relative position. */
