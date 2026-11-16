@@ -237,3 +237,119 @@ Restoration, placement-drop cleanup, pending-player restoration, weak collection
 and unchanged save checks all passed. Final raw hashes were byte-identical to the
 post-control gameplay baseline, with zero decoded differences. These are local
 measurements; copy restoration remains synchronous before public availability.
+
+## Generated-map soak
+
+Task 7.12 (#166) adds a generated-map workload to the local harness (`--generated`, see
+[the harness instructions](../scripts/soak/README.md#generated-map-workload)). Run
+`generated-soak4` used four rooms and `arenas.max-active: 4` on Paper 26.3 build 226,
+OpenJDK 25.0.5, Node.js 24.22.3, Mineflayer 4.39.0, ViaVersion and ViaBackwards 5.12.1 and
+protocol 1.21.11, on Linux with 12 logical processors; the server was limited to two and
+a 256 to 1024 MiB heap. The production JAR, built from main at `5fbd9d7` with no
+production changes, had SHA-256
+`cec1979f38c55fbaadc892d67f2c95020658a538d9442690c0008096e531a065`.
+
+Two clients per room opened the rooms with `/narena room create` and
+`/narena room accept`, and the hosts started each match with `/narena room start`, so
+every map was leased, generated and placed by the production services, at the default
+difficulty 2 with random seeds. Matches used `regenerate: round`, the bundled shop phase
+(45 s, 30 s map wait), bundled hazards and stability settings, the hand-built soak's
+threat base of 200, and shorter rounds: 10 s prep, 45 s round, 45 s overrun limit, three
+rounds and no extra rounds. First starts were 37 s apart so shop breaks spread out.
+
+### Matches and maps
+
+| Measure | Result |
+| :--- | ---: |
+| Matches started and finished | 8 and 8 (two per room) |
+| Seconds until all four ran at once | 111 |
+| Play and drain stages | 950 s |
+| Maps placed: first, between matches, after reopening | 4, 7, 4 |
+| Blocks cleared and placed per map | 5160960 |
+| Placement time, first four together | 8.6 s |
+| Placement time between matches, median / max | 8.7 / 9.5 s |
+| Shop breaks, all with a committed replacement | 16 |
+| Replacement placement, median / max | 3.7 / 5.3 s |
+| Shop break length, max | 45.0 s |
+
+No shop break waited for its map and none kept the current map. Every room saw three
+rounds per match, 540 fighting samples each.
+
+### Tick time and the stability guard
+
+The guard's thresholds are the bundled `stability` values: spawning pauses above 40 ms
+average tick time, the tier drops above 45 ms and both resume below 35 ms. The guard
+stayed `NORMAL` in all 960 per-second samples of the play, drain and reopen stages.
+
+| Tick duration, 19000 play and drain ticks | Milliseconds |
+| :--- | ---: |
+| Mean | 4.992 |
+| Median | 2.767 |
+| p95 | 13.559 |
+| p99 | 16.020 |
+| Maximum | 165.339 |
+
+Three of those ticks exceeded 50 ms. The 2581 ticks with a map being placed averaged
+13.2 ms (median 12.7, p95 15.8): the placement budget is 10 ms a tick. The highest
+average tick time was 15.9 ms while playing and 13.5 ms while draining; minimum
+one-minute TPS was 19.62.
+
+Reopening the retired world is synchronous in the first `/narena room create`: that
+command took 1373 ms, one tick of 1378 ms, and the average tick time reached 32.6 ms,
+below the 35 ms resume threshold. The other three creates took under 0.2 ms; in play, the first
+create took 88 ms and the others about 11 ms. All four maps were placed 11.1 s after the
+reopen. Collection requests made by the probe during the release stages cost 8 ticks
+over 50 ms; those are not counted above.
+
+### Enemies, lava and collapses
+
+Every room reached 25 live enemies, with a fighting median of 24 or 25; the global
+maximum was 80, within both caps. OVERRUN intensity had a median of 1 and a minimum of
+0.80. Minimum player health was 20. Up to 76 lava sources were open across the
+maps at once (18 to 42 in one map); the arena world allowed 3204 lava flows, and 4766
+falling blocks came from collapses. Clients stood still, so these counts reflect the
+hazard schedule rather than play.
+
+### Memory and chunks
+
+The arena world held at most 2472 full chunks and 5688 holders. Heap use peaked at
+978585048 bytes (about 933 MiB) of the 1024 MiB maximum, so the run had little
+headroom; a 1024 MiB heap is a floor for four generated slots, not a recommendation.
+
+### World release and reopen
+
+After the last match the clients left their rooms; the world was released after 9.0 s,
+and after the second cycle after 10.0 s. Slot cells were empty both times, and no
+snapshot was pending at the end. The arena save held only air after shutdown: release
+without saving wrote cleared chunks, so raw hashes differ from setup, but no generated
+block was saved.
+
+Cycle 2 was collected. Cycle 1 was not: the retired world stayed strongly reachable
+after 45 s and four collection requests, and all eight clients' last damage came from
+one of its entities. A heap dump from the earlier failed run `generated-soak1` gives the
+path: the server's player list holds each `ServerPlayer`, whose `lastDamageSource` names
+the zombie that last hit them, whose `level` is the retired world. Nothing clears that
+field when the player leaves the arena world, so a player who fought there and then
+waits in the lobby keeps the whole retired world in memory until they take other damage
+or leave. Cycle 2 had no fighting, so nothing held
+it. This is a real retain in the plugin's lifecycle, recorded here and not fixed by this
+harness change; the run fails acceptance on it.
+
+### Recommendation and limits
+
+Four generated matches at once stayed inside the stability guard on a two-processor
+server, so the README recommends keeping `arenas.max-active` at its default of 4. Fewer
+slots were not run, since four did not break the guard. More than four were not
+measured: the harness has at most eight clients, and between-round regeneration uses one
+spare cell, so four slots already hold five cells.
+
+The clients did not fight, move, buy in the shop, die or lag: they stood still on
+loopback with resistance and saturation, so rounds ended at the overrun limit. Real
+latency, player combat and Bedrock clients are not modelled. Rounds were shorter than
+the defaults, which raises the rate of per-round regeneration compared with play.
+
+Earlier attempts are retained but are not results: `generated-smoke1` and
+`generated-soak1` stopped at the first collection check (soak1 left the heap dump used
+above), `generated-soak2` completed but over-counted one placement time and then
+failed the raw save-hash check that the air-only check replaced, and `generated-soak3`
+was cut off by a host restart.
