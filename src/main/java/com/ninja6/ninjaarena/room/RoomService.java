@@ -912,14 +912,22 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (previews == null || !previews.anyIn(room)) {
             return true;
         }
-        List<UUID> previewing = room.members().stream().filter(previews::contains).toList();
+        // One the lobby could not take is out of the room by now (sentHome).
         previews.endRoom(room);
-        for (UUID member : previewing) {
-            if (rooms.contains(room) && room.contains(member) && !lobby.isMember(member)) {
-                remove(room, member);
-            }
-        }
         return rooms.contains(room) && room.canStart();
+    }
+
+    /**
+     * A preview ended with the player restored home because the lobby could not take them:
+     * they have left the plugin's worlds, so they leave the room now rather than at the
+     * next tick, and no match can take them from home.
+     */
+    void sentHome(Player player) {
+        UUID id = player.getUniqueId();
+        Room room = roomOf.get(id);
+        if (room != null && rooms.contains(room) && !lobby.isMember(id) && !matches.isInMatch(id)) {
+            remove(room, id);
+        }
     }
 
     // ---- Map previews ----

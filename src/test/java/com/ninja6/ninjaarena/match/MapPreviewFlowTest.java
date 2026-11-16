@@ -454,6 +454,37 @@ class MapPreviewFlowTest extends MatchFixture {
         assertFalse(matches.isInMatch(CAROL));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"preview", "leave", "check", "clearing"})
+    void aPreviewerSentHomeLeavesTheRoomAtOnceSoAStartBeforeTheNextTickLeavesThemOut(String way) {
+        Room room = openWith(ALICE, BOB, CAROL);
+        room.setSettings(room.settings().withPlayers(2));
+        rooms.playGenerated(room, 42, 1);
+        drain();
+        startPreview(CAROL, room);
+        lobbyRefuses = true;
+        switch (way) {
+            case "preview" -> rooms.preview(player(CAROL));
+            case "leave" -> assertTrue(previews.end(player(CAROL)));
+            case "check" -> {
+                room.setPlaying(true);
+                rooms.tick();
+                room.setPlaying(false);
+            }
+            case "clearing" -> previews.clearing(generated.cellOf(room.arena()).orElseThrow());
+            default -> throw new IllegalArgumentException(way);
+        }
+        lobbyRefuses = false;
+        assertHome(CAROL);
+        assertFalse(rooms.isMember(CAROL), "out of the room as soon as they are home");
+
+        rooms.start(player(ALICE), null);
+        assertTrue(room.isPlaying());
+        assertFalse(matches.isInMatch(CAROL), "never taken into the match from home");
+        assertFalse(rooms.isMember(CAROL));
+        assertTrue(matches.isInMatch(ALICE) && matches.isInMatch(BOB));
+    }
+
     @Test
     void disconnectingWhilePreviewingPutsThePlayerInTheLobbyOnRejoin() {
         Room room = placedRoom();

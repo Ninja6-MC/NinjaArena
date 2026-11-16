@@ -148,8 +148,8 @@ public final class MapPreviews implements Listener {
     }
 
     /**
-     * Ends the player's preview and takes them back to the lobby, in their room; home when
-     * the lobby cannot take them.
+     * Ends the player's preview and takes them back to the lobby, in their room; home, and
+     * out of the room, when the lobby cannot take them.
      *
      * @return false if they were not previewing
      */
@@ -170,6 +170,10 @@ public final class MapPreviews implements Listener {
             return true;
         }
         sendHome(player);
+        if (rooms != null) {
+            // Home, so out of the plugin's worlds: no longer in the room, before anything can start its match.
+            rooms.sentHome(player);
+        }
         return true;
     }
 
