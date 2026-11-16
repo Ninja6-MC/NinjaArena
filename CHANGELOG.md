@@ -416,8 +416,6 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
-- A server whose `config.yml` has no `lobby.pads.fog.colours` no longer logs five "must be a
-  colour" warnings at startup; the bundled colours were used anyway (#220).
 - Texture and room dialog buttons stop working after 10 and 30 minutes instead of 12
   hours, so the server no longer keeps old dialog callbacks for players who opened them
   often or quit with one open. Reopen the screen to use it again.
