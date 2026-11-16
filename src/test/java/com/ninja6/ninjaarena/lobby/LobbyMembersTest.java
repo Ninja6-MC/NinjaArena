@@ -75,6 +75,8 @@ class LobbyMembersTest extends LobbyFixture {
         members.enter(alice);
 
         assertTrue(members.leave(alice, LobbyMembers.Exit.COMMAND));
+        assertEquals("You left the lobby. You are back home; /narena leave has nothing more to leave.",
+                players.get(ALICE).messages.getLast());
         assertFalse(members.isMember(ALICE));
         assertEquals(List.of(ALICE), sentHome);
         assertFalse(members.leave(alice, LobbyMembers.Exit.COMMAND));
@@ -88,6 +90,8 @@ class LobbyMembersTest extends LobbyFixture {
         members.enter(bob);
 
         members.leave(alice, LobbyMembers.Exit.TELEPORTED);
+        assertEquals("You left the lobby. You are back home; /narena leave has nothing more to leave.",
+                players.get(ALICE).messages.getLast());
         assertEquals(List.of(), sentHome, "not inside the teleport event");
         runNextTick();
         assertEquals(List.of(ALICE), sentHome);

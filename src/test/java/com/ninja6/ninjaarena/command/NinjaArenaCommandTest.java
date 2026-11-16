@@ -499,7 +499,9 @@ class NinjaArenaCommandTest {
 
         waiting = false;
         run(player, "LEAVE");
-        assertEquals(List.of("You are not in an arena."), messages);
+        assertEquals(List.of("There is nothing to leave: you are not in the lobby, a room, a match, "
+                + "a map preview or spectating."),
+                messages);
 
         messages.clear();
         run(player, "arena list");

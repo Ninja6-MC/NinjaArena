@@ -148,6 +148,8 @@ class SpectatorLifecycleTest extends MatchFixture {
         viewers.arrived(player(DAVE), "dojo");
 
         assertTrue(viewers.leave(player(DAVE)));
+        assertEquals("You stopped watching. You are in the lobby; /narena leave again takes you home.",
+                players.get(DAVE).messages.getLast());
         assertEquals(List.of(DAVE), lobby);
         assertEquals(List.of(), restored);
         assertTrue(snapshots.exists(DAVE));

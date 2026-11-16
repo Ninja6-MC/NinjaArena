@@ -656,7 +656,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 // A map preview leads back to the room; spectating, a room or a match to the
                 // lobby; the lobby itself leads home.
-                player -> previewing.end(player) || watching.leave(player) || roomList.leaveRoom(player)
+                player -> previewing.leave(player) || watching.leave(player) || roomList.leaveRoom(player)
                         || matches.leave(player, MatchService.Exit.COMMAND)
                         || inLobby.leave(player, LobbyMembers.Exit.COMMAND),
                 roomList, reloader::execute, watching::fromLobby, new LeaderboardCommand(this, this::stats),

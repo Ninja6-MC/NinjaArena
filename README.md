@@ -492,6 +492,11 @@ settings are validated on reload but apply after a restart. See
 | A match | Quit, then rejoin within `match.rejoin-grace-seconds` | Back in the match (see below) |
 | A room, a match, the lobby, spectating or a map preview | Quit, then rejoin | The lobby, with the snapshot kept |
 
+Each `/narena leave` message says where the player now is and what the next
+`/narena leave` does: from a map preview, "You left the map preview. You are in the lobby,
+still in your room; /narena leave again leaves the room." Leaving a match also leaves its
+room in one message.
+
 A player the lobby cannot take is sent home instead. Rejoining puts a player in the lobby
 only while the server keeps running; after a restart they are restored home on joining, as
 before.

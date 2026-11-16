@@ -528,6 +528,20 @@ public final class MatchService {
      * @return false if they were not in a match
      */
     public boolean leave(Player player, Exit exit) {
+        return leave(player, exit, "match.left");
+    }
+
+    /**
+     * {@link #leave} by {@link Exit#COMMAND} for a player who has just left the match's room
+     * too: one message tells them they left both.
+     *
+     * @return false if they were not in a match
+     */
+    public boolean leaveWithRoom(Player player) {
+        return leave(player, Exit.COMMAND, "match.left-room");
+    }
+
+    private boolean leave(Player player, Exit exit, String leftKey) {
         UUID playerId = player.getUniqueId();
         held.remove(playerId);
         heldNames.remove(playerId);
@@ -543,11 +557,11 @@ public final class MatchService {
                 // The restore listener marks the snapshot; it is restored on the next join.
             }
             case COMMAND -> {
-                player.sendMessage(msg("match.left"));
-                sendBack(player);
+                // Said once they are placed, so it can say where: the lobby, or home.
+                player.sendMessage(msg(sendBack(player) ? leftKey : "match.left-home"));
             }
             case TELEPORTED -> {
-                player.sendMessage(msg("match.left"));
+                player.sendMessage(msg("match.left-home"));
                 // Not inside the teleport event that saw the player leave.
                 homeBound.add(playerId);
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -1044,7 +1058,8 @@ public final class MatchService {
     }
 
     /** To the lobby, or home when the lobby cannot take the player. */
-    private void sendBack(Player player) {
+    /** To the lobby, or home when the lobby cannot take the player; true if the lobby took them. */
+    private boolean sendBack(Player player) {
         boolean placed;
         try {
             placed = lobby.test(player);
@@ -1055,6 +1070,7 @@ public final class MatchService {
         if (!placed) {
             sendHome(player);
         }
+        return placed;
     }
 
     private void sendHome(Player player) {

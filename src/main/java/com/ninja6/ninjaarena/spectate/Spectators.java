@@ -229,12 +229,14 @@ public final class Spectators implements Listener {
         if (viewers.remove(player.getUniqueId()) == null) {
             return false;
         }
-        toLobby(player);
+        if (toLobby(player)) {
+            tell(player, "spectate.left");
+        }
         return true;
     }
 
-    /** To the lobby, or home when the lobby cannot take the player. */
-    private void toLobby(Player player) {
+    /** To the lobby, or home when the lobby cannot take the player; true if the lobby took them. */
+    private boolean toLobby(Player player) {
         boolean placed;
         try {
             placed = lobby.test(player);
@@ -245,6 +247,7 @@ public final class Spectators implements Listener {
         if (!placed) {
             restore(player);
         }
+        return placed;
     }
 
     private void restore(Player player) {

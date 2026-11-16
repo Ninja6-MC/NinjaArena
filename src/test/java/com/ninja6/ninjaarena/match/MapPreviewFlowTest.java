@@ -412,14 +412,19 @@ class MapPreviewFlowTest extends MatchFixture {
         assertEquals(room, rooms.roomOf(BOB).orElseThrow());
 
         rooms.preview(player(BOB));
-        assertEquals("The map preview has ended; you are back in the lobby.", last(BOB));
+        assertEquals("You left the map preview. You are in the lobby, still in your room; "
+                + "/narena leave again leaves the room.",
+                last(BOB));
         assertBackInRoom(BOB, room);
 
         // /narena leave ends the preview first, and only that.
         startPreview(BOB, room);
-        assertTrue(previews.end(player(BOB)));
+        assertTrue(previews.leave(player(BOB)));
+        assertEquals("You left the map preview. You are in the lobby, still in your room; "
+                + "/narena leave again leaves the room.",
+                last(BOB));
         assertBackInRoom(BOB, room);
-        assertFalse(previews.end(player(BOB)), "nothing more to end");
+        assertFalse(previews.leave(player(BOB)), "nothing more to end");
     }
 
     @Test

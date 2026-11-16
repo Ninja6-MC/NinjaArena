@@ -177,7 +177,9 @@ class MatchServiceTest extends MatchFixture {
         ticks(2);
         assertTrue(matches.leave(player(BOB), Exit.COMMAND));
         assertEquals(List.of(BOB), restored);
-        assertTrue(players.get(BOB).messages.contains("You left the match."));
+        // No lobby here, so home.
+        assertEquals("You left the match. You are back home; /narena leave has nothing more to leave.",
+                players.get(BOB).messages.getLast());
         assertTrue(players.get(ALICE).messages.contains("Bob left the match."));
         assertEquals(Cause.LEFT, events(PlayerEliminatedEvent.class).getFirst().cause());
         assertEquals(BOB, events(PlayerLeaveMatchEvent.class).getFirst().player());

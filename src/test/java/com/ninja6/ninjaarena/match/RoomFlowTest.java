@@ -576,7 +576,7 @@ class RoomFlowTest extends MatchFixture {
     void leavingARoomInTheLobbyStaysInTheLobby() {
         Room room = openWith(ALICE, BOB);
         rooms.leave(player(BOB));
-        assertEquals("You left the room.", lastMessage(BOB));
+        assertEquals("You left the room. You are in the lobby; /narena leave again takes you home.", lastMessage(BOB));
         assertFalse(room.contains(BOB));
         assertTrue(lobby.contains(BOB));
         assertEquals(List.of(), restored);
@@ -588,6 +588,11 @@ class RoomFlowTest extends MatchFixture {
         rooms.start(player(ALICE), null);
 
         assertTrue(rooms.leaveRoom(player(CAROL)));
+        assertEquals("You left the match and its room. You are in the lobby; /narena leave again takes you home.",
+                lastMessage(CAROL));
+        assertFalse(players.get(CAROL).messages.contains("You left the room. You are in the lobby; "
+                + "/narena leave again takes you home."),
+                "one message for the match and the room");
         assertFalse(matches.isInMatch(CAROL));
         assertFalse(room.contains(CAROL));
         assertTrue(lobby.contains(CAROL));
@@ -596,10 +601,24 @@ class RoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void theLeaveCommandFromAMatchTheLobbyRefusesSaysThePlayerIsHome() {
+        openWith(ALICE, BOB, CAROL);
+        rooms.start(player(ALICE), null);
+        lobbyRefuses.add(CAROL);
+
+        assertTrue(rooms.leaveRoom(player(CAROL)));
+        assertTrue(restored.contains(CAROL));
+        assertEquals("You left the match. You are back home; /narena leave has nothing more to leave.",
+                lastMessage(CAROL));
+    }
+
+    @Test
     void theLeaveCommandFromAMatchWithNoRoomAlsoGoesToTheLobby() {
         matches.start("dojo", List.of(List.of(ALICE), List.of(BOB)));
         assertFalse(rooms.leaveRoom(player(ALICE)), "not in a room");
         assertTrue(matches.leave(player(ALICE), MatchService.Exit.COMMAND));
+        assertEquals("You left the match. You are in the lobby; /narena leave again takes you home.",
+                lastMessage(ALICE));
         assertTrue(lobby.contains(ALICE));
         assertEquals(List.of(), restored);
     }
@@ -623,6 +642,8 @@ class RoomFlowTest extends MatchFixture {
 
         player(CAROL).teleport(new Location(overworld, 5, 70, 5), PlayerTeleportEvent.TeleportCause.COMMAND);
         assertFalse(matches.isInMatch(CAROL));
+        assertEquals("You left the match. You are back home; /narena leave has nothing more to leave.",
+                lastMessage(CAROL));
         runNextTick();
         assertTrue(restored.contains(CAROL));
         rooms.tick();
