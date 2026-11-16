@@ -130,8 +130,8 @@ not assert times.
 
 ## Hazard layout
 
-After labelling the terrain, hazards run in fixed order: gaps, rivers, ceiling lava,
-then collapsing ledges. They use new streams, leaving streams 1 (theme), 2 (height),
+After labelling the terrain, hazards run in fixed order: gaps, chasms, rivers, ceiling
+lava, then collapsing ledges. They use new streams, leaving streams 1 (theme), 2 (height),
 3 (cliffs), 4 (ravines), 5 (overhangs) and 6 (platforms) unchanged. Ceiling and river
 candidates read a snapshot of the original geometry. Existing hazards take precedence;
 later passes do not overwrite them. Every candidate draws a fixed number of values,
@@ -146,6 +146,7 @@ check that independently.
 | Hanging lava | 9 | 0.8% to 4% per ceiling candidate with a solid roof above |
 | Gaps | 10 | 3 to 15 attempts at default size; span 3–6 to 3–10, breadth 1 to 1–3 |
 | Collapsing rims | 11 | 4% to 20% per exposed ground or platform rim cell |
+| Chasms | 12 | None at 1 to 3; 1 at difficulty 4, 2 at difficulty 5 |
 
 Rivers occupy the air immediately above low ground (at least three blocks below the
 base), following consecutive rows whose floors differ by at most one block. Falls
@@ -159,15 +160,31 @@ hollow to its solid floor. They are ordinary `AIR`: placement and the solver alr
 inspect air and require no separate gap marker.
 The exposed floor is labelled `SURFACE`; no supporting blocks are added to hollows.
 
+A chasm (`TerrainGenerator.chasmCount`) runs across the whole width of the side,
+`CHASM_WIDTH` (2) rows wide, with `LAVA` at `y = 3` and air from there to the model top,
+platforms included. It has no standing cell and no ceiling, so no route walks round,
+through or under it, and every route to the centre jumps it: a gap of 2 is within both
+the level and the rising jump of the default movement. Its near edge wanders up to
+`CHASM_WANDER` (2) rows, at most one row between neighbouring columns, so no walk along a
+row slips past it. The hazard rows are split into one share per chasm; each chasm stays
+inside its share with a clear row at each end, so the two chasms at difficulty 5 always
+have ground between them. Sides too small for that wander less, and get no chasm when
+even a straight one does not fit. `TerrainGenerator.chasmRows` gives where they run. The
+chasms run after the gaps, so a gap cannot put a floor back in one, and the later passes
+leave their cells alone.
+
 Totals over sixteen seeds `0 * 7919` through `15 * 7919` at the default size:
 
-| Difficulty | Sources | Lava | Hanging | Crumble | Platform crumble | Gap cells |
+| Difficulty | Sources | Lava | Hanging | Crumble | Platform crumble | Carved cells |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1 | 14 | 88 | 14 | 277 | 29 | 547 |
 | 2 | 62 | 625 | 49 | 1,085 | 85 | 2,312 |
 | 3 | 185 | 1,658 | 126 | 2,085 | 166 | 4,199 |
-| 4 | 327 | 2,973 | 227 | 3,194 | 303 | 7,993 |
-| 5 | 572 | 4,994 | 470 | 4,534 | 487 | 10,878 |
+| 4 | 313 | 5,905 | 210 | 3,406 | 295 | 53,342 |
+| 5 | 513 | 10,643 | 414 | 4,977 | 460 | 92,321 |
+
+Carved cells are solid cells the hazard passes turn to air: gaps, and at difficulties 4
+and 5 the chasms, which also add their lava floors to the lava count.
 
 All lava kinds have `solid() == false`; both collapse kinds are solid until activated.
 `terrainTopY` ignores lava, platforms and collapsing platform rims, so it still reports
@@ -185,7 +202,9 @@ belong to #161. Growth and warning timing belong to #162. This package touches n
 
 The two generator golden digests changed deliberately for these passes. The digest byte
 layout is unchanged, so `TerrainModel.DIGEST_FORMAT` remains 1. Tests also retain both
-old digests for the pre-hazard passes to pin streams 1 through 6.
+old digests for the pre-hazard passes to pin streams 1 through 6. The chasms changed the
+difficulty 5 digest, and every map at difficulties 4 and 5, deliberately; a further
+golden hash over seeds 0 to 11 at difficulties 1 to 3 pins those maps as they were.
 
 ## Movement solver and challenge check
 
@@ -267,21 +286,26 @@ difficulty, because a 96-block side always has a way round.
 
 ### Minimums
 
-`ChallengeMinimums.forDifficulty(difficulty)` gives initial values, picked at or below
-about the 20th percentile of what the generator gives over 300 seeds per difficulty, so
-most seeds pass. Task 7.12 (#166) tunes them by play.
+`ChallengeMinimums.forDifficulty(difficulty)` gives the minimums. Climb and hazard
+exposure are at or below about the 20th percentile of what the generator gives over 300
+seeds per difficulty, so most seeds pass. Forced jumps were set by play (#166).
 
 | Difficulty | Forced jumps | Climb | Hazard exposure |
 | ---: | ---: | ---: | ---: |
 | 1 | 0 | 1 | 0 |
 | 2 | 0 | 2 | 0 |
 | 3 | 0 | 2 | 0 |
-| 4 | 0 | 2 | 1 |
-| 5 | 0 | 2 | 2 |
+| 4 | 1 | 2 | 1 |
+| 5 | 2 | 2 | 2 |
 
-Forced jumps stay at 0 for now: about four in ten direct routes need no jump at every
-difficulty, so any minimum would reject them; #166 decides whether the generator should
-force more gaps. Over the crossable sides of the same seeds, the direct route's median
+Forced jumps stay at 0 at difficulties 1 to 3, where about four in ten direct routes need
+no jump. A play test rated difficulties 4 and 5 about right on maps that all forced jumps,
+and a minimum keeps any seed from giving them a walk-over. Raising the minimums alone
+would have made the search fail often: over 1,000 seeds without chasms, 3.7% of searches
+at difficulty 4 and 33% at difficulty 5 used every attempt, at 3.2 and 5.8 attempts per
+search. The chasms force the jumps instead, so every crossable side meets the jump
+minimum; over the same seeds no search failed, at 1.6 and 1.7 attempts per search, as
+before the change. Over the crossable sides of the same seeds, the direct route's median
 climb rises from 3 at difficulty 1 to about 8 at difficulty 5, and its median hazard
 exposure from 0 to about 12.
 
@@ -323,8 +347,8 @@ side decides):
 | 1 | 100% | 100% | 1.00 |
 | 2 | 95.5% | 100% | 1.05 |
 | 3 | 80.5% | 100% | 1.26 |
-| 4 | 61.5% | 100% | 1.62 |
-| 5 | 58.0% | 100% | 1.74 |
+| 4 | 64.5% | 100% | 1.54 |
+| 5 | 60.5% | 100% | 1.71 |
 
 When a search fails, `MapSearch.fallback(lastGoodSeed)` decides what the room plays:
 `LAST_GOOD_SEED` with that seed if the room has one, else `HAND_BUILT`. Each carries the
@@ -352,7 +376,8 @@ does not assert times.
   blocks only; a hazard that adds lava or removes any other block must be checked again,
   as `HazardPlan` does for flowing lava and collapsing platforms
   ([Lava flow and collapses](#lava-flow-and-collapses)).
-* **#166** tunes `MovementModel` and `ChallengeMinimums` by play.
+* **#166** tunes `MovementModel` and `ChallengeMinimums` by play; the forced jumps at
+  difficulties 4 and 5 are set.
 
 ## Determinism rules
 

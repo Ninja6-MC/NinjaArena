@@ -5,9 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -22,17 +26,87 @@ class TerrainGeneratorTest {
      * which must be deliberate: every seed then gives a different map. To update them on
      * purpose, run this test, copy the actual digests from the failure into these constants
      * and say in the pull request that existing seeds now generate different maps.
-     * Updated deliberately for the hazard passes (streams 7 through 11).
+     * Updated deliberately for the hazard passes (streams 7 through 11), and for the chasms
+     * at difficulties 4 and 5 (stream 12).
      */
     private static final String GOLDEN_SEED_42_DIFFICULTY_3 =
             "42b185aa1cde7c72a637f7edc9a73c18d9a3fcc0d48fe953b0ceda5eac48f874";
     private static final String GOLDEN_SEED_MINUS_7_DIFFICULTY_5 =
-            "318a93c6d3478f087806e6a092ba376864af338b2a78500fb6f5912a414d0531";
+            "2811b5d4e03cbab284ad11ee5ce3245a6c5a56408d20ffce64f204c5b47eb379";
 
     @Test
     void goldenDigestsAreUnchanged() {
         assertEquals(GOLDEN_SEED_42_DIFFICULTY_3, TerrainGenerator.generate(42, 3).digest());
         assertEquals(GOLDEN_SEED_MINUS_7_DIFFICULTY_5, TerrainGenerator.generate(-7, 5).digest());
+    }
+
+    /** Every model for seeds 0 to 11 at difficulties 1 to 3, hashed: the chasm pass left them alone. */
+    private static final String GOLDEN_DIFFICULTIES_1_TO_3 =
+            "1769c6554376ae4bfc2c8b37fa390142f2b881d618ae22fb88ae917b75511fff";
+
+    @Test
+    void difficultiesOneToThreeKeepTheirMaps() throws Exception {
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
+        for (int difficulty = 1; difficulty <= 3; difficulty++) {
+            for (long seed = 0; seed < 12; seed++) {
+                sha.update(TerrainGenerator.generate(seed, difficulty).digest().getBytes(StandardCharsets.US_ASCII));
+            }
+        }
+        assertEquals(GOLDEN_DIFFICULTIES_1_TO_3, HexFormat.of().formatHex(sha.digest()));
+    }
+
+    @Test
+    void chasmsCrossEverySideAtDifficultiesFourAndFiveWithinJumpReach() {
+        assertEquals(0, TerrainGenerator.chasmCount(1));
+        assertEquals(0, TerrainGenerator.chasmCount(3));
+        assertEquals(1, TerrainGenerator.chasmCount(4));
+        assertEquals(2, TerrainGenerator.chasmCount(5));
+        assertTrue(TerrainGenerator.CHASM_WIDTH <= MovementModel.DEFAULT.maxRisingGap(),
+                "a chasm must be a gap the solver can jump, rising or level");
+        for (SideDimensions size : new SideDimensions[] {SideDimensions.DEFAULT, SideDimensions.forCell(64),
+                SideDimensions.forCell(512)}) {
+            for (int difficulty = 4; difficulty <= 5; difficulty++) {
+                for (long seed : new long[] {0, 7919, 42, -7, Long.MIN_VALUE}) {
+                    assertChasms(TerrainGenerator.generate(seed, difficulty, size));
+                }
+            }
+        }
+    }
+
+    /**
+     * Each chasm runs the whole width, {@link TerrainGenerator#CHASM_WIDTH} rows of lava under
+     * open sky inside the hazard rows with no standing cell, its near edge moving at most one
+     * row between columns, and the chasms keep ground between them.
+     */
+    private static void assertChasms(TerrainModel model) {
+        SideDimensions size = model.dimensions();
+        String where = "seed " + model.seed() + " difficulty " + model.difficulty() + " " + size + ": ";
+        int[][] chasms = TerrainGenerator.chasmRows(model.seed(), model.difficulty(), size);
+        assertEquals(TerrainGenerator.chasmCount(model.difficulty()), chasms.length, where + "chasms");
+        MovementSolver solved = MovementSolver.solve(model, MovementModel.DEFAULT);
+        int lastRow = -1;
+        for (int[] nearEdge : chasms) {
+            assertTrue(Arrays.stream(nearEdge).min().orElseThrow() > lastRow + 1, where + "chasms touch");
+            for (int x = 0; x < size.width(); x++) {
+                if (x > 0) {
+                    assertTrue(Math.abs(nearEdge[x] - nearEdge[x - 1]) <= 1, where + "chasm edge jumps at " + x);
+                }
+                for (int z = nearEdge[x]; z < nearEdge[x] + TerrainGenerator.CHASM_WIDTH; z++) {
+                    assertTrue(size.hazardRow(z), where + "chasm outside the hazard rows at " + x + ", " + z);
+                    assertEquals(BlockKind.LAVA, model.at(x, TerrainGenerator.FLOOR + 1, z), where + "chasm floor");
+                    for (int y = TerrainGenerator.FLOOR + 2; y < size.height(); y++) {
+                        assertEquals(BlockKind.AIR, model.at(x, y, z), where + "chasm not open at " + x + ", " + z);
+                    }
+                    for (int y = 0; y < size.height(); y++) {
+                        assertTrue(!solved.standable(x, y, z), where + "standing cell in a chasm at " + x + ", " + z);
+                    }
+                }
+            }
+            lastRow = Arrays.stream(nearEdge).max().orElseThrow() + TerrainGenerator.CHASM_WIDTH - 1;
+        }
+        for (int difficulty = 1; difficulty <= 3; difficulty++) {
+            assertEquals(0, TerrainGenerator.chasmRows(model.seed(), difficulty, size).length);
+        }
     }
 
     @Test

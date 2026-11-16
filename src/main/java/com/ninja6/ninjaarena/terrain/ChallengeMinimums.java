@@ -2,8 +2,8 @@ package com.ninja6.ninjaarena.terrain;
 
 /**
  * The least challenge a side's direct route must hold at a difficulty, compared against a
- * {@link CrossingReport}. The values from {@link #forDifficulty} are initial ones, set from
- * what the generator produces so that most seeds pass, and are tuned by play testing.
+ * {@link CrossingReport}. The values from {@link #forDifficulty} are set from what the
+ * generator produces so that most seeds pass, and tuned by play testing.
  *
  * @param forcedJumps    jumps over a gap the direct route cannot avoid
  * @param climb          blocks the direct route climbs in total
@@ -14,15 +14,18 @@ public record ChallengeMinimums(int forcedJumps, int climb, int hazardExposure) 
     /** No minimums: only crossability, a safe spawn and enemy spawns are checked. */
     public static final ChallengeMinimums NONE = new ChallengeMinimums(0, 0, 0);
 
-    // Initial values, about the 10th to 20th percentile of what the generator gives at each
-    // difficulty, so most seeds pass. Jumps stay at 0: about 4 in 10 direct routes at every
-    // difficulty need none.
+    // Climb and hazards: about the 10th to 20th percentile of what the generator gives at each
+    // difficulty, so most seeds pass. Jumps: 0 at difficulties 1 to 3, where about 4 in 10
+    // direct routes need none. Jumps at 4 and 5: 1 and 2, set after a play test in which every
+    // map at those difficulties forced jumps and felt right, so that no seed gives them a
+    // walk-over. The generator cuts that many chasms across those sides
+    // (TerrainGenerator.chasmCount), so the search does not retry more for it.
     private static final ChallengeMinimums[] BY_DIFFICULTY = {
         new ChallengeMinimums(0, 1, 0),
         new ChallengeMinimums(0, 2, 0),
         new ChallengeMinimums(0, 2, 0),
-        new ChallengeMinimums(0, 2, 1),
-        new ChallengeMinimums(0, 2, 2),
+        new ChallengeMinimums(1, 2, 1),
+        new ChallengeMinimums(2, 2, 2),
     };
 
     public ChallengeMinimums {
@@ -31,7 +34,7 @@ public record ChallengeMinimums(int forcedJumps, int climb, int hazardExposure) 
         }
     }
 
-    /** The initial minimums for a difficulty from 1 to 5. */
+    /** The minimums for a difficulty from 1 to 5. */
     public static ChallengeMinimums forDifficulty(int difficulty) {
         if (difficulty < TerrainGenerator.MIN_DIFFICULTY || difficulty > TerrainGenerator.MAX_DIFFICULTY) {
             throw new IllegalArgumentException("difficulty must be " + TerrainGenerator.MIN_DIFFICULTY + " to "

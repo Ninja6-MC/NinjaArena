@@ -15,14 +15,19 @@ class CollapseCrossingTest {
 
     private static final int[] CRUMBLE_KINDS = {BlockKind.CRUMBLE.ordinal(), BlockKind.CRUMBLE_PLATFORM.ordinal()};
 
-    /** Single collapses that stranded a team when only "all intact" and "all gone" were checked. */
+    /**
+     * Single collapses that strand a team although the side is crossable intact and with every
+     * crumbling block gone, so checking only those two would accept them. Found again after
+     * the chasms changed every map at difficulties 4 and 5.
+     */
     @Test
     void collapsesThatOnceStrandedATeamNoLongerDo() {
         record Case(long seed, int difficulty, int x, int y, int z) { }
         List<Case> cases = List.of(
-                new Case(2_513_501L, 5, 19, 17, 56),
-                new Case(9_015_894_427_218_372_089L, 4, 43, 22, 36),
-                new Case(9_015_894_427_218_372_089L, 4, 43, 23, 37));
+                new Case(-3_294_968_442_888_373_315L, 4, 28, 20, 28),
+                new Case(-7_573_232_559_504_912_326L, 4, 62, 24, 43),
+                new Case(792_725_471_689_316_877L, 5, 22, 21, 49),
+                new Case(-3_389_602_350_861_902_783L, 5, 19, 19, 30));
         for (Case c : cases) {
             TerrainModel side = TerrainGenerator.generate(c.seed(), c.difficulty());
             assertTrue(isCrumble(side.at(c.x(), c.y(), c.z()).ordinal()), c.toString());
