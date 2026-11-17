@@ -494,4 +494,38 @@ class GeneratedRoomFlowTest extends MatchFixture {
         assertEquals(List.of(), generated.inUse(), "the failed map's cell is free");
         assertNoArenaNamed(ALICE, BOB);
     }
+
+    @Test
+    void withNoHandBuiltArenaAFailedLastGoodSeedStillGetsOneMoreRandomSeedBeforeTheRoomCloses() throws Exception {
+        deleteEveryArena();
+        seedModes(42);
+        players.get(ALICE).permissions.add(NinjaArenaCommand.MAP_CHANGE);
+        boolean[] failing = {false};
+        List<Long> searched = new ArrayList<>();
+        GeneratedMaps.Search real = GeneratedMaps.Search.DEFAULT;
+        generated.setSearch((seed, difficulty, teams, size) -> {
+            searched.add(seed);
+            return failing[0] ? new MapSearch.Failed(seed, List.of()) : real.search(seed, difficulty, teams, size);
+        });
+        Room room = openWith(ALICE, BOB);
+        drain();
+        assertEquals(42, room.lastGoodSeed().orElseThrow().seed());
+
+        // A real generator or placement failure: the last good seed fails too this time.
+        failing[0] = true;
+        rooms.mapReroll(player(ALICE));
+        drain();
+        assertEquals(List.of(42L, 43L, 42L, 44L), searched);
+        List<String> bob = messages(BOB);
+        int lastGood = bob.indexOf("No playable map came from seed 43 in 0 tries, so the room plays the last good"
+                + " seed, 42.");
+        int random = bob.indexOf("No playable map came from seed 42 in 0 tries, so the room tries a new random"
+                + " seed, 44.");
+        assertTrue(lastGood >= 0 && random > lastGood, String.valueOf(bob));
+        assertEquals("The room closed: no playable map came from its seeds and there is no other map to play.",
+                bob.getLast());
+        assertTrue(rooms.hostedBy(ALICE).isEmpty());
+        assertEquals(List.of(), generated.inUse(), "the failed map's cell is free");
+        assertNoArenaNamed(ALICE, BOB);
+    }
 }

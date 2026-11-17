@@ -571,10 +571,11 @@ In the lobby these generate the room's map again at once. While the room plays, 
 being played never changes: they apply at the next generation, which is the next shop
 break with `regenerate: round`, else the map after the match. `/narena map set <arena>`
 goes back to a hand-built arena. When no map comes from a seed, the room plays its last
-good seed; with none, a hand-built arena; with none of those, one more random seed. On a
-server with no hand-built arena that step is skipped without a word about a missing
-arena, and a room whose last good seed or random seed fails as well closes; its players
-are told no playable map came from its seeds.
+good seed; if that fails or there is none, a hand-built arena; with none of those, one
+more random seed. On a server with no hand-built arena that step is skipped without a
+word about a missing arena, so a failed last good seed goes on to the random seed. A room
+whose random seed fails as well closes; its players are told no playable map came from
+its seeds.
 
 With `regenerate: round` (it needs the shop phase), the next map is generated in a spare
 cell in each shop break while the current one stays as it is. The shop waits for it, up
