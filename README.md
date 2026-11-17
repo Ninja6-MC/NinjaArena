@@ -439,7 +439,10 @@ given up when the room is back in the lobby, where it queues again for its next 
 when it closes. `arenas.max-active` in `config.yml` (default 4) caps the slots in use at
 once; every match is a room's and holds one. It is also never more than the cells
 of the arena grid. While every slot is leased, more rooms queue, and their players see
-their place in the queue. A hand-built arena holds one match at a time, so a room whose
+their place in the queue. While an unused arena world reopens, slot cells clear or the
+room's map builds, chat, the status line and the room screen say the arena is being
+prepared instead. Start waits for preparation to finish; a generated map is announced
+as ready only after it is placed. A hand-built arena holds one match at a time, so a room whose
 arena is in use queues for that arena; rooms behind it that want a free arena go first.
 A room that closes while its match runs keeps the lease until the match ends.
 

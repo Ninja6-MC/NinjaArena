@@ -651,6 +651,7 @@ room:
   below-count: "<yellow>The room needs <required> players to start; it has <size>."
   queued: "<gold>Every arena slot is in use. Your room is number <position> in the queue."
   queued-arena: "<gold>Arena <arena> is in use. Your room is number <position> in the queue."
+  preparing: "<gold>Preparing arena <arena> for your room. Start once its map is ready."
   lease-granted: "<green>Arena <arena> is ready for your room."
   not-ready: "<yellow>Arena <arena> is not ready for a match yet."
   start-building: "<yellow>The room's map is still being built (<percent>%). Start once it is ready."
@@ -672,6 +673,7 @@ room:
   returned: "<green>The match is over and the room is back in the lobby."
   status-waiting: "<gray>Room <count>: waiting for players"
   status-ready: "<green>Room <count>: ready to start"
+  status-preparing: "<gold>Preparing arena <arena> for your room"
   status-queued: "<gold>Waiting for an arena: number <position> in the queue"
   status-host-away: "<yellow>Room <count>: waiting <seconds>s for <player> to come back"
   # Before the status line while the player who opened the room is in it.

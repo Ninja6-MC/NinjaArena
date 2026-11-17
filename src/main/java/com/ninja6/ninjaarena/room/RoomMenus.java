@@ -14,6 +14,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 
@@ -107,7 +108,7 @@ public final class RoomMenus {
         }
         if (room.isManager(id)) {
             // While the map is built or the host is away, Start only says so, as the command does.
-            options.add(rooms.building(room).isPresent()
+            options.add(rooms.isPreparing(room)
                     ? action("start-building", Material.GRAY_DYE, p -> rooms.start(p, null))
                     : room.isHostAway() ? action("start-host-away", Material.GRAY_DYE, p -> rooms.start(p, null))
                     : action("start", Material.LIME_WOOL, this::start));
@@ -122,6 +123,7 @@ public final class RoomMenus {
         List<String> lines = new ArrayList<>();
         lines.add(text("room.screen.summary", "host", rooms.playerName(room.host()),
                 "arena", room.arena(), "size", room.size(), "players", room.settings().players()));
+        lines.add(PlainTextComponentSerializer.plainText().serialize(rooms.status(room)));
         lines.add(text("room.screen.privacy-line", "privacy", text(RoomService.privacyKey(room.settings()))));
         if (room.hasCreator()) {
             lines.add(text("room.screen.creator", "player", rooms.playerName(room.creator())));
