@@ -876,6 +876,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
                 }, Bukkit::getCurrentTick, getLogger());
         generatedMaps.onClearing(hazards::forget);
+        world.afterRelease(hazards::worldReleased);
         hazards.setFeet(player -> {
             Player online = getServer().getPlayer(player);
             if (online == null || !PluginWorlds.isArena(online.getWorld())) {

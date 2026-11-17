@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -217,6 +218,11 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         final Set<Long> collapsing = new HashSet<>();
         /** Collapsed blocks and what they were, put back at the next PREP. */
         final Map<Long, Material> collapsed = new LinkedHashMap<>();
+        /**
+         * Falling blocks the collapses let drop this round, by id only: an entity would keep
+         * the arena world in memory after it retires.
+         */
+        final Set<UUID> debris = new LinkedHashSet<>();
         /** Late hazards of the plan dealt with this round, warned of or skipped. */
         int released;
         /** The tick from which the next late hazard may be warned of. */
@@ -434,7 +440,28 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             map.collapsing.clear();
             map.pending.clear();
             map.reserved = 0;
+            // The cell is cleared with everything in it.
+            map.debris.clear();
         }
+    }
+
+    /**
+     * The arena world was retired: its falling blocks went with it, so only their ids are
+     * forgotten. {@code ArenaWorld#afterRelease}.
+     */
+    public void worldReleased() {
+        for (MapHazards map : maps.values()) {
+            map.debris.clear();
+        }
+    }
+
+    /** Falling blocks dropped this round and not yet removed, in every map. */
+    int debris() {
+        int count = 0;
+        for (MapHazards map : maps.values()) {
+            count += map.debris.size();
+        }
+        return count;
     }
 
     // ---- Flow ----
@@ -542,9 +569,7 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
                     map.collapsing.add(at);
                     changes.add(change(map, generation, () -> {
                         map.collapsing.remove(at);
-                        if (blocks.collapse(unpackX(at), unpackY(at), unpackZ(at), material)) {
-                            map.collapsed.put(at, material);
-                        }
+                        collapse(map, at, material);
                     }));
                 }
             }
@@ -590,6 +615,14 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         }
     }
 
+    /** Collapses the block now; it comes back at the next PREP, and its falling block goes at the round end. */
+    private void collapse(MapHazards map, long at, Material material) {
+        blocks.collapse(unpackX(at), unpackY(at), unpackZ(at), material).ifPresent(falling -> {
+            map.collapsed.put(at, material);
+            map.debris.add(falling);
+        });
+    }
+
     private void collapseDue(MapHazards map, int now) {
         List<Runnable> changes = new ArrayList<>();
         int generation = map.generation;
@@ -605,9 +638,7 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             map.collapsing.add(at);
             changes.add(change(map, generation, () -> {
                 map.collapsing.remove(at);
-                if (blocks.collapse(unpackX(at), unpackY(at), unpackZ(at), material)) {
-                    map.collapsed.put(at, material);
-                }
+                collapse(map, at, material);
             }));
         }
         if (!changes.isEmpty()) {
@@ -734,8 +765,12 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
         });
     }
 
-    /** Ends the round for the map: nothing flows or collapses, and every source is taken away. */
+    /**
+     * Ends the round for the map: nothing flows or collapses, every source is taken away and
+     * every falling block still falling is removed.
+     */
     private void stop(MapHazards map) {
+        removeDebris(map);
         map.fighting = false;
         map.openOnPlan = false;
         map.generation++;
@@ -796,12 +831,22 @@ public final class HazardService implements Listener, ArenaProtectionListener.Fl
             }
             map.allowed.clear();
             map.open.clear();
+            removeDebris(map);
         }
         maps.clear();
+    }
+
+    /** Removes the map's falling blocks still falling and forgets them all. */
+    private void removeDebris(MapHazards map) {
+        if (map.debris.isEmpty()) {
+            return;
+        }
+        List<UUID> debris = List.copyOf(map.debris);
+        map.debris.clear();
         try {
-            blocks.removeDebris();
+            blocks.removeDebris(debris);
         } catch (RuntimeException e) {
-            logger.log(Level.WARNING, "Could not remove falling blocks.", e);
+            logger.log(Level.WARNING, "Could not remove falling blocks in map " + map.placed.arena().name() + ".", e);
         }
     }
 

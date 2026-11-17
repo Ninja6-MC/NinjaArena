@@ -1,9 +1,7 @@
 package com.ninja6.ninjaarena.hazard;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -11,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -26,6 +25,7 @@ class WorldHazardBlocksTest {
     /** Every block set, as {@code x,y,z=TYPE/physics}. */
     private final List<String> sets = new ArrayList<>();
     private final List<Map<String, Object>> falling = new ArrayList<>();
+    private final Map<UUID, FallingBlock> entities = new HashMap<>();
     private final BlockData data = inert(BlockData.class);
     private boolean open = true;
     private final World world = world();
@@ -44,6 +44,7 @@ class WorldHazardBlocksTest {
                     case "getName" -> "arena";
                     case "getBlockAt" -> block((World) proxy, (int) args[0], (int) args[1], (int) args[2]);
                     case "spawn" -> spawn(args);
+                    case "getEntity" -> entities.get((UUID) args[0]);
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
     }
@@ -54,6 +55,8 @@ class WorldHazardBlocksTest {
         Map<String, Object> state = new HashMap<>();
         state.put("at", args[0]);
         state.put("valid", true);
+        UUID id = UUID.randomUUID();
+        state.put("id", id);
         FallingBlock entity = (FallingBlock) Proxy.newProxyInstance(FallingBlock.class.getClassLoader(),
                 new Class<?>[] {FallingBlock.class}, (proxy, method, call) -> switch (method.getName()) {
                     case "setBlockData", "setCancelDrop", "setDropItem", "setHurtEntities", "setPersistent" -> {
@@ -61,14 +64,17 @@ class WorldHazardBlocksTest {
                         yield null;
                     }
                     case "isValid" -> state.get("valid");
+                    case "getUniqueId" -> id;
                     case "remove" -> {
                         state.put("valid", false);
+                        state.put("removed", true);
                         yield null;
                     }
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
         ((Consumer<FallingBlock>) args[2]).accept(entity);
         falling.add(state);
+        entities.put(id, entity);
         return entity;
     }
 
@@ -121,13 +127,14 @@ class WorldHazardBlocksTest {
 
     @Test
     void aCollapseDropsAFallingBlockThatNeverLandsAsABlock() {
-        assertFalse(hazards.collapse(1, 2, 3, Material.CALCITE), "nothing to collapse");
+        assertEquals(Optional.empty(), hazards.collapse(1, 2, 3, Material.CALCITE), "nothing to collapse");
         types.put("1,2,3", Material.CALCITE);
-        assertFalse(hazards.collapse(1, 2, 3, Material.STONE), "not the block expected");
-        assertTrue(hazards.collapse(1, 2, 3, Material.CALCITE));
+        assertEquals(Optional.empty(), hazards.collapse(1, 2, 3, Material.STONE), "not the block expected");
+        Optional<UUID> id = hazards.collapse(1, 2, 3, Material.CALCITE);
         assertEquals(List.of("1,2,3=AIR/false"), sets);
         assertEquals(1, falling.size());
         Map<String, Object> debris = falling.getFirst();
+        assertEquals(Optional.of(debris.get("id")), id, "only the id is handed out");
         assertSame(data, debris.get("setBlockData"));
         assertEquals(true, debris.get("setCancelDrop"), "it never lands as a block");
         assertEquals(false, debris.get("setDropItem"));
@@ -137,8 +144,39 @@ class WorldHazardBlocksTest {
         assertEquals(1.5, at.getX());
         assertEquals(2, at.getY());
         assertEquals(3.5, at.getZ());
-        hazards.removeDebris();
+        hazards.removeDebris(List.of(id.orElseThrow()));
         assertEquals(false, debris.get("valid"));
+    }
+
+    @Test
+    void removingDebrisRemovesOnlyTheGivenBlocksStillFalling() {
+        for (int x = 1; x <= 3; x++) {
+            types.put(x + ",2,3", Material.CALCITE);
+        }
+        UUID landed = hazards.collapse(1, 2, 3, Material.CALCITE).orElseThrow();
+        UUID falling2 = hazards.collapse(2, 2, 3, Material.CALCITE).orElseThrow();
+        UUID other = hazards.collapse(3, 2, 3, Material.CALCITE).orElseThrow();
+        falling.get(0).put("valid", false);
+        hazards.removeDebris(List.of(landed, falling2, UUID.randomUUID()));
+        assertEquals(null, falling.get(0).get("removed"), "a landed block is not removed again");
+        assertEquals(true, falling.get(1).get("removed"));
+        assertEquals(true, falling.get(2).get("valid"), "another map's block keeps falling");
+        assertEquals(other, falling.get(2).get("id"));
+    }
+
+    @Test
+    void nothingIsKeptBetweenCallsThatCouldHoldTheWorld() {
+        for (var field : WorldHazardBlocks.class.getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            assertEquals("world", field.getName(), "only the supplier of the open world is kept");
+        }
+        types.put("1,2,3", Material.CALCITE);
+        UUID id = hazards.collapse(1, 2, 3, Material.CALCITE).orElseThrow();
+        open = false;
+        hazards.removeDebris(List.of(id));
+        assertEquals(true, falling.getFirst().get("valid"), "a retired world's blocks went with it");
     }
 
     @Test
@@ -147,7 +185,7 @@ class WorldHazardBlocksTest {
         hazards.startLava(1, 2, 3);
         hazards.stopLava(1, 2, 3);
         hazards.restore(1, 2, 3, Material.LAVA);
-        assertFalse(hazards.collapse(1, 2, 3, Material.AIR));
+        assertEquals(Optional.empty(), hazards.collapse(1, 2, 3, Material.AIR));
         assertEquals(Material.AIR, hazards.get(1, 2, 3));
         assertEquals(List.of(), sets);
     }

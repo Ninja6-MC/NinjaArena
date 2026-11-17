@@ -1,9 +1,9 @@
 package com.ninja6.ninjaarena.hazard;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Supplier;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -14,12 +14,12 @@ import org.bukkit.entity.FallingBlock;
 
 /**
  * {@link HazardBlocks} in the arena world, while it is open. With the world closed every
- * change does nothing. Server thread only.
+ * change does nothing. It keeps no blocks or entities between calls, so it never holds a
+ * retired world. Server thread only.
  */
 public final class WorldHazardBlocks implements HazardBlocks {
 
     private final Supplier<Optional<World>> world;
-    private final List<FallingBlock> debris = new ArrayList<>();
 
     /** @param world the arena world while it is open; {@code ArenaWorld#currentWorld} */
     public WorldHazardBlocks(Supplier<Optional<World>> world) {
@@ -67,15 +67,14 @@ public final class WorldHazardBlocks implements HazardBlocks {
     }
 
     @Override
-    public boolean collapse(int x, int y, int z, Material material) {
+    public Optional<UUID> collapse(int x, int y, int z, Material material) {
         Optional<Block> found = block(x, y, z).filter(block -> block.getType() == material);
         if (found.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
         Block block = found.get();
         BlockData data = block.getBlockData();
         block.setType(Material.AIR, false);
-        debris.removeIf(falling -> !falling.isValid());
         Location at = block.getLocation().add(0.5, 0, 0.5);
         FallingBlock falling = block.getWorld().spawn(at, FallingBlock.class, spawned -> {
             spawned.setBlockData(data);
@@ -84,13 +83,17 @@ public final class WorldHazardBlocks implements HazardBlocks {
             spawned.setHurtEntities(false);
             spawned.setPersistent(false);
         });
-        debris.add(falling);
-        return true;
+        return Optional.of(falling.getUniqueId());
     }
 
     @Override
-    public void removeDebris() {
-        debris.stream().filter(FallingBlock::isValid).forEach(FallingBlock::remove);
-        debris.clear();
+    public void removeDebris(Collection<UUID> debris) {
+        world.get().ifPresent(current -> {
+            for (UUID id : debris) {
+                if (current.getEntity(id) instanceof FallingBlock falling && falling.isValid()) {
+                    falling.remove();
+                }
+            }
+        });
     }
 }

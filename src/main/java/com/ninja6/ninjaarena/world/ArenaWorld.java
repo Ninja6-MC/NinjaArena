@@ -49,6 +49,7 @@ public final class ArenaWorld {
     private volatile ArenaWorldSettings settings = ArenaWorldSettings.DEFAULTS;
     private Runnable restoreCopies = () -> { };
     private Runnable afterReopen = () -> { };
+    private Runnable afterRelease = () -> { };
     private State state = State.READY;
     private final UUID identity;
     private boolean savingEnabled;
@@ -247,6 +248,21 @@ public final class ArenaWorld {
         };
     }
 
+    /**
+     * Runs once the world has been retired, so nothing goes on referring to it; hooks run in
+     * the order they were added. The world stays retired whatever a hook does; a hook that
+     * throws reaches the caller of {@link #releaseIfIdle}, so hooks should handle their own
+     * failures.
+     */
+    public void afterRelease(Runnable hook) {
+        Objects.requireNonNull(hook, "hook");
+        Runnable earlier = afterRelease;
+        afterRelease = () -> {
+            earlier.run();
+            hook.run();
+        };
+    }
+
     /** Holds the world through an asynchronous operation and its server-thread completion. */
     public Runnable acquire() {
         if (!acceptingOperations()) {
@@ -308,12 +324,13 @@ public final class ArenaWorld {
             }
             world = null;
             state = State.UNLOADED;
-            return true;
         } finally {
             if (state == State.UNLOADING) {
                 state = State.READY;
             }
         }
+        afterRelease.run();
+        return true;
     }
 
     public boolean isSavingEnabled() {

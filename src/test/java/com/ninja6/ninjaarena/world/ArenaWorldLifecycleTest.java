@@ -277,6 +277,23 @@ class ArenaWorldLifecycleTest {
     }
 
     @Test
+    void releaseHooksRunInOrderOnlyOnceTheWorldIsRetired() {
+        Generation first = new Generation();
+        boolean[] unload = {false};
+        var manager = new ArenaWorld(first.world, () -> first.world, world -> unload[0]);
+        List<String> calls = new ArrayList<>();
+        manager.afterRelease(() -> calls.add("hazards"));
+        manager.afterRelease(() -> calls.add("second"));
+        assertFalse(manager.releaseIfIdle(() -> false), "busy");
+        assertFalse(manager.releaseIfIdle(() -> true), "unload refused");
+        assertEquals(List.of(), calls, "nothing runs while the world stays");
+        unload[0] = true;
+        assertTrue(manager.releaseIfIdle(() -> true));
+        assertEquals(List.of("hazards", "second"), calls);
+        assertTrue(manager.currentWorld().isEmpty());
+    }
+
+    @Test
     void aHoldOnAnOpenWorldDoesNotReopenIt() {
         Generation first = new Generation();
         int[] loads = {0};

@@ -1,5 +1,8 @@
 package com.ninja6.ninjaarena.hazard;
 
+import java.util.Collection;
+import java.util.Optional;
+import java.util.UUID;
 import org.bukkit.Material;
 
 /**
@@ -30,10 +33,12 @@ public interface HazardBlocks {
      * Sets the block to air without physics and lets a falling block of it drop from there.
      * The falling block never lands as a block and drops no item.
      *
-     * @return whether the block was the one expected and collapsed
+     * @return the falling block's id if the block was the one expected and collapsed. Only the
+     *         id is handed out, so nothing holds the falling block, or through it the arena
+     *         world, once it has landed or the world has been retired.
      */
-    boolean collapse(int x, int y, int z, Material material);
+    Optional<UUID> collapse(int x, int y, int z, Material material);
 
-    /** Removes every falling block {@link #collapse} let drop that is still falling. */
-    void removeDebris();
+    /** Removes the falling blocks {@link #collapse} let drop that are still falling. */
+    void removeDebris(Collection<UUID> debris);
 }
