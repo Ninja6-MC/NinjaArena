@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Nothing has been released yet. The plugin targets Paper 26.3, needs the server to run on
 Java 25, and does not run on Folia.
 
+### Fixed
+- Rooms waiting for an unused arena world to reopen, slot cells to clear or their map
+  to build now show preparation in chat, the status line and the room screen instead
+  of a queue (#255). Real waits for another room or a full slot limit still show queue
+  positions. Generated maps are announced as ready only after placement finishes.
+
 ### Added
 - `rooms.default-map` chooses the map for new rooms, defaulting to `generated` (#252).
   `arena` keeps the ready hand-built arena preference, falling back to generated maps.
