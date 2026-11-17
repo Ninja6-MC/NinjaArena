@@ -80,6 +80,22 @@ class PortalEntryTest {
     }
 
     @Test
+    void anAdminPortalWithNoArenaOrADeletedOneJoinsAnyRoomLikeAPlayerBuiltOne() {
+        Portal gate = new Portal("gate", "world", REGION, null);
+        assertEquals(Optional.empty(), entry.check(player(true), gate));
+        assertEquals(Optional.empty(), entry.destination(gate));
+        assertEquals(Optional.empty(), entry.roomArena(gate));
+        assertEquals(Optional.empty(), entry.roomArena(gate.withLobby(LobbyMode.DEDICATED)));
+
+        entry.setArenaExists(arena -> false);
+        assertEquals(Optional.empty(), entry.roomArena(PLAY), "its arena was deleted");
+        assertEquals(Optional.empty(), entry.roomArena(PLAY.withLobby(LobbyMode.DEDICATED)));
+        entry.setArenaExists("dojo"::equals);
+        assertEquals(Optional.of("dojo"), entry.roomArena(PLAY));
+        assertEquals(0, captures);
+    }
+
+    @Test
     void theOldServerDefaultStillPicksTheRoomsForPortalsWithNoChoice() {
         LobbyMode[] serverDefault = {LobbyMode.SHARED};
         entry.setDefaultLobby(() -> serverDefault[0]);

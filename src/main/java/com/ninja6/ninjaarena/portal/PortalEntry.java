@@ -51,6 +51,7 @@ public final class PortalEntry {
     private final Predicate<UUID> pendingSnapshot;
     private final Function<Player, CaptureResult> capture;
     private Supplier<LobbyMode> defaultLobby = () -> LobbyMode.DEDICATED;
+    private Predicate<String> arenaExists = arena -> true;
 
     /**
      * @param pendingSnapshot {@code SnapshotService#hasPending}
@@ -77,13 +78,22 @@ public final class PortalEntry {
     }
 
     /**
+     * Whether an arena of that name is registered, read at each entry. A play portal whose
+     * arena is gone joins any room. By default every arena exists.
+     */
+    public void setArenaExists(Predicate<String> arenaExists) {
+        this.arenaExists = Objects.requireNonNull(arenaExists, "arenaExists");
+    }
+
+    /**
      * Whose open rooms a player who comes through a play portal joins: those on the portal's
      * arena while its lobby choice is dedicated, or any room (empty) while it is shared, as
-     * the old shared hub took players to any arena. A player-built portal has no arena and
-     * joins any room.
+     * the old shared hub took players to any arena. A portal with no arena, player-built or
+     * not, or whose arena was deleted, joins any room.
      */
     public Optional<String> roomArena(Portal portal) {
-        if (portal.spectator() || portal.arena() == null || portal.lobby(defaultLobby.get()) == LobbyMode.SHARED) {
+        if (portal.spectator() || portal.arena() == null || portal.lobby(defaultLobby.get()) == LobbyMode.SHARED
+                || !arenaExists.test(portal.arena())) {
             return Optional.empty();
         }
         return Optional.of(portal.arena());

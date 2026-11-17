@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import org.bukkit.Location;
 import org.bukkit.plugin.Plugin;
@@ -184,6 +185,76 @@ public final class PortalRegistry {
     }
 
     /**
+     * Server log lines for play portals whose arena is not in the registry, such as after a
+     * hand edit of {@code arenas.yml}. Each works as a portal with no arena, joining players to
+     * any open room; a spectator portal refuses everyone until its arena is back.
+     *
+     * @param arenaExists whether an arena of that name is registered
+     */
+    public List<String> missingArenaWarnings(Predicate<String> arenaExists) {
+        List<String> play = new ArrayList<>();
+        List<String> spectator = new ArrayList<>();
+        for (Portal portal : portals.values()) {
+            if (portal.arena() != null && !arenaExists.test(portal.arena())) {
+                (portal.spectator() ? spectator : play).add(portal.name() + " (" + portal.arena() + ")");
+            }
+        }
+        List<String> warnings = new ArrayList<>();
+        if (!play.isEmpty()) {
+            warnings.add("portals.yml: play portal(s) " + String.join(", ", play) + " name an arena that does"
+                    + " not exist. They join players to any open room, as a portal with no arena does.");
+        }
+        if (!spectator.isEmpty()) {
+            warnings.add("portals.yml: spectator portal(s) " + String.join(", ", spectator) + " name an arena"
+                    + " that does not exist and refuse everyone until it is back or they are deleted.");
+        }
+        return warnings;
+    }
+
+    /**
+     * What {@link #unbind} did with the portals bound to an arena.
+     *
+     * @param unbound    the play portals now bound to no arena
+     * @param spectators the spectator portals still bound to it, which need an arena
+     */
+    public record Unbound(List<String> unbound, List<String> spectators) {
+
+        public Unbound {
+            unbound = List.copyOf(unbound);
+            spectators = List.copyOf(spectators);
+        }
+    }
+
+    /**
+     * Binds every play portal on the arena to no arena, for when it is deleted, so they join
+     * players to any open room. Spectator portals keep the name and refuse everyone until it
+     * is back or they are deleted.
+     *
+     * @throws ArenaException if the write fails; every portal is then unchanged
+     */
+    public Unbound unbind(String arena) throws ArenaException {
+        String name = Arena.normalizeName(arena);
+        Map<String, Portal> next = new TreeMap<>(portals);
+        List<String> unbound = new ArrayList<>();
+        List<String> spectators = new ArrayList<>();
+        for (Portal portal : portals.values()) {
+            if (!name.equals(portal.arena())) {
+                continue;
+            }
+            if (portal.spectator()) {
+                spectators.add(portal.name());
+            } else {
+                next.put(portal.name(), portal.withArena(null));
+                unbound.add(portal.name());
+            }
+        }
+        if (!unbound.isEmpty()) {
+            write(next);
+        }
+        return new Unbound(unbound, spectators);
+    }
+
+    /**
      * Registers a portal. Whether the arena exists is the caller's to check.
      *
      * @throws ArenaException if the name is taken or invalid, the region is refused or
@@ -198,7 +269,10 @@ public final class PortalRegistry {
         return create(name, world, region, arena, spectator, null);
     }
 
-    /** @param lobby the portal's own lobby choice, or {@code null} for the server default */
+    /**
+     * @param arena the arena, or {@code null} for a play portal that joins any open room
+     * @param lobby the portal's own lobby choice, or {@code null} for the server default
+     */
     public Portal create(String name, String world, ArenaBounds region, String arena, boolean spectator,
             LobbyMode lobby) throws ArenaException {
         String key = Portal.normalizeName(name);
@@ -210,7 +284,8 @@ public final class PortalRegistry {
         }
         Portal portal;
         try {
-            portal = new Portal(key, world, region, Arena.normalizeName(arena), spectator, lobby);
+            portal = new Portal(key, world, region, arena == null ? null : Arena.normalizeName(arena), spectator,
+                    lobby);
         } catch (IllegalArgumentException e) {
             throw ArenaException.refused(e);
         }

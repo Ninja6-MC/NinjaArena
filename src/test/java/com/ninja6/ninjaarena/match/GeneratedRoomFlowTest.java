@@ -417,4 +417,81 @@ class GeneratedRoomFlowTest extends MatchFixture {
         rooms.setMaxActive(2);
         assertEquals(cells, generated.cells(), "raised again, the same cells");
     }
+
+    /** Seed modes with the bundled defaults, whose random seeds count up from {@code first}. */
+    private void seedModes(long first) {
+        long[] next = {first - 1};
+        rooms.setSeedPolicy(new com.ninja6.ninjaarena.map.SeedPolicy(com.ninja6.ninjaarena.map.SeedSettings.DEFAULTS,
+                () -> 0, () -> ++next[0], message -> { }));
+    }
+
+    private void deleteEveryArena() throws Exception {
+        for (Arena arena : List.copyOf(arenas.all())) {
+            arenas.delete(arena.name());
+        }
+        assertTrue(arenas.all().isEmpty());
+    }
+
+    /** Nothing a player saw names a hand-built arena. */
+    private void assertNoArenaNamed(UUID... ids) {
+        for (UUID id : ids) {
+            assertTrue(messages(id).stream().noneMatch(message -> message.contains("hand-built")
+                    || message.contains("dojo") || message.contains("garden") || message.contains("deleted")
+                    || message.contains("No arena")), String.valueOf(messages(id)));
+        }
+    }
+
+    @Test
+    void aServerWithNoArenasOpensRoomsAndPlaysWholeMatchesOnGeneratedMaps() throws Exception {
+        deleteEveryArena();
+        seedModes(42);
+        Room room = openWith(ALICE, BOB, CAROL, DAVE);
+        String name = room.arena();
+        assertTrue(Arena.isGeneratedName(name), name);
+        drain();
+        assertTrue(maps.isAvailable(name));
+        rooms.start(player(ALICE), null);
+        assertTrue(room.isPlaying());
+        die(ALICE);
+        playToTheEnd(name);
+        assertFalse(room.isPlaying());
+        drain();
+        assertTrue(maps.isAvailable(name), "the next match has its map again");
+        rooms.start(player(ALICE), null);
+        assertTrue(room.isPlaying(), "and plays it");
+        assertNoArenaNamed(ALICE, BOB, CAROL, DAVE);
+    }
+
+    @Test
+    void withAHandBuiltArenaAFailedSearchWithNoGoodSeedStillFallsBackToIt() {
+        seedModes(100);
+        generated.setSearch((seed, difficulty, teams, size) -> new MapSearch.Failed(seed, List.of()));
+        Room room = openWith(ALICE, BOB);
+        drain();
+        assertEquals("dojo", room.arena());
+        assertTrue(messages(BOB).getLast().endsWith("so the room plays the hand-built arena dojo."),
+                messages(BOB).getLast());
+    }
+
+    @Test
+    void withNoHandBuiltArenaAFailedSearchTriesOneMoreRandomSeedThenCloses() throws Exception {
+        deleteEveryArena();
+        seedModes(100);
+        List<Long> searched = new ArrayList<>();
+        generated.setSearch((seed, difficulty, teams, size) -> {
+            searched.add(seed);
+            return new MapSearch.Failed(seed, List.of());
+        });
+        Room room = openWith(ALICE, BOB);
+        drain();
+        assertEquals(2, searched.size(), String.valueOf(searched));
+        assertTrue(messages(BOB).contains("No playable map came from seed " + searched.get(0) + " in 0 tries, so the"
+                + " room tries a new random seed, " + searched.get(1) + "."), String.valueOf(messages(BOB)));
+        assertEquals("The room closed: no playable map came from its seeds and there is no other map to play.",
+                messages(BOB).getLast());
+        assertTrue(rooms.hostedBy(ALICE).isEmpty());
+        assertFalse(room.isPlaying());
+        assertEquals(List.of(), generated.inUse(), "the failed map's cell is free");
+        assertNoArenaNamed(ALICE, BOB);
+    }
 }

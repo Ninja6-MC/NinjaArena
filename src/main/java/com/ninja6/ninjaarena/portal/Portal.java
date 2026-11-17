@@ -16,10 +16,11 @@ import java.util.UUID;
  * @param world  the world's name
  * @param region both corners inclusive; at most {@link #MAX_SPAN} blocks along each axis
  * @param arena  the arena's name; the arena may have been deleted since, which makes the
- *               spectator portal refuse everyone until it is bound again. A play portal
- *               whose lobby choice is dedicated joins players to open rooms on it.
- *               {@code null} for a player-built portal, which joins players to any open
- *               room
+ *               spectator portal refuse everyone until it is bound again and a play portal
+ *               join players to any open room. A play portal whose lobby choice is
+ *               dedicated joins players to open rooms on it. {@code null} for a play portal
+ *               with no arena, player-built or admin-marked, which joins players to any open
+ *               room; a spectator portal always names one
  * @param lobby  the portal's own deprecated lobby choice ({@link LobbyMode}), or
  *               {@code null} to use the server default;
  *               always {@code null} for a spectator portal, which leads to a live match, and
@@ -72,6 +73,11 @@ public record Portal(String name, String world, ArenaBounds region, String arena
         return new Portal(name, world, region, arena, spectator, lobby, built);
     }
 
+    /** The same portal bound to another arena, or with {@code null} to none. */
+    public Portal withArena(String arena) {
+        return new Portal(name, world, region, arena, spectator, lobby, built);
+    }
+
     /** Whether a player built this portal from a frame. */
     public boolean playerBuilt() {
         return built != null;
@@ -101,8 +107,14 @@ public record Portal(String name, String world, ArenaBounds region, String arena
         if (PluginWorlds.isLobby(world)) {
             throw new KeyedArgumentException("portals cannot be in the lobby world", "portal.invalid.lobby-world");
         }
-        if (arena == null ? built == null : !Arena.isValidName(arena)) {
+        if (arena == null && spectator) {
+            throw new KeyedArgumentException("a spectator portal needs an arena", "portal.invalid.spectator-arena");
+        }
+        if (arena != null && !Arena.isValidName(arena)) {
             throw new KeyedArgumentException("invalid arena name " + arena, "arena.invalid.name", "name", arena);
+        }
+        if (arena != null && built != null) {
+            throw new KeyedArgumentException("a player-built portal has no arena", "portal.invalid.built-arena");
         }
         if (spectator && lobby != null) {
             throw new KeyedArgumentException("a spectator portal leads to a live match and has no lobby",

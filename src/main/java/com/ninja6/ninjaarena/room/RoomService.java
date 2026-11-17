@@ -73,7 +73,8 @@ import org.bukkit.scheduler.BukkitTask;
  * slot, and no arena in edit mode. Once leased, the map is generated and placed in the
  * cell; the room can start when it is ready. After each match the cell is cleared and the
  * map generated again for the next. When no map comes from the seed, the room falls back
- * to its last good seed, else to a hand-built arena, and tells its players which.
+ * to its last good seed, else to a hand-built arena, else, on a server with none, to one
+ * more random seed, and tells its players which.
  *
  * <p><b>Seeds.</b> A room on generated maps plays a seed its host set by hand
  * ({@link #playGenerated}), or the seed the seed modes give the slot its map is generated in
@@ -1947,7 +1948,8 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     /**
      * A map was placed, or no map came from the seed. A good one is remembered as the room's
      * last good seed. A failed search falls back to the last good seed, generated at the
-     * difficulty it was good at, else to a hand-built arena; the players are told which.
+     * difficulty it was good at, else to a hand-built arena, else, with none, to one more
+     * random seed; the players are told which. A room left with no map closes.
      */
     private void prepared(Room room, String name, SeedChoice choice, boolean fallback,
             GeneratedMaps.Prepared outcome) {
@@ -1986,7 +1988,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
                 }
                 if (handBuilt.isEmpty()) {
                     leaveGenerated(room);
-                    close(room, "room.closed-no-arena");
+                    close(room, "room.closed-no-map");
                     return;
                 }
                 broadcast(room, msg(decision.messageKey(), "seed", failed.requestedSeed(),

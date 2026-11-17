@@ -629,6 +629,28 @@ class PortalListenerTest {
     }
 
     @Test
+    void anAdminPortalWithNoArenaAndOneWhoseArenaWasDeletedTakeThePlayerBuiltPath() throws Exception {
+        portals.delete("door");
+        portals.create("door", "world", new ArenaBounds(30, 64, 10, 32, 67, 10), null);
+        walkIntoTheDoor();
+        assertTrue(lobbyEntries.isEmpty(), "never inside the move event");
+        runNextTick();
+
+        portals.delete("door");
+        portals.create("door", "world", new ArenaBounds(30, 64, 10, 32, 67, 10), "dojo");
+        entry.setArenaExists(name -> arenas.get(name).isPresent());
+        arenas.delete("dojo");
+        walkIntoTheDoor();
+        runNextTick();
+        assertEquals(List.of(Optional.empty(), Optional.empty()), lobbyEntries);
+        assertTrue(chunkLoads.isEmpty());
+        assertEquals(0, captures, "the lobby saves the snapshot");
+        assertEquals(0, operations, "the arena world is not opened for it");
+        assertTrue(entered.isEmpty());
+        assertTrue(messages.isEmpty());
+    }
+
+    @Test
     void anOldSharedServerDefaultMakesPortalsWithNoChoiceJoinAnyRoom() {
         entry.setDefaultLobby(() -> LobbyMode.SHARED);
         walkIntoTheDoor();

@@ -271,6 +271,9 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         chunkUnloader.start(this);
         portals = PortalRegistry.open(this);
         portals.oldLobbyWarnings(WaitingRoomSettings.MIGRATION_DOCS).forEach(getLogger()::warning);
+        if (arenas.isReadable()) {
+            portals.missingArenaWarnings(name -> arenas.get(name).isPresent()).forEach(getLogger()::warning);
+        }
         matches = new MatchService(this, maps, arenaWorld::world,
                 MatchSettings.from(getConfig().getConfigurationSection("match")), restores::restore,
                 getServer().getPluginManager()::callEvent, MatchService::readyForRound);
@@ -503,6 +506,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 () -> roomDefaults.lobby());
         PortalEntry entry = new PortalEntry(snapshots::hasPending, snapshots::captureAndPersist, watching::destination);
         entry.setDefaultLobby(() -> roomDefaults.lobby());
+        entry.setArenaExists(name -> arenas.get(name).isPresent());
         ArenaAdmission admission = new ArenaAdmission(this, entry, arenaWorld::world, snapshots);
         startRooms();
         RoomService roomList = rooms;
@@ -685,6 +689,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
         reloader.enableShop(catalogue, getLogger());
         ArenaCommand arenaCommand = new ArenaCommand(arenas, arenaWorld::world, arenaWorld::acquire,
                 task -> getServer().getScheduler().runTask(this, task));
+        arenaCommand.setPortals(portals);
         NinjaArenaCommand command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(inMatch::matches, inMatch::matchOf, enemyDirectors::director),
                 // A map preview leads back to the room; spectating, a room or a match to the
