@@ -71,6 +71,7 @@ class PortalCommandTest {
         portals.load();
         portalCommand = new PortalCommand(portals, arenas, world -> !world.equals("gone"));
         ArenaCommand arenaCommand = new ArenaCommand(arenas, () -> null);
+        arenaCommand.setPortals(portals);
         command = new NinjaArenaCommand(arenaCommand, portalCommand,
                 new DirectorCommand(List::of, id -> Optional.empty(), match -> Optional.empty()), player -> false);
         standing = new Location(world("world"), 10.5, 64, 10.5);
@@ -232,7 +233,7 @@ class PortalCommandTest {
         messages.clear();
         run(sender, "portal list");
         assertEquals(List.of("Play portals lead to the lobby; spectator portals to a live match.",
-                "far (gone) to missing: world not loaded", "lobby (world) to dojo: open, to the lobby"), messages);
+                "far (gone) to any room, arena missing deleted: world not loaded", "lobby (world) to dojo: open, to the lobby"), messages);
 
         messages.clear();
         run(sender, "portal info lobby");
@@ -422,5 +423,76 @@ class PortalCommandTest {
         assertEquals(List.of("dojo"), complete(sender, "portal", "create", "lobby2", ""));
         assertEquals(List.of("lobby"), complete(sender, "portal", "info", "l"));
         assertEquals(List.of(), complete(sender, "portal", "list", ""));
+    }
+
+    @Test
+    void anAdminPortalNeedsNoArenaAndLeadsToAnyRoom() {
+        CommandSender sender = player(true);
+        run(sender, "portal setcorner 1");
+        run(sender, "portal setcorner 2 ~ ~2 ~");
+        messages.clear();
+        run(sender, "portal create Gate");
+        Portal gate = portals.get("gate").orElseThrow();
+        assertEquals(new Portal("gate", "world", new ArenaBounds(10, 64, 10, 10, 66, 10), null), gate);
+        assertEquals(List.of("Portal gate created in world (10, 64, 10 to 10, 66, 10), leading to the lobby,"
+                + " joining any open room."), messages);
+
+        messages.clear();
+        run(console(), "portal list");
+        run(console(), "portal info gate");
+        assertEquals(List.of("Play portals lead to the lobby; spectator portals to a live match.",
+                "gate (world) to any room: open, to the lobby",
+                "Portal gate: open, to the lobby", "World: world", "Region: 10, 64, 10 to 10, 66, 10",
+                "Arena: none", "Leads to: the lobby, joining any open room"), messages);
+
+        messages.clear();
+        run(sender, "portal create watch");
+        run(sender, "portal create a b c d");
+        assertEquals(List.of("Set both corners first with setcorner 1 and setcorner 2.",
+                "Usage: /narena portal create <name> [<arena> [spectator|dedicated|shared]]"), messages);
+    }
+
+    @Test
+    void arenaDeleteUnbindsItsPlayPortalsAndNamesTheSpectatorPortalsLeft() throws Exception {
+        arenas.create("n6", new GridCell(1, 0));
+        arenas.finishEdit("n6");
+        portals.create("gate", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "n6");
+        portals.create("watch", "world", new ArenaBounds(20, 64, 10, 22, 67, 10), "n6", true);
+        portals.create("lobby", "world", new ArenaBounds(30, 64, 10, 32, 67, 10), "dojo");
+        CommandSender sender = console();
+        run(sender, "arena delete N6");
+        assertEquals(List.of("Arena n6 removed from the registry. Its blocks are still in the world.",
+                "Portal(s) gate now have no arena and join players to any open room.",
+                "Spectator portal(s) watch still name arena n6 and refuse everyone until it is back or they are"
+                        + " deleted."), messages);
+        assertEquals(null, portals.get("gate").orElseThrow().arena());
+        assertEquals("n6", portals.get("watch").orElseThrow().arena());
+        assertEquals("dojo", portals.get("lobby").orElseThrow().arena());
+
+        messages.clear();
+        run(sender, "portal info gate");
+        assertEquals("Arena: none", messages.get(3));
+        messages.clear();
+        run(sender, "portal list");
+        assertEquals(List.of("Play portals lead to the lobby; spectator portals to a live match.",
+                "gate (world) to any room: open, to the lobby", "lobby (world) to dojo: open, to the lobby",
+                "watch (world) to n6: arena missing"), messages);
+    }
+
+    @Test
+    void aPortalWhoseArenaWasDeletedElsewhereIsShownAsJoiningAnyRoom() throws Exception {
+        arenas.create("n6", new GridCell(1, 0));
+        arenas.finishEdit("n6");
+        portals.create("gate", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "n6");
+        // Not through the command, as when arenas.yml was edited by hand: the portal keeps the name.
+        arenas.delete("n6");
+        CommandSender sender = console();
+        run(sender, "portal list");
+        run(sender, "portal info gate");
+        assertEquals(List.of("Play portals lead to the lobby; spectator portals to a live match.",
+                "gate (world) to any room, arena n6 deleted: open, to the lobby",
+                "Portal gate: open, to the lobby", "World: world", "Region: 10, 64, 10 to 12, 67, 10",
+                "Arena: n6 (deleted, so it joins any open room)", "Leads to: the lobby, joining any open room"),
+                messages);
     }
 }

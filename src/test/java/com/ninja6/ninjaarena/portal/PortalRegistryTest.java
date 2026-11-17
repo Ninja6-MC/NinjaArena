@@ -273,4 +273,58 @@ class PortalRegistryTest {
         registry.setHub(null);
         assertEquals(List.of(), open().oldLobbyWarnings("the docs"), "a migrated file loads quietly");
     }
+
+    @Test
+    void anAdminPortalWithNoArenaSurvivesARestartAndASpectatorPortalStillNeedsOne() throws Exception {
+        PortalRegistry registry = open();
+        Portal gate = registry.create("Gate", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), null);
+        assertNull(gate.arena());
+        assertTrue(!gate.playerBuilt() && !gate.spectator());
+        String text = Files.readString(dir.resolve("portals.yml"));
+        assertTrue(!text.contains("arena"), text);
+
+        PortalRegistry reopened = open();
+        assertEquals(List.of(gate), List.copyOf(reopened.all()));
+        assertEquals(gate, reopened.at("world", 11, 65, 10));
+        assertEquals(List.of(), reopened.missingArenaWarnings(arena -> false), "no arena is not a missing one");
+
+        ArenaException refused = assertThrows(ArenaException.class,
+                () -> reopened.create("watch", "world", new ArenaBounds(20, 64, 10, 22, 67, 10), null, true));
+        assertEquals("portal.invalid.spectator-arena", refused.key());
+        assertThrows(PortalCodec.PortalFormatException.class, () -> PortalCodec.decode("""
+                format: 1
+                portals:
+                  watch:
+                    world: world
+                    spectator: true
+                    region: {min-x: 20, min-y: 64, min-z: 10, max-x: 22, max-y: 67, max-z: 10}
+                """));
+    }
+
+    @Test
+    void unbindingAnArenaFreesItsPlayPortalsAndKeepsItsSpectatorPortals() throws Exception {
+        PortalRegistry registry = open();
+        registry.create("gate", "world", new ArenaBounds(10, 64, 10, 12, 67, 10), "n6");
+        Portal shared = registry.create("door", "world", new ArenaBounds(20, 64, 10, 22, 67, 10), "n6", false,
+                LobbyMode.SHARED);
+        Portal watch = registry.create("watch", "world", new ArenaBounds(30, 64, 10, 32, 67, 10), "n6", true);
+        Portal other = registry.create("other", "world", new ArenaBounds(40, 64, 10, 42, 67, 10), "dojo");
+        assertEquals(List.of("portals.yml: play portal(s) door (n6), gate (n6) name an arena that does not exist."
+                + " They join players to any open room, as a portal with no arena does.",
+                "portals.yml: spectator portal(s) watch (n6) name an arena that does not exist and refuse everyone"
+                + " until it is back or they are deleted."), registry.missingArenaWarnings("dojo"::equals));
+
+        PortalRegistry.Unbound result = registry.unbind("N6");
+        assertEquals(List.of("door", "gate"), result.unbound());
+        assertEquals(List.of("watch"), result.spectators());
+        PortalRegistry reopened = open();
+        assertNull(reopened.get("gate").orElseThrow().arena());
+        assertEquals(shared.withArena(null), reopened.get("door").orElseThrow(), "its lobby choice stays");
+        assertEquals(watch, reopened.get("watch").orElseThrow());
+        assertEquals(other, reopened.get("other").orElseThrow());
+        assertEquals(List.of("portals.yml: spectator portal(s) watch (n6) name an arena that does not exist and"
+                + " refuse everyone until it is back or they are deleted."),
+                reopened.missingArenaWarnings("dojo"::equals));
+        assertEquals(new PortalRegistry.Unbound(List.of(), List.of("watch")), reopened.unbind("n6"));
+    }
 }

@@ -73,7 +73,8 @@ import org.bukkit.scheduler.BukkitTask;
  * slot, and no arena in edit mode. Once leased, the map is generated and placed in the
  * cell; the room can start when it is ready. After each match the cell is cleared and the
  * map generated again for the next. When no map comes from the seed, the room falls back
- * to its last good seed, else to a hand-built arena, and tells its players which.
+ * to its last good seed, else to a hand-built arena, else, on a server with none, to one
+ * more random seed, and tells its players which.
  *
  * <p><b>Seeds.</b> A room on generated maps plays a seed its host set by hand
  * ({@link #playGenerated}), or the seed the seed modes give the slot its map is generated in
@@ -418,7 +419,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (generated != null && room.playsGenerated() && generated.cellOf(room.arena()).isEmpty()) {
             SeedChoice choice = choose(room, generated.nextFreeSlot().orElse(1));
             broadcast(room, msg("room.map-generating", "seed", choice.seed(), "difficulty", choice.difficulty()));
-            prepare(room, room.arena(), choice, false);
+            prepare(room, room.arena(), choice, Attempt.FIRST);
         }
     }
 
@@ -1933,11 +1934,21 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         return settings.teams() <= 2 ? 2 : 4;
     }
 
-    private void prepare(Room room, String name, SeedChoice choice, boolean fallback) {
+    /** Which try at a room's map a generation is, so each fallback runs at most once. */
+    private enum Attempt {
+        /** The seed the room asked for. */
+        FIRST,
+        /** The room's last good seed, after the first failed. */
+        LAST_GOOD_SEED,
+        /** One more random seed, with no hand-built arena to fall back to. */
+        RANDOM
+    }
+
+    private void prepare(Room room, String name, SeedChoice choice, Attempt attempt) {
         mapSeeds.put(name, choice.seed());
         try {
             generated.prepare(name, new GeneratedMaps.Request(choice.seed(), choice.difficulty(),
-                    layoutTeams(room.settings())), outcome -> prepared(room, name, choice, fallback, outcome));
+                    layoutTeams(room.settings())), outcome -> prepared(room, name, choice, attempt, outcome));
         } catch (RuntimeException e) {
             plugin.getLogger().log(Level.SEVERE, "Could not generate map " + name + " for the room of "
                     + name(room.host()) + ".", e);
@@ -1947,9 +1958,11 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     /**
      * A map was placed, or no map came from the seed. A good one is remembered as the room's
      * last good seed. A failed search falls back to the last good seed, generated at the
-     * difficulty it was good at, else to a hand-built arena; the players are told which.
+     * difficulty it was good at, else to a hand-built arena, else, with none, to one more
+     * random seed, also after the last good seed failed; the players are told which. A room
+     * left with no map closes.
      */
-    private void prepared(Room room, String name, SeedChoice choice, boolean fallback,
+    private void prepared(Room room, String name, SeedChoice choice, Attempt attempt,
             GeneratedMaps.Prepared outcome) {
         if (!rooms.contains(room) || !room.arena().equals(name)) {
             // Closed or moved meanwhile; its map was freed then.
@@ -1963,30 +1976,30 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             case GeneratedMaps.Failed failed -> {
                 Set<Long> active = activeSeeds(name, room);
                 // Under distinct, a last good seed another slot has taken since is no fallback.
-                Optional<SeedChoice> last = fallback ? Optional.empty() : room.lastGoodSeed()
+                Optional<SeedChoice> last = attempt != Attempt.FIRST ? Optional.empty() : room.lastGoodSeed()
                         .filter(seed -> seeds == null || !seeds.collides(seed.seed(), active));
                 MapSearch.FallbackDecision decision = MapSearch.fallback(
                         last.map(seed -> OptionalLong.of(seed.seed())).orElse(OptionalLong.empty()));
                 if (decision.fallback() == MapSearch.Fallback.LAST_GOOD_SEED) {
                     broadcast(room, msg(decision.messageKey(), "seed", failed.requestedSeed(),
                             "attempts", failed.attempts(), "last", last.get().seed()));
-                    prepare(room, name, last.get(), true);
+                    prepare(room, name, last.get(), Attempt.LAST_GOOD_SEED);
                     return;
                 }
                 Optional<Arena> handBuilt = defaultArena(room);
-                if (handBuilt.isEmpty() && seeds != null && !room.isPinned() && !fallback) {
+                if (handBuilt.isEmpty() && seeds != null && !room.isPinned() && attempt != Attempt.RANDOM) {
                     // No hand-built arena to fall back to: one more try, from a new random seed.
                     int slot = generated.slotNumber(name).orElse(1);
                     SeedChoice retry = seeds.next(slot, active, SeedPolicy.Request.REROLL).choice();
                     room.setSeed(retry);
                     broadcast(room, msg("room.map-fallback-random", "seed", failed.requestedSeed(),
                             "attempts", failed.attempts(), "next", retry.seed()));
-                    prepare(room, name, retry, true);
+                    prepare(room, name, retry, Attempt.RANDOM);
                     return;
                 }
                 if (handBuilt.isEmpty()) {
                     leaveGenerated(room);
-                    close(room, "room.closed-no-arena");
+                    close(room, "room.closed-no-map");
                     return;
                 }
                 broadcast(room, msg(decision.messageKey(), "seed", failed.requestedSeed(),

@@ -190,7 +190,8 @@ arenas:
 maps:
   # How each slot cell picks the seed and difficulty of its next generated map. A room
   # plays generated maps by rooms.default-map, when its host picks them
-  # (/narena map set generated), or when no hand-built arena is ready as it opens.
+  # (/narena map set generated), or when no hand-built arena is ready as it opens. A
+  # server needs no hand-built arena: with none, every room plays generated maps.
   # Every key applies on reload, at each slot's next generation: a map already placed
   # and a running match keep theirs.
   default:

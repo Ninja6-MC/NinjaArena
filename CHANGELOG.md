@@ -366,6 +366,15 @@ Java 25, and does not run on Folia.
   `config.yml` are moved into it on first start; those keys are now deprecated. Command
   argument syntax, errors from the system itself and the reasons a reload gives for
   rejecting `config.yml` or `kits.yml` stay in English.
+- A server runs without hand-built arenas (#257). `/narena portal create <name>` makes an
+  admin portal with no arena, saved without an `arena:` key, that leads to the lobby and
+  any open room as a player-built portal does; `portal list` and `info` show it.
+  `/narena arena delete` unbinds the play portals bound to the arena and names them, and
+  names the spectator portals that still need it. A play portal whose arena is missing
+  for another reason warns once at startup and joins any open room. With no hand-built
+  arena, a failed generated map, or a failed last good seed after it, goes on to one more
+  random seed without mentioning an arena, and a room left with no map closes saying no
+  playable map came from its seeds instead of that its arena was deleted.
 
 ### Changed
 - Generated maps at difficulty 4 force a jump on every route from a spawn to the centre,

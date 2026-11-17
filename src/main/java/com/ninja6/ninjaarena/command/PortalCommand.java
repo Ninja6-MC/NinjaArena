@@ -29,6 +29,10 @@ import org.bukkit.entity.Player;
  * {@code /ninjaarena portal ...}: marking out portals and binding them to arenas. The caller
  * has already checked the admin permission.
  *
+ * <p>A play portal needs no arena: created without one, or once its arena is deleted, it
+ * joins players to any open room, as a player-built portal does. A spectator portal always
+ * names its arena.
+ *
  * <p>An admin selects a region with {@code setcorner 1} and {@code setcorner 2}, each taken
  * from where they stand or from coordinates in their current world, then {@code create}s
  * the portal from it. Selections are per player and dropped when they leave. {@code delete},
@@ -172,8 +176,10 @@ public final class PortalCommand {
 
     private void create(CommandSender sender, String[] args, String usage) throws ArenaException {
         String kind = args.length == 3 ? args[2].toLowerCase(Locale.ROOT) : null;
-        if (args.length != 2 && (args.length != 3 || !List.of("spectator", "dedicated", "shared").contains(kind))) {
-            tell(sender, "command.usage-full", "usage", usage + "create <name> <arena> [spectator|dedicated|shared]");
+        if (args.length != 1 && args.length != 2
+                && (args.length != 3 || !List.of("spectator", "dedicated", "shared").contains(kind))) {
+            tell(sender, "command.usage-full", "usage",
+                    usage + "create <name> [<arena> [spectator|dedicated|shared]]");
             return;
         }
         if (!(sender instanceof Player player)) {
@@ -184,15 +190,18 @@ public final class PortalCommand {
         if (selection == null || !selection.complete()) {
             throw new ArenaException("portal.error.no-selection");
         }
-        Arena arena = arenas.get(args[1])
-                .orElseThrow(() -> new ArenaException("arena.error.unknown", "arena", args[1]));
+        String arena = null;
+        if (args.length > 1) {
+            arena = arenas.get(args[1]).map(Arena::name)
+                    .orElseThrow(() -> new ArenaException("arena.error.unknown", "arena", args[1]));
+        }
         boolean spectator = "spectator".equals(kind);
         LobbyMode lobby = spectator || kind == null ? null : LobbyMode.parse(kind).orElseThrow();
-        Portal portal = portals.create(args[0], selection.world(), selection.bounds(), arena.name(), spectator, lobby);
+        Portal portal = portals.create(args[0], selection.world(), selection.bounds(), arena, spectator, lobby);
         selections.remove(player.getUniqueId());
         if (portal.spectator()) {
             tell(sender, "portal.created-spectator", "portal", portal.name(), "world", portal.world(),
-                    "region", portal.region().describe(), "arena", arena.name());
+                    "region", portal.region().describe(), "arena", arena);
             return;
         }
         tell(sender, "portal.created", "portal", portal.name(), "world", portal.world(),
@@ -233,10 +242,28 @@ public final class PortalCommand {
 
     /** Where a play portal sends players now, for chat: the lobby, and which rooms they join there. */
     private Component destination(Portal portal) {
-        Component destination = portal.arena() == null || portal.lobby(defaultLobby.get()) == LobbyMode.SHARED
+        boolean bound = bound(portal);
+        Component destination = !bound || portal.lobby(defaultLobby.get()) == LobbyMode.SHARED
                 ? msg("portal.destination.any") : msg("portal.destination.arena", "arena", portal.arena());
-        return portal.lobby() == null && portal.arena() != null
+        return portal.lobby() == null && bound
                 ? msg("portal.destination.server-default", "destination", destination) : destination;
+    }
+
+    /** Whether the portal names an arena that exists; one that does not acts as no arena. */
+    private boolean bound(Portal portal) {
+        return portal.arena() != null && arenas.get(portal.arena()).isPresent();
+    }
+
+    /** What a portal leads to, for {@code list}. */
+    private Object target(Portal portal) {
+        if (portal.playerBuilt()) {
+            return msg("portal.player-built-target");
+        }
+        if (portal.arena() == null) {
+            return msg("portal.no-arena-target");
+        }
+        return bound(portal) || portal.spectator() ? portal.arena()
+                : msg("portal.arena-missing-target", "arena", portal.arena());
     }
 
     private void delete(CommandSender sender, String[] args, String usage) throws ArenaException {
@@ -257,7 +284,7 @@ public final class PortalCommand {
         }
         for (Portal portal : portals.all()) {
             tell(sender, "portal.list-line", "portal", portal.name(), "world", portal.world(),
-                    "target", portal.playerBuilt() ? msg("portal.player-built-target") : portal.arena(),
+                    "target", target(portal),
                     "status", status(portal));
         }
     }
@@ -275,9 +302,12 @@ public final class PortalCommand {
         tell(sender, "portal.info.region", "region", portal.region().describe());
         if (portal.playerBuilt()) {
             tell(sender, "portal.info.built", "owner", portal.built().owner(), "frame", portal.built().frame());
+        } else if (portal.arena() == null) {
+            tell(sender, "portal.info.no-arena");
+        } else if (portal.spectator()) {
+            tell(sender, "portal.info.arena-spectator", "arena", portal.arena());
         } else {
-            tell(sender, portal.spectator() ? "portal.info.arena-spectator" : "portal.info.arena",
-                    "arena", portal.arena());
+            tell(sender, bound(portal) ? "portal.info.arena" : "portal.info.arena-missing", "arena", portal.arena());
         }
         if (!portal.spectator()) {
             tell(sender, "portal.info.leads-to", "destination", destination(portal));
