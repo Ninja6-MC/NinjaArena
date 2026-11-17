@@ -499,9 +499,11 @@ protection off across the whole arena world, and a placed map may hold lava. The
 works both ways, since a generated slot is not granted while an arena is in edit mode.
 
 `RoomService.playGenerated(room, seed, difficulty)` plays a seed set by hand and
-`RoomService.playSeedModes(room)` the seeds of the [seed modes](#seed-modes); a new room
-uses the latter when no hand-built arena is ready. `/narena map set generated`, `map
-next`, `map reroll` and `admin generate` call them (README, *Seed modes*).
+`RoomService.playSeedModes(room)` the seeds of the [seed modes](#seed-modes). New rooms
+follow `rooms.default-map`: `generated` (the default) uses the seed modes; `arena`
+starts on a ready hand-built arena and uses the seed modes when none is ready. A ready,
+unclaimed featured event map takes priority under either value. `/narena map set generated`,
+`map next`, `map reroll` and `admin generate` call them (README, *Seed modes*).
 
 ### Seed modes
 
