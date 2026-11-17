@@ -117,6 +117,7 @@ import com.ninja6.ninjaarena.restore.JoinRestore;
 import com.ninja6.ninjaarena.room.MaxActive;
 import com.ninja6.ninjaarena.room.AdminMaps;
 import com.ninja6.ninjaarena.room.RoomService;
+import com.ninja6.ninjaarena.room.DefaultMap;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import com.ninja6.ninjaarena.world.ArenaChunkUnloader;
 import com.ninja6.ninjaarena.world.ArenaWorld;
@@ -588,6 +589,11 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                     }
 
                     @Override
+                    public void defaultMap(DefaultMap map) {
+                        roomList.setDefaultMap(map);
+                    }
+
+                    @Override
                     public void hostGrace(int seconds) {
                         roomList.setHostGraceSeconds(seconds);
                     }
@@ -742,6 +748,7 @@ public final class NinjaArenaPlugin extends JavaPlugin {
                 MaxActive.read(getConfig(), getLogger()::warning));
         rooms.setRequestTimes(getConfig().getInt(RoomService.REQUEST_LIFETIME_KEY, RoomService.DEFAULT_REQUEST_LIFETIME),
                 getConfig().getInt(RoomService.REQUEST_COOLDOWN_KEY, RoomService.DEFAULT_REQUEST_COOLDOWN));
+        rooms.setDefaultMap(DefaultMap.read(getConfig(), getLogger()::warning));
         rooms.setSounds(sounds);
         rooms.setBedrock(bedrock::isBedrock);
         rooms.setHostGraceSeconds(getConfig().getInt(RoomService.HOST_GRACE_KEY,

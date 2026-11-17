@@ -13,6 +13,11 @@ Nothing has been released yet. The plugin targets Paper 26.3, needs the server t
 Java 25, and does not run on Folia.
 
 ### Added
+- `rooms.default-map` chooses the map for new rooms, defaulting to `generated` (#252).
+  `arena` keeps the ready hand-built arena preference, falling back to generated maps.
+  A ready featured event map still takes priority, hosts can still change maps, and
+  reloading the setting affects only rooms created afterwards. Unknown values warn
+  once and use `generated`.
 - A generated-map workload for the local stability soak (`--generated`): rooms opened
   with the room commands play back-to-back matches on generated maps with
   `regenerate: round`, lava and late hazards, then leave so the arena world retires,

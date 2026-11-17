@@ -34,6 +34,15 @@ import com.ninja6.ninjaarena.match.event.RoundStartEvent;
 import com.ninja6.ninjaarena.restore.RestoreService.RestoreResult;
 import com.ninja6.ninjaarena.room.AdminMaps;
 import com.ninja6.ninjaarena.room.Room;
+import com.ninja6.ninjaarena.room.DefaultMap;
+import com.ninja6.ninjaarena.config.ConfigReload;
+import com.ninja6.ninjaarena.config.ReloadFiles;
+import com.ninja6.ninjaarena.kit.KitDefinition;
+import com.ninja6.ninjaarena.kit.KitItems;
+import com.ninja6.ninjaarena.tool.ToolSettings;
+import com.ninja6.ninjaarena.world.ArenaWorldSettings;
+import java.nio.file.Files;
+import java.util.ArrayList;
 import com.ninja6.ninjaarena.room.RoomLobby;
 import com.ninja6.ninjaarena.room.RoomService;
 import com.ninja6.ninjaarena.room.SeedChoice;
@@ -161,6 +170,7 @@ class SeedModeFlowTest extends MatchFixture {
         rooms = new RoomService(plugin, arenas, matches, fakeLobby, () -> new WaitingRoomSettings(2), transfers,
                 () -> () -> { }, 2);
         rooms.setGeneratedMaps(generated);
+        rooms.setDefaultMap(DefaultMap.ARENA);
         matches.setLobby(rooms::enterLobby);
         matches.setMapReady(rooms::mapReady);
         transfers.allow(matches::crossesWorlds);
@@ -235,6 +245,119 @@ class SeedModeFlowTest extends MatchFixture {
 
     private long seedOf(Room room) {
         return room.generated().orElseThrow().seed();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"GENERATED,true", "GENERATED,false", "ARENA,true", "ARENA,false"})
+    void newRoomsFollowTheMapPreferenceWithAndWithoutReadyArenas(DefaultMap preference, boolean ready)
+            throws Exception {
+        useSeedModes("maps: {default: {mode: static, seed: 42, difficulty: 1}}");
+        rooms.setDefaultMap(preference);
+        if (!ready) {
+            arenas.delete("dojo");
+            arenas.delete("garden");
+        }
+        Room room = openWith(ALICE);
+        drain();
+        boolean generatedDefault = preference == DefaultMap.GENERATED || !ready;
+        assertEquals(generatedDefault, room.playsGenerated());
+        assertTrue(rooms.hasLease(room));
+        if (generatedDefault) {
+            assertEquals(42, seedOf(room));
+            assertTrue(maps.isAvailable(room.arena()));
+            assertFalse(room.isPinned());
+        } else {
+            assertEquals("dojo", room.arena());
+        }
+
+        // Room info, chat list, and the native room screen all use the selected map.
+        players.get(ALICE).messages.clear();
+        rooms.show(player(ALICE));
+        assertTrue(messages(ALICE).stream().anyMatch(line -> line.contains(room.arena())));
+        players.get(BOB).messages.clear();
+        rooms.show(player(BOB));
+        assertTrue(messages(BOB).stream().anyMatch(line -> line.contains(room.arena())));
+        var screen = new RoomScreenHarness(rooms, true);
+        Player alice = screen.wrap(player(ALICE));
+        screen.menus.open(alice);
+        screen.press(alice, "Your room");
+        assertTrue(screen.forms.get(ALICE).content().lines().stream().anyMatch(line -> line.contains(room.arena())));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(DefaultMap.class)
+    void aReadyFeaturedMapTakesPriorityAndTheHostCanChangeIt(DefaultMap preference) throws Exception {
+        useSeedModes("maps: {default: {mode: static, seed: 42, difficulty: 1}}");
+        rooms.setDefaultMap(preference);
+        rooms.setFeatured(() -> Optional.of("garden"));
+        Room room = openWith(ALICE);
+        assertEquals("garden", room.arena());
+        rooms.mapSetGenerated(player(ALICE), null, null);
+        drain();
+        assertTrue(room.playsGenerated());
+        assertEquals(42, seedOf(room));
+        arenas.setPickable("dojo", true);
+        rooms.mapSet(player(ALICE), "dojo");
+        drain();
+        assertEquals("dojo", room.arena());
+        assertFalse(room.playsGenerated());
+    }
+
+    @Test
+    void anUnavailableFeaturedMapDoesNotOverrideTheGeneratedDefault() {
+        useSeedModes("maps: {default: {difficulty: 1}}");
+        rooms.setDefaultMap(DefaultMap.GENERATED);
+        rooms.setFeatured(() -> Optional.of("garden"));
+        assertEquals("garden", openWith(ALICE).arena());
+        Room second = openWith(BOB);
+        assertTrue(second.playsGenerated(), "the featured map is already claimed");
+    }
+
+    @Test
+    void reloadChangesOnlyNewRoomsAndAnUnknownNameWarnsOnceAndUsesGenerated() throws Exception {
+        useSeedModes("maps: {default: {difficulty: 1}}");
+        rooms.setDefaultMap(DefaultMap.GENERATED);
+        var initial = ReloadFiles.defaults();
+        var warnings = new ArrayList<String>();
+        var reload = new ConfigReload(dir, initial, KitDefinition.EMPTY, new KitItems(), new ConfigReload.Target() {
+            @Override public boolean canResize() { return false; }
+            @Override public void world(ArenaWorldSettings settings) { throw new AssertionError("unchanged"); }
+            @Override public void grid(int cellSize, double border) { throw new AssertionError("unchanged"); }
+            @Override public void waiting(WaitingRoomSettings settings) { throw new AssertionError("unchanged"); }
+            @Override public void match(MatchSettings settings, boolean friendlyFire, ScoringSettings scoring) {
+                throw new AssertionError("unchanged");
+            }
+            @Override public void tools(ToolSettings settings) { throw new AssertionError("unchanged"); }
+            @Override public void kit(KitDefinition kit) { throw new AssertionError("unchanged"); }
+            @Override public void defaultMap(DefaultMap map) { rooms.setDefaultMap(map); }
+            @Override public void warning(String warning) { warnings.add(warning); }
+        });
+        Files.writeString(dir.resolve("kits.yml"), "format: 1\nitems: []\n");
+        Room first = openWith(ALICE);
+        drain();
+        String firstMap = first.arena();
+        var firstSeed = first.generated();
+        initial.set(DefaultMap.KEY, "arena");
+        Files.writeString(dir.resolve("config.yml"), initial.saveToString());
+        assertTrue(reload.reload().get(1).contains(DefaultMap.KEY));
+        Room second = openWith(BOB);
+        assertEquals("dojo", second.arena());
+        assertEquals(firstMap, first.arena());
+        assertEquals(firstSeed, first.generated());
+        assertTrue(maps.isAvailable(firstMap));
+
+        initial.set(DefaultMap.KEY, "unknown");
+        Files.writeString(dir.resolve("config.yml"), initial.saveToString());
+        assertTrue(reload.reload().getFirst().contains("complete"));
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.getFirst().contains(DefaultMap.KEY));
+        Room third = openWith(CAROL);
+        Room fourth = openWith(DAVE);
+        assertTrue(third.playsGenerated() && fourth.playsGenerated());
+        assertEquals("dojo", second.arena());
+        assertEquals(firstMap, first.arena());
+        reload.reload();
+        assertEquals(1, warnings.size(), "neither room creation nor an unchanged reload repeats the warning");
     }
 
     @Test

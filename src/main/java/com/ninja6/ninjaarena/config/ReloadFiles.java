@@ -17,6 +17,7 @@ import com.ninja6.ninjaarena.resourcepack.ResourcePackSettings;
 import com.ninja6.ninjaarena.resourcepack.BedrockPackSettings;
 import com.ninja6.ninjaarena.room.MaxActive;
 import com.ninja6.ninjaarena.room.RoomService;
+import com.ninja6.ninjaarena.room.DefaultMap;
 import com.ninja6.ninjaarena.waiting.WaitingRoomSettings;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -143,6 +144,8 @@ public final class ReloadFiles {
                 String problem;
                 if (path.startsWith(PlayerPortalSettings.SECTION + ".")) {
                     problem = PlayerPortalSettings.problem(path, text);
+                } else if (path.equals(DefaultMap.KEY)) {
+                    problem = null; // Unknown names warn and fall back when applied.
                 } else if (path.equals("rooms.menu")) {
                     problem = text.trim().equalsIgnoreCase("dialog") || text.trim().equalsIgnoreCase("chest")
                             ? null : "expected dialog or chest";
