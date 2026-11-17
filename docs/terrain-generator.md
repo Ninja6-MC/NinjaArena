@@ -740,7 +740,9 @@ Every `CHECK_TICKS` (2) ticks during a fight, a crumbling block that a living pl
 stands on cracks: the player hears `hazard-warning`, and `COLLAPSE_DELAY_TICKS` (20) later
 it collapses. It is set to air without physics and a falling block of it drops from there
 with `cancelDrop` set, so it never lands as a block and drops no item; the arena
-protection's cancelling of entity block changes stays as it was.
+protection's cancelling of entity block changes stays as it was. The service keeps only
+the falling block's id, so nothing it holds keeps the arena world in memory after it
+retires.
 
 ### Late hazards
 
@@ -787,10 +789,11 @@ which always run.
 
 | When | What happens |
 | :--- | :--- |
-| Round end (any phase but PREP, COMBAT and OVERRUN), match end | Nothing flows from that moment; cracking blocks no longer collapse; pending late hazards are dropped; every source is set to air with physics, and the lava it fed drains by itself |
+| Round end (any phase but PREP, COMBAT and OVERRUN), match end | Nothing flows from that moment; cracking blocks no longer collapse; pending late hazards are dropped; every source is set to air with physics, and the lava it fed drains by itself; the map's falling blocks still falling are removed |
 | Next PREP on the same map | The removed heads and held lava are put back still, and the collapsed blocks put back, while the teams are at their spawns |
 | Time limit | That source is taken away the same way |
 | Map freed or replaced, cell swept (`GeneratedMaps#onClearing`) | Everything for the map is dropped without block changes, before the cell's clear removes the lava with everything else |
+| Arena world retired (`ArenaWorld#afterRelease`) | The ids of falling blocks are forgotten; the blocks went with the world |
 | Plugin disable (`HazardService#close`, before the cells close) | Every flow stops, the lava of every footprint started or stopped that round is removed at once without physics, and falling blocks still falling are removed |
 
 On startup the cells are swept as before, which removes any lava the world save kept.

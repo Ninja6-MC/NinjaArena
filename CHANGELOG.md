@@ -434,6 +434,10 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- A retired arena world no longer stays in memory through the falling blocks of
+  collapsed platforms (#247). The hazards kept the last falling blocks of every match
+  until the next collapse or a plugin disable. They now keep only their ids, and remove
+  the ones still falling at the end of each round and match.
 - A retired arena world no longer stays in memory through players who were last hurt by
   one of its enemies (#247). Players returned to the lobby after a match kept their last
   damage, and with it the enemy and its whole world, until they were hurt again. Damage

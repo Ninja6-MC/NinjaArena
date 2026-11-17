@@ -23,9 +23,11 @@ import com.ninja6.ninjaarena.terrain.MapSearch;
 import com.ninja6.ninjaarena.terrain.MovementModel;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
@@ -97,7 +99,9 @@ class HazardServiceTest {
         final Set<Long> started = new HashSet<>();
         int calls;
         int debris;
-        boolean debrisRemoved;
+        /** Every falling block dropped, by id, and those the service asked to remove. */
+        final List<UUID> dropped = new ArrayList<>();
+        final List<UUID> removed = new ArrayList<>();
 
         Hazards(FakeBlocks blocks) {
             this.blocks = blocks;
@@ -140,19 +144,21 @@ class HazardServiceTest {
         }
 
         @Override
-        public boolean collapse(int x, int y, int z, Material material) {
+        public Optional<UUID> collapse(int x, int y, int z, Material material) {
             calls++;
             if (blocks.get(x, y, z) != material) {
-                return false;
+                return Optional.empty();
             }
             blocks.set(x, y, z, Material.AIR);
             debris++;
-            return true;
+            UUID id = UUID.randomUUID();
+            dropped.add(id);
+            return Optional.of(id);
         }
 
         @Override
-        public void removeDebris() {
-            debrisRemoved = true;
+        public void removeDebris(Collection<UUID> debris) {
+            removed.addAll(debris);
         }
     }
 
@@ -513,6 +519,88 @@ class HazardServiceTest {
         assertFalse(service.allows(0, 64, 0, 0, 63, 0));
     }
 
+    /** Collapses the map's first crumbling block under a fighting player and returns the match. */
+    private MatchView collapseOne(HazardService service, String arena) {
+        GeneratedMaps.Placed placed = place(arena, SEED);
+        long at = HazardService.worldPlan(placed).crumble().keySet().iterator().next();
+        MatchView match = match(arena);
+        service.prepareRound(match);
+        service.startFight(match);
+        drain();
+        feet = at;
+        service.tick();
+        now += HazardService.COLLAPSE_DELAY_TICKS;
+        service.tick();
+        drain();
+        assertEquals(1, hazards.dropped.size(), "one block collapsed");
+        assertEquals(1, service.debris());
+        return match;
+    }
+
+    @Test
+    void theRoundEndRemovesTheFallingBlocksAndKeepsNoneOfThem() {
+        HazardService service = service(HazardSettings.DEFAULTS);
+        MatchView match = collapseOne(service, "generated:1");
+        service.stopRound(match);
+        assertEquals(hazards.dropped, hazards.removed, "removed if still falling");
+        assertEquals(0, service.debris());
+        service.stopRound(match);
+        assertEquals(1, hazards.removed.size(), "asked once");
+    }
+
+    @Test
+    void theMatchEndRemovesTheFallingBlocks() {
+        HazardService service = service(HazardSettings.DEFAULTS);
+        MatchView match = collapseOne(service, "generated:1");
+        service.onMatchEnd(new MatchEndEvent(match, null));
+        assertEquals(hazards.dropped, hazards.removed);
+        assertEquals(0, service.debris());
+    }
+
+    @Test
+    void closeRemovesTheFallingBlocksOfEveryMap() {
+        HazardService service = service(HazardSettings.DEFAULTS);
+        collapseOne(service, "generated:1");
+        service.close();
+        assertEquals(hazards.dropped, hazards.removed);
+        assertEquals(0, service.debris());
+    }
+
+    @Test
+    void aRetiredArenaWorldLeavesNoFallingBlocksBehind() {
+        HazardService service = service(HazardSettings.DEFAULTS);
+        collapseOne(service, "generated:1");
+        service.worldReleased();
+        assertEquals(0, service.debris());
+        assertEquals(List.of(), hazards.removed, "they went with the world");
+    }
+
+    @Test
+    void aClearedCellLeavesNoFallingBlocksBehind() {
+        HazardService service = service(HazardSettings.DEFAULTS);
+        collapseOne(service, "generated:1");
+        service.forget(maps.placed("generated:1").orElseThrow().arena().cell());
+        assertEquals(0, service.debris());
+    }
+
+    @Test
+    void hazardStateHoldsFallingBlocksByIdOnly() {
+        for (Class<?> type : HazardService.class.getDeclaredClasses()) {
+            if (type.getSimpleName().equals("MapHazards")) {
+                for (var field : type.getDeclaredFields()) {
+                    String declared = field.getGenericType().getTypeName();
+                    assertFalse(declared.contains("org.bukkit.entity") || declared.contains("org.bukkit.World"),
+                            field.getName() + " is " + declared);
+                }
+            }
+        }
+        for (var field : HazardService.class.getDeclaredFields()) {
+            String declared = field.getGenericType().getTypeName();
+            assertFalse(declared.contains("org.bukkit.entity") || declared.contains("org.bukkit.World"),
+                    field.getName() + " is " + declared);
+        }
+    }
+
     @Test
     void closeRemovesTheLavaOfEveryFootprintAtOnce() {
         GeneratedMaps.Placed placed = place("generated:1", SEED);
@@ -533,7 +621,6 @@ class HazardServiceTest {
             assertEquals(Material.AIR, blocks.get(HazardService.unpackX(cell), HazardService.unpackY(cell),
                     HazardService.unpackZ(cell)));
         }
-        assertTrue(hazards.debrisRemoved);
         assertFalse(service.allows(source.x(), source.y(), source.z(), source.x(), source.y() - 1, source.z()));
         service.prepareRound(match);
         service.startFight(match);
