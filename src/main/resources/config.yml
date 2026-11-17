@@ -189,9 +189,10 @@ arenas:
 
 maps:
   # How each slot cell picks the seed and difficulty of its next generated map. A room
-  # plays generated maps when its host picks them (/narena map set generated) or when no
-  # hand-built arena is ready as it opens. Every key applies on reload, at each slot's
-  # next generation: a map already placed and a running match keep theirs.
+  # plays generated maps by rooms.default-map, when its host picks them
+  # (/narena map set generated), or when no hand-built arena is ready as it opens.
+  # Every key applies on reload, at each slot's next generation: a map already placed
+  # and a running match keep theirs.
   default:
     # static: always seed. rotation: the seeds list in order. random: a random seed.
     mode: random
@@ -534,6 +535,10 @@ sounds:
     pitch: 0.8
 
 rooms:
+  # New rooms start on generated maps. arena: a ready hand-built arena, else generated.
+  # A ready featured event map takes priority; hosts can still change their room's map.
+  # Unknown values warn once and use generated. Reload applies only to new rooms.
+  default-map: generated
   # Room screens opened by /narena room. Independent of resource-pack.texture-menu.
   # dialog: native Java dialogs / Bedrock forms; chest: inventory menus for every screen.
   # A dialog that cannot be sent falls back to a chest menu. Restart to apply.

@@ -236,14 +236,15 @@ start. Nothing is reserved without a room any more.
 
 Rooms are how players start matches themselves. `/narena room create` takes the player
 to the lobby, saving their snapshot as a portal does, and opens a room there with them
-as its host. The room plays on a hand-built arena: an event's featured map when it is
-ready and no other room holds it, else the first by name that is ready and that no other
-room holds. When no hand-built arena is ready, the room plays [generated
-maps](#seed-modes) from the seed modes instead, for two teams, so a server with no
-hand-built arena at all works out of the box. Nothing in a room counts down, and no
-match starts any other way. The host, a co-host or an admin presses start with
-`/narena room start` once the room has its required player count; below it the start is
-refused.
+as its host. New rooms play [generated maps](#seed-modes) from the seed modes by
+default, for two teams. Set `rooms.default-map: arena` in `config.yml` to start on the
+first hand-built arena by name that is ready and that no other room holds, falling back
+to generated maps when none is ready. Under either value, a running event's featured
+map takes priority when ready and no other room holds it. Unknown values warn once and
+use `generated`. A reload changes only rooms opened afterwards; existing rooms keep
+their map. Nothing in a room counts down, and no match starts any other way. The host,
+a co-host or an admin presses start with `/narena room start` once the room has its
+required player count; below it the start is refused.
 
 Hosts with `ninjaarena.map.change` (default op, inherited from `ninjaarena.admin`) can
 use `/narena map set <arena>` while their room is in the lobby. Admins mark a hand-built
@@ -480,10 +481,12 @@ while an arena is in edit mode.
 
 #### Seed modes
 
-A room plays generated maps when its host picks them with `/narena map set generated`,
-or when it opens with no hand-built arena ready. Its map is generated in a slot cell
-before each match, and with `regenerate: round` also in each shop break. The `maps`
-section of `config.yml` says which seed and difficulty each slot cell's next map gets:
+A room starts on generated maps with `rooms.default-map: generated` (the default),
+unless a ready featured event map takes priority. With `rooms.default-map: arena` it
+starts on generated maps when no hand-built arena is ready. Its host can also pick them
+with `/narena map set generated`. Its map is generated in a slot cell before each
+match, and with `regenerate: round` also in each shop break. The `maps` section of
+`config.yml` says which seed and difficulty each slot cell's next map gets:
 
 | Key | Default | Meaning |
 | :--- | :--- | :--- |
@@ -827,6 +830,7 @@ match players or restarts a match.
 | `match.spectate-radius` | Applies immediately to eliminated players in running matches. |
 | `match.rejoin-grace-seconds` | Applies immediately to new disconnects, in running matches too. Players already held keep the grace they were given. |
 | `rooms.request-lifetime-seconds`, `rooms.request-cooldown-seconds` | Applies immediately to new requests and cooldowns. Existing deadlines stay fixed. |
+| `rooms.default-map` | Applies to rooms created after reload. Existing rooms keep their map; a ready featured event map still takes priority. Unknown values warn once and use `generated`. |
 | `rooms.host-grace-seconds` | Applies immediately to hosts who disconnect from then on. A host already away keeps the grace they were given; 0 hands the room on at the next host disconnect. |
 | Shop screen | `shop.menu` applies to the next screen opened. |
 | Shop phase | `shop.enabled`, `shop.max-seconds`, `shop.quick-start-seconds` and `shop.map-wait-limit-seconds` apply to the next match; a running match keeps its own. |

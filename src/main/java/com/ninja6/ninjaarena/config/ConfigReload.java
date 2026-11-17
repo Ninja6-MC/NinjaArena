@@ -14,6 +14,7 @@ import com.ninja6.ninjaarena.message.Messages;
 import com.ninja6.ninjaarena.portal.PlayerPortalSettings;
 import com.ninja6.ninjaarena.room.MaxActive;
 import com.ninja6.ninjaarena.room.RoomService;
+import com.ninja6.ninjaarena.room.DefaultMap;
 import com.ninja6.ninjaarena.shop.ShopCatalogue;
 import com.ninja6.ninjaarena.spectate.SpectatorSettings;
 import com.ninja6.ninjaarena.tool.ToolSettings;
@@ -58,6 +59,9 @@ public final class ConfigReload {
         }
         /** A new {@code rooms.host-grace-seconds}, for host disconnects from now on. */
         default void hostGrace(int seconds) {
+        }
+        /** The map preference for rooms opened from now on. */
+        default void defaultMap(DefaultMap map) {
         }
         /** New request deadlines apply to requests sent from now on. */
         default void roomRequests(int lifetime, int cooldown) {
@@ -270,6 +274,9 @@ public final class ConfigReload {
         }
         if (!same(effective.get(REJOIN_GRACE), next.get(REJOIN_GRACE))) {
             target.rejoinGrace(MatchSettings.rejoinGraceSeconds(next.getConfigurationSection("match")));
+        }
+        if (!same(effective.get(DefaultMap.KEY), next.get(DefaultMap.KEY))) {
+            target.defaultMap(DefaultMap.read(next, target::warning));
         }
         if (!same(effective.get(HOST_GRACE), next.get(HOST_GRACE))) {
             target.hostGrace(next.getInt(HOST_GRACE, RoomService.DEFAULT_HOST_GRACE_SECONDS));

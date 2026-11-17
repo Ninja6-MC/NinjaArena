@@ -57,9 +57,10 @@ import org.bukkit.scheduler.BukkitTask;
  * settings, invites players and presses start once enough have joined; nothing starts a
  * room's match by itself. The rules for teams and hand-offs are in {@link Room}.
  *
- * <p><b>Arena slots.</b> A room plays on a hand-built arena, the first ready one when it is
- * created, or on a generated map when no hand-built arena is ready (once the seed modes are
- * set, {@link #setSeedPolicy}), and leases a slot for it at once ({@link SlotLeases}). While every slot is in use,
+ * <p><b>Arena slots.</b> A new room follows {@code rooms.default-map}: generated maps by
+ * default (once {@link #setSeedPolicy} is set), or the first ready hand-built arena with
+ * generated maps when none is ready. A ready featured event map takes priority. The room
+ * leases a slot at once ({@link SlotLeases}). While every slot is in use,
  * or its arena is, the room waits in a queue and its players see their position. The lease
  * lasts through the start, every round and the end of the match, and is given up when the
  * room is back in the lobby, where it queues again for its next match, or when it closes;
@@ -188,6 +189,7 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     private BukkitTask barTicker;
     private int configuredMax;
     private int hostGraceSeconds = DEFAULT_HOST_GRACE_SECONDS;
+    private DefaultMap defaultMap = DefaultMap.GENERATED;
     private final BuildBars bars;
     private MapPreviews previews;
 
@@ -226,6 +228,11 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     /** The featured map of the scheduled event running now, {@code ArenaEvents#arena}; by default none. */
     public void setFeatured(Supplier<Optional<String>> featured) {
         this.featured = Objects.requireNonNull(featured, "featured");
+    }
+
+    /** Applies only when opening a new room; existing rooms keep their map. */
+    public void setDefaultMap(DefaultMap defaultMap) {
+        this.defaultMap = Objects.requireNonNull(defaultMap, "defaultMap");
     }
 
     /**
@@ -273,8 +280,8 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
 
     /**
      * The seed modes ({@code maps} in config.yml), after {@link #setGeneratedMaps}. From then
-     * on a room with no hand-built arena ready plays generated maps, rooms on generated maps
-     * without a seed set by hand take their seeds from it, and slots that regenerate between
+     * on new rooms follow {@code rooms.default-map}, rooms on generated maps without a
+     * seed set by hand take their seeds from it, and slots that regenerate between
      * rounds get one spare cell to place the next map in. Logs what the settings warn about.
      */
     public void setSeedPolicy(SeedPolicy seeds) {
@@ -645,9 +652,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             return null;
         }
         Optional<Arena> arena = chosen != null ? Optional.of(chosen) : readyArena(null);
-        // With no hand-built arena ready, a new room plays generated maps, so a server with
-        // none at all works out of the box.
-        boolean onGenerated = arena.isEmpty() && chosen == null && generated != null && seeds != null;
+        boolean featuredReady = arena.isPresent() && isFeatured(arena.get().name());
+        boolean onGenerated = chosen == null && generated != null && seeds != null
+                && (arena.isEmpty() || defaultMap == DefaultMap.GENERATED && !featuredReady);
         if (arena.isEmpty() && !onGenerated) {
             arena = defaultArena(null);
         }
