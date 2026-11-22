@@ -131,6 +131,16 @@ public final class SlotLeases<K> {
         return leases.size();
     }
 
+    /** Slots that can still be leased now under the maximum. */
+    public int free() {
+        return Math.max(0, max - used());
+    }
+
+    /** Queued holders, longest waiting first. */
+    public List<K> queued() {
+        return List.copyOf(queue.keySet());
+    }
+
     /** Whether one more slot can be used now. */
     public boolean hasFree() {
         return used() < max;

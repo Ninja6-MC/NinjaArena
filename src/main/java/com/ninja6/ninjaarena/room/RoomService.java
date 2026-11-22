@@ -2440,7 +2440,13 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         player.sendMessage(hostAway(room));
     }
 
-    /** Whether the room waits for preparation rather than another room or a full slot limit. */
+    /**
+     * Whether the room waits for preparation rather than another room or a full slot limit. A
+     * queued room is preparing only if its place in the queue fits within the free slots and,
+     * on a generated map, its place among queued generated rooms fits within the slot cells
+     * free or clearing that no leased room waits for. No arena may be in edit mode, since
+     * generated rooms queue for as long as an edit lasts.
+     */
     public boolean isPreparing(Room room) {
         if (room.isPlaying()) {
             return false;
@@ -2448,12 +2454,32 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (building(room).isPresent()) {
             return true;
         }
-        if (slots.position(room).isEmpty() || !slots.hasFree() || slots.isLeased(room.arena())
+        OptionalInt position = slots.position(room);
+        if (position.isEmpty() || position.getAsInt() > slots.free() || slots.isLeased(room.arena())
                 || matches.match(room.arena()).isPresent()) {
             return false;
         }
-        return !room.playsGenerated() || generated != null
-                && generated.freeCells() + generated.clearingCells() > waitingForCell();
+        if (!room.playsGenerated()) {
+            return true;
+        }
+        if (generated == null || !arenas.editing().isEmpty()) {
+            return false;
+        }
+        return generatedPosition(room) <= generated.freeCells() + generated.clearingCells() - waitingForCell();
+    }
+
+    /** The room's place among queued rooms waiting for a generated map, from 1. */
+    private int generatedPosition(Room room) {
+        int position = 0;
+        for (Room waiting : slots.queued()) {
+            if (slots.wanted(waiting).filter(Arena::isGeneratedName).isPresent()) {
+                position++;
+            }
+            if (waiting.equals(room)) {
+                break;
+            }
+        }
+        return position;
     }
 
     private Component queued(Room room) {

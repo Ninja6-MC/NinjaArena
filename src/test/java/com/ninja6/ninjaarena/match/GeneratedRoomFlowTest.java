@@ -326,6 +326,74 @@ class GeneratedRoomFlowTest extends MatchFixture {
     }
 
     @Test
+    void aRoomBehindTheSlotLimitDuringAReopenKeepsItsQueueInChatAndTheStatusLine() {
+        rooms.setSeedPolicy(new SeedPolicy(SeedSettings.DEFAULTS, () -> 0, () -> 42, message -> { }));
+        rooms.setMaxActive(1);
+        drain();
+        generated.reopened();
+        Room first = openWith(ALICE);
+        Room second = openWith(CAROL, DAVE);
+        assertTrue(rooms.isPreparing(first));
+        assertFalse(rooms.isPreparing(second), "the only slot goes to the room ahead");
+        String queued = "Arena " + second.arena() + " is in use. Your room is number 2 in the queue.";
+        assertTrue(messages(CAROL).contains(queued));
+        assertTrue(messages(CAROL).stream().noneMatch(message -> message.startsWith("Preparing")));
+        rooms.start(player(CAROL), null);
+        assertEquals(queued, messages(CAROL).getLast());
+        rooms.tick();
+        assertEquals("♛ Carol | Waiting for an arena: number 2 in the queue",
+                players.get(CAROL).actionBars.getLast());
+
+        drain();
+        assertTrue(rooms.hasLease(first));
+        assertFalse(rooms.isPreparing(second));
+        rooms.start(player(CAROL), null);
+        assertEquals("Every arena slot is in use. Your room is number 1 in the queue.", messages(CAROL).getLast());
+        rooms.tick();
+        assertEquals("♛ Carol | Waiting for an arena: number 1 in the queue",
+                players.get(CAROL).actionBars.getLast());
+        assertTrue(messages(CAROL).stream().noneMatch(message -> message.startsWith("Preparing")));
+    }
+
+    @Test
+    void aFifthRoomDuringAReopenQueuesBehindTheFourSlots() {
+        rooms.setSeedPolicy(new SeedPolicy(SeedSettings.DEFAULTS, () -> 0, () -> 42, message -> { }));
+        UUID eve = new UUID(0, 5);
+        add(eve, "Eve");
+        players.get(eve).location = new Location(overworld, 0, 70, 0);
+        players.get(eve).permissions.add(NinjaArenaCommand.PLAY);
+        players.get(eve).permissions.add(RoomService.CREATE);
+        rooms.setMaxActive(4);
+        drain();
+        generated.reopened();
+        List<Room> opened = new ArrayList<>();
+        for (UUID host : List.of(ALICE, BOB, CAROL, DAVE)) {
+            opened.add(openWith(host));
+        }
+        Room fifth = openWith(eve);
+        assertTrue(opened.stream().allMatch(rooms::isPreparing), "four slots and four cells for the first four");
+        assertFalse(rooms.isPreparing(fifth));
+        assertEquals("Arena " + fifth.arena() + " is in use. Your room is number 5 in the queue.",
+                messages(eve).getLast());
+        rooms.tick();
+        assertEquals("♛ Eve | Waiting for an arena: number 5 in the queue", players.get(eve).actionBars.getLast());
+    }
+
+    @Test
+    void aRoomWaitingOnAnArenaEditIsQueuedNotPreparing() throws Exception {
+        rooms.setSeedPolicy(new SeedPolicy(SeedSettings.DEFAULTS, () -> 0, () -> 42, message -> { }));
+        drain();
+        arenas.startEdit("garden");
+        Room room = openWith(ALICE);
+        assertFalse(rooms.hasLease(room), "generated rooms wait while an arena is edited");
+        assertFalse(rooms.isPreparing(room));
+        assertEquals("Arena " + room.arena() + " is in use. Your room is number 1 in the queue.",
+                messages(ALICE).getLast());
+        rooms.tick();
+        assertEquals("♛ Alice | Waiting for an arena: number 1 in the queue", players.get(ALICE).actionBars.getLast());
+    }
+
+    @Test
     void aRoomPlaysAWholeMatchOnAGeneratedMapAndEveryLookupFindsIt() throws Exception {
         String stored = Files.readString(store);
         FileTime written = Files.getLastModifiedTime(store);
