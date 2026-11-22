@@ -364,6 +364,11 @@ public final class GeneratedMaps {
         return (int) slots.values().stream().filter(slot -> slot.state == State.IDLE).count();
     }
 
+    /** Cells that will become free once their current clear finishes. */
+    public int clearingCells() {
+        return (int) slots.values().stream().filter(slot -> slot.state == State.CLEARING).count();
+    }
+
     /**
      * Applies a new {@code arenas.max-active}. Reserved cells stay where they are; a cell a
      * map still uses is never given up, only once it is free. New cells are cleared.

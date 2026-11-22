@@ -443,6 +443,10 @@ Java 25, and does not run on Folia.
   startup warning.
 
 ### Fixed
+- Rooms waiting for an unused arena world to reopen, slot cells to clear or their map
+  to build now show preparation in chat, the status line and the room screen instead
+  of a queue (#255). Real waits for another room or a full slot limit still show queue
+  positions. Generated maps are announced as ready only after placement finishes.
 - A retired arena world no longer stays in memory through the falling blocks of
   collapsed platforms (#247). The hazards kept the last falling blocks of every match
   until the next collapse or a plugin disable. They now keep only their ids, and remove

@@ -399,7 +399,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
     private void granted(List<Room> granted) {
         for (Room room : granted) {
             if (rooms.contains(room)) {
-                broadcast(room, msg("room.lease-granted", "arena", room.arena()));
+                if (!room.playsGenerated()) {
+                    broadcast(room, msg("room.lease-granted", "arena", room.arena()));
+                }
                 leased(room);
             }
         }
@@ -1278,17 +1280,19 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
             sender.sendMessage(hostAway(room));
             return;
         }
+        if (isPreparing(room)) {
+            Optional<GeneratedMaps.Progress> building = building(room);
+            sender.sendMessage(building.isPresent()
+                    ? msg("room.start-building", "percent", BuildBars.percent(building.get()))
+                    : msg("room.preparing", "arena", room.arena()));
+            return;
+        }
         if (!room.canStart()) {
             sender.sendMessage(msg("room.below-count", "required", room.settings().players(), "size", room.size()));
             return;
         }
         if (!hasLease(room)) {
             sender.sendMessage(queued(room));
-            return;
-        }
-        Optional<GeneratedMaps.Progress> building = building(room);
-        if (building.isPresent()) {
-            sender.sendMessage(msg("room.start-building", "percent", BuildBars.percent(building.get())));
             return;
         }
         String arena = room.arena();
@@ -2400,7 +2404,8 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         return featured.get().map(Arena::normalizeName).filter(arena::equals).isPresent();
     }
 
-    private Component status(Room room) {
+    /** The state shared by chat, the status line and room screens. */
+    public Component status(Room room) {
         if (room.isPlaying()) {
             return msg("room.status-playing", "arena", room.arena());
         }
@@ -2409,6 +2414,9 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         if (room.isHostAway()) {
             return creator.append(msg("room.status-host-away", "count", count(room), "player", name(room.host()),
                     "seconds", room.hostGraceLeft()));
+        }
+        if (isPreparing(room)) {
+            return creator.append(msg("room.status-preparing", "arena", room.arena()));
         }
         OptionalInt position = slots.position(room);
         if (position.isPresent()) {
@@ -2432,7 +2440,52 @@ public final class RoomService implements RoomCommands, HostingCommands, Listene
         player.sendMessage(hostAway(room));
     }
 
+    /**
+     * Whether the room waits for preparation rather than another room or a full slot limit. A
+     * queued room is preparing only if its place in the queue fits within the free slots and,
+     * on a generated map, its place among queued generated rooms fits within the slot cells
+     * free or clearing that no leased room waits for. No arena may be in edit mode, since
+     * generated rooms queue for as long as an edit lasts.
+     */
+    public boolean isPreparing(Room room) {
+        if (room.isPlaying()) {
+            return false;
+        }
+        if (building(room).isPresent()) {
+            return true;
+        }
+        OptionalInt position = slots.position(room);
+        if (position.isEmpty() || position.getAsInt() > slots.free() || slots.isLeased(room.arena())
+                || matches.match(room.arena()).isPresent()) {
+            return false;
+        }
+        if (!room.playsGenerated()) {
+            return true;
+        }
+        if (generated == null || !arenas.editing().isEmpty()) {
+            return false;
+        }
+        return generatedPosition(room) <= generated.freeCells() + generated.clearingCells() - waitingForCell();
+    }
+
+    /** The room's place among queued rooms waiting for a generated map, from 1. */
+    private int generatedPosition(Room room) {
+        int position = 0;
+        for (Room waiting : slots.queued()) {
+            if (slots.wanted(waiting).filter(Arena::isGeneratedName).isPresent()) {
+                position++;
+            }
+            if (waiting.equals(room)) {
+                break;
+            }
+        }
+        return position;
+    }
+
     private Component queued(Room room) {
+        if (isPreparing(room)) {
+            return msg("room.preparing", "arena", room.arena());
+        }
         int position = slots.position(room).orElse(1);
         return slots.hasFree() ? msg("room.queued-arena", "arena", room.arena(), "position", position)
                 : msg("room.queued", "position", position);

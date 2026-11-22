@@ -66,6 +66,19 @@ class MessagesTest {
     }
 
     @Test
+    void preparationKeysFallBackForExistingMessageFiles() {
+        for (String key : List.of("room.preparing", "room.status-preparing")) {
+            Messages messages = with(key, null);
+            for (int repeat = 0; repeat < 2; repeat++) {
+                assertEquals(Messages.bundled().plain(key, "arena", "generated:1"),
+                        messages.plain(key, "arena", "generated:1"));
+            }
+        }
+        assertEquals(List.of("messages.yml: room.preparing is missing; using the default.",
+                "messages.yml: room.status-preparing is missing; using the default."), warnings);
+    }
+
+    @Test
     void aBrokenKeyFallsBackToTheDefaultWithOneWarning() {
         Messages messages = with("match.fight", "<red>Fight <colour:nope>now");
         assertEquals("Fight!", messages.plain("match.fight"));

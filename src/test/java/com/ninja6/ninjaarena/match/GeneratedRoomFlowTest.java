@@ -25,6 +25,8 @@ import com.ninja6.ninjaarena.map.BudgetedCellWriter;
 import com.ninja6.ninjaarena.map.FakeBlocks;
 import com.ninja6.ninjaarena.map.FakeWriters;
 import com.ninja6.ninjaarena.map.GeneratedMaps;
+import com.ninja6.ninjaarena.map.SeedPolicy;
+import com.ninja6.ninjaarena.map.SeedSettings;
 import com.ninja6.ninjaarena.match.event.MatchEndEvent;
 import com.ninja6.ninjaarena.match.event.PlayerEliminatedEvent;
 import com.ninja6.ninjaarena.match.event.PlayerLeaveMatchEvent;
@@ -63,6 +65,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -242,6 +245,152 @@ class GeneratedRoomFlowTest extends MatchFixture {
             }
         }
         throw new AssertionError("no rejected seed");
+    }
+
+    @Test
+    void openingAfterAnIdleWorldReopensPreparesThenAnnouncesOnlyThePlacedMapAsReady() {
+        rooms.setSeedPolicy(new SeedPolicy(SeedSettings.DEFAULTS, () -> 0, () -> 42, message -> { }));
+        generated.reopened();
+        Room room = openWith(ALICE);
+        String preparing = "Preparing arena " + room.arena() + " for your room";
+        assertFalse(rooms.hasLease(room), "the reopened world's slot cells are still clearing");
+        assertTrue(messages(ALICE).contains(preparing + ". Start once its map is ready."));
+        assertTrue(messages(ALICE).stream().noneMatch(message -> message.contains("queue")
+                || message.contains("in use") || message.contains("is ready:")
+                || message.contains("is ready for your room")));
+        rooms.start(player(ALICE), null);
+        assertEquals(preparing + ". Start once its map is ready.", messages(ALICE).getLast());
+        assertPreparationShown(room, preparing);
+        rooms.invite(player(ALICE), "Bob");
+        rooms.accept(player(BOB), "Alice");
+
+        // Stop as soon as the reopen sweep grants the lease; placement is still pending.
+        for (int i = 0; i < 1000 && !rooms.hasLease(room); i++) {
+            writer.tick();
+            runNextTick();
+        }
+        assertTrue(rooms.hasLease(room));
+        assertTrue(rooms.building(room).isPresent());
+        assertTrue(messages(ALICE).stream().noneMatch(message -> message.contains("is ready:")
+                || message.contains("is ready for your room")));
+        assertPreparationShown(room, preparing);
+        rooms.start(player(ALICE), null);
+        assertTrue(messages(ALICE).getLast().startsWith("The room's map is still being built ("));
+        assertFalse(room.isPlaying());
+
+        drain();
+        assertTrue(maps.isAvailable(room.arena()));
+        assertEquals("The room's generated map is ready: seed 42.", messages(ALICE).getLast());
+        int generating = messages(ALICE).indexOf("Generating the room's map from seed 42 at difficulty 2...");
+        assertTrue(generating >= 0 && generating < messages(ALICE).size() - 1);
+        assertFalse(rooms.isPreparing(room));
+    }
+
+    private void assertPreparationShown(Room room, String preparing) {
+        rooms.tick();
+        assertEquals("♛ Alice | " + preparing, players.get(ALICE).actionBars.getLast());
+        RoomScreenHarness screen = new RoomScreenHarness(rooms, true);
+        Player alice = screen.wrap(player(ALICE));
+        screen.menus.open(alice);
+        screen.press(alice, "Your room");
+        assertTrue(screen.forms.get(ALICE).content().lines().contains("♛ Alice | " + preparing));
+        assertTrue(screen.forms.get(ALICE).content().options().stream()
+                .anyMatch(option -> option.label().equals("Start (map still building)")));
+    }
+
+    @Test
+    void aRoomBehindAMatchKeepsItsQueueUntilACellClearsThenPrepares() {
+        rooms.setMaxActive(1);
+        drain();
+        Room first = openWith(ALICE, BOB);
+        rooms.playGenerated(first, 42, 1);
+        drain();
+        rooms.start(player(ALICE), null);
+        assertTrue(first.isPlaying());
+        Room second = openWith(CAROL, DAVE);
+        rooms.playGenerated(second, 43, 1);
+        assertFalse(rooms.isPreparing(second));
+        rooms.start(player(CAROL), null);
+        assertEquals("Every arena slot is in use. Your room is number 1 in the queue.",
+                messages(CAROL).getLast());
+        rooms.tick();
+        assertEquals("♛ Carol | Waiting for an arena: number 1 in the queue",
+                players.get(CAROL).actionBars.getLast());
+        assertTrue(PlainTextComponentSerializer.plainText().serialize(rooms.status(second)).contains("queue"));
+        playToTheEnd(first.arena());
+        assertTrue(rooms.isPreparing(second), "a clearing cell is preparation once the match releases its slot");
+        drain();
+        assertTrue(rooms.hasLease(second));
+        assertEquals("The room's generated map is ready: seed 43.", messages(CAROL).getLast());
+        assertFalse(messages(CAROL).stream().anyMatch(message -> message.contains("is ready for your room")));
+    }
+
+    @Test
+    void aRoomBehindTheSlotLimitDuringAReopenKeepsItsQueueInChatAndTheStatusLine() {
+        rooms.setSeedPolicy(new SeedPolicy(SeedSettings.DEFAULTS, () -> 0, () -> 42, message -> { }));
+        rooms.setMaxActive(1);
+        drain();
+        generated.reopened();
+        Room first = openWith(ALICE);
+        Room second = openWith(CAROL, DAVE);
+        assertTrue(rooms.isPreparing(first));
+        assertFalse(rooms.isPreparing(second), "the only slot goes to the room ahead");
+        String queued = "Arena " + second.arena() + " is in use. Your room is number 2 in the queue.";
+        assertTrue(messages(CAROL).contains(queued));
+        assertTrue(messages(CAROL).stream().noneMatch(message -> message.startsWith("Preparing")));
+        rooms.start(player(CAROL), null);
+        assertEquals(queued, messages(CAROL).getLast());
+        rooms.tick();
+        assertEquals("♛ Carol | Waiting for an arena: number 2 in the queue",
+                players.get(CAROL).actionBars.getLast());
+
+        drain();
+        assertTrue(rooms.hasLease(first));
+        assertFalse(rooms.isPreparing(second));
+        rooms.start(player(CAROL), null);
+        assertEquals("Every arena slot is in use. Your room is number 1 in the queue.", messages(CAROL).getLast());
+        rooms.tick();
+        assertEquals("♛ Carol | Waiting for an arena: number 1 in the queue",
+                players.get(CAROL).actionBars.getLast());
+        assertTrue(messages(CAROL).stream().noneMatch(message -> message.startsWith("Preparing")));
+    }
+
+    @Test
+    void aFifthRoomDuringAReopenQueuesBehindTheFourSlots() {
+        rooms.setSeedPolicy(new SeedPolicy(SeedSettings.DEFAULTS, () -> 0, () -> 42, message -> { }));
+        UUID eve = new UUID(0, 5);
+        add(eve, "Eve");
+        players.get(eve).location = new Location(overworld, 0, 70, 0);
+        players.get(eve).permissions.add(NinjaArenaCommand.PLAY);
+        players.get(eve).permissions.add(RoomService.CREATE);
+        rooms.setMaxActive(4);
+        drain();
+        generated.reopened();
+        List<Room> opened = new ArrayList<>();
+        for (UUID host : List.of(ALICE, BOB, CAROL, DAVE)) {
+            opened.add(openWith(host));
+        }
+        Room fifth = openWith(eve);
+        assertTrue(opened.stream().allMatch(rooms::isPreparing), "four slots and four cells for the first four");
+        assertFalse(rooms.isPreparing(fifth));
+        assertEquals("Arena " + fifth.arena() + " is in use. Your room is number 5 in the queue.",
+                messages(eve).getLast());
+        rooms.tick();
+        assertEquals("♛ Eve | Waiting for an arena: number 5 in the queue", players.get(eve).actionBars.getLast());
+    }
+
+    @Test
+    void aRoomWaitingOnAnArenaEditIsQueuedNotPreparing() throws Exception {
+        rooms.setSeedPolicy(new SeedPolicy(SeedSettings.DEFAULTS, () -> 0, () -> 42, message -> { }));
+        drain();
+        arenas.startEdit("garden");
+        Room room = openWith(ALICE);
+        assertFalse(rooms.hasLease(room), "generated rooms wait while an arena is edited");
+        assertFalse(rooms.isPreparing(room));
+        assertEquals("Arena " + room.arena() + " is in use. Your room is number 1 in the queue.",
+                messages(ALICE).getLast());
+        rooms.tick();
+        assertEquals("♛ Alice | Waiting for an arena: number 1 in the queue", players.get(ALICE).actionBars.getLast());
     }
 
     @Test
