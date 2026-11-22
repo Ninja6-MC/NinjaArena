@@ -23,6 +23,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
  *     arena: dojo
  *     lobby: shared
  *     region: {min-x: 10, min-y: 64, min-z: 10, max-x: 12, max-y: 67, max-z: 10}
+ *   gate:
+ *     world: world
+ *     region: {min-x: 20, min-y: 64, min-z: 10, max-x: 22, max-y: 67, max-z: 10}
  *   built-1:
  *     world: world
  *     built-by: 7a3c1d2e-0000-4000-8000-000000000001
@@ -35,6 +38,10 @@ import org.bukkit.configuration.file.YamlConfiguration;
  * without them reads as before. Both are deprecated: they still load, with a startup warning
  * ({@link PortalRegistry#oldLobbyWarnings}), every play portal leads to the lobby, and
  * {@code lobby} only picks which open rooms a player joins there.
+ *
+ * <p>A play portal an admin marked out may leave {@code arena} out: it joins players to any
+ * open room, as a player-built one does. A spectator portal always names its arena. Versions
+ * from before portals without an arena refuse a file that holds one.
  *
  * <p>A player-built portal has {@code built-by} and {@code frame} and no {@code arena},
  * {@code spectator} or {@code lobby}; its region is the opening of its frame. Versions from
@@ -86,7 +93,7 @@ public final class PortalCodec {
             if (portal.playerBuilt()) {
                 section.set("built-by", portal.built().owner().toString());
                 section.set("frame", portal.built().frame());
-            } else {
+            } else if (portal.arena() != null) {
                 section.set("arena", portal.arena());
             }
             if (portal.spectator()) {
@@ -198,8 +205,9 @@ public final class PortalCodec {
             return Portal.built(name, requireString(section, "world"), region,
                     new Portal.Built(owner, requireString(section, "frame")));
         }
-        return new Portal(name, requireString(section, "world"), region, requireString(section, "arena"),
-                section.getBoolean("spectator"), lobby);
+        String arena = section.contains("arena") ? requireString(section, "arena") : null;
+        return new Portal(name, requireString(section, "world"), region, arena, section.getBoolean("spectator"),
+                lobby);
     }
 
     private static double requireDouble(ConfigurationSection section, String path) throws PortalFormatException {

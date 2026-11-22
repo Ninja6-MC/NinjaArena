@@ -89,6 +89,9 @@ help:
 arena:
   created: "<green>Arena <arena> created in cell <cell> (<cell-bounds>) and put in edit mode."
   deleted: "<green>Arena <arena> removed from the registry. Its blocks are still in the world."
+  deleted-portals-unbound: "<yellow>Portal(s) <portals> now have no arena and join players to any open room."
+  deleted-spectator-portals: "<yellow>Spectator portal(s) <portals> still name arena <arena> and refuse everyone until it is back or they are deleted."
+  deleted-portals-failed: "<red>The portals on arena <arena> could not be unbound (<message>); they join players to any open room meanwhile."
   list-empty: "<gray>No arenas are registered."
   list-line: "<gray><arena> (cell <cell>): <status>"
   not-set: "not set"
@@ -201,6 +204,8 @@ portal:
   list-empty: "<gray>No portals are registered."
   list-line: "<gray><portal> (<world>) to <target>: <status>"
   player-built-target: "any room, player-built"
+  no-arena-target: "any room"
+  arena-missing-target: "any room, arena <arena> deleted"
   destination:
     any: "the lobby, joining any open room"
     arena: "the lobby, joining an open room on arena <arena>"
@@ -213,6 +218,8 @@ portal:
     built: "<gray>Built by player <owner> from <frame>. Breaking a frame block removes it."
     arena: "<gray>Arena: <arena>"
     arena-spectator: "<gray>Arena: <arena> (spectator portal)"
+    arena-missing: "<gray>Arena: <arena> (deleted, so it joins any open room)"
+    no-arena: "<gray>Arena: none"
     leads-to: "<gray>Leads to: <destination>"
   status:
     world-unloaded: "world not loaded"
@@ -226,6 +233,8 @@ portal:
     lobby-world: "Portals cannot be in the lobby world."
     frame: "Invalid frame block <frame>."
     spectator-lobby: "A spectator portal leads to a live match and has no lobby."
+    spectator-arena: "A spectator portal needs an arena."
+    built-arena: "A player-built portal has no arena."
     built-lobby: "A player-built portal follows the server default lobby."
     too-large: "A portal can be at most <max> blocks along each axis."
   error:
@@ -640,6 +649,7 @@ room:
   host-grace-lost: "<yellow>The lobby could not take you back, so you are out of your room and go home. /narena leave has nothing more to leave."
   closed: "<yellow>The room closed: nobody left in it can host."
   closed-no-arena: "<yellow>The room closed: its arena was deleted and no other arena is set up."
+  closed-no-map: "<yellow>The room closed: no playable map came from its seeds and there is no other map to play."
   arena-changed: "<yellow>Arena <old> was deleted, so the room now plays on arena <arena>."
   settings-playing: "<yellow>Settings can be changed once the room is back in the lobby."
   settings-unknown: "<red>Unknown setting <setting>. Use players, teams, team-size or privacy."

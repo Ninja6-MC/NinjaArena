@@ -10,6 +10,7 @@ import com.ninja6.ninjaarena.arena.ArenaException;
 import com.ninja6.ninjaarena.arena.ArenaPoint;
 import com.ninja6.ninjaarena.arena.ArenaRegistry;
 import com.ninja6.ninjaarena.arena.GridCell;
+import com.ninja6.ninjaarena.portal.PortalRegistry;
 import com.ninja6.ninjaarena.restore.OwnTeleports;
 import com.ninja6.ninjaarena.world.ArenaWorld;
 import com.ninja6.ninjaarena.world.PluginWorlds;
@@ -36,6 +37,10 @@ import org.bukkit.entity.Player;
  * <p>Every position can be given as coordinates, so each subcommand except {@code tp} also
  * runs from the console. A player who leaves the coordinates out uses where they stand, and
  * may write {@code ~} or {@code ~n} for a coordinate relative to it.
+ *
+ * <p>{@code delete} unbinds the play portals bound to the arena ({@link #setPortals}), which
+ * then join players to any open room, and names them; spectator portals keep its name and
+ * refuse everyone until it is back or they are deleted.
  */
 public final class ArenaCommand {
 
@@ -51,6 +56,7 @@ public final class ArenaCommand {
     private final Supplier<World> world;
     private final Supplier<Runnable> acquireWorld;
     private final Consumer<Runnable> completeOnServer;
+    private PortalRegistry portals;
 
     /**
      * @param world the arena world, for {@code tp}
@@ -69,6 +75,11 @@ public final class ArenaCommand {
         this.world = Objects.requireNonNull(world, "world");
         this.acquireWorld = Objects.requireNonNull(acquireWorld, "acquireWorld");
         this.completeOnServer = Objects.requireNonNull(completeOnServer, "completeOnServer");
+    }
+
+    /** The portals {@code delete} unbinds from a deleted arena; until set, none. */
+    public void setPortals(PortalRegistry portals) {
+        this.portals = Objects.requireNonNull(portals, "portals");
     }
 
     void execute(CommandSender sender, String label, String[] args) {
@@ -124,6 +135,23 @@ public final class ArenaCommand {
         String name = registry.get(args[0]).map(Arena::name).orElse(args[0]);
         registry.delete(args[0]);
         tell(sender, "arena.deleted", "arena", name);
+        if (portals == null) {
+            return;
+        }
+        PortalRegistry.Unbound bound;
+        try {
+            bound = portals.unbind(name);
+        } catch (ArenaException e) {
+            tell(sender, "arena.deleted-portals-failed", "arena", name, "message", e.text());
+            return;
+        }
+        if (!bound.unbound().isEmpty()) {
+            tell(sender, "arena.deleted-portals-unbound", "portals", String.join(", ", bound.unbound()));
+        }
+        if (!bound.spectators().isEmpty()) {
+            tell(sender, "arena.deleted-spectator-portals", "arena", name,
+                    "portals", String.join(", ", bound.spectators()));
+        }
     }
 
     private void list(CommandSender sender) {

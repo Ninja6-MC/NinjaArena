@@ -79,6 +79,32 @@ state to lose on logout, death or restart. Teleporting into a gate also requires
 and walking back in. Existing pending snapshots keep their saved coordinates and facing;
 the usual unsafe-landing fallbacks still apply.
 
+## Entrance portals
+
+Players reach the lobby through portals in another world. A server needs no hand-built
+arena: rooms play [generated maps](#seed-modes), and a portal leads to the lobby without
+one. Select the portal's corners with `/narena portal setcorner 1` and `2` as in step 8
+above, then:
+
+- `/narena portal create <name>` makes a portal with no arena. Walking through it takes
+  players to the lobby and into any open room that has space, rooms on an event's
+  featured map first, as a [player-built portal](#player-built-portals) does. With none,
+  they stay in the lobby, see the room list and can open a room.
+- `/narena portal create <name> <arena>` binds the portal to a hand-built arena: it joins
+  players to an open room on that arena. `<arena> spectator` makes a
+  [spectator portal](#watching-live-matches), which always needs its arena.
+
+`/narena portal list` and `info` show `any room` and `Arena: none` for a portal with no
+arena. In `portals.yml` such a portal simply has no `arena:` key. Versions from before
+portals without an arena refuse a file that holds one rather than drop it.
+
+`/narena arena delete <arena>` unbinds every play portal bound to the arena, saves
+`portals.yml` and names them: they now have no arena. Spectator portals keep the arena's
+name and refuse everyone until an arena of that name is back or they are deleted; the
+command names them too. A play portal whose arena is missing for another reason, such as
+a hand-edited `arenas.yml`, logs one warning at startup and joins any open room, so
+joining never breaks.
+
 ## Moving from waiting rooms to rooms
 
 No match starts by itself any more. Waiting rooms with their automatic countdown and the
@@ -239,7 +265,8 @@ to the lobby, saving their snapshot as a portal does, and opens a room there wit
 as its host. New rooms play [generated maps](#seed-modes) from the seed modes by
 default, for two teams. Set `rooms.default-map: arena` in `config.yml` to start on the
 first hand-built arena by name that is ready and that no other room holds, falling back
-to generated maps when none is ready. Under either value, a running event's featured
+to generated maps when none is ready. A server with no hand-built arena at all opens
+every room on generated maps. Under either value, a running event's featured
 map takes priority when ready and no other room holds it. Unknown values warn once and
 use `generated`. A reload changes only rooms opened afterwards; existing rooms keep
 their map. Nothing in a room counts down, and no match starts any other way. The host,
@@ -547,7 +574,11 @@ In the lobby these generate the room's map again at once. While the room plays, 
 being played never changes: they apply at the next generation, which is the next shop
 break with `regenerate: round`, else the map after the match. `/narena map set <arena>`
 goes back to a hand-built arena. When no map comes from a seed, the room plays its last
-good seed; with none, a hand-built arena; with none of those, one more random seed.
+good seed; if that fails or there is none, a hand-built arena; with none of those, one
+more random seed. On a server with no hand-built arena that step is skipped without a
+word about a missing arena, so a failed last good seed goes on to the random seed. A room
+whose random seed fails as well closes; its players are told no playable map came from
+its seeds.
 
 With `regenerate: round` (it needs the shop phase), the next map is generated in a spare
 cell in each shop break while the current one stays as it is. The shop waits for it, up
